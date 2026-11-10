@@ -247,7 +247,7 @@ void main() {
           return {};
         }, initialState: AppState(settings: _lockOnClose));
         final releaseOtherPage = anotherPhonePage
-            ? controller.claimControlPage('phone')
+            ? controller.views.claimControlPage('phone')
             : null;
         try {
           await _mountEntry(

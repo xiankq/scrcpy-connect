@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/state_recovery.dart';
 
 StateJson snapshot(int sequence) => {
@@ -270,10 +270,7 @@ void main() {
       emit: events.add,
       isDisposed: () => false,
     );
-    await expectLater(
-      recovery.refresh(),
-      throwsA(isA<ApplicationCommandException>()),
-    );
+    await expectLater(recovery.refresh(), throwsA(isA<RequestFailure>()));
     expect(recovery.pending, isTrue);
     expect(events.last['type'], 'state.resync.failed');
     recovery.dispose();

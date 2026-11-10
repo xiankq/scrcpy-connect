@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/services/media/audio_player_port.dart';
+import 'package:scrcpy_connect/services/media/audio_player.dart';
 
 /// 独立于设备媒体输出应用全局偏好；原生宿主持有前台服务生命周期及显式停止状态。
 class ApplicationBackgroundCoordinator {

@@ -1,5 +1,5 @@
-import 'package:scrcpy_connect/services/files/received_directory.dart';
-import 'package:scrcpy_connect/services/files/file_access.dart';
+import 'package:scrcpy_connect/services/files/local_directories.dart';
+import 'package:scrcpy_connect/services/files/file_browser.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
@@ -8,7 +8,7 @@ import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/media_cache_blocker.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/services/files/system_file_share.dart';
+import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 
 import 'dart:io';
 

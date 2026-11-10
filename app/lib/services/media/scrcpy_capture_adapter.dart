@@ -1,5 +1,5 @@
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 typedef CaptureJson = Map<String, dynamic>;
 
@@ -13,21 +13,18 @@ final class ScrcpyCaptureAdapter {
   Future<CaptureJson> openSource(CaptureJson stream, int generation) async {
     final ref = stream['captureRef'];
     if (ref is! String || ref.isEmpty) {
-      throw const ApplicationCommandException(
-        'invalid_endpoint',
-        '缺少精确的视频捕获身份。',
-      );
+      throw const RequestFailure('invalid_endpoint', '缺少精确的视频捕获身份。');
     }
     final ScrcpySession session;
     try {
       session = await _scrcpy.attach(ref, generation: generation);
     } on ScrcpyException catch (error) {
-      throw ApplicationCommandException(error.code, error.message);
+      throw RequestFailure(error.code, error.message);
     }
     try {
       final source = session.info?.source;
       if (source == null || source.sourceId != stream['videoSourceId']) {
-        throw const ApplicationCommandException('stale_capture', '视频输入已被替换。');
+        throw const RequestFailure('stale_capture', '视频输入已被替换。');
       }
       return {
         'sourceId': source.sourceId,
@@ -42,7 +39,7 @@ final class ScrcpyCaptureAdapter {
         'detachAddress': source.detachAddress,
       };
     } on ScrcpyException catch (error) {
-      throw ApplicationCommandException(error.code, error.message);
+      throw RequestFailure(error.code, error.message);
     } finally {
       // 此附着不持有停止权；释放观察对象不会取消原生捕获。
       await session.close();

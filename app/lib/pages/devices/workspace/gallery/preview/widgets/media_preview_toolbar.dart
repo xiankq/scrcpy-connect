@@ -5,7 +5,7 @@ import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/services/files/system_file_share.dart';
+import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 
 import 'media_controls_protection.dart';
 

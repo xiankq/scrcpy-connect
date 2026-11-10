@@ -6,7 +6,7 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 typedef SharePlatformRequest = Future<Map<String, dynamic>> Function(
   String command,
@@ -66,7 +66,7 @@ final class ShareScopeRecovery {
         params,
       ).timeout(const Duration(seconds: 120));
     } on TimeoutException {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'share_cleanup_unconfirmed',
         '分享资源接管尚未确认，请重试；不会继续读取或清理来源。',
       );
@@ -84,10 +84,7 @@ final class ShareScopeRecovery {
       if (cache is! String ||
           !p.isAbsolute(cache) ||
           (lease != null && lease is! String)) {
-        throw const ApplicationCommandException(
-          'cache_unavailable',
-          '系统未提供可信分享暂存位置。',
-        );
+        throw const RequestFailure('cache_unavailable', '系统未提供可信分享暂存位置。');
       }
       final root = await Directory(cache).resolveSymbolicLinks();
       final random = Random.secure();
@@ -119,10 +116,7 @@ final class ShareScopeRecovery {
     });
     if (response['claimed'] != true ||
         response['ownerLeaseId'] != candidate.leaseId) {
-      throw const ApplicationCommandException(
-        'share_cleanup_unconfirmed',
-        '分享平台尚未确认新代次。',
-      );
+      throw const RequestFailure('share_cleanup_unconfirmed', '分享平台尚未确认新代次。');
     }
     return candidate;
   }

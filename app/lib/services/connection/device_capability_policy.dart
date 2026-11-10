@@ -1,5 +1,4 @@
-import 'package:scrcpy_connect/models/application_request.dart' show Json;
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'package:scrcpy_connect/services/connection/device_capability_facts_reader.dart';
 
@@ -20,11 +19,11 @@ class DeviceCapabilityPolicy {
 
   Future<Json> request(String command, Json params) async {
     if (!handles(command)) {
-      throw const ApplicationCommandException('unknown_command', '未知设备解释请求。');
+      throw const RequestFailure('unknown_command', '未知设备解释请求。');
     }
     final id = params['deviceId'];
     if (id is! String) {
-      throw const ApplicationCommandException('invalid_device_id', '设备记录标识无效。');
+      throw const RequestFailure('invalid_device_id', '设备记录标识无效。');
     }
     final diagnosis = command == 'device.diagnose';
     final observed = await facts.read(id, diagnose: diagnosis);

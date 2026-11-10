@@ -1,3 +1,12 @@
+import 'package:scrcpy_connect/services/platform/local_notification_sink.dart';
+export 'package:scrcpy_connect/services/platform/local_notification_sink.dart'
+    show
+        SystemNotificationKind,
+        systemNotificationIdMin,
+        systemNotificationIdMax,
+        SystemNotificationStatus,
+        SystemNotice,
+        SystemNotificationSink;
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 
@@ -10,57 +19,6 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 
 part 'system_notification_coordinator.g.dart';
-
-enum SystemNotificationKind { notification, call }
-
-const systemNotificationIdMin = 100000;
-const systemNotificationIdMax = 199999;
-
-@immutable
-class SystemNotificationStatus {
-  const SystemNotificationStatus({
-    this.supported = false,
-    this.permissionGranted,
-    this.notificationChannelEnabled,
-    this.callChannelEnabled,
-    this.canRequest = false,
-    this.canOpenSettings = false,
-    this.reason = '',
-  });
-  final bool supported;
-  final bool? permissionGranted;
-  final bool? notificationChannelEnabled;
-  final bool? callChannelEnabled;
-  final bool canRequest;
-  final bool canOpenSettings;
-  final String reason;
-}
-
-@immutable
-class SystemNotice {
-  const SystemNotice({
-    required this.id,
-    required this.kind,
-    required this.title,
-    required this.body,
-    required this.payload,
-  });
-  final int id;
-  final SystemNotificationKind kind;
-  final String title;
-  final String body;
-  final String payload;
-}
-
-abstract interface class SystemNotificationSink {
-  Stream<String> get activations;
-  Future<void> initialize();
-  Future<SystemNotificationStatus> status();
-  Future<SystemNotificationStatus> requestPermission();
-  Future<bool> openSettings();
-  Future<void> show(SystemNotice notice);
-  Future<void> cancel(int id);
-}
 
 /// 只向系统交付定位信息，不把它作为授权回执。
 @immutable

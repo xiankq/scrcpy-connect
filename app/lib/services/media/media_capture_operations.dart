@@ -1,9 +1,8 @@
 import 'package:adb/adb.dart';
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/services/application_snapshot_reader.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/command_contract.dart';
-import 'package:scrcpy_connect/models/application_command.dart';
 import 'package:scrcpy_connect/stores/connection/device_coordinator.dart';
 import 'package:scrcpy_connect/stores/media/session_coordinator.dart';
 import 'package:scrcpy_connect/stores/media/device_audio_source_coordinator.dart';
@@ -81,7 +80,7 @@ final class MediaCaptureOperations {
       return await _execute(operation, params);
     } on AdbException catch (error, stack) {
       Error.throwWithStackTrace(
-        ApplicationCommandException(error.code, error.message),
+        RequestFailure(error.code, error.message),
         stack,
       );
     }
@@ -154,10 +153,7 @@ final class MediaCaptureOperations {
     }
     if (operation == ApplicationCommand.mediaOpen) {
       if (params['kind'] != 'audio') {
-        throw const ApplicationCommandException(
-          'invalid_argument',
-          '视频输入由窗口的精确捕获直接附着。',
-        );
+        throw const RequestFailure('invalid_argument', '视频输入由窗口的精确捕获直接附着。');
       }
       return Map.from(
         await _audio.openSource(
@@ -169,7 +165,7 @@ final class MediaCaptureOperations {
     if (operation == ApplicationCommand.mediaStatus) {
       return await _sourceStatus(params['relayId'] as String);
     }
-    throw ApplicationCommandException('unknown_command', '不是媒体捕获操作：$command');
+    throw RequestFailure('unknown_command', '不是媒体捕获操作：$command');
   }
 
   Future<Map<String, dynamic>> _sourceStatus(String sourceId) async {
@@ -188,7 +184,7 @@ final class MediaCaptureOperations {
         _devices.current(session['deviceId'] as String),
         connection,
       )) {
-        throw const ApplicationCommandException('cancelled', '输入所属的设备连接已改变。');
+        throw const RequestFailure('cancelled', '输入所属的设备连接已改变。');
       }
       return {
         'relayId': sourceId,

@@ -1,8 +1,6 @@
 import 'package:path/path.dart' as p;
 
-import 'package:scrcpy_connect/models/file_kind.dart';
-
-export 'package:scrcpy_connect/models/file_kind.dart';
+enum FileKind { documents, images, videos, audio, archives, other }
 
 /// 浏览、搜索与呈现共用的分类规则。
 abstract final class FileTypePolicy {

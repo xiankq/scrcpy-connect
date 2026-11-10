@@ -5,7 +5,7 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/services/connection/device_details_reader.dart';
 import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
@@ -298,9 +298,8 @@ void main() {
 Map<String, Object?> _map(Map<String, Object?> value, String key) =>
     value[key]! as Map<String, Object?>;
 
-Matcher _failure(String code) => throwsA(
-  isA<ApplicationCommandException>().having((e) => e.code, 'code', code),
-);
+Matcher _failure(String code) =>
+    throwsA(isA<RequestFailure>().having((e) => e.code, 'code', code));
 
 const _device = AdbDevice(
   id: 'native-handle',

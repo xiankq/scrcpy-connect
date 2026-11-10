@@ -101,7 +101,7 @@ Future<void> _flush(WidgetTester tester) async {
 void main() {
   testWidgets('永久焦点丢失后即使源已清理也不自动重开，明确播放才解除恢复栅栏', (tester) async {
     final fixture = _AudioFixture();
-    final close = fixture.controller.claimRemoteDeviceView('a');
+    final close = fixture.controller.views.claimRemoteDeviceView('a');
     await _flush(tester);
     fixture.events.add({
       'type': 'audio.resume.required',
@@ -122,7 +122,7 @@ void main() {
       fixture.calls.where((call) => call.$1 == 'audio.start'),
       hasLength(1),
     );
-    await fixture.controller.request('audio.start', {'deviceId': 'a'});
+    await fixture.controller.views.request('audio.start', {'deviceId': 'a'});
     await _flush(tester);
     expect(
       fixture.calls.where((call) => call.$1 == 'audio.start'),
@@ -135,7 +135,7 @@ void main() {
 
   testWidgets('最后窗口停止失败后无需外部事件即可有界重试清理精确音源', (tester) async {
     final fixture = _AudioFixture();
-    final close = fixture.controller.claimRemoteDeviceView('a');
+    final close = fixture.controller.views.claimRemoteDeviceView('a');
     await _flush(tester);
     final failedStop = fixture.pendingStop = Completer<Json>();
     close();
@@ -159,7 +159,7 @@ void main() {
   testWidgets('已释放窗口的迟到音源清理失败后仍重试且只停止原身份', (tester) async {
     final fixture = _AudioFixture();
     final pending = fixture.pendingStarts['a'] = Completer<Json>();
-    final close = fixture.controller.claimRemoteDeviceView('a');
+    final close = fixture.controller.views.claimRemoteDeviceView('a');
     await _flush(tester);
     close();
     await _flush(tester);
@@ -185,7 +185,7 @@ void main() {
 
   testWidgets('持续停止失败保留待清理错误但不形成无限重试', (tester) async {
     final fixture = _AudioFixture();
-    final close = fixture.controller.claimRemoteDeviceView('a');
+    final close = fixture.controller.views.claimRemoteDeviceView('a');
     await _flush(tester);
     fixture.stopsToFail = 100;
     close();
@@ -213,7 +213,7 @@ void main() {
   testWidgets('旧音源快照不能抹掉读取期间新产生的迟到清理失败', (tester) async {
     final fixture = _AudioFixture();
     final starting = fixture.pendingStarts['a'] = Completer<Json>();
-    final close = fixture.controller.claimRemoteDeviceView('a');
+    final close = fixture.controller.views.claimRemoteDeviceView('a');
     await _flush(tester);
     final reading = fixture.pendingSources = Completer<Json>();
     fixture.sessionChanged();
@@ -251,7 +251,7 @@ void main() {
   testWidgets('协调器释放时重试仅由失败清理记录持有的迟到音源', (tester) async {
     final fixture = _AudioFixture();
     final starting = fixture.pendingStarts['a'] = Completer<Json>();
-    final close = fixture.controller.claimRemoteDeviceView('a');
+    final close = fixture.controller.views.claimRemoteDeviceView('a');
     await _flush(tester);
     close();
     await _flush(tester);
@@ -282,7 +282,7 @@ void main() {
   ) async {
     final fixture = _AudioFixture();
     final pending = fixture.pendingSources = Completer<Json>();
-    final close = fixture.controller.claimRemoteDeviceView('a');
+    final close = fixture.controller.views.claimRemoteDeviceView('a');
     await _flush(tester);
     for (var i = 0; i < 50; i++) {
       fixture.sessionChanged();
@@ -315,7 +315,7 @@ void main() {
   ) async {
     final fixture = _AudioFixture();
     final starting = fixture.pendingStarts['a'] = Completer<Json>();
-    final close = fixture.controller.claimRemoteDeviceView('a');
+    final close = fixture.controller.views.claimRemoteDeviceView('a');
     await _flush(tester);
     expect(
       fixture.calls.where((call) => call.$1 == 'audio.start'),
@@ -347,9 +347,9 @@ void main() {
     'opened remote pages mix device sound and deduplicate same-device windows',
     (tester) async {
       final fixture = _AudioFixture();
-      final closeA = fixture.controller.claimRemoteDeviceView('a');
-      final closeAppA = fixture.controller.claimRemoteDeviceView('a');
-      final closeB = fixture.controller.claimRemoteDeviceView('b');
+      final closeA = fixture.controller.views.claimRemoteDeviceView('a');
+      final closeAppA = fixture.controller.views.claimRemoteDeviceView('a');
+      final closeB = fixture.controller.views.claimRemoteDeviceView('b');
       await _flush(tester);
       expect(fixture.sources.keys, unorderedEquals(['a', 'b']));
       expect(
@@ -445,7 +445,7 @@ void main() {
     (tester) async {
       final fixture = _AudioFixture();
       fixture.sessions.clear();
-      final close = fixture.controller.claimRemoteDeviceView('a');
+      final close = fixture.controller.views.claimRemoteDeviceView('a');
       await _flush(tester);
       expect(fixture.sources, isEmpty);
       fixture.sessions.add({
@@ -470,8 +470,8 @@ void main() {
     'lost sessions stop device sound while another open device continues',
     (tester) async {
       final fixture = _AudioFixture();
-      final closeA = fixture.controller.claimRemoteDeviceView('a');
-      final closeB = fixture.controller.claimRemoteDeviceView('b');
+      final closeA = fixture.controller.views.claimRemoteDeviceView('a');
+      final closeB = fixture.controller.views.claimRemoteDeviceView('b');
       await _flush(tester);
       fixture.sessions.removeWhere((session) => session['deviceId'] == 'a');
       fixture.events.add({
@@ -493,8 +493,8 @@ void main() {
   ) async {
     final fixture = _AudioFixture();
     final pending = fixture.pendingStarts['a'] = Completer<Json>();
-    final closeA = fixture.controller.claimRemoteDeviceView('a');
-    final closeB = fixture.controller.claimRemoteDeviceView('b');
+    final closeA = fixture.controller.views.claimRemoteDeviceView('a');
+    final closeB = fixture.controller.views.claimRemoteDeviceView('b');
     await _flush(tester);
     expect(fixture.sources['b']?['status'], 'playing');
     closeB();
@@ -524,8 +524,8 @@ void main() {
     tester,
   ) async {
     final fixture = _AudioFixture()..failingDevices.add('a');
-    final closeA = fixture.controller.claimRemoteDeviceView('a');
-    final closeB = fixture.controller.claimRemoteDeviceView('b');
+    final closeA = fixture.controller.views.claimRemoteDeviceView('a');
+    final closeB = fixture.controller.views.claimRemoteDeviceView('b');
     await _flush(tester);
     expect(fixture.sources.keys, ['b']);
     expect(fixture.controller.audioError, contains('unsupported a'));

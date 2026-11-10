@@ -1,7 +1,6 @@
 import 'dart:async';
 
-import 'package:scrcpy_connect/models/application_command.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 typedef StateJson = Map<String, dynamic>;
 
@@ -72,9 +71,7 @@ class StateRecovery {
 
   Future<StateJson> refresh() {
     if (_disposed || isDisposed()) {
-      return Future.error(
-        const ApplicationCommandException('cancelled', '状态恢复已结束。'),
-      );
+      return Future.error(const RequestFailure('cancelled', '状态恢复已结束。'));
     }
     if (_running case final existing?) return existing;
     _pending = true;
@@ -91,21 +88,18 @@ class StateRecovery {
     try {
       emit({'type': 'state.resync', 'data': <String, dynamic>{}});
       if (!current()) {
-        throw const ApplicationCommandException('cancelled', '状态恢复已结束。');
+        throw const RequestFailure('cancelled', '状态恢复已结束。');
       }
       for (var attempt = 0; attempt < 4; attempt++) {
         final gaps = _gaps;
         final localRevision = _localRevision;
         final snapshot = await read(current).timeout(timeout);
         if (!current()) {
-          throw const ApplicationCommandException('cancelled', '状态恢复已结束。');
+          throw const RequestFailure('cancelled', '状态恢复已结束。');
         }
         final sequence = validateStateSnapshot(snapshot);
         if (sequence < _watermark) {
-          throw const ApplicationCommandException(
-            'invalid_snapshot',
-            '状态快照版本已过期。',
-          );
+          throw const RequestFailure('invalid_snapshot', '状态快照版本已过期。');
         }
         if (gaps != _gaps ||
             localRevision != _localRevision ||
@@ -127,10 +121,7 @@ class StateRecovery {
         result.complete(snapshot);
         return;
       }
-      throw const ApplicationCommandException(
-        'state_busy',
-        '状态持续变化，尚未完成核验，请重试。',
-      );
+      throw const RequestFailure('state_busy', '状态持续变化，尚未完成核验，请重试。');
     } catch (error, stack) {
       if (current()) {
         // 使超时读取失效，防止它释放迟到的所有者。
@@ -161,7 +152,7 @@ class StateRecovery {
 int validateStateSnapshot(StateJson snapshot) {
   final sequence = snapshot['sequence'];
   if (sequence is! int || sequence < 0 || snapshot['settings'] is! Map) {
-    throw const ApplicationCommandException('invalid_snapshot', '状态快照缺少版本或设置。');
+    throw const RequestFailure('invalid_snapshot', '状态快照缺少版本或设置。');
   }
   for (final key in const [
     'devices',
@@ -173,7 +164,7 @@ int validateStateSnapshot(StateJson snapshot) {
     'companions',
   ]) {
     if (snapshot[key] is! List) {
-      throw ApplicationCommandException('invalid_snapshot', '状态快照缺少$key。');
+      throw RequestFailure('invalid_snapshot', '状态快照缺少$key。');
     }
   }
   return sequence;

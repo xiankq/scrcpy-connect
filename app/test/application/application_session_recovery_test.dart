@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/stores/application_session.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
 import 'package:scrcpy_connect/stores/media/app_launch_store.dart';
 
@@ -243,8 +243,8 @@ Future<void> _expectReadsAndCleanupAvailable(
   expect(record['autoReconnect'], isFalse);
 }
 
-Matcher _commandFailure(String code) => isA<ApplicationCommandException>()
-    .having((error) => error.code, 'code', code);
+Matcher _commandFailure(String code) =>
+    isA<RequestFailure>().having((error) => error.code, 'code', code);
 
 Directory _officialBinaryDirectory() {
   final binary = Platform.environment['INTEROP_OFFICIAL_ADB_BINARY'];

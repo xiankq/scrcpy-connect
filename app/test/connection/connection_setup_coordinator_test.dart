@@ -6,7 +6,7 @@ import 'dart:typed_data';
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:multicast_dns/multicast_dns.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
 import 'package:scrcpy_connect/stores/connection/connection_setup_coordinator.dart';
 import 'package:scrcpy_connect/stores/connection/device_coordinator.dart';
@@ -556,7 +556,7 @@ void main() {
     await expectLater(
       fixture.setup.request('devices.pair', {..._pair, 'identity': _dedicated}),
       throwsA(
-        isA<ApplicationCommandException>()
+        isA<RequestFailure>()
             .having((error) => error.code, 'code', 'setup_cleanup_unconfirmed')
             .having(
               (error) =>
@@ -609,13 +609,8 @@ void main() {
   });
 }
 
-Matcher _failure(String code) => throwsA(
-  isA<ApplicationCommandException>().having(
-    (error) => error.code,
-    'code',
-    code,
-  ),
-);
+Matcher _failure(String code) =>
+    throwsA(isA<RequestFailure>().having((error) => error.code, 'code', code));
 
 ({String instance, String password}) _qrFields(String payload) {
   final match = RegExp(r'^WIFI:T:ADB;S:([^;]+);P:([^;]+);;$')

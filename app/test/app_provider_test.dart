@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/remote_views.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
@@ -28,7 +29,7 @@ ProviderContainer scope(
 );
 
 void main() {
-  test('类型化调用直接使用执行接口，并在回执前发布精确停止意图', () async {
+  test('类型化调用直接使用执行接口', () async {
     final calls = <ApplicationCommand>[];
     final receipt = Completer<Json>();
     final container = ProviderContainer(
@@ -48,19 +49,12 @@ void main() {
       ],
     );
     final notifier = container.read(appControllerProvider.notifier);
-    final events = <Json>[];
-    final subscription = notifier.eventStream().listen(events.add);
     final pending = notifier.execute(ApplicationCommand.sessionStop, {
       'sessionId': 'session-owned',
     });
     expect(calls, [ApplicationCommand.sessionStop]);
-    expect(events.single, {
-      'type': 'session.stop.requested',
-      'data': {'sessionId': 'session-owned'},
-    });
     receipt.complete({'stopped': true});
     expect(await pending, {'stopped': true});
-    await subscription.cancel();
     container.dispose();
   });
 
@@ -110,7 +104,9 @@ void main() {
       return {};
     }, events: events.stream);
     final notifier = container.read(appControllerProvider.notifier);
-    final view = notifier.claimSessionViewLease('live', visible: true);
+    final views = RemoteViews(notifier);
+    addTearDown(views.dispose);
+    final view = views.claimSessionViewLease('live', visible: true);
     final snapshot = <String, dynamic>{
       'devices': <Json>[],
       'settings': <String, dynamic>{},
@@ -147,7 +143,9 @@ void main() {
 
     final container = scope(request, events: oldEvents.stream);
     final oldController = container.read(appControllerProvider.notifier);
-    final oldView = oldController.claimSessionViewLease('old', visible: true);
+    final views = RemoteViews(oldController);
+    addTearDown(views.dispose);
+    final oldView = views.claimSessionViewLease('old', visible: true);
     oldEvents.add({'type': 'state.resync', 'data': <String, dynamic>{}});
     container.updateOverrides([
       appDependenciesProvider.overrideWithValue(

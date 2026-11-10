@@ -9,12 +9,11 @@ import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
 import 'package:scrcpy_connect/services/file_commands.dart';
 import 'package:scrcpy_connect/stores/files/share_coordinator.dart';
 import 'package:scrcpy_connect/services/command_contract.dart';
-import 'package:scrcpy_connect/models/application_command.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/media/video_quality_policy.dart';
 import 'package:scrcpy_connect/services/media/virtual_display_policy.dart';
 
-import 'package:scrcpy_connect/services/preference_commands.dart';
+import 'package:scrcpy_connect/services/app_settings.dart';
 
 /// 应用命令的校验、产品偏好和文件流程；各业务所有者通过 Dart 接口执行。
 final class ApplicationCommandDispatcher {
@@ -47,7 +46,7 @@ final class ApplicationCommandDispatcher {
     Map<String, dynamic> params,
   )
   execute;
-  final PreferenceCommands _preferences;
+  final AppSettings _preferences;
   final void Function(Map<String, dynamic>)? _onMediaEvent;
   final AppMediaCache? _cache;
   final DeliveryJournal? _deliveries;
@@ -88,10 +87,19 @@ final class ApplicationCommandDispatcher {
         );
       }
     }
-    if (_preferences.handles(command)) {
-      return Map<String, dynamic>.from(
-        await _preferences.invoke(command, params) as Map,
-      );
+    switch (operation) {
+      case ApplicationCommand.settingsGet:
+        return _preferences.read();
+      case ApplicationCommand.settingsUpdate:
+        return _preferences.update(params);
+      case ApplicationCommand.settingsExport:
+        return _preferences.exportMetadata();
+      case ApplicationCommand.settingsImportPreview:
+        return _preferences.previewImport(params);
+      case ApplicationCommand.settingsImport:
+        return _preferences.importMetadata(params);
+      default:
+        break;
     }
     try {
       if (operation == ApplicationCommand.activitiesStop &&
@@ -111,19 +119,13 @@ final class ApplicationCommandDispatcher {
           if (operation == ApplicationCommand.sharingPending) {
             return {'shares': <Object?>[]};
           }
-          throw const ApplicationCommandException(
-            'platform_unavailable',
-            '此宿主不支持接收系统分享。',
-          );
+          throw const RequestFailure('platform_unavailable', '此宿主不支持接收系统分享。');
         }
         return await sharing.command(command, params);
       }
       if (command.startsWith('media.cache.')) {
         if (_cache == null) {
-          throw const ApplicationCommandException(
-            'cache_not_configured',
-            '应用缓存尚未配置。',
-          );
+          throw const RequestFailure('cache_not_configured', '应用缓存尚未配置。');
         }
         final result = Map<String, dynamic>.from(
           await _cache.command(command, params),
@@ -136,10 +138,7 @@ final class ApplicationCommandDispatcher {
       }
       if (command.startsWith('delivery.')) {
         if (_deliveries == null) {
-          throw const ApplicationCommandException(
-            'delivery_not_configured',
-            '保存日志尚未配置。',
-          );
+          throw const RequestFailure('delivery_not_configured', '保存日志尚未配置。');
         }
         return await _deliveries.command(command, params);
       }
@@ -149,17 +148,14 @@ final class ApplicationCommandDispatcher {
         ApplicationCommand.mediaThumbnailCancel,
       ].contains(operation)) {
         if (_artifacts == null) {
-          throw const ApplicationCommandException(
-            'cache_not_configured',
-            '应用媒体缓存尚未配置。',
-          );
+          throw const RequestFailure('cache_not_configured', '应用媒体缓存尚未配置。');
         }
         return await _artifacts.invoke(command, params);
       }
     } on MediaCacheFailure catch (error) {
-      throw ApplicationCommandException(error.code, error.message);
+      throw RequestFailure(error.code, error.message);
     } on FileFailure catch (error) {
-      throw ApplicationCommandException(error.code, error.message);
+      throw RequestFailure(error.code, error.message);
     }
     if (const [
       ApplicationCommand.sessionStart,
@@ -197,7 +193,7 @@ final class ApplicationCommandDispatcher {
         _transfers.cancelDevice(device),
       ]);
     }
-    final response = await _request(operation, params);
+    final response = await execute(operation, params);
     if (operation == ApplicationCommand.devicesForget) {
       await _preferences.forgetDevicePreferences(params['deviceId'] as String);
     }
@@ -218,15 +214,5 @@ final class ApplicationCommandDispatcher {
       );
     }
     return result;
-  }
-
-  Future<Map<String, dynamic>> _request(
-    ApplicationCommand command,
-    Map<String, dynamic> params,
-  ) async {
-    validateTypedCommandRequest(command, params);
-    final response = await execute(command, params);
-    validateCommandResult(command, response);
-    return response;
   }
 }

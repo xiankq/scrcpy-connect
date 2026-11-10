@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/services/connection/device_probe.dart';
 import 'package:scrcpy_connect/models/device_record.dart';
@@ -411,13 +411,8 @@ final class _Client implements AdbClient {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Matcher _failure(String code) => throwsA(
-  isA<ApplicationCommandException>().having(
-    (error) => error.code,
-    'code',
-    code,
-  ),
-);
+Matcher _failure(String code) =>
+    throwsA(isA<RequestFailure>().having((error) => error.code, 'code', code));
 
 DeviceRecord _record({String? serial, String? guid}) => DeviceRecord(
   id: '0b771116-878d-42d5-a47a-3179cc4ae758',

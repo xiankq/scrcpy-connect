@@ -1,5 +1,5 @@
 import 'package:scrcpy_connect/stores/application_events.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/device_coordinator.dart';
 import 'package:scrcpy_connect/stores/companion_coordinator.dart';
 import 'package:scrcpy_connect/stores/observation_coordinator.dart';
@@ -80,10 +80,7 @@ final class ApplicationSnapshotReader {
         ),
       };
     }
-    throw const ApplicationCommandException(
-      'state_busy',
-      '应用状态持续变化，尚未取得完整快照，请重试。',
-    );
+    throw const RequestFailure('state_busy', '应用状态持续变化，尚未取得完整快照，请重试。');
   }
 
   /// 快照与实时窗口事件共用同一投影；读取不启动或关闭保持唤醒服务。

@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
-import 'package:scrcpy_connect/services/media/audio_player_port.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/services/media/audio_player.dart';
 import 'package:scrcpy_connect/stores/media/audio_output_coordinator.dart';
-import 'package:scrcpy_connect/stores/media/device_audio_view_coordinator.dart';
+import 'package:scrcpy_connect/widgets/remote_audio_views.dart';
 
 final _token = List.filled(64, 'a').join();
 AudioJson _stream(String id, [String device = 'device-A']) => {
@@ -23,7 +23,7 @@ AudioJson _endpoint(String id) => {
   'detachAddress': 8192,
 };
 Matcher _code(String code) =>
-    isA<ApplicationCommandException>().having((e) => e.code, 'code', code);
+    isA<RequestFailure>().having((e) => e.code, 'code', code);
 
 class _Player implements AudioPlayerPort {
   final changes = StreamController<AudioJson>.broadcast(sync: true);
@@ -179,10 +179,7 @@ class _Harness {
     switch (method) {
       case 'audio.platform.focus.acquire':
         if (focusBusy) {
-          throw const ApplicationCommandException(
-            'audio_owner_busy',
-            'another owner',
-          );
+          throw const RequestFailure('audio_owner_busy', 'another owner');
         }
         if (reuseNativeEpoch) {
           nativeEpoch ??= ++epochs;

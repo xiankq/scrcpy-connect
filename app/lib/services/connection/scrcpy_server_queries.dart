@@ -6,7 +6,7 @@ import 'package:scrcpy_connect/services/connection/device_query.dart';
 import 'package:uuid/uuid.dart';
 import 'package:adb/adb.dart';
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/services/connection/scrcpy_query_process.dart';
 
@@ -399,5 +399,4 @@ String _quote(String value) {
   return "'${value.replaceAll("'", "'\\''")}'";
 }
 
-Never _fail(String code, String message) =>
-    throw ApplicationCommandException(code, message);
+Never _fail(String code, String message) => throw RequestFailure(code, message);

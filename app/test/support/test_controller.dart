@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/remote_views.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/router/route_resource_resolver.dart';
 
@@ -10,6 +11,7 @@ import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
 import 'package:scrcpy_connect/models/app_state.dart';
 
 final _containers = Expando<ProviderContainer>();
+final _views = Expando<RemoteViews>();
 
 class _TestController extends AppController {
   void seed(AppState next) {
@@ -23,14 +25,48 @@ AppController createTestController(
   AppState? initialState,
   Future<void> Function()? close,
 }) {
+  final operationEvents = StreamController<Json>.broadcast(sync: true);
+  final incoming = events?.listen(operationEvents.add);
+  Future<Json> invoke(String command, [Json params = const {}]) {
+    final activity = command == 'activities.stop' ? params['activityId'] : null;
+    final session = command == 'session.stop'
+        ? params['sessionId']
+        : activity is String && activity.startsWith('session:')
+        ? activity.substring(8)
+        : null;
+    final device = ['devices.disconnect', 'devices.forget'].contains(command)
+        ? params['deviceId']
+        : activity is String && activity.startsWith('connection:')
+        ? activity.substring(11)
+        : null;
+    if (session is String) {
+      operationEvents.add({
+        'type': 'session.stop.requested',
+        'data': {'sessionId': session},
+      });
+    }
+    if (device is String) {
+      operationEvents.add({
+        'type': 'device.disconnect.requested',
+        'deviceId': device,
+        'data': <String, dynamic>{},
+      });
+    }
+    return request(command, params);
+  }
+
   final container = ProviderContainer(
     overrides: [
       appDependenciesProvider.overrideWithValue(
         AppDependencies(
-          request: request,
-          events: events ?? const Stream<Json>.empty(),
+          request: invoke,
+          events: operationEvents.stream,
           initialState: initialState,
-          close: close,
+          close: () async {
+            await incoming?.cancel();
+            await operationEvents.close();
+            await close?.call();
+          },
           initialize: false,
         ),
       ),
@@ -43,6 +79,8 @@ AppController createTestController(
   );
   final controller = container.read(appControllerProvider.notifier);
   _containers[controller] = container;
+  final views = _views[controller] = RemoteViews(controller);
+  container.listen(appControllerProvider, (_, _) => views.reconcile());
   return controller;
 }
 
@@ -61,13 +99,18 @@ class TestProviderScope extends StatelessWidget {
   @override
   Widget build(BuildContext context) => UncontrolledProviderScope(
     container: testContainer(controller),
-    child: child,
+    child: RemoteViewsScope(views: controller.views, child: child),
   );
 }
 
 /// 夹具注入仅供测试；生产控件消费生成状态和动作，不能经这些辅助方法修改不可变快照。
 extension ControllerFixture on AppController {
-  void dispose() => testContainer(this).dispose();
+  RemoteViews get views => _views[this]!;
+  void dispose() {
+    views.dispose();
+    testContainer(this).dispose();
+  }
+
   void queueTestShare(Json share) {
     pendingShares = [...pendingShares, share];
   }

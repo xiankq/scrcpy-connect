@@ -26,7 +26,7 @@ import 'package:scrcpy_connect/widgets/media_cache_blocker.dart';
 import 'dart:async';
 import 'dart:io';
 
-import 'package:scrcpy_connect/services/files/system_file_share.dart';
+import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 
 /// 准备原件时任务身份保持不变，缓存下载完成后才作为明确系统交付的来源。
 class ReceiveContentPage extends HookWidget {

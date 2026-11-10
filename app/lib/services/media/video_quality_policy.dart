@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 /// 与应用默认值共用的远程捕获基础设置。
 const defaultVideoQuality = <String, Object?>{
@@ -16,7 +16,7 @@ class VideoQualityPolicy {
     void validate(Map<Object?, Object?> values) {
       if (values.containsKey('qualityPreset') &&
           !presets.containsKey(values['qualityPreset'])) {
-        throw const ApplicationCommandException('invalid_argument', '画质预设无效。');
+        throw const RequestFailure('invalid_argument', '画质预设无效。');
       }
     }
 
@@ -60,7 +60,7 @@ class VideoQualityPolicy {
     if (patch.containsKey('preset')) {
       final selected = presets[patch['preset']];
       if (selected == null) {
-        throw const ApplicationCommandException('invalid_argument', '画质预设无效。');
+        throw const RequestFailure('invalid_argument', '画质预设无效。');
       }
       result.addAll({
         'qualityPreset': patch['preset'],
@@ -87,10 +87,7 @@ class VideoQualityPolicy {
       'audioEnabled',
       'audioCodec',
     ].any(patch.containsKey)) {
-      throw const ApplicationCommandException(
-        'invalid_argument',
-        '设备声音设置请使用独立音源设置。',
-      );
+      throw const RequestFailure('invalid_argument', '设备声音设置请使用独立音源设置。');
     }
     return result;
   }

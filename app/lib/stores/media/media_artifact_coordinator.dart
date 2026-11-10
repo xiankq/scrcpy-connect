@@ -6,7 +6,7 @@ import 'dart:typed_data';
 import 'package:uuid/uuid.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/files/file_paths.dart';
 import 'package:scrcpy_connect/services/files/file_type_policy.dart';
 import 'package:scrcpy_connect/services/files/file_executor.dart';
@@ -44,7 +44,7 @@ final class MediaArtifactCoordinator {
   ) async {
     final device = _text(params, 'deviceId');
     if (_closed || _stoppingDevices.contains(device)) {
-      throw const ApplicationCommandException('disposed', '媒体缓存所有者已关闭。');
+      throw const RequestFailure('disposed', '媒体缓存所有者已关闭。');
     }
     if (command == 'media.thumbnail.cancel') {
       final operation = _uuid(params['operationId']);
@@ -69,7 +69,7 @@ final class MediaArtifactCoordinator {
     final operation = thumbnail ? _uuid(params['operationId']) : _uuid(null);
     final key = '$device:$operation';
     if (_active.values.where((task) => task.device == device).length >= 16) {
-      throw const ApplicationCommandException('busy', '这台设备正在处理的媒体请求已达到上限。');
+      throw const RequestFailure('busy', '这台设备正在处理的媒体请求已达到上限。');
     }
     _claim(key, false);
     final task = _Operation(device);
@@ -124,12 +124,11 @@ final class MediaArtifactCoordinator {
     } on Object catch (error) {
       if (task.timeout &&
           (error is FileFailure && error.code == 'cancelled' ||
-              error is ApplicationCommandException &&
-                  error.code == 'cancelled')) {
+              error is RequestFailure && error.code == 'cancelled')) {
         task.check();
       }
       if (error is FileSystemException) {
-        throw ApplicationCommandException('io_error', error.message);
+        throw RequestFailure('io_error', error.message);
       }
       rethrow;
     } finally {
@@ -152,16 +151,13 @@ final class MediaArtifactCoordinator {
 
   void _claim(String key, bool cancelled) {
     if (_seen.containsKey(key)) {
-      throw ApplicationCommandException(
+      throw RequestFailure(
         _seen[key]! ? 'cancelled' : 'operation_reused',
         '此媒体操作已结束或取消，请使用新的操作标识。',
       );
     }
     if (_seen.length >= 65536) {
-      throw const ApplicationCommandException(
-        'operation_limit',
-        '媒体操作标识已达到本次附着上限。',
-      );
+      throw const RequestFailure('operation_limit', '媒体操作标识已达到本次附着上限。');
     }
     _seen[key] = cancelled;
   }
@@ -252,10 +248,7 @@ final class MediaArtifactCoordinator {
   ) async {
     final files = executor;
     if (files is! FileReadExecutor) {
-      throw const ApplicationCommandException(
-        'unsupported',
-        '文件执行器不支持精确预览生命周期。',
-      );
+      throw const RequestFailure('unsupported', '文件执行器不支持精确预览生命周期。');
     }
     final reader = await (files as FileReadExecutor).beginRead(
       device,
@@ -265,7 +258,7 @@ final class MediaArtifactCoordinator {
     task.check();
     final source = await reader.stat(path);
     if (!source.isFile) {
-      throw const ApplicationCommandException('not_a_file', '预览源必须是普通文件。');
+      throw const RequestFailure('not_a_file', '预览源必须是普通文件。');
     }
     final key = _hash(utf8.encode('$device\u0000$path'));
     final version = _hash(utf8.encode(jsonEncode(source.toJson())));
@@ -338,13 +331,10 @@ final class MediaArtifactCoordinator {
     task.check();
     final after = await reader.stat(path);
     if (count != source.size || after != source) {
-      throw const ApplicationCommandException(
-        'source_changed',
-        '预览源文件发生变化，请重新打开。',
-      );
+      throw const RequestFailure('source_changed', '预览源文件发生变化，请重新打开。');
     }
     if (await temporary.length() != count) {
-      throw const ApplicationCommandException('source_changed', '预览传输字节数不一致。');
+      throw const RequestFailure('source_changed', '预览传输字节数不一致。');
     }
     final digest = (await sha256.bind(temporary.openRead()).first).toString();
     await reader.commit(temporary.path, target.path);
@@ -385,10 +375,7 @@ final class MediaArtifactCoordinator {
     _Operation task,
   ) async {
     if (maxSize is! int || maxSize < 64 || maxSize > 512) {
-      throw const ApplicationCommandException(
-        'invalid_argument',
-        '缩略图尺寸必须在 64–512 之间。',
-      );
+      throw const RequestFailure('invalid_argument', '缩略图尺寸必须在 64–512 之间。');
     }
     final mime = FileTypePolicy.mime(path);
     final kind = mime.startsWith('image/')
@@ -397,7 +384,7 @@ final class MediaArtifactCoordinator {
         ? 'video'
         : null;
     if (kind == null) {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'media_type_unknown',
         '此路径的媒体类型尚未识别，不能自动下载原内容作为缩略图。',
       );
@@ -483,23 +470,17 @@ final class MediaArtifactCoordinator {
     if (!_same(_source(response['sourceStamp']), source) ||
         response['thumbnail'] != true ||
         response['mime'] != 'image/jpeg') {
-      throw const ApplicationCommandException(
-        'source_changed',
-        '生成期间媒体源或缩略图类型发生变化。',
-      );
+      throw const RequestFailure('source_changed', '生成期间媒体源或缩略图类型发生变化。');
     }
     final encoded = response['data'];
     if (encoded is! String || encoded.length > ((_maxThumbnail + 2) ~/ 3) * 4) {
-      throw const ApplicationCommandException(
-        'invalid_thumbnail',
-        '缩略图数据缺失或超过大小限制。',
-      );
+      throw const RequestFailure('invalid_thumbnail', '缩略图数据缺失或超过大小限制。');
     }
     final Uint8List jpeg;
     try {
       jpeg = base64Decode(encoded);
     } on FormatException {
-      throw const ApplicationCommandException('invalid_thumbnail', '缩略图编码无效。');
+      throw const RequestFailure('invalid_thumbnail', '缩略图编码无效。');
     }
     final digest = _hash(jpeg), dimensions = _jpeg(jpeg);
     if (jpeg.length > _maxThumbnail ||
@@ -509,18 +490,12 @@ final class MediaArtifactCoordinator {
         response['height'] != dimensions.$2 ||
         dimensions.$1 > maxSize ||
         dimensions.$2 > maxSize) {
-      throw const ApplicationCommandException(
-        'invalid_thumbnail',
-        '缩略图摘要、大小或尺寸不一致。',
-      );
+      throw const RequestFailure('invalid_thumbnail', '缩略图摘要、大小或尺寸不一致。');
     }
     final after = await _rpc('stat', params, task);
     transferred += _count(after['rpcBytesReceived']);
     if (!_same(_source(after['sourceStamp']), source)) {
-      throw const ApplicationCommandException(
-        'source_changed',
-        '媒体源已经变化，请重新获取缩略图。',
-      );
+      throw const RequestFailure('source_changed', '媒体源已经变化，请重新获取缩略图。');
     }
     task.check();
     await directory.create(recursive: true);
@@ -646,10 +621,7 @@ final class MediaArtifactCoordinator {
   ) async {
     final bytes = utf8.encode(jsonEncode(metadata));
     if (bytes.length > 4096) {
-      throw const ApplicationCommandException(
-        'invalid_metadata',
-        '媒体缓存元数据超过上限。',
-      );
+      throw const RequestFailure('invalid_metadata', '媒体缓存元数据超过上限。');
     }
     final file = File(p.join(directory.path, '.${_uuid(null)}.metadata'));
     try {
@@ -662,7 +634,7 @@ final class MediaArtifactCoordinator {
 
   static Map<String, dynamic> _source(Object? value) {
     if (value is! Map<String, dynamic>) {
-      throw const ApplicationCommandException('invalid_data', '缩略图源元数据无效。');
+      throw const RequestFailure('invalid_data', '缩略图源元数据无效。');
     }
     final mode = value['mode'], size = value['size'];
     if (mode is! int ||
@@ -676,13 +648,13 @@ final class MediaArtifactCoordinator {
         int.tryParse(value['inode'] as String) == null ||
         value['modifiedSeconds'] is! int ||
         value['changedSeconds'] is! int) {
-      throw const ApplicationCommandException('invalid_data', '缩略图源元数据无效。');
+      throw const RequestFailure('invalid_data', '缩略图源元数据无效。');
     }
     for (final key in ['modifiedNanos', 'changedNanos']) {
       final nanos = value[key];
       if (nanos != null &&
           (nanos is! int || nanos < 0 || nanos >= 1000000000)) {
-        throw const ApplicationCommandException('invalid_data', '缩略图源时间精度无效。');
+        throw const RequestFailure('invalid_data', '缩略图源时间精度无效。');
       }
     }
     return {
@@ -703,7 +675,7 @@ final class MediaArtifactCoordinator {
   static Future<(int, int)?> _cachedDimensions(File target) async {
     try {
       return _jpeg(await target.readAsBytes());
-    } on ApplicationCommandException {
+    } on RequestFailure {
       return null;
     } on FileSystemException {
       return null;
@@ -711,10 +683,7 @@ final class MediaArtifactCoordinator {
   }
 
   static (int, int) _jpeg(List<int> bytes) {
-    const invalid = ApplicationCommandException(
-      'invalid_thumbnail',
-      '缩略图 JPEG 结构或尺寸无效。',
-    );
+    const invalid = RequestFailure('invalid_thumbnail', '缩略图 JPEG 结构或尺寸无效。');
     if (bytes.length < 4 ||
         bytes[0] != 255 ||
         bytes[1] != 216 ||
@@ -753,7 +722,7 @@ final class MediaArtifactCoordinator {
   static String _text(Map<String, dynamic> params, String key) {
     final value = params[key];
     if (value is! String || value.isEmpty || value.contains('\u0000')) {
-      throw ApplicationCommandException('invalid_argument', '缺少有效字段：$key');
+      throw RequestFailure('invalid_argument', '缺少有效字段：$key');
     }
     return value;
   }
@@ -764,10 +733,7 @@ final class MediaArtifactCoordinator {
           !RegExp(
             r'^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$',
           ).hasMatch(value)) {
-        throw const ApplicationCommandException(
-          'invalid_argument',
-          '媒体操作标识必须是 UUID。',
-        );
+        throw const RequestFailure('invalid_argument', '媒体操作标识必须是 UUID。');
       }
       return value.toLowerCase();
     }
@@ -798,7 +764,7 @@ final class _Operation {
       await writer?.close();
       writer = null;
     } catch (error) {
-      throw ApplicationCommandException(
+      throw RequestFailure(
         'media_cleanup_unconfirmed',
         '媒体执行或缓存保护尚未确认释放：$error',
       );
@@ -815,7 +781,7 @@ final class _Operation {
   void cancel() => token.cancel();
   void check() {
     if (timeout) {
-      throw const ApplicationCommandException('media_timeout', '媒体请求超过有界等待时间。');
+      throw const RequestFailure('media_timeout', '媒体请求超过有界等待时间。');
     }
     token.check();
   }

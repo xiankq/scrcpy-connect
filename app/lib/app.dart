@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/widgets/remote_views.dart';
+import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
 import 'package:scrcpy_connect/widgets/app_presentation_host.dart';
 import 'package:scrcpy_connect/services/platform/system_visual_preferences.dart';
 import 'package:scrcpy_connect/services/platform/system_typography.dart';
@@ -17,6 +19,16 @@ class ConnectApp extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.watch(appControllerProvider.notifier);
+    final dependencies = ref.watch(appDependenciesProvider);
+    final views = useMemoized(() => RemoteViews(controller), [
+      controller,
+      dependencies,
+    ]);
+    useEffect(() => views.dispose, [views]);
+    ref.listen(
+      appControllerProvider.select((s) => (s.devices, s.reconciliationPending)),
+      (_, _) => views.reconcile(),
+    );
     final appSettings = ref.watch(
       appControllerProvider.select((state) => state.settings),
     );
@@ -59,17 +71,20 @@ class ConnectApp extends HookConsumerWidget {
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: mode,
-      builder: (context, child) => AppPresentationHost(
-        navigator: navigator,
-        router: router,
-        child: liquid.GlassTheme(
-          data: GlassMaterial.theme(context),
-          child: liquid.GlassAccessibilityScope(
-            reduceTransparency:
-                systemVisualPreferences.reduceTransparency ||
-                MediaQuery.highContrastOf(context) ||
-                liquid.GlassAccessibilityData.of(context).reduceTransparency,
-            child: child!,
+      builder: (context, child) => RemoteViewsScope(
+        views: views,
+        child: AppPresentationHost(
+          navigator: navigator,
+          router: router,
+          child: liquid.GlassTheme(
+            data: GlassMaterial.theme(context),
+            child: liquid.GlassAccessibilityScope(
+              reduceTransparency:
+                  systemVisualPreferences.reduceTransparency ||
+                  MediaQuery.highContrastOf(context) ||
+                  liquid.GlassAccessibilityData.of(context).reduceTransparency,
+              child: child!,
+            ),
           ),
         ),
       ),

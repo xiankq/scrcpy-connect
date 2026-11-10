@@ -1,5 +1,4 @@
-import 'package:scrcpy_connect/models/application_command_exception.dart';
-import 'package:scrcpy_connect/models/application_command.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 /// 内部路由入口的防御性检查；权限、身份和资源代际仍由业务所有者核验。
 ApplicationCommand validateCommandRequest(
@@ -8,7 +7,7 @@ ApplicationCommand validateCommandRequest(
 ) {
   final command = ApplicationCommand.tryParse(name);
   if (command == null) {
-    throw ApplicationCommandException('unknown_command', '未知操作：$name');
+    throw RequestFailure('unknown_command', '未知操作：$name');
   }
   validateTypedCommandRequest(command, params);
   return command;
@@ -408,10 +407,7 @@ void _check(
   final value = data[key];
   if (optional && value == null) return;
   if (!accepts(value)) {
-    throw ApplicationCommandException(
-      code,
-      optional ? '无效的字段：$key' : '缺少或无效的字段：$key',
-    );
+    throw RequestFailure(code, optional ? '无效的字段：$key' : '缺少或无效的字段：$key');
   }
 }
 

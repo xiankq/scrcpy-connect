@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:adb/adb.dart';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/services/connection/device_probe.dart';
 import 'package:scrcpy_connect/services/connection/device_query.dart';
@@ -36,28 +36,22 @@ final class DeviceDetailsReader {
     AdbCancellation? cancellation,
   }) async {
     if (!handles(name)) {
-      throw const ApplicationCommandException(
-        'unknown_command',
-        '此设备详情模块不处理这项命令。',
-      );
+      throw const RequestFailure('unknown_command', '此设备详情模块不处理这项命令。');
     }
     final id = params['deviceId'];
     if (id is! String || !validDeviceId(id)) {
-      throw const ApplicationCommandException('invalid_device_id', '设备记录标识无效。');
+      throw const RequestFailure('invalid_device_id', '设备记录标识无效。');
     }
     final record = records.current.find(id);
     if (record == null) {
-      throw const ApplicationCommandException('device_not_found', '设备记录已不存在。');
+      throw const RequestFailure('device_not_found', '设备记录已不存在。');
     }
     final expected = params['connectionId'];
     if (expected != null && (expected is! String || expected.isEmpty)) {
-      throw const ApplicationCommandException(
-        'invalid_connection_id',
-        '设备连接标识无效。',
-      );
+      throw const RequestFailure('invalid_connection_id', '设备连接标识无效。');
     }
     if (cancellation?.isCancelled == true) {
-      throw const ApplicationCommandException('cancelled', '本次设备数据读取已取消。');
+      throw const RequestFailure('cancelled', '本次设备数据读取已取消。');
     }
     final connection = connectionForDevice(id);
     if (connection == null) {
@@ -74,7 +68,7 @@ final class DeviceDetailsReader {
           },
         };
       }
-      throw const ApplicationCommandException('disconnected', '这台设备当前没有可用连接。');
+      throw const RequestFailure('disconnected', '这台设备当前没有可用连接。');
     }
     try {
       final facts = await connection.client.services.connectionFacts(
@@ -86,10 +80,7 @@ final class DeviceDetailsReader {
       }
       final connectionId = facts.connectionId;
       if (connectionId == null || connectionId.isEmpty) {
-        throw const ApplicationCommandException(
-          'query_unavailable',
-          '无法核验当前设备连接。',
-        );
+        throw const RequestFailure('query_unavailable', '无法核验当前设备连接。');
       }
       final scope = (id: id, connection: connection, idAtStart: connectionId);
       final result = switch (name) {
@@ -127,7 +118,7 @@ final class DeviceDetailsReader {
       };
     } on AdbException catch (error, stack) {
       Error.throwWithStackTrace(
-        ApplicationCommandException(error.code, error.message),
+        RequestFailure(error.code, error.message),
         stack,
       );
     }
@@ -174,10 +165,7 @@ final class DeviceDetailsReader {
         return await _read(scope, command, cancellation);
       } catch (error, stack) {
         final (code, message) = switch (error) {
-          ApplicationCommandException(:final code, :final message) => (
-            code,
-            message,
-          ),
+          RequestFailure(:final code, :final message) => (code, message),
           AdbException(:final code, :final message) => (code, message),
           _ => Error.throwWithStackTrace(error, stack),
         };
@@ -267,10 +255,8 @@ typedef _FactScope = ({
   String idAtStart,
 });
 
-Never _stale() => throw const ApplicationCommandException(
-  'stale_connection',
-  '连接已替换或关闭，请重新读取设备数据。',
-);
+Never _stale() =>
+    throw const RequestFailure('stale_connection', '连接已替换或关闭，请重新读取设备数据。');
 
 List<String> _lines(String text) => const LineSplitter().convert(text);
 
@@ -366,10 +352,7 @@ String _foregroundPackage(String text) {
     }
   }
   if (packages.length != 1) {
-    throw const ApplicationCommandException(
-      'foreground_unavailable',
-      '无法确定当前手机画面中的应用。',
-    );
+    throw const RequestFailure('foreground_unavailable', '无法确定当前手机画面中的应用。');
   }
   return packages.single;
 }

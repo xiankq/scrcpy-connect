@@ -4,16 +4,12 @@ import 'dart:io';
 import 'package:scrcpy_connect/stores/preference_store.dart';
 import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
 import 'package:scrcpy_connect/models/device_metadata.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
-import 'package:scrcpy_connect/services/preference_commands.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/services/app_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-TypeMatcher<ApplicationCommandException> errorCode(String code) =>
-    isA<ApplicationCommandException>().having(
-      (error) => error.code,
-      'code',
-      code,
-    );
+TypeMatcher<RequestFailure> errorCode(String code) =>
+    isA<RequestFailure>().having((error) => error.code, 'code', code);
 Map<String, dynamic> metadata([
   Map<String, Object?> settings = const {'appearance': 'dark'},
 ]) {
@@ -41,12 +37,12 @@ void main() {
   late Directory directory;
   late PreferenceStore preferences;
   late DeviceRecordStore records;
-  PreferenceCommands commands({
+  AppSettings commands({
     DeviceRecordStore? deviceRecords,
     void Function(DeviceRecordsImport)? onDevicesImported,
     void Function(Map<String, dynamic>)? onChanged,
     Future<void> Function(bool)? applyBackgroundPolicy,
-  }) => PreferenceCommands(
+  }) => AppSettings(
     preferences: preferences,
     records: deviceRecords ?? records,
     onDevicesImported: onDevicesImported ?? (_) {},
@@ -58,7 +54,7 @@ void main() {
     directory = await Directory.systemTemp.createTemp(
       'preferences-runtime-test-',
     );
-    preferences = await PreferenceCommands.prepare(directory);
+    preferences = await AppSettings.prepare(directory);
     records = await DeviceRecordStore.open(directory: directory);
   });
   tearDown(() async {
@@ -75,12 +71,12 @@ void main() {
         await release.future;
       },
     );
-    final saving = runtime.invoke('settings.update', {
+    final saving = runtime.update({
       'appearance': 'dark',
       'backgroundKeepAlive': false,
     });
     await applying.future;
-    final second = runtime.invoke('settings.update', {'appearance': 'system'});
+    final second = runtime.update({'appearance': 'system'});
     var returned = false;
     final reading = runtime.read().then((settings) {
       returned = true;
@@ -110,10 +106,7 @@ void main() {
       },
     );
     await expectLater(
-      runtime.invoke('settings.update', {
-        'appearance': 'dark',
-        'backgroundKeepAlive': false,
-      }),
+      runtime.update({'appearance': 'dark', 'backgroundKeepAlive': false}),
       throwsA(
         errorCode('preferences_apply_unknown').having(
           (error) => error.details,
@@ -124,9 +117,7 @@ void main() {
     );
     expect(changes.single['appearance'], 'dark');
     expect(
-      (await PreferenceCommands.prepare(directory))
-          .current
-          .values['appearance'],
+      (await AppSettings.prepare(directory)).current.values['appearance'],
       'dark',
     );
     final revision = preferences.current.revision;
@@ -140,23 +131,23 @@ void main() {
       })['settings']['appearance'],
       'dark',
     );
-    await runtime.invoke('settings.update', {'fileViewMode': 'list'});
+    await runtime.update({'fileViewMode': 'list'});
     expect(applied, [false, false]);
     observerRejected = true;
     await expectLater(
-      runtime.invoke('settings.update', {'appearance': 'system'}),
+      runtime.update({'appearance': 'system'}),
       throwsA(errorCode('preferences_apply_unknown')),
     );
     expect(preferences.current.values['appearance'], 'system');
     observerRejected = false;
     await runtime.reconcile();
     expect(runtime.settings['appearance'], 'system');
-    await runtime.invoke('settings.reset', {
+    await runtime.reset({
       'keys': ['backgroundKeepAlive'],
     });
     expect(runtime.settings['backgroundKeepAlive'], isTrue);
     expect(applied, [false, false, false, true]);
-    await runtime.invoke('settings.update', {'appearance': 'dark'});
+    await runtime.update({'appearance': 'dark'});
     expect(applied, [false, false, false, true]);
   });
 
@@ -167,7 +158,7 @@ void main() {
       name: 'Phone',
     );
     final runtime = commands(onChanged: (_) => fail('只读导出不应发布偏好变化'));
-    final exported = await runtime.invoke('settings.export', {});
+    final exported = await runtime.exportMetadata();
     final document = exported['metadata'] as Map;
     final saved = (document['devices'] as List).single as Map;
     expect(saved['name'], 'Phone');
@@ -179,7 +170,7 @@ void main() {
     expect(records.current.find(device.id), isNotNull);
     await records.file.writeAsString('{');
     await expectLater(
-      runtime.invoke('settings.export', {}),
+      runtime.exportMetadata(),
       throwsA(errorCode('records_corrupt')),
     );
   });
@@ -216,7 +207,7 @@ void main() {
           },
         );
         final input = metadata();
-        final preview = await runtime.invoke('settings.import.preview', input);
+        final preview = await runtime.previewImport(input);
         expect(preview['newRecords'], 1);
         expect(preview['globalChanges'], [
           {'key': 'appearance', 'current': 'light', 'imported': 'dark'},
@@ -224,17 +215,17 @@ void main() {
         expect(allocations, 0);
         lost = true;
         await expectLater(
-          runtime.invoke('settings.import', input),
+          runtime.importMetadata(input),
           throwsA(errorCode('preferences_import_unknown')),
         );
         expect(preferences.current.values['appearance'], 'light');
         final reopened = await DeviceRecordStore.open(directory: directory);
         expect(reopened.current.devices, hasLength(1));
-        final checked = await runtime.invoke('settings.import.preview', input);
+        final checked = await runtime.previewImport(input);
         expect(checked['alreadyImported'], true);
         expect(checked['newRecords'], 0);
         expect(checked['preferencesStatus'], 'needsReview');
-        final duplicate = await runtime.invoke('settings.import', input);
+        final duplicate = await runtime.importMetadata(input);
         expect(duplicate['alreadyImported'], true);
         expect(allocations, 1);
         expect(preferences.current.values['appearance'], 'light');
@@ -244,7 +235,7 @@ void main() {
   }
 
   test('restore with conflicting local save reports partial success without overwriting', () async {
-    final other = await PreferenceCommands.prepare(directory);
+    final other = await AppSettings.prepare(directory);
     var competing = false;
     final records = await DeviceRecordStore.open(
       directory: directory,
@@ -256,14 +247,12 @@ void main() {
     competing = true;
     final runtime = commands(deviceRecords: records);
     await expectLater(
-      runtime.invoke('settings.import', metadata()),
+      runtime.importMetadata(metadata()),
       throwsA(errorCode('preferences_import_partial')),
     );
     expect(records.current.devices, hasLength(1));
     expect(
-      (await PreferenceCommands.prepare(directory))
-          .current
-          .values['appearance'],
+      (await AppSettings.prepare(directory)).current.values['appearance'],
       'system',
     );
   });
@@ -277,23 +266,23 @@ void main() {
     );
     final runtime = commands(deviceRecords: records);
     await expectLater(
-      runtime.invoke('settings.import', metadata({'privateKeyPem': 'secret'})),
+      runtime.importMetadata(metadata({'privateKeyPem': 'secret'})),
       throwsA(errorCode('invalid_argument')),
     );
     expect(allocations, 0);
     final input = metadata()..remove('importGlobalPreferences');
     await expectLater(
-      runtime.invoke('settings.import', {...input, 'fingerprint': 'changed'}),
+      runtime.importMetadata({...input, 'fingerprint': 'changed'}),
       throwsA(errorCode('invalid_import_preview')),
     );
     expect(allocations, 0);
-    final preview = await runtime.invoke('settings.import.preview', input);
+    final preview = await runtime.previewImport(input);
     expect(preview['newRecords'], 1);
-    final first = await runtime.invoke('settings.import', input);
+    final first = await runtime.importMetadata(input);
     expect(first['preferencesStatus'], 'preserved');
     expect(preferences.current.values['appearance'], 'light');
     final second = metadata({'appearance': 'system'});
-    await runtime.invoke('settings.import', second);
+    await runtime.importMetadata(second);
     expect(preferences.current.values['appearance'], 'system');
     expect(records.current.devices, hasLength(2));
   });
@@ -307,7 +296,7 @@ void main() {
         runtime.saveDeviceQuality(first, {'maxFps': 30, 'maxSize': 720}),
         runtime.saveDeviceQuality(second, {'maxFps': 60, 'maxSize': 1920}),
       ]);
-      final restarted = await PreferenceCommands.prepare(directory);
+      final restarted = await AppSettings.prepare(directory);
       final quality = restarted.current.values['deviceQuality'] as Map;
       expect(quality[first]['maxFps'], 30);
       expect(quality[second]['maxSize'], 1920);

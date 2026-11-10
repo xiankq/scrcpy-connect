@@ -14,7 +14,7 @@ import 'package:scrcpy_connect/services/files/file_executor.dart';
 
 export 'package:scrcpy_connect/models/document_limits.dart';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 typedef DocumentsJson = Map<String, dynamic>;
 typedef DocumentsRequest = Future<DocumentsJson> Function(
@@ -49,7 +49,7 @@ String _name(String name) {
       name == '..' ||
       name.length > 255 ||
       name.contains(RegExp(r'[/\\\x00\r\n]'))) {
-    throw const ApplicationCommandException('invalid_path', '文档名称包含不安全的路径字符。');
+    throw const RequestFailure('invalid_path', '文档名称包含不安全的路径字符。');
   }
   return name;
 }
@@ -106,10 +106,7 @@ class DocumentsCoordinator {
       if (!['keepBoth', 'skip', 'cancel'].contains(choice) ||
           (params['applyToRemaining'] != null &&
               params['applyToRemaining'] is! bool)) {
-        throw const ApplicationCommandException(
-          'invalid_decision',
-          '请选择保留两份、跳过或取消。',
-        );
+        throw const RequestFailure('invalid_decision', '请选择保留两份、跳过或取消。');
       }
       if (params['applyToRemaining'] == true && choice != 'cancel') {
         op.conflict = choice;
@@ -135,40 +132,31 @@ class DocumentsCoordinator {
       'documents.importFiles',
       'documents.export',
     ].contains(command)) {
-      throw const ApplicationCommandException('unknown_command', '未知的系统文档操作。');
+      throw const RequestFailure('unknown_command', '未知的系统文档操作。');
     }
     if (_disposed || _isDisposed()) {
-      throw const ApplicationCommandException('cancelled', '页面已关闭。');
+      throw const RequestFailure('cancelled', '页面已关闭。');
     }
     final previous = _active;
     if (previous != null && previous.finished.isCompleted) {
       await _finish(previous);
       if (_disposed || _isDisposed()) {
-        throw const ApplicationCommandException('cancelled', '页面已关闭。');
+        throw const RequestFailure('cancelled', '页面已关闭。');
       }
     }
     if (_active != null) {
-      throw const ApplicationCommandException(
-        'documents_busy',
-        '已有文件选择或复制正在进行，请先完成或取消。',
-      );
+      throw const RequestFailure('documents_busy', '已有文件选择或复制正在进行，请先完成或取消。');
     }
     final id = _text(params, 'operationId', _id());
     if (id.isEmpty ||
         id.length > 128 ||
         _issued.length >= 10000 ||
         !_issued.add(id)) {
-      throw const ApplicationCommandException(
-        'operation_id_reused',
-        '请使用新的文件操作标识。',
-      );
+      throw const RequestFailure('operation_id_reused', '请使用新的文件操作标识。');
     }
     final conflict = _text(params, 'conflict', 'ask');
     if (!['ask', 'skip', 'keepBoth'].contains(conflict)) {
-      throw const ApplicationCommandException(
-        'invalid_argument',
-        '系统目录仅支持询问、跳过或保留两者。',
-      );
+      throw const RequestFailure('invalid_argument', '系统目录仅支持询问、跳过或保留两者。');
     }
     final op = _Operation(id, command, conflict, limits);
     _active = op;
@@ -184,10 +172,7 @@ class DocumentsCoordinator {
       op.cache = boundary.cacheDirectory;
       final ownerLease = environment['ownerLeaseId'];
       if (ownerLease is! String || ownerLease.isEmpty) {
-        throw const ApplicationCommandException(
-          'document_cleanup_unconfirmed',
-          '文档平台尚未接管。',
-        );
+        throw const RequestFailure('document_cleanup_unconfirmed', '文档平台尚未接管。');
       }
       op.ownerLeaseId = ownerLease;
       op.check(_disposed || _isDisposed());
@@ -208,10 +193,7 @@ class DocumentsCoordinator {
         final kind = stat.identity.kind;
         if (![LocalFileKind.file, LocalFileKind.directory].contains(kind) ||
             (params['kind'] != null && params['kind'] != kind.name)) {
-          throw const ApplicationCommandException(
-            'source_changed',
-            '源类型与所选保存方式不一致。',
-          );
+          throw const RequestFailure('source_changed', '源类型与所选保存方式不一致。');
         }
         op.localPath = source;
         op.name = _name(_text(params, 'name', p.basename(source)));
@@ -242,22 +224,16 @@ class DocumentsCoordinator {
       op.check(_disposed || _isDisposed());
       final selections = _maps(selection['documents']);
       if (selections.isEmpty) {
-        throw const ApplicationCommandException('invalid_uri', '系统没有返回可读取的文档。');
+        throw const RequestFailure('invalid_uri', '系统没有返回可读取的文档。');
       }
       if (selections.length > op.limits.maxSelected) {
-        throw const ApplicationCommandException(
-          'selection_limit',
-          '最多选择 1000 个文件，请分批导入。',
-        );
+        throw const RequestFailure('selection_limit', '最多选择 1000 个文件，请分批导入。');
       }
       op.uri = _text(selections.first, 'uri');
       if (mode == 'importDirectory') {
         final root = await _metadata(op, selections.first);
         if (root['directory'] != true || root['virtual'] == true) {
-          throw const ApplicationCommandException(
-            'not_a_directory',
-            '请选择可读取的普通文档目录。',
-          );
+          throw const RequestFailure('not_a_directory', '请选择可读取的普通文档目录。');
         }
         op.name = _name(_text(root, 'name'));
         final owner = await _owner(op);
@@ -272,7 +248,7 @@ class DocumentsCoordinator {
           try {
             final source = await _metadata(op, selections[index]);
             if (source['directory'] == true) {
-              throw const ApplicationCommandException(
+              throw const RequestFailure(
                 'not_a_file',
                 '文件选择器返回了目录，请使用发送本机文件夹。',
               );
@@ -290,7 +266,7 @@ class DocumentsCoordinator {
       } else if (mode == 'exportDirectory') {
         final parent = await _metadata(op, selections.first);
         if (parent['directory'] != true || parent['canCreate'] != true) {
-          throw const ApplicationCommandException(
+          throw const RequestFailure(
             'create_unavailable',
             '所选提供方目录没有新建能力；本机暂存已保留。',
           );
@@ -317,7 +293,7 @@ class DocumentsCoordinator {
     } catch (error) {
       final code = op.timedOut
           ? 'timeout'
-          : error is ApplicationCommandException
+          : error is RequestFailure
           ? error.code
           : 'documents_error';
       op.error(op.name, code, '$error');
@@ -362,10 +338,7 @@ class DocumentsCoordinator {
         op.timedOut = true;
         unawaited(_cancel(op).catchError((Object _) {}));
       }
-      throw const ApplicationCommandException(
-        'timeout',
-        '系统文档提供方未及时响应；请核对已完成内容。',
-      );
+      throw const RequestFailure('timeout', '系统文档提供方未及时响应；请核对已完成内容。');
     }
   }
 
@@ -409,7 +382,7 @@ class DocumentsCoordinator {
           operation: op,
         );
         if (released['released'] != true) {
-          throw const ApplicationCommandException(
+          throw const RequestFailure(
             'document_cleanup_unconfirmed',
             '平台文档资源未确认释放。',
           );
@@ -421,7 +394,7 @@ class DocumentsCoordinator {
       }
       if (identical(_active, op)) _active = null;
     } catch (error) {
-      throw ApplicationCommandException(
+      throw RequestFailure(
         'document_cleanup_unconfirmed',
         '文档操作尚未确认释放，请重试关闭；不会重新复制。',
         {'operationId': op.id},
@@ -444,7 +417,7 @@ class DocumentsCoordinator {
           operation: op,
         );
         if (cancelled['cancelled'] != true) {
-          throw const ApplicationCommandException(
+          throw const RequestFailure(
             'document_cleanup_unconfirmed',
             '平台文档取消未确认。',
           );
@@ -497,23 +470,17 @@ class DocumentsCoordinator {
       final entries = _maps(page['documents']);
       children.addAll(entries);
       if (children.length > op.limits.maxEntries) {
-        throw const ApplicationCommandException(
-          'tree_limit',
-          '提供方目录超过项目上限，请分批处理。',
-        );
+        throw const RequestFailure('tree_limit', '提供方目录超过项目上限，请分批处理。');
       }
       if (page['loading'] == true) {
-        throw const ApplicationCommandException(
+        throw const RequestFailure(
           'provider_loading',
           '文档提供方尚未完成目录加载，请稍后重新选择。',
         );
       }
       if (page['hasMore'] != true) return children;
       if (entries.isEmpty) {
-        throw const ApplicationCommandException(
-          'provider_loading',
-          '提供方没有完成目录分页。',
-        );
+        throw const RequestFailure('provider_loading', '提供方没有完成目录分页。');
       }
       offset += entries.length;
     }
@@ -528,7 +495,7 @@ class DocumentsCoordinator {
         await _mkdir(op, source.path);
         return source.path;
       } on FileFailure catch (error) {
-        throw ApplicationCommandException(error.code, error.message);
+        throw RequestFailure(error.code, error.message);
       }
     }
     final base = p.join(op.cache, 'documents');
@@ -538,32 +505,30 @@ class DocumentsCoordinator {
     return path;
   }
 
-  ApplicationCommandException _fileFailure(LocalFileException error) =>
-      ApplicationCommandException(
-        switch (error.code) {
-          LocalFileErrorCode.invalidArgument => 'invalid_path',
-          LocalFileErrorCode.scopeClosed ||
-          LocalFileErrorCode.cancelled => 'cancelled',
-          LocalFileErrorCode.notFound => 'not_found',
-          LocalFileErrorCode.busy => 'documents_busy',
-          LocalFileErrorCode.timedOut => 'timeout',
-          LocalFileErrorCode.byteLimit => 'byte_limit',
-          LocalFileErrorCode.entryLimit => 'tree_limit',
-          LocalFileErrorCode.sourceChanged => 'source_changed',
-          LocalFileErrorCode.targetChanged => 'target_changed',
-          LocalFileErrorCode.conflict => 'conflict',
-          LocalFileErrorCode.resultUnknown => 'result_unknown',
-          LocalFileErrorCode.cleanupUnconfirmed =>
-            'document_cleanup_unconfirmed',
-          LocalFileErrorCode.unsupported => 'implementation_pending',
-          LocalFileErrorCode.io => 'document_io',
-        },
-        error.message,
-        {
-          'bytesCopied': error.bytesCopied,
-          'partialDestinationPossible': error.partialDestinationPossible,
-        },
-      );
+  RequestFailure _fileFailure(LocalFileException error) => RequestFailure(
+    switch (error.code) {
+      LocalFileErrorCode.invalidArgument => 'invalid_path',
+      LocalFileErrorCode.scopeClosed ||
+      LocalFileErrorCode.cancelled => 'cancelled',
+      LocalFileErrorCode.notFound => 'not_found',
+      LocalFileErrorCode.busy => 'documents_busy',
+      LocalFileErrorCode.timedOut => 'timeout',
+      LocalFileErrorCode.byteLimit => 'byte_limit',
+      LocalFileErrorCode.entryLimit => 'tree_limit',
+      LocalFileErrorCode.sourceChanged => 'source_changed',
+      LocalFileErrorCode.targetChanged => 'target_changed',
+      LocalFileErrorCode.conflict => 'conflict',
+      LocalFileErrorCode.resultUnknown => 'result_unknown',
+      LocalFileErrorCode.cleanupUnconfirmed => 'document_cleanup_unconfirmed',
+      LocalFileErrorCode.unsupported => 'implementation_pending',
+      LocalFileErrorCode.io => 'document_io',
+    },
+    error.message,
+    {
+      'bytesCopied': error.bytesCopied,
+      'partialDestinationPossible': error.partialDestinationPossible,
+    },
+  );
 
   Future<T> _native<T>(Future<T> Function() action) async {
     try {
@@ -622,7 +587,7 @@ class DocumentsCoordinator {
       op.check(_disposed || _isDisposed());
       completed = true;
       return completedCopy;
-    } on ApplicationCommandException catch (error) {
+    } on RequestFailure catch (error) {
       op.bytes += _number(_map(error.details), 'bytesCopied');
       cleanupUnconfirmed = error.code == 'document_cleanup_unconfirmed';
       rethrow;
@@ -637,10 +602,7 @@ class DocumentsCoordinator {
           'outcome': completed && !op.cancelled ? 'success' : 'abort',
         }, cancellable: false);
         if (released['released'] != true) {
-          throw const ApplicationCommandException(
-            'close_failed',
-            '系统文档流已释放，无法确认本次完成。',
-          );
+          throw const RequestFailure('close_failed', '系统文档流已释放，无法确认本次完成。');
         }
       } catch (error) {
         releaseFailure = error;
@@ -651,7 +613,7 @@ class DocumentsCoordinator {
       // 写入已完成但提供方关闭未确认时，不重写、不删除该 URI。
       if (completed && releaseFailure != null) {
         op.check(_disposed || _isDisposed());
-        throw ApplicationCommandException(
+        throw RequestFailure(
           mode == 'rw' ? 'result_unknown' : 'read_failed',
           '系统文档流关闭未确认，请核对已完成内容；不会自动重试。',
         );
@@ -686,10 +648,7 @@ class DocumentsCoordinator {
         try {
           final name = _name(_text(child, 'name'));
           if (!names.add(name)) {
-            throw const ApplicationCommandException(
-              'duplicate_name',
-              '提供方返回同名项目，未合并或覆盖。',
-            );
+            throw const RequestFailure('duplicate_name', '提供方返回同名项目，未合并或覆盖。');
           }
           await _importNode(
             op,
@@ -714,7 +673,7 @@ class DocumentsCoordinator {
         BigInt.from(_number(source, 'size')) >
             (space.freeBytes ?? BigInt.zero) -
                 BigInt.from(op.limits.reserveBytes)) {
-      throw const ApplicationCommandException('cache_full', '本机暂存空间不足，未下载此文件。');
+      throw const RequestFailure('cache_full', '本机暂存空间不足，未下载此文件。');
     }
     final part = p.join(parent, '.interop-${_id()}.part');
     LocalFileCopy? copy;
@@ -723,10 +682,7 @@ class DocumentsCoordinator {
       final after = await _metadata(op, source);
       if (!_sameProvider(source, after, directory: false) ||
           (source['size'] is num && copy.bytes != _number(source, 'size'))) {
-        throw const ApplicationCommandException(
-          'source_changed',
-          '源文件在复制期间发生变化；未提交暂存文件。',
-        );
+        throw const RequestFailure('source_changed', '源文件在复制期间发生变化；未提交暂存文件。');
       }
       final identity = copy.identity;
       final scope = await _scope(op);
@@ -766,26 +722,20 @@ class DocumentsCoordinator {
           ? await _conflict(op, name)
           : op.conflict;
       if (decision == 'cancel') {
-        throw const ApplicationCommandException('cancelled', '已取消保存；已完成内容保留。');
+        throw const RequestFailure('cancelled', '已取消保存；已完成内容保留。');
       }
       if (decision == 'skip') {
         op.skipped++;
         return null;
       }
       if (decision != 'keepBoth') {
-        throw const ApplicationCommandException(
-          'invalid_decision',
-          '未确认同名项目处理方式。',
-        );
+        throw const RequestFailure('invalid_decision', '未确认同名项目处理方式。');
       }
       name = '$name (${_id()})';
     }
     final fresh = await _metadata(op, parent);
     if (fresh['directory'] != true || fresh['canCreate'] != true) {
-      throw const ApplicationCommandException(
-        'target_changed',
-        '目标目录的新建能力已变化。',
-      );
+      throw const RequestFailure('target_changed', '目标目录的新建能力已变化。');
     }
     op.check(_disposed || _isDisposed());
     op.writing = true;
@@ -800,7 +750,7 @@ class DocumentsCoordinator {
             : 'application/octet-stream',
       });
     } catch (_) {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'result_unknown',
         '文档创建结果尚不确定，请核对目标目录；不会自动重试。',
       );
@@ -816,7 +766,7 @@ class DocumentsCoordinator {
     if (existing.any((child) => child['id'] == created['id']) ||
         created['name'] != name ||
         created['directory'] != directory) {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'target_changed',
         '提供方返回已有文档、不同类型或修改了名称；未写入内容，请核对空项目。',
       );
@@ -826,10 +776,7 @@ class DocumentsCoordinator {
           parent,
         )).where((child) => child['name'] == name).length !=
         1) {
-      throw const ApplicationCommandException(
-        'target_changed',
-        '创建期间出现同名竞争；未写入内容，请核对空项目。',
-      );
+      throw const RequestFailure('target_changed', '创建期间出现同名竞争；未写入内容，请核对空项目。');
     }
     if (name != requested && op.renamed.length < op.limits.maxErrors) {
       op.renamed.add({
@@ -882,10 +829,7 @@ class DocumentsCoordinator {
     op.entry(depth, relative);
     final before = (await _stat(op, source)).identity;
     if (expected != null && !_sameLocal(expected, before)) {
-      throw const ApplicationCommandException(
-        'source_changed',
-        '源项目在遍历后被替换，未读取替换内容。',
-      );
+      throw const RequestFailure('source_changed', '源项目在遍历后被替换，未读取替换内容。');
     }
     if (before.kind == LocalFileKind.directory) {
       op.directories++;
@@ -895,10 +839,7 @@ class DocumentsCoordinator {
       );
       op.check(_disposed || _isDisposed());
       if (!_sameLocal(before, listing.identity)) {
-        throw const ApplicationCommandException(
-          'source_changed',
-          '源目录在遍历前发生变化。',
-        );
+        throw const RequestFailure('source_changed', '源目录在遍历前发生变化。');
       }
       for (final child in listing.entries) {
         op.examine();
@@ -908,10 +849,7 @@ class DocumentsCoordinator {
           final path = p.join(source, name);
           final stat = (await _stat(op, path)).identity;
           if (!_sameLocal(child.identity, stat)) {
-            throw const ApplicationCommandException(
-              'source_changed',
-              '源项目在目录快照后发生变化。',
-            );
+            throw const RequestFailure('source_changed', '源项目在目录快照后发生变化。');
           }
           if (![
             LocalFileKind.file,
@@ -966,26 +904,17 @@ class DocumentsCoordinator {
     op.examine();
     final before = (await _stat(op, source)).identity;
     if (before.kind != LocalFileKind.file) {
-      throw const ApplicationCommandException(
-        'source_changed',
-        '源文件类型已变化，未跟随符号链接。',
-      );
+      throw const RequestFailure('source_changed', '源文件类型已变化，未跟随符号链接。');
     }
     final fresh = await _metadata(op, target);
     if (fresh['id'] != target['id'] ||
         fresh['directory'] == true ||
         fresh['virtual'] == true ||
         (fresh['size'] != null && fresh['size'] != 0)) {
-      throw const ApplicationCommandException(
-        'target_changed',
-        '目标不是刚创建的空文档，未覆盖已有内容。',
-      );
+      throw const RequestFailure('target_changed', '目标不是刚创建的空文档，未覆盖已有内容。');
     }
     if (fresh['canWrite'] != true) {
-      throw const ApplicationCommandException(
-        'write_unavailable',
-        '提供方没有声明写入能力；本机暂存已保留。',
-      );
+      throw const RequestFailure('write_unavailable', '提供方没有声明写入能力；本机暂存已保留。');
     }
     op.writing = true;
     final copy = await _copy(
@@ -998,10 +927,7 @@ class DocumentsCoordinator {
     try {
       final after = (await _stat(op, source)).identity;
       if (!_sameLocal(before, after)) {
-        throw const ApplicationCommandException(
-          'source_changed',
-          '源文件在保存期间变化，目标可能包含部分内容。',
-        );
+        throw const RequestFailure('source_changed', '源文件在保存期间变化，目标可能包含部分内容。');
       }
     } finally {
       await _native(copy.close);
@@ -1009,7 +935,7 @@ class DocumentsCoordinator {
     final saved = await _metadata(op, target);
     if (saved['size'] != null &&
         BigInt.from(_number(saved, 'size')) != before.size) {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'result_unknown',
         '提供方返回保存长度不一致，请核对目标；本机暂存已保留。',
       );
@@ -1044,7 +970,7 @@ class _Operation {
     response,
     interrupted.future.then<T>((_) {
       check(false);
-      throw const ApplicationCommandException('cancelled', '操作已取消。');
+      throw const RequestFailure('cancelled', '操作已取消。');
     }),
   ]);
   int entries = 0,
@@ -1063,20 +989,17 @@ class _Operation {
       items = <DocumentsJson>[];
   void check(bool disposed) {
     if (timedOut) {
-      throw const ApplicationCommandException(
-        'timeout',
-        '系统文档复制超过十分钟；已完成内容保留，请分批处理。',
-      );
+      throw const RequestFailure('timeout', '系统文档复制超过十分钟；已完成内容保留，请分批处理。');
     }
     if (cancelled || disposed) {
-      throw const ApplicationCommandException('cancelled', '操作已取消。');
+      throw const RequestFailure('cancelled', '操作已取消。');
     }
   }
 
   void examine() {
     check(false);
     if (++examined > limits.maxEntries) {
-      throw const ApplicationCommandException('tree_limit', '目录超过项目上限，请分批处理。');
+      throw const RequestFailure('tree_limit', '目录超过项目上限，请分批处理。');
     }
   }
 
@@ -1087,10 +1010,7 @@ class _Operation {
     if (entries > limits.maxEntries ||
         depth > limits.maxDepth ||
         pathBytes > limits.maxPathBytes) {
-      throw const ApplicationCommandException(
-        'tree_limit',
-        '目录超过项目、深度或路径上限，请分批处理。',
-      );
+      throw const RequestFailure('tree_limit', '目录超过项目、深度或路径上限，请分批处理。');
     }
   }
 
@@ -1108,7 +1028,7 @@ class _Operation {
 
   void record(String path, Object failure) {
     if (cancelled ||
-        failure is ApplicationCommandException &&
+        failure is RequestFailure &&
             [
               'cancelled',
               'tree_limit',
@@ -1121,7 +1041,7 @@ class _Operation {
     }
     skip(
       path,
-      failure is ApplicationCommandException ? failure.code : 'documents_error',
+      failure is RequestFailure ? failure.code : 'documents_error',
       '$failure',
     );
   }

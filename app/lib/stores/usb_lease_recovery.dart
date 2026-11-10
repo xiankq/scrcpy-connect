@@ -3,7 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/services.dart';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 /// 先封存旧 USB 准入，再由宿主排空 SDK，最后确认平台原始描述符实际回收。
 /// 同一对象的失败重试保持原候选；不会按 ready 跳过恢复或用超时丢弃在途调用。
@@ -98,7 +98,7 @@ final class UsbLeaseRecovery {
       }
       return Map<String, dynamic>.from(response);
     } on PlatformException catch (error) {
-      throw ApplicationCommandException(
+      throw RequestFailure(
         error.code,
         error.message ?? 'USB 资源恢复尚未确认。',
         error.details,
@@ -108,7 +108,7 @@ final class UsbLeaseRecovery {
 }
 
 Never _unconfirmed(String message) =>
-    throw ApplicationCommandException('usb_cleanup_unconfirmed', message);
+    throw RequestFailure('usb_cleanup_unconfirmed', message);
 
 bool _validLease(Object value) =>
     value is String &&

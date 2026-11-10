@@ -4,12 +4,11 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show debugPrint;
-import 'package:scrcpy_connect/models/application_command_exception.dart';
-import 'package:scrcpy_connect/models/application_command.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/command_contract.dart';
 import 'package:scrcpy_connect/services/media/media_capture_operations.dart';
 import 'package:scrcpy_connect/services/platform/diagnostic_log.dart';
-import 'package:scrcpy_connect/services/media/audio_player_port.dart';
+import 'package:scrcpy_connect/services/media/audio_player.dart';
 import 'package:scrcpy_connect/stores/media/device_quality_coordinator.dart';
 import 'package:scrcpy_connect/stores/media/media_intent_registry.dart';
 import 'package:scrcpy_connect/services/media/scrcpy_capture_adapter.dart';
@@ -202,7 +201,7 @@ final class MediaCoordinator {
               (item['available'] == true || item['canAttempt'] == true),
         );
     if (!supported) {
-      throw ApplicationCommandException(
+      throw RequestFailure(
         'decoder_unavailable',
         '本机尚未提供 $codec 解码器，请选择其他视频编码。',
       );
@@ -240,7 +239,7 @@ final class MediaCoordinator {
           _videoLifecycle.close(
             id,
             failure: data['status'] == 'failed'
-                ? ApplicationCommandException(
+                ? RequestFailure(
                     data['failureCode'] is String
                         ? data['failureCode'] as String
                         : 'session_failed',
@@ -275,6 +274,20 @@ final class MediaCoordinator {
       await _audioOutputs.handlePlatformEvent(event);
     }
   }
+
+  /// 只参与捕获、播放与关联资源关闭；设置和文件读取不经过媒体生命周期。
+  bool handles(ApplicationCommand operation) =>
+      operation.wire.startsWith('session.') ||
+      operation.wire.startsWith('audio.') ||
+      const {
+        ApplicationCommand.appsLaunch,
+        ApplicationCommand.mediaOpen,
+        ApplicationCommand.mediaStatus,
+        ApplicationCommand.videoCapabilities,
+        ApplicationCommand.devicesDisconnect,
+        ApplicationCommand.devicesForget,
+        ApplicationCommand.activitiesStop,
+      }.contains(operation);
 
   Future<Map<String, dynamic>> dispatch(
     ApplicationCommand operation,
@@ -406,10 +419,7 @@ final class MediaCoordinator {
       return _updateAudio(operation, params);
     }
     if (_disposed || intent?.cancelled == true) {
-      throw const ApplicationCommandException(
-        'cancelled',
-        '已停止本次打开，不会重新启动画面或声音。',
-      );
+      throw const RequestFailure('cancelled', '已停止本次打开，不会重新启动画面或声音。');
     }
     final result = await invoke(operation, params);
     if (operation == ApplicationCommand.sessionQualityOptions) {
@@ -537,7 +547,7 @@ final class MediaCoordinator {
         result['sourceId'] as String,
         result['deviceId'] as String,
       );
-      throw const ApplicationCommandException('cancelled', '已停止本次声音，不会重新启动。');
+      throw const RequestFailure('cancelled', '已停止本次声音，不会重新启动。');
     }
     final id = result['sourceId'] as String;
     _audioSources[id] = result;
@@ -547,11 +557,11 @@ final class MediaCoordinator {
         cancelled: () => _disposed || intent?.cancelled == true,
       );
       if (_disposed || intent?.cancelled == true) {
-        throw const ApplicationCommandException('cancelled', '已停止本次声音，不会重新启动。');
+        throw const RequestFailure('cancelled', '已停止本次声音，不会重新启动。');
       }
       final ready = await captures.readyAudio({...result, ...playback});
       if (_disposed || intent?.cancelled == true) {
-        throw const ApplicationCommandException('cancelled', '已停止本次声音，不会重新启动。');
+        throw const RequestFailure('cancelled', '已停止本次声音，不会重新启动。');
       }
       return {...ready, ...playback};
     } catch (_) {
@@ -575,7 +585,7 @@ final class MediaCoordinator {
         id,
         keepLaunchRecord: result['packageName'] is String,
       );
-      throw const ApplicationCommandException('cancelled', '已停止本次画面，不会重新启动。');
+      throw const RequestFailure('cancelled', '已停止本次画面，不会重新启动。');
     }
     try {
       final texture = await _videoOutputs.start(
@@ -583,12 +593,12 @@ final class MediaCoordinator {
         cancelled: () => _disposed || intent?.cancelled == true,
       );
       if (_disposed || intent?.cancelled == true) {
-        throw const ApplicationCommandException('cancelled', '已停止本次画面，不会重新启动。');
+        throw const RequestFailure('cancelled', '已停止本次画面，不会重新启动。');
       }
       _textures[id] = {...result, ...texture};
       await captures.readyVideo({'sessionId': id, ...texture});
       if (_disposed || intent?.cancelled == true) {
-        throw const ApplicationCommandException('cancelled', '已停止本次画面，不会重新启动。');
+        throw const RequestFailure('cancelled', '已停止本次画面，不会重新启动。');
       }
       _videoLifecycle.monitor(id);
       return {...result, ...texture, 'status': 'connected'};
@@ -601,19 +611,15 @@ final class MediaCoordinator {
       }
       await _videoLifecycle.close(id);
       if (appLaunch) {
-        throw ApplicationCommandException(
-          'app_launch_unknown',
-          '应用可能已在手机上打开，请先核对本次记录。',
-          {
-            'sessionId': id,
-            'deviceId': result['deviceId'],
-            'packageName': result['packageName'],
-            'launchOutcome': 'unknown',
-            'failureCode': error is ApplicationCommandException
-                ? error.code
-                : 'video_output_failed',
-          },
-        );
+        throw RequestFailure('app_launch_unknown', '应用可能已在手机上打开，请先核对本次记录。', {
+          'sessionId': id,
+          'deviceId': result['deviceId'],
+          'packageName': result['packageName'],
+          'launchOutcome': 'unknown',
+          'failureCode': error is RequestFailure
+              ? error.code
+              : 'video_output_failed',
+        });
       }
       rethrow;
     }

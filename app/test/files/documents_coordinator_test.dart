@@ -10,7 +10,7 @@ import 'package:scrcpy_connect/services/platform/application_platform.dart';
 import 'package:scrcpy_connect/stores/files/documents_coordinator.dart';
 import 'package:scrcpy_connect/stores/files/document_sources.dart';
 import 'package:scrcpy_connect/services/files/document_scope_recovery.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 // 虚拟时钟不会推进可信根解析的真实文件系统回执。等待实际阶段，同时
 // 继续由 pump 驱动协调器，避免把准入耗时误算成 provider/conflict 超时。
@@ -37,13 +37,8 @@ Future<DocumentsJson> documentResult(
   return result;
 }
 
-Matcher documentFailure(String code) => throwsA(
-  isA<ApplicationCommandException>().having(
-    (error) => error.code,
-    'code',
-    code,
-  ),
-);
+Matcher documentFailure(String code) =>
+    throwsA(isA<RequestFailure>().having((error) => error.code, 'code', code));
 
 class Fixture {
   Fixture({this.cacheDirectory = '/cache', this.sources});
@@ -131,7 +126,7 @@ class Fixture {
     if (command != 'documents.platform.environment' &&
         command != 'documents.platform.claim' &&
         params['ownerLeaseId'] != ownerLeaseId) {
-      throw const ApplicationCommandException('cancelled', '平台代次已撤销。');
+      throw const RequestFailure('cancelled', '平台代次已撤销。');
     }
     final id = params['handle'];
     switch (command) {
@@ -140,7 +135,7 @@ class Fixture {
       case 'documents.platform.claim':
         if (params['expectedOwnerLeaseId'] != ownerLeaseId &&
             params['ownerLeaseId'] != ownerLeaseId) {
-          throw const ApplicationCommandException('cancelled', '旧平台代次。');
+          throw const RequestFailure('cancelled', '旧平台代次。');
         }
         ownerLeaseId = params['ownerLeaseId'] as String;
         ownerReady = true;
@@ -171,10 +166,7 @@ class Fixture {
         return {'fd': 44, 'fdLeaseId': 'lease-$id'};
       case 'documents.platform.releaseFd':
         if (failClose) {
-          throw const ApplicationCommandException(
-            'close_failed',
-            'provider refused close',
-          );
+          throw const RequestFailure('close_failed', 'provider refused close');
         }
         return {'released': true};
       case 'documents.platform.cancel':
@@ -185,7 +177,7 @@ class Fixture {
         return {'choice': choice};
       case 'documents.platform.create':
         if (loseCreate) {
-          throw const ApplicationCommandException('binder_lost', 'lost');
+          throw const RequestFailure('binder_lost', 'lost');
         }
         final next = 'created-${nodes.length}';
         final fresh = node(
@@ -616,7 +608,7 @@ void main() {
     var fails = true;
     f.onClaim = (_) async {
       if (fails) {
-        throw const ApplicationCommandException(
+        throw const RequestFailure(
           'document_cleanup_unconfirmed',
           '原始 PFD 尚未关闭。',
         );
@@ -627,10 +619,7 @@ void main() {
       files: f.files,
       platform: f.platform,
     );
-    await expectLater(
-      recovery.recover(),
-      throwsA(isA<ApplicationCommandException>()),
-    );
+    await expectLater(recovery.recover(), throwsA(isA<RequestFailure>()));
     expect(f.callsFor('local.scope.open'), hasLength(1));
     fails = false;
     await recovery.recover();
@@ -953,7 +942,7 @@ void main() {
           ...pending,
           'choice': 'replace',
         }),
-        throwsA(isA<ApplicationCommandException>()),
+        throwsA(isA<RequestFailure>()),
       );
       await tester.pump(const Duration(milliseconds: 21));
       final result = await job;
@@ -1174,10 +1163,7 @@ void main() {
       await newJob;
       expect(secondResult?['status'], 'cancelled');
       second.completeError(
-        const ApplicationCommandException(
-          'late_provider',
-          'late provider failure',
-        ),
+        const RequestFailure('late_provider', 'late provider failure'),
       );
       await tester.pump();
       expect(tester.takeException(), isNull);
@@ -1195,7 +1181,7 @@ void main() {
         platform: (command, params) {
           if (command == 'documents.platform.releaseFd' &&
               params['outcome'] != 'success') {
-            throw const ApplicationCommandException(
+            throw const RequestFailure(
               'provider_incomplete',
               'provider did not receive successful completion',
             );

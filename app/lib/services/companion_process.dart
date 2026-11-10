@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/models/companion_exception.dart';
+import 'package:scrcpy_connect/services/companion_protocol.dart';
 
 import 'dart:convert';
 import 'dart:typed_data';

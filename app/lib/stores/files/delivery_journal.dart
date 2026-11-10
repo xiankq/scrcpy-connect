@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 typedef _Json = Map<String, dynamic>;
 
@@ -90,7 +90,7 @@ final class DeliveryJournal {
           records[entry.key] = record;
         }
       } on Object {
-        throw const ApplicationCommandException(
+        throw const RequestFailure(
           'delivery_storage_invalid',
           '保存记录格式或内容无效，原文件保留。',
         );
@@ -181,13 +181,10 @@ final class DeliveryJournal {
     if (command == 'delivery.finish') {
       final operation = _text(params, 'operationId', 256);
       if (previous == null) {
-        throw const ApplicationCommandException(
-          'delivery_not_found',
-          '找不到本次保存记录。',
-        );
+        throw const RequestFailure('delivery_not_found', '找不到本次保存记录。');
       }
       if (previous['operationId'] != operation) {
-        throw const ApplicationCommandException(
+        throw const RequestFailure(
           'delivery_operation_mismatch',
           '保存回执不属于当前操作。',
         );
@@ -195,7 +192,7 @@ final class DeliveryJournal {
       final result = _cleanResult(params['result']);
       if (previous['status'] != 'pending') {
         if (_same(previous['result'], result)) return _receipt(previous);
-        throw const ApplicationCommandException(
+        throw const RequestFailure(
           'delivery_result_conflict',
           '已有保存终态，请核对目标内容。',
         );
@@ -212,7 +209,7 @@ final class DeliveryJournal {
       return _receipt(record);
     }
     if (command != 'delivery.begin') {
-      throw const ApplicationCommandException('unknown_command', '未知保存操作。');
+      throw const RequestFailure('unknown_command', '未知保存操作。');
     }
     final record = <String, dynamic>{
       'operationId': _text(params, 'operationId', 256),
@@ -226,20 +223,17 @@ final class DeliveryJournal {
     };
     if (previous != null) {
       if (previous['status'] == 'pending') {
-        throw const ApplicationCommandException(
-          'delivery_busy',
-          '此内容正在保存，请等待结果。',
-        );
+        throw const RequestFailure('delivery_busy', '此内容正在保存，请等待结果。');
       }
       if (previous['status'] == 'saved' &&
           params['additionalCopyOfOperationId'] != previous['operationId']) {
-        throw const ApplicationCommandException('delivery_saved', '此内容已经保存。');
+        throw const RequestFailure('delivery_saved', '此内容已经保存。');
       }
       if ((previous['status'] == 'result_unknown' ||
               (previous['result'] as _Json)['partialDestinationPossible'] ==
                   true) &&
           params['reviewedOperationId'] != previous['operationId']) {
-        throw const ApplicationCommandException(
+        throw const RequestFailure(
           'delivery_review_required',
           '请先核对上次目标，再明确重新保存。',
         );
@@ -247,17 +241,11 @@ final class DeliveryJournal {
     }
     final operation = record['operationId'] as String;
     if (_operations.contains(operation)) {
-      throw const ApplicationCommandException(
-        'delivery_operation_reused',
-        '重新保存需要新的操作标识。',
-      );
+      throw const RequestFailure('delivery_operation_reused', '重新保存需要新的操作标识。');
     }
     if (previous == null && _records.length >= _maxRecords ||
         _operations.length >= _maxOperations) {
-      throw const ApplicationCommandException(
-        'delivery_capacity',
-        '保存记录已满，请保留当前缓存。',
-      );
+      throw const RequestFailure('delivery_capacity', '保存记录已满，请保留当前缓存。');
     }
     final records = {..._records, key: record};
     final operations = {..._operations, operation};
@@ -285,10 +273,7 @@ final class DeliveryJournal {
         records.values.where((record) => record['status'] == 'pending').length *
         256;
     if (bytes.length + reserve > _maxBytes) {
-      throw const ApplicationCommandException(
-        'delivery_capacity',
-        '保存记录已满，请保留当前缓存。',
-      );
+      throw const RequestFailure('delivery_capacity', '保存记录已满，请保留当前缓存。');
     }
     Directory? temporary;
     try {
@@ -299,7 +284,7 @@ final class DeliveryJournal {
       await file.writeAsBytes(bytes, flush: true);
       await file.rename(_file.path);
     } on FileSystemException catch (error) {
-      throw ApplicationCommandException('io_error', error.message);
+      throw RequestFailure('io_error', error.message);
     } finally {
       if (temporary != null) {
         try {
@@ -322,7 +307,7 @@ final class DeliveryJournal {
         bytes.add(chunk);
       }
       if (bytes.length > _maxBytes) {
-        throw const ApplicationCommandException(
+        throw const RequestFailure(
           'delivery_storage_invalid',
           '保存记录超出容量，原文件保留。',
         );
@@ -334,7 +319,7 @@ final class DeliveryJournal {
               Platform.isWindows && error.osError?.errorCode == 3)) {
         return null;
       }
-      throw ApplicationCommandException('io_error', error.message);
+      throw RequestFailure('io_error', error.message);
     } finally {
       await handle?.close();
     }
@@ -361,10 +346,7 @@ final class DeliveryJournal {
   static String _text(_Json params, String field, int limit) {
     final value = params[field];
     if (!_validText(value, limit)) {
-      throw ApplicationCommandException(
-        'invalid_argument',
-        '缺少或无效的保存字段：$field',
-      );
+      throw RequestFailure('invalid_argument', '缺少或无效的保存字段：$field');
     }
     return value as String;
   }
@@ -374,7 +356,7 @@ final class DeliveryJournal {
         path = _text(params, 'localPath', 4096),
         kind = _text(params, 'kind', 32);
     if (kind != 'file' && kind != 'directory') {
-      throw const ApplicationCommandException('invalid_argument', '保存类型无效。');
+      throw const RequestFailure('invalid_argument', '保存类型无效。');
     }
     return jsonEncode([source, path, kind]);
   }
@@ -400,7 +382,7 @@ final class DeliveryJournal {
 
   static _Json _cleanResult(Object? input) {
     if (input is! _Json) {
-      throw const ApplicationCommandException('invalid_argument', '保存结果必须是对象。');
+      throw const RequestFailure('invalid_argument', '保存结果必须是对象。');
     }
     final status = switch (input['status']) {
       'resultUnknown' || 'result_unknown' => 'result_unknown',
@@ -412,28 +394,19 @@ final class DeliveryJournal {
             'cancelled',
           }.contains(status) =>
         status,
-      _ => throw const ApplicationCommandException(
-        'invalid_argument',
-        '保存结果状态无效。',
-      ),
+      _ => throw const RequestFailure('invalid_argument', '保存结果状态无效。'),
     };
     final result = <String, dynamic>{'status': status};
     if (input.containsKey('name')) {
       if (!_validText(input['name'], 1024, empty: true)) {
-        throw const ApplicationCommandException(
-          'invalid_argument',
-          '保存结果名称无效。',
-        );
+        throw const RequestFailure('invalid_argument', '保存结果名称无效。');
       }
       result['name'] = input['name'];
     }
     for (final field in ['files', 'directories', 'bytes', 'skipped']) {
       if (input.containsKey(field)) {
         if (!_unsigned(input[field])) {
-          throw const ApplicationCommandException(
-            'invalid_argument',
-            '保存结果计数无效。',
-          );
+          throw const RequestFailure('invalid_argument', '保存结果计数无效。');
         }
         result[field] = input[field];
       }
@@ -441,10 +414,7 @@ final class DeliveryJournal {
     for (final field in ['partialDestinationPossible', 'cacheRetained']) {
       if (input.containsKey(field)) {
         if (input[field] is! bool) {
-          throw const ApplicationCommandException(
-            'invalid_argument',
-            '保存结果标记无效。',
-          );
+          throw const RequestFailure('invalid_argument', '保存结果标记无效。');
         }
         result[field] = input[field];
       }
@@ -457,10 +427,7 @@ final class DeliveryJournal {
     if (input.containsKey('errors')) {
       final errors = input['errors'];
       if (errors is! List) {
-        throw const ApplicationCommandException(
-          'invalid_argument',
-          '保存错误明细无效。',
-        );
+        throw const RequestFailure('invalid_argument', '保存错误明细无效。');
       }
       result['errors'] = [
         for (final error in errors.take(100)) _cleanError(error),
@@ -471,10 +438,7 @@ final class DeliveryJournal {
 
   static _Json _cleanError(Object? error) {
     if (error is! _Json) {
-      throw const ApplicationCommandException(
-        'invalid_argument',
-        '保存错误明细必须是对象。',
-      );
+      throw const RequestFailure('invalid_argument', '保存错误明细必须是对象。');
     }
     final result = <String, dynamic>{};
     for (final (field, limit) in [
@@ -485,10 +449,7 @@ final class DeliveryJournal {
       if (!error.containsKey(field)) continue;
       final value = error[field];
       if (!_validText(value, 0x7fffffffffffffff, empty: true)) {
-        throw const ApplicationCommandException(
-          'invalid_argument',
-          '保存错误字段无效。',
-        );
+        throw const RequestFailure('invalid_argument', '保存错误字段无效。');
       }
       final bytes = utf8.encode(value as String);
       var end = bytes.length > limit ? limit : bytes.length;

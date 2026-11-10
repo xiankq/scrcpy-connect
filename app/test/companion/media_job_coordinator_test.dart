@@ -1,10 +1,10 @@
-import 'package:scrcpy_connect/models/companion_exception.dart';
+import 'package:scrcpy_connect/services/companion_protocol.dart';
 
 import 'dart:async';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/media_job_coordinator.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 
@@ -25,11 +25,8 @@ Map<String, Object?> _params(String operation, {String phase = 'thumbnail'}) =>
       'execution': phase,
     };
 
-Matcher _code(String code) => isA<ApplicationCommandException>().having(
-  (error) => error.code,
-  'code',
-  code,
-);
+Matcher _code(String code) =>
+    isA<RequestFailure>().having((error) => error.code, 'code', code);
 
 void main() {
   test('非法阶段和预取消不创建RPC，取消先到会阻止同ID迟到启动', () async {

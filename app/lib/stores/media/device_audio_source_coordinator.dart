@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 
 typedef AudioSourceJson = Map<String, Object?>;
@@ -48,10 +48,7 @@ final class DeviceAudioSourceCoordinator {
     if (command == 'audio.stop') {
       final source = params['sourceId'];
       if (source != null && (source is! String || source.isEmpty)) {
-        throw const ApplicationCommandException(
-          'invalid_argument',
-          '声音来源身份无效。',
-        );
+        throw const RequestFailure('invalid_argument', '声音来源身份无效。');
       }
       return stop(device, sourceId: source as String?);
     }
@@ -71,10 +68,7 @@ final class DeviceAudioSourceCoordinator {
     switch (command) {
       case 'audio.ready':
         if (entry.source == null) {
-          throw const ApplicationCommandException(
-            'audio_not_ready',
-            '设备音频捕获尚未就绪。',
-          );
+          throw const RequestFailure('audio_not_ready', '设备音频捕获尚未就绪。');
         }
         _applyReady(entry.state, params);
       case 'audio.presentation':
@@ -103,10 +97,7 @@ final class DeviceAudioSourceCoordinator {
             volume < 0 ||
             volume > 1 ||
             muted is! bool) {
-          throw const ApplicationCommandException(
-            'invalid_argument',
-            '音量或静音状态无效。',
-          );
+          throw const RequestFailure('invalid_argument', '音量或静音状态无效。');
         }
         if (params['applied'] != true) {
           return Future.value({
@@ -120,7 +111,7 @@ final class DeviceAudioSourceCoordinator {
         entry.state['volume'] = volume.toDouble();
         entry.state['muted'] = muted;
       default:
-        throw const ApplicationCommandException('unknown_command', '音源操作无效。');
+        throw const RequestFailure('unknown_command', '音源操作无效。');
     }
     _updated(entry);
     return Future.value(_snapshot(entry));
@@ -132,23 +123,14 @@ final class DeviceAudioSourceCoordinator {
     final connection = requireConnection(deviceId);
     final level = apiLevel?.call(deviceId);
     if (level != null && level < 30) {
-      throw const ApplicationCommandException(
-        'unsupported',
-        '设备声音采集需要 Android 11 或更新版本。',
-      );
+      throw const RequestFailure('unsupported', '设备声音采集需要 Android 11 或更新版本。');
     }
     if (_current[deviceId] case final existing?) {
       if (!_sameConnection(existing.connection, connection)) {
-        throw const ApplicationCommandException(
-          'source_changed',
-          '设备连接已替换，请先排空旧音源。',
-        );
+        throw const RequestFailure('source_changed', '设备连接已替换，请先排空旧音源。');
       }
       if (existing.state['nativeAttached'] != true) {
-        throw const ApplicationCommandException(
-          'audio_source_starting',
-          '这台设备的音源正在连接。',
-        );
+        throw const RequestFailure('audio_source_starting', '这台设备的音源正在连接。');
       }
       return Future.value({..._snapshot(existing), 'existing': true});
     }
@@ -227,10 +209,7 @@ final class DeviceAudioSourceCoordinator {
       _checkCurrent(entry);
       final source = info.audioSource;
       if (!info.audioEnabled || !info.mediaReady || source == null) {
-        throw const ApplicationCommandException(
-          'audio_not_ready',
-          '音频捕获尚未返回实际 PCM 来源。',
-        );
+        throw const RequestFailure('audio_not_ready', '音频捕获尚未返回实际 PCM 来源。');
       }
       _validateSource(source);
       entry.source = source;
@@ -260,7 +239,7 @@ final class DeviceAudioSourceCoordinator {
       }
       Error.throwWithStackTrace(
         revoked
-            ? const ApplicationCommandException('cancelled', '此设备音源已结束。')
+            ? const RequestFailure('cancelled', '此设备音源已结束。')
             : _applicationError(error),
         stack,
       );
@@ -303,7 +282,7 @@ final class DeviceAudioSourceCoordinator {
     int generation = 1,
   }) async {
     if (generation <= 0) {
-      throw const ApplicationCommandException('invalid_argument', '声音输出代次无效。');
+      throw const RequestFailure('invalid_argument', '声音输出代次无效。');
     }
     final entry = _current.values
         .where((entry) => entry.source?.sourceId == nativeSourceId)
@@ -455,14 +434,14 @@ final class DeviceAudioSourceCoordinator {
 
   void _checkOpen() {
     if (_closed) {
-      throw const ApplicationCommandException('disposed', '音源所有者已关闭。');
+      throw const RequestFailure('disposed', '音源所有者已关闭。');
     }
   }
 
   void _checkCurrent(_DeviceAudioSource entry) {
     _checkOpen();
     if (entry.retired || !identical(_current[entry.deviceId], entry)) {
-      throw const ApplicationCommandException('cancelled', '此设备音源已结束。');
+      throw const RequestFailure('cancelled', '此设备音源已结束。');
     }
     if (!hasAudioOwner(entry.deviceId)) throw _sessionRequired();
     if (!_sameConnection(requireConnection(entry.deviceId), entry.connection)) {
@@ -486,7 +465,7 @@ final class DeviceAudioSourceCoordinator {
 
   static void _requireAttached(_DeviceAudioSource entry) {
     if (entry.state['nativeAttached'] != true) {
-      throw const ApplicationCommandException('audio_not_ready', '音频播放器尚未就绪。');
+      throw const RequestFailure('audio_not_ready', '音频播放器尚未就绪。');
     }
   }
 
@@ -496,10 +475,7 @@ final class DeviceAudioSourceCoordinator {
         source.generation <= 0 ||
         source.attachAddress <= 0 ||
         source.detachAddress <= 0) {
-      throw const ApplicationCommandException(
-        'invalid_endpoint',
-        '原生音频来源格式或地址无效。',
-      );
+      throw const RequestFailure('invalid_endpoint', '原生音频来源格式或地址无效。');
     }
   }
 }
@@ -533,10 +509,7 @@ void _applyReady(AudioSourceJson state, AudioSourceJson params) {
       params['bytesWritten'] is! int ||
       (params['bytesWritten'] as int) <= 0 ||
       !const ['playing', 'paused'].contains(params['playState'])) {
-    throw const ApplicationCommandException(
-      'audio_not_ready',
-      '原生音频输出尚未确认实际播放数据。',
-    );
+    throw const RequestFailure('audio_not_ready', '原生音频输出尚未确认实际播放数据。');
   }
   if (state['nativeAttached'] == true) {
     _applyPresentation(state, params);
@@ -559,10 +532,7 @@ void _applyPresentation(AudioSourceJson state, AudioSourceJson params) {
       revision < 0 ||
       params['applied'] != true ||
       !const ['playing', 'paused'].contains(params['playState'])) {
-    throw const ApplicationCommandException(
-      'audio_not_applied',
-      '播放器尚未确认实际声音状态。',
-    );
+    throw const RequestFailure('audio_not_applied', '播放器尚未确认实际声音状态。');
   }
   if (revision < (state['nativeRevision'] as int? ?? 0)) return;
   state.addAll({
@@ -597,20 +567,17 @@ void _copyPauseReasons(AudioSourceJson state, AudioSourceJson params) {
 String _required(AudioSourceJson params, String key) {
   final value = params[key];
   if (value is! String || value.isEmpty) {
-    throw ApplicationCommandException('invalid_argument', '缺少有效的$key。');
+    throw RequestFailure('invalid_argument', '缺少有效的$key。');
   }
   return value;
 }
 
 Object _applicationError(Object error) => error is ScrcpyException
-    ? ApplicationCommandException(error.code, error.message)
+    ? RequestFailure(error.code, error.message)
     : error;
-ApplicationCommandException _sessionRequired() =>
-    const ApplicationCommandException(
-      'session_required',
-      '请先打开这台设备的远控画面或应用窗口。',
-    );
-ApplicationCommandException _sourceRequired() =>
-    const ApplicationCommandException('audio_source_required', '请先连接这台设备的音源。');
-ApplicationCommandException _sourceChanged() =>
-    const ApplicationCommandException('source_changed', '设备音源已重新连接。');
+RequestFailure _sessionRequired() =>
+    const RequestFailure('session_required', '请先打开这台设备的远控画面或应用窗口。');
+RequestFailure _sourceRequired() =>
+    const RequestFailure('audio_source_required', '请先连接这台设备的音源。');
+RequestFailure _sourceChanged() =>
+    const RequestFailure('source_changed', '设备音源已重新连接。');

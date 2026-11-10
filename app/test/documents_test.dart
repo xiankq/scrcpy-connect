@@ -1,7 +1,7 @@
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/services/files/document_operation_controller.dart';
+import 'package:scrcpy_connect/widgets/documents/document_operation.dart';
 
 import 'support/test_controller.dart';
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/services/files/file_access.dart';
+import 'package:scrcpy_connect/services/files/file_browser.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';

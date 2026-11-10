@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:adb/adb.dart';
 import 'package:path/path.dart' as p;
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
 import 'package:scrcpy_connect/models/device_record.dart' show validDeviceId;
 import 'package:scrcpy_connect/services/connection/identity_transaction.dart';
@@ -403,7 +403,7 @@ final class IdentityManager {
     trace ??= cleanupError?.$2;
     if (failure != null) {
       if (!metadataCommitted) {
-        throw const ApplicationCommandException(
+        throw const RequestFailure(
           'identity_result_unknown',
           '私钥已发布，但身份记录未完整提交；请重新打开核对，不要重复提交。',
         );
@@ -437,7 +437,7 @@ final class IdentityManager {
       await _markUnauthorized({device});
     } catch (error, stack) {
       _uncertain.add(device);
-      failure = const ApplicationCommandException(
+      failure = const RequestFailure(
         'identity_result_unknown',
         '身份来源记录尚未完整提交，请重新打开核对。',
       );
@@ -657,10 +657,7 @@ final class IdentityManager {
 
   Future<AdbIdentityInfo> _inspect(String path) async =>
       await identities.inspectIdentity(path) ??
-      (throw const ApplicationCommandException(
-        'identity_unavailable',
-        '授权身份材料缺失。',
-      ));
+      (throw const RequestFailure('identity_unavailable', '授权身份材料缺失。'));
   Future<void> _install(String path, String pem, String? expected) async {
     final receipt = await identities.replaceIdentity(
       path,
@@ -751,8 +748,7 @@ String _pem(Object? value) {
   return value;
 }
 
-Never _fail(String code, String message) =>
-    throw ApplicationCommandException(code, message);
+Never _fail(String code, String message) => throw RequestFailure(code, message);
 
 Future<(Object, StackTrace)?> _settle(Future<void> cleanup) async {
   try {

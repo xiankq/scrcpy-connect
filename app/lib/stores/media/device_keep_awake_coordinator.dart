@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:adb/adb.dart';
 import 'package:scrcpy/scrcpy.dart';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 
 /// 每设备共享的保持唤醒控制服务；窗口资格由控制窗口所有者提供，包含有界画质交接。
@@ -69,9 +69,7 @@ final class DeviceKeepAwakeCoordinator {
   /// 关闭失败保留精确捕获，下一次通知先重试旧清理，再允许同设备启动。
   Future<Map<String, Object?>> sync(String deviceId) {
     if (_closed) {
-      return Future.error(
-        const ApplicationCommandException('disposed', '保持唤醒所有者已关闭。'),
-      );
+      return Future.error(const RequestFailure('disposed', '保持唤醒所有者已关闭。'));
     }
     final wanted = _enabled(deviceId) && hasWindowOwner(deviceId);
     DeviceConnection? connection;
@@ -113,11 +111,11 @@ final class DeviceKeepAwakeCoordinator {
           await _close(entry);
         } catch (cleanup, trace) {
           Error.throwWithStackTrace(
-            ApplicationCommandException(
-              'keep_active_cleanup',
-              '保持唤醒服务尚未确认停止，请重试。',
-              {'cause': '$error', 'cleanupReason': '$cleanup', ...entry.state},
-            ),
+            RequestFailure('keep_active_cleanup', '保持唤醒服务尚未确认停止，请重试。', {
+              'cause': '$error',
+              'cleanupReason': '$cleanup',
+              ...entry.state,
+            }),
             trace,
           );
         }
@@ -143,11 +141,11 @@ final class DeviceKeepAwakeCoordinator {
         }(),
     ]);
     if (failures.isNotEmpty) {
-      throw ApplicationCommandException(
-        'keep_active_partial',
-        '设置已保存，部分保持唤醒服务尚未应用。',
-        {'saved': true, 'action': 'keep_active', 'failures': failures},
-      );
+      throw RequestFailure('keep_active_partial', '设置已保存，部分保持唤醒服务尚未应用。', {
+        'saved': true,
+        'action': 'keep_active',
+        'failures': failures,
+      });
     }
   }
 
@@ -162,7 +160,7 @@ final class DeviceKeepAwakeCoordinator {
   void _check(_KeepAwakeLease entry) {
     if (!_eligible(entry)) {
       final failure = entry.state['keepActiveError'];
-      throw ApplicationCommandException(
+      throw RequestFailure(
         failure is Map && failure['code'] is String
             ? failure['code'] as String
             : 'cancelled',
@@ -220,10 +218,7 @@ final class DeviceKeepAwakeCoordinator {
       final info = await session.startControl();
       _check(entry);
       if (info.id != session.id || !info.controlReady) {
-        throw const ApplicationCommandException(
-          'keep_active_protocol',
-          '保持唤醒控制通道未接纳。',
-        );
+        throw const RequestFailure('keep_active_protocol', '保持唤醒控制通道未接纳。');
       }
       entry.state.addAll({
         'status': 'active',
@@ -332,7 +327,7 @@ final class DeviceKeepAwakeCoordinator {
         });
         _publish(entry);
         Error.throwWithStackTrace(
-          ApplicationCommandException('keep_active_cleanup', '保持唤醒服务尚未确认停止。', {
+          RequestFailure('keep_active_cleanup', '保持唤醒服务尚未确认停止。', {
             ...entry.state,
             'cause': '$error',
           }),
@@ -429,16 +424,13 @@ final class _KeepAwakeLease {
 }
 
 String _errorCode(Object error) => switch (error) {
-  ApplicationCommandException(:final code) ||
+  RequestFailure(:final code) ||
   ScrcpyException(:final code) ||
   AdbException(:final code) => code,
   _ => 'keep_active_failed',
 };
 Object _applicationError(Object error) => switch (error) {
   ScrcpyException(:final code, :final message) ||
-  AdbException(
-    :final code,
-    :final message,
-  ) => ApplicationCommandException(code, message),
+  AdbException(:final code, :final message) => RequestFailure(code, message),
   _ => error,
 };

@@ -146,15 +146,15 @@ void main() {
             if (showNavigationBar) {
               final context = tester.element(finder);
               final colors = Theme.of(context).colorScheme;
-              final icon = tester.widget<Icon>(
-                find.descendant(of: finder, matching: find.byType(Icon)),
+              expect(
+                find.descendant(of: finder, matching: find.byType(CustomPaint)),
+                findsOneWidget,
               );
               final bar = tester.widget<ColoredBox>(
                 find
                     .ancestor(of: finder, matching: find.byType(ColoredBox))
                     .first,
               );
-              expect(icon.color, colors.onSurface);
               expect(bar.color, colors.surface);
               await tester.tap(finder);
               await tester.pump();

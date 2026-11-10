@@ -5,7 +5,7 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/services/media/physical_display_script.dart';
 
@@ -173,7 +173,7 @@ final class PhysicalDisplayCommand {
     });
   }
 
-  Never _unknown() => throw ApplicationCommandException(
+  Never _unknown() => throw RequestFailure(
     'display_cleanup_unconfirmed',
     '显示命令尚无完整终态：${_readFailure ?? '回执缺失或等待超时'}',
   );

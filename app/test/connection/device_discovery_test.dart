@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:multicast_dns/multicast_dns.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/device_discovery.dart';
 
 void main() {
@@ -323,9 +323,8 @@ void main() {
   });
 }
 
-Matcher _error(String code) => throwsA(
-  isA<ApplicationCommandException>().having((e) => e.code, 'code', code),
-);
+Matcher _error(String code) =>
+    throwsA(isA<RequestFailure>().having((e) => e.code, 'code', code));
 
 final class _Fixture {
   DateTime now = DateTime.utc(2026, 10, 24);

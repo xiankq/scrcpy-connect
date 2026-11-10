@@ -1,10 +1,39 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
-
 import 'dart:async';
+
+import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+
+DocumentOperationController useDocumentOperationController(
+  AppController controller, {
+  Json? exportSource,
+}) {
+  final operation = useMemoized(
+    () => DocumentOperationController(
+      request: controller.request,
+      execute: controller.execute,
+      events: controller.eventStream(),
+      exportSource: exportSource,
+    ),
+    [
+      controller,
+      exportSource?['sourceId'],
+      exportSource?['localPath'],
+      exportSource?['kind'],
+    ],
+  );
+  useListenable(operation);
+  useEffect(() {
+    if (exportSource != null) Future.microtask(operation.refresh);
+    return operation.dispose;
+  }, [operation]);
+  return operation;
+}
 
 /// 持有文档操作表单的提交、取消与交付记录回读状态。
 /// 实际系统文档操作及资源回收由应用文档所有者执行。

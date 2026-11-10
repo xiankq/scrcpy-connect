@@ -1,5 +1,5 @@
 import 'package:scrcpy_connect/services/media/video_output_snapshot.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'package:scrcpy_connect/stores/state_recovery.dart';
 
@@ -22,7 +22,7 @@ Future<StateJson> readAndReconcileMediaSnapshot({
       liveSources = _live(sources, 'sourceId');
   void check() {
     if (!current()) {
-      throw const ApplicationCommandException('cancelled', '状态恢复已结束。');
+      throw const RequestFailure('cancelled', '状态恢复已结束。');
     }
   }
 
@@ -59,10 +59,7 @@ List<StateJson> _records(dynamic values, String id) {
         value[id] is! String ||
         (value[id] as String).isEmpty ||
         !ids.add(value[id] as String)) {
-      throw const ApplicationCommandException(
-        'invalid_snapshot',
-        '状态快照包含无效或重复的媒体标识。',
-      );
+      throw const RequestFailure('invalid_snapshot', '状态快照包含无效或重复的媒体标识。');
     }
     records.add(value);
   }

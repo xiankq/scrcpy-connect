@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/services/platform/diagnostic_log.dart';
 import 'package:scrcpy_connect/services/platform/diagnostic_reporter.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
@@ -123,11 +123,9 @@ void main() {
         'clipboard.set',
         {'deviceId': 'secret-device', 'text': 'clipboard-secret'},
         12,
-        error: const ApplicationCommandException(
-          'connection_lost',
-          'token-secret',
-          {'key': 'private-key'},
-        ),
+        error: const RequestFailure('connection_lost', 'token-secret', {
+          'key': 'private-key',
+        }),
       );
       log.record(
         DiagnosticArea.app,

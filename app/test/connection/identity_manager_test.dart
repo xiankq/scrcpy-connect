@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/identity_manager.dart';
 import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
 
@@ -31,7 +31,7 @@ void main() {
     port: 5555,
     identityFingerprint: fingerprint,
   )).id;
-  final interop = isA<ApplicationCommandException>();
+  final interop = isA<RequestFailure>();
 
   setUp(() async {
     root = await Directory.systemTemp.createTemp('identity-manager-');

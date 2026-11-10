@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/services/files/received_directory.dart';
+import 'package:scrcpy_connect/services/files/local_directories.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 

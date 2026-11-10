@@ -1,5 +1,4 @@
-import 'package:scrcpy_connect/models/application_command.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'package:scrcpy_connect/services/platform/diagnostic_log.dart';
 
@@ -39,7 +38,7 @@ class DiagnosticReporter {
     if (log == null || !_commands.contains(command)) return;
     // 指针、触摸和周期状态流量不能挤占日志容量。
     if (error == null && !_important.contains(command)) return;
-    if (error is ApplicationCommandException && error.code == 'cancelled') {
+    if (error is RequestFailure && error.code == 'cancelled') {
       return;
     }
     log!.record(
@@ -52,7 +51,7 @@ class DiagnosticReporter {
         if (params['deviceId'] is String)
           'scope': log!.scope(params['deviceId'] as String),
         if (error != null) 'errorType': error.runtimeType.toString(),
-        if (error is ApplicationCommandException) 'code': error.code,
+        if (error is RequestFailure) 'code': error.code,
       },
     );
   }
@@ -326,7 +325,7 @@ class DiagnosticReporter {
       fields: {
         if (log != null) 'scope': log!.scope(id),
         'errorType': error.runtimeType.toString(),
-        if (error is ApplicationCommandException) 'code': error.code,
+        if (error is RequestFailure) 'code': error.code,
         if (const {'video_open'}.contains(stage)) 'stage': stage,
       },
     );

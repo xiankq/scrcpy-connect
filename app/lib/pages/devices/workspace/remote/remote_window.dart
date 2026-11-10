@@ -4,7 +4,7 @@ import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/services/media/remote_failure.dart';
-import 'package:scrcpy_connect/stores/media/session_view_registry.dart';
+import 'package:scrcpy_connect/widgets/remote_views.dart';
 
 import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_presentation.dart';
 
@@ -22,11 +22,16 @@ class RemoteWindowClose {
 /// 单个路由窗口拥有设备音源租约、手机控制页计数和精确会话视图。
 /// 输入排空、可见性切换与关闭均在这里排序，页面只负责呈现和导航反馈。
 class RemoteWindow {
-  RemoteWindow({required this.controller, required this.deviceId}) {
-    _releaseDeviceView = controller.claimRemoteDeviceView(deviceId);
+  RemoteWindow({
+    required this.controller,
+    required this.deviceId,
+    required this.views,
+  }) {
+    _releaseDeviceView = views.claimRemoteDeviceView(deviceId);
   }
 
   final AppController controller;
+  final RemoteViews views;
   final String deviceId;
   final presentation = RemotePresentation();
   late final void Function() _releaseDeviceView;
@@ -37,11 +42,11 @@ class RemoteWindow {
 
   void bind({required bool visible}) {
     _releaseControlPage?.call();
-    _releaseControlPage = controller.claimControlPage(
+    _releaseControlPage = views.claimControlPage(
       deviceId,
       sessionId: presentation.sessionId,
     );
-    _view = controller.claimSessionViewLease(
+    _view = views.claimSessionViewLease(
       presentation.sessionId,
       visible: visible,
     );
@@ -95,7 +100,7 @@ class RemoteWindow {
     }
     var owned = _view;
     if (owned == null || !owned.isCurrent) {
-      owned = controller.claimSessionViewLease(
+      owned = views.claimSessionViewLease(
         presentation.sessionId,
         visible: false,
       );
@@ -103,7 +108,7 @@ class RemoteWindow {
       _releaseControlPage?.call();
       _releaseControlPage = null;
     }
-    _releaseControlPage ??= controller.claimControlPage(
+    _releaseControlPage ??= views.claimControlPage(
       deviceId,
       sessionId: presentation.sessionId,
     );
@@ -154,7 +159,7 @@ class RemoteWindow {
         await releases;
         if (lock &&
             lastPage &&
-            !controller.hasControlPages(deviceId) &&
+            !views.hasControlPages(deviceId) &&
             owned!.ownsBinding) {
           try {
             for (final action in ['down', 'up']) {

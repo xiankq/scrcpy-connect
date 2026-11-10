@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/stores/media/device_quality_coordinator.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 void main() {
   test(
@@ -149,7 +149,7 @@ void main() {
             };
           }
           if (params['sessionId'] == 'A') {
-            throw const ApplicationCommandException('encoder_failed', '编码器失败');
+            throw const RequestFailure('encoder_failed', '编码器失败');
           }
           return {...params, 'generation': 2};
         },
@@ -225,8 +225,8 @@ void main() {
       final first = coordinator.change({'deviceId': 'phone'});
       final second = coordinator.change({'deviceId': 'phone'});
       final errors = [
-        expectLater(first, throwsA(isA<ApplicationCommandException>())),
-        expectLater(second, throwsA(isA<ApplicationCommandException>())),
+        expectLater(first, throwsA(isA<RequestFailure>())),
+        expectLater(second, throwsA(isA<RequestFailure>())),
       ];
       await Future<void>.delayed(Duration.zero);
       coordinator.beforeRequest('devices.disconnect', {'deviceId': 'phone'});

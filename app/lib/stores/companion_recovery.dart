@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:adb/adb.dart';
-import 'package:scrcpy_connect/models/companion_exception.dart';
+import 'package:scrcpy_connect/services/companion_protocol.dart';
 import 'package:scrcpy_connect/services/companion_process.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 

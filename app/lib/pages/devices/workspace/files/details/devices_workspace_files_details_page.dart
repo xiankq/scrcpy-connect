@@ -1,5 +1,5 @@
-import 'package:scrcpy_connect/services/files/file_access.dart';
-import 'package:scrcpy_connect/services/files/system_file_share.dart';
+import 'package:scrcpy_connect/services/files/file_browser.dart';
+import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/utils/formatters.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';

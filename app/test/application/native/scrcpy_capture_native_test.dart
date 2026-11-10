@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/services/connection/scrcpy_server_queries.dart';
 import 'package:scrcpy_connect/stores/media/app_launch_store.dart';
@@ -162,7 +162,7 @@ void main() {
             'text': '等待新画面确认',
           }),
           throwsA(
-            isA<ApplicationCommandException>().having(
+            isA<RequestFailure>().having(
               (error) => error.code,
               'code',
               'stale_capture',

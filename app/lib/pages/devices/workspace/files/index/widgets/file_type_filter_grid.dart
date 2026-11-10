@@ -2,7 +2,7 @@ import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/models/file_browser.dart';
+import 'package:scrcpy_connect/services/files/file_browser.dart';
 
 class FileTypeFilterGrid extends StatelessWidget {
   const FileTypeFilterGrid({

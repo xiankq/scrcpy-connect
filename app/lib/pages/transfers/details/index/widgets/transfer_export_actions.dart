@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/services/files/system_file_share.dart';
+import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';

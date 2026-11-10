@@ -5,8 +5,7 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/models/application_request.dart' show Json;
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
 import 'package:scrcpy_connect/services/connection/device_capability_facts_reader.dart';
@@ -318,13 +317,8 @@ const _device = AdbDevice(
 Json _entry(Json result, String id) => (result['capabilities'] as List)
     .cast<Json>()
     .singleWhere((item) => item['id'] == id);
-Matcher _failure(String code) => throwsA(
-  isA<ApplicationCommandException>().having(
-    (error) => error.code,
-    'code',
-    code,
-  ),
-);
+Matcher _failure(String code) =>
+    throwsA(isA<RequestFailure>().having((error) => error.code, 'code', code));
 
 final class _Fixture {
   _Fixture(this.directory);

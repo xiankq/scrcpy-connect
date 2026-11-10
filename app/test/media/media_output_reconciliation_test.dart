@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/media/media_output_reconciliation.dart';
 import 'package:scrcpy_connect/stores/state_recovery.dart';
 
@@ -125,7 +125,7 @@ void main() {
           },
           current: () => !valid,
         ),
-        throwsA(isA<ApplicationCommandException>()),
+        throwsA(isA<RequestFailure>()),
       );
       expect(closed, isEmpty);
     }

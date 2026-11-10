@@ -5,15 +5,12 @@ import 'dart:async';
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/stores/media/device_audio_source_coordinator.dart';
 
-Matcher _code(String code) => isA<ApplicationCommandException>().having(
-  (error) => error.code,
-  'code',
-  code,
-);
+Matcher _code(String code) =>
+    isA<RequestFailure>().having((error) => error.code, 'code', code);
 
 AudioSourceJson _ready(String device, Object? source, {int revision = 7}) => {
   'deviceId': device,
@@ -223,7 +220,7 @@ void main() {
     await expectLater(
       fixture.owner.eligibilityChanged('a'),
       throwsA(
-        isA<ApplicationCommandException>().having(
+        isA<RequestFailure>().having(
           (error) => error.code,
           'code',
           'cleanup_unconfirmed',
@@ -289,10 +286,7 @@ void main() {
     await fixture.owner.start('a');
     await fixture.owner.start('b');
     fixture.native.stopFailures = 1;
-    await expectLater(
-      fixture.owner.close(),
-      throwsA(isA<ApplicationCommandException>()),
-    );
+    await expectLater(fixture.owner.close(), throwsA(isA<RequestFailure>()));
     expect(fixture.owner.snapshots(activeOnly: true), isEmpty);
     expect(fixture.owner.snapshots(), hasLength(1));
     await expectLater(

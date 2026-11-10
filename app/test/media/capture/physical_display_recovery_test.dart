@@ -5,7 +5,7 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/stores/media/physical_display_recovery.dart';
 
@@ -226,7 +226,7 @@ void main() {
   });
 }
 
-final _unknown = isA<ApplicationCommandException>().having(
+final _unknown = isA<RequestFailure>().having(
   (e) => e.code,
   'code',
   'display_recovery_unconfirmed',

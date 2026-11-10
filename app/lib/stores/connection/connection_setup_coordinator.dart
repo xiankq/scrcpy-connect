@@ -4,8 +4,7 @@ import 'dart:math';
 
 import 'package:adb/adb.dart';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
-import 'package:scrcpy_connect/models/application_request.dart' show Json;
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
 import 'package:scrcpy_connect/stores/connection/device_coordinator.dart';
 import 'package:scrcpy_connect/stores/connection/device_discovery.dart';
@@ -120,10 +119,10 @@ class ConnectionSetupCoordinator {
 
   Future<Json> request(String command, Json params) async {
     if (_disposed) {
-      throw const ApplicationCommandException('disposed', '连接协调器已释放。');
+      throw const RequestFailure('disposed', '连接协调器已释放。');
     }
     if (!handles(command)) {
-      throw const ApplicationCommandException('unknown_command', '未知连接流程。');
+      throw const RequestFailure('unknown_command', '未知连接流程。');
     }
     policy.validate();
     final requestedAttempt = params['attemptId'];
@@ -132,11 +131,11 @@ class ConnectionSetupCoordinator {
             requestedAttempt.isEmpty ||
             requestedAttempt.length > 256 ||
             requestedAttempt.contains(RegExp(r'[\x00-\x1f]')))) {
-      throw const ApplicationCommandException('invalid_argument', '连接尝试标识无效。');
+      throw const RequestFailure('invalid_argument', '连接尝试标识无效。');
     }
     final id = params['deviceId'];
     if (id != null && (id is! String || !validDeviceId(id))) {
-      throw const ApplicationCommandException('invalid_device_id', '设备记录标识无效。');
+      throw const RequestFailure('invalid_device_id', '设备记录标识无效。');
     }
     final attempt =
         requestedAttempt as String? ??
@@ -189,15 +188,15 @@ class ConnectionSetupCoordinator {
         return result;
       } on AdbException catch (error, stack) {
         Error.throwWithStackTrace(
-          ApplicationCommandException(error.code, error.message, {
+          RequestFailure(error.code, error.message, {
             if (flow.result != null) 'result': flow.result,
           }),
           stack,
         );
-      } on ApplicationCommandException catch (error, stack) {
+      } on RequestFailure catch (error, stack) {
         if (flow.result == null) rethrow;
         Error.throwWithStackTrace(
-          ApplicationCommandException(error.code, error.message, {
+          RequestFailure(error.code, error.message, {
             'result': flow.result,
             if (error.details != null) 'cause': error.details,
           }),
@@ -205,7 +204,7 @@ class ConnectionSetupCoordinator {
         );
       } on DeviceRecordsFailure catch (error, stack) {
         Error.throwWithStackTrace(
-          ApplicationCommandException(error.code, error.message, {
+          RequestFailure(error.code, error.message, {
             ...error.details,
             if (flow.result != null) 'result': flow.result,
           }),
@@ -218,7 +217,7 @@ class ConnectionSetupCoordinator {
           await _cleanup(flow);
         } catch (error, stack) {
           Error.throwWithStackTrace(
-            ApplicationCommandException(
+            RequestFailure(
               'setup_cleanup_unconfirmed',
               '连接流程的资源尚未确认释放：$error',
               {if (flow.result != null) 'result': flow.result},
@@ -351,10 +350,7 @@ class ConnectionSetupCoordinator {
     final port = _port(params['port']);
     final code = params['code'];
     if (code is! String || !RegExp(r'^\d{6}$').hasMatch(code)) {
-      throw const ApplicationCommandException(
-        'invalid_pairing_code',
-        '请输入六位配对码。',
-      );
+      throw const RequestFailure('invalid_pairing_code', '请输入六位配对码。');
     }
     await _identity(flow, params);
     final client = await _client(flow);
@@ -474,7 +470,7 @@ class ConnectionSetupCoordinator {
               cancellation: flow.stop,
               checkCandidate: () {
                 if (!discovery.isCurrent(candidate)) {
-                  throw const ApplicationCommandException(
+                  throw const RequestFailure(
                     'discovery_changed',
                     '发现端点已变化，请重新核验。',
                   );
@@ -566,27 +562,18 @@ class ConnectionSetupCoordinator {
         (usbSerial is! String ||
             usbSerial.length > 256 ||
             usbSerial.contains(RegExp(r'[\x00-\x1f]')))) {
-      throw const ApplicationCommandException(
-        'invalid_argument',
-        'USB 候选序列号无效。',
-      );
+      throw const RequestFailure('invalid_argument', 'USB 候选序列号无效。');
     }
     String? selector;
     final fd = authorized['fd'];
     if (fd != null && flow.usbLease == null ||
         fd == null && flow.usbLease != null) {
-      throw const ApplicationCommandException(
-        'invalid_argument',
-        'USB 描述符与平台租约必须同时交付。',
-      );
+      throw const RequestFailure('invalid_argument', 'USB 描述符与平台租约必须同时交付。');
     }
     if (fd == null) {
       final client = await _client(flow);
       if (client is! AdbTransportDiscovery) {
-        throw const ApplicationCommandException(
-          'usb_unsupported',
-          '当前平台没有 USB 传输枚举能力。',
-        );
+        throw const RequestFailure('usb_unsupported', '当前平台没有 USB 传输枚举能力。');
       }
       final attached = (await (client as AdbTransportDiscovery).transports(
         timeout: policy.discoveryTimeout,
@@ -616,10 +603,7 @@ class ConnectionSetupCoordinator {
       }
       selector = selected.serial;
     } else if (fd is! int || fd < 0) {
-      throw const ApplicationCommandException(
-        'invalid_argument',
-        'USB 授权描述符无效。',
-      );
+      throw const RequestFailure('invalid_argument', 'USB 授权描述符无效。');
     }
     _check(flow);
     final serial = selector ?? authorized['serial'];
@@ -628,7 +612,7 @@ class ConnectionSetupCoordinator {
           .where((record) => record.serial == serial)
           .toList();
       if (matches.length > 1) {
-        throw const ApplicationCommandException(
+        throw const RequestFailure(
           'usb_selection_required',
           '多条记录匹配 USB 序列号，请明确选择原设备。',
         );
@@ -636,7 +620,7 @@ class ConnectionSetupCoordinator {
       if (matches.length == 1) {
         if (params['identity'] is Map &&
             (params['identity'] as Map)['scope'] == 'device') {
-          throw const ApplicationCommandException(
+          throw const RequestFailure(
             'identity_read_only',
             '此 USB 设备已有记录，请在原记录中管理其授权身份。',
           );
@@ -655,10 +639,7 @@ class ConnectionSetupCoordinator {
     _check(flow);
     final platformLease = flow.usbLease;
     if (platformLease != null && releaseUsb == null) {
-      throw const ApplicationCommandException(
-        'usb_cleanup_unavailable',
-        '缺少平台 USB 连接回收入口。',
-      );
+      throw const RequestFailure('usb_cleanup_unavailable', '缺少平台 USB 连接回收入口。');
     }
     final receipt = await devices.admitSetupCandidate(
       deviceId: flow.deviceId,
@@ -672,7 +653,7 @@ class ConnectionSetupCoordinator {
       open: (client, stop) async {
         if (fd != null) {
           if (client is! NativeAdbClient || !client.capabilities.androidUsbFd) {
-            throw const ApplicationCommandException(
+            throw const RequestFailure(
               'usb_unsupported',
               '当前主控不支持 Android USB 授权描述符。',
             );
@@ -705,7 +686,7 @@ class ConnectionSetupCoordinator {
   Future<Json> _tcpip(_SetupFlow flow, Json params) async {
     final id = flow.deviceId;
     if (id == null) {
-      throw const ApplicationCommandException('invalid_argument', '缺少设备标识。');
+      throw const RequestFailure('invalid_argument', '缺少设备标识。');
     }
     await _identity(flow, params);
     final original = devices.requireConnection(id);
@@ -722,22 +703,16 @@ class ConnectionSetupCoordinator {
         facts.closed ||
         facts.connectionId == null ||
         network['connectionId'] != facts.connectionId) {
-      throw const ApplicationCommandException(
-        'stale_connection',
-        '目标设备连接已变化，请重新获取地址。',
-      );
+      throw const RequestFailure('stale_connection', '目标设备连接已变化，请重新获取地址。');
     }
     final address = validateDeviceAddress(params['address']);
     final addresses = network['addresses'] as List;
     if (!addresses.any((item) => item is Map && item['address'] == address)) {
-      throw const ApplicationCommandException(
-        'address_changed',
-        '目标设备网络地址已变化，请重新选择。',
-      );
+      throw const RequestFailure('address_changed', '目标设备网络地址已变化，请重新选择。');
     }
     final serial = devices.records.current.find(id)?.serial;
     if (serial == null || serial.isEmpty) {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'device_identity_unverified',
         '缺少原设备实际序列号，不能转换连接。',
       );
@@ -756,7 +731,7 @@ class ConnectionSetupCoordinator {
         );
         if (utf8.decode(response, allowMalformed: false).trim() !=
             'restarting in TCP mode port: $port') {
-          throw const ApplicationCommandException(
+          throw const RequestFailure(
             'wireless_setup_failed',
             '设备未确认在指定端口开启 IP 连接。',
           );
@@ -810,10 +785,7 @@ class ConnectionSetupCoordinator {
           rethrow;
         }
         if (!_now().isBefore(deadline)) {
-          throw const ApplicationCommandException(
-            'timeout',
-            'IP 监听已开启，但目标尚未连接，请核对地址和端口。',
-          );
+          throw const RequestFailure('timeout', 'IP 监听已开启，但目标尚未连接，请核对地址和端口。');
         }
       }
       await _pause(flow, policy.tcpipRetryInterval);
@@ -842,10 +814,10 @@ class ConnectionSetupCoordinator {
   void _check(_SetupFlow flow) {
     if (!_now().isBefore(flow.deadline)) _cancel(flow, expired: true);
     if (flow.expired) {
-      throw const ApplicationCommandException('expired', '本次连接流程已到期。');
+      throw const RequestFailure('expired', '本次连接流程已到期。');
     }
     if (_disposed || flow.cancelled) {
-      throw const ApplicationCommandException('cancelled', '本次连接流程已停止。');
+      throw const RequestFailure('cancelled', '本次连接流程已停止。');
     }
   }
 
@@ -930,7 +902,7 @@ class ConnectionSetupCoordinator {
 }
 
 String _code(Object error) => switch (error) {
-  ApplicationCommandException(:final code) ||
+  RequestFailure(:final code) ||
   AdbException(:final code) ||
   DeviceRecordsFailure(:final code) => code,
   _ => 'setup_failed',
@@ -939,7 +911,7 @@ String _endpoint(String address, int port) =>
     address.contains(':') ? '[$address]:$port' : '$address:$port';
 int _port(Object? value) {
   if (value is! int || value < 1 || value > 65535) {
-    throw const ApplicationCommandException('invalid_port', '端口必须为 1 到 65535。');
+    throw const RequestFailure('invalid_port', '端口必须为 1 到 65535。');
   }
   return value;
 }

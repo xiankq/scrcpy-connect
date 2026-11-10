@@ -1,11 +1,10 @@
 import 'dart:async';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/platform/diagnostic_log.dart';
 import 'package:scrcpy_connect/services/platform/diagnostic_reporter.dart';
 
-import 'package:scrcpy_connect/services/media/audio_player_port.dart';
-import 'package:scrcpy_connect/services/media/codec_audio_player.dart';
+import 'package:scrcpy_connect/services/media/audio_player.dart';
 
 /// 进程或引擎范围内的输出所有者；捕获协调器持有远端捕获，平台持有系统焦点及前台服务资格。
 /// PCM 数据包不进入 Dart。
@@ -54,10 +53,7 @@ class AudioOutputCoordinator {
     if (_stopped.contains(id) || cancelled?.call() == true) throw _cancelled();
     if (_entries[id] case final existing?) {
       if (existing.device != device) {
-        throw const ApplicationCommandException(
-          'source_changed',
-          '声音输出不属于这台设备。',
-        );
+        throw const RequestFailure('source_changed', '声音输出不属于这台设备。');
       }
       await existing.ready;
       _check(existing);
@@ -65,13 +61,13 @@ class AudioOutputCoordinator {
     }
     _input(stream);
     if (_retiring.any((entry) => entry.id == id)) {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'audio_cleanup_unconfirmed',
         '原声音输出尚未确认释放，请先重试停止。',
       );
     }
     if (_entries.length + _retiring.length >= 16) {
-      throw const ApplicationCommandException('resource_busy', '声音输出数量已达上限。');
+      throw const RequestFailure('resource_busy', '声音输出数量已达上限。');
     }
     final entry = _AudioOutput(id, device, _factory(), cancelled);
     _entries[id] = entry;
@@ -107,28 +103,19 @@ class AudioOutputCoordinator {
           } else if (event['kind'] == 'failed') {
             _fail(
               entry,
-              const ApplicationCommandException(
-                'audio_failed',
-                '声音播放器报告媒体输入失败。',
-              ),
+              const RequestFailure('audio_failed', '声音播放器报告媒体输入失败。'),
             );
           }
         },
         onError: (Object _, StackTrace _) {
-          _fail(
-            entry,
-            const ApplicationCommandException('audio_failed', '声音播放器事件连接已中断。'),
-          );
+          _fail(entry, const RequestFailure('audio_failed', '声音播放器事件连接已中断。'));
         },
       );
       final format = await _await(entry, entry.player.open(endpoint));
       if (format.codec != 'pcm_s16le' ||
           format.sampleRate != 48000 ||
           format.channels != 2) {
-        throw const ApplicationCommandException(
-          'audio_format',
-          '播放器没有返回所需的 48kHz 双声道 PCM。',
-        );
+        throw const RequestFailure('audio_format', '播放器没有返回所需的 48kHz 双声道 PCM。');
       }
       entry.mediaInfoReady = entry.opened = true;
       await _await(entry, entry.player.volume(entry.volume, entry.muted));
@@ -142,10 +129,7 @@ class AudioOutputCoordinator {
           request('media.status', {'relayId': entry.relay}),
         );
         if (relay['status'] == 'failed' || relay['status'] == 'closed') {
-          throw const ApplicationCommandException(
-            'audio_input_closed',
-            '声音输入已结束，尚未完成播放确认。',
-          );
+          throw const RequestFailure('audio_input_closed', '声音输入已结束，尚未完成播放确认。');
         }
         final packets = relay['packets'];
         if (packets is int && packets > 0) {
@@ -239,7 +223,7 @@ class AudioOutputCoordinator {
       try {
         await _schedule(entry, reason);
         return;
-      } on ApplicationCommandException catch (error) {
+      } on RequestFailure catch (error) {
         _check(entry);
         if (current?.call() == false) throw _cancelled();
         if (error.code != 'cancelled') rethrow;
@@ -251,10 +235,7 @@ class AudioOutputCoordinator {
     final revision = ++entry.requestRevision;
     if (++entry.queued > 12) {
       entry.queued--;
-      throw const ApplicationCommandException(
-        'resource_busy',
-        '声音状态更新过于频繁，请稍后再试。',
-      );
+      throw const RequestFailure('resource_busy', '声音状态更新过于频繁，请稍后再试。');
     }
     final operation = entry.control.then((_) async {
       _check(entry);
@@ -293,18 +274,12 @@ class AudioOutputCoordinator {
     required bool muted,
   }) async {
     if (!volume.isFinite || volume < 0 || volume > 1) {
-      throw const ApplicationCommandException(
-        'invalid_argument',
-        '音量必须在 0 到 1 之间。',
-      );
+      throw const RequestFailure('invalid_argument', '音量必须在 0 到 1 之间。');
     }
     final entry = _entry(id);
     if (++entry.queued > 12) {
       entry.queued--;
-      throw const ApplicationCommandException(
-        'resource_busy',
-        '声音状态更新过于频繁，请稍后再试。',
-      );
+      throw const RequestFailure('resource_busy', '声音状态更新过于频繁，请稍后再试。');
     }
     try {
       await entry.ready;
@@ -365,8 +340,8 @@ class AudioOutputCoordinator {
         _backgroundReady = false;
         await _reconcile('background_unavailable');
       }
-      if (error is ApplicationCommandException) rethrow;
-      throw const ApplicationCommandException(
+      if (error is RequestFailure) rethrow;
+      throw const RequestFailure(
         'audio_background_unavailable',
         '系统尚未确认媒体后台运行资格。',
       );
@@ -461,7 +436,7 @@ class AudioOutputCoordinator {
       }
       try {
         await operation.timeout(operationTimeout);
-      } on ApplicationCommandException catch (error) {
+      } on RequestFailure catch (error) {
         if (error.code != 'cancelled' ||
             _disposed ||
             isDisposed() ||
@@ -493,10 +468,7 @@ class AudioOutputCoordinator {
       if (result['granted'] == true && epoch is int && epoch >= 0) {
         await _releaseEpoch(epoch);
       }
-      throw const ApplicationCommandException(
-        'audio_focus_denied',
-        '系统没有确认新的声音焦点，尚未开始播放。',
-      );
+      throw const RequestFailure('audio_focus_denied', '系统没有确认新的声音焦点，尚未开始播放。');
     }
     _epoch = epoch;
     _lastEpoch = epoch;
@@ -566,7 +538,7 @@ class AudioOutputCoordinator {
           result['ready'] == true || result['mediaPlaybackReady'] == true;
       // 明确的宿主能力限制仍允许前台播放；支持的服务若就绪失败，则不能准入。
       if (enabled && !ready && result['supported'] != false) {
-        throw const ApplicationCommandException(
+        throw const RequestFailure(
           'audio_background_unavailable',
           '系统尚未确认媒体前台服务，声音不会在后台播放。',
         );
@@ -592,7 +564,7 @@ class AudioOutputCoordinator {
     );
   }
 
-  void _fail(_AudioOutput entry, ApplicationCommandException failure) {
+  void _fail(_AudioOutput entry, RequestFailure failure) {
     if (!_owns(entry) || entry.closed) return;
     entry.failure = failure;
     _entries.remove(entry.id);
@@ -671,7 +643,7 @@ class AudioOutputCoordinator {
 
   void _checkReleased([String? device]) {
     if (_retiring.any((entry) => device == null || entry.device == device)) {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'audio_cleanup_unconfirmed',
         '声音输出尚未确认释放，请重试关闭。',
       );
@@ -788,22 +760,19 @@ class AudioOutputCoordinator {
     _checkOwner();
     final entry = _entries[id];
     if (entry == null) {
-      throw const ApplicationCommandException(
-        'audio_source_required',
-        '声音输出已结束。',
-      );
+      throw const RequestFailure('audio_source_required', '声音输出已结束。');
     }
     _check(entry);
     return entry;
   }
 
-  ApplicationCommandException _abort(_AudioOutput entry) => entry.timedOut
-      ? const ApplicationCommandException('audio_timeout', '尚未取得完整的真实声音播放证据。')
+  RequestFailure _abort(_AudioOutput entry) => entry.timedOut
+      ? const RequestFailure('audio_timeout', '尚未取得完整的真实声音播放证据。')
       : _cancelled();
-  ApplicationCommandException _failure(Object error, _AudioOutput entry) =>
-      error is ApplicationCommandException
+  RequestFailure _failure(Object error, _AudioOutput entry) =>
+      error is RequestFailure
       ? error
-      : ApplicationCommandException(
+      : RequestFailure(
           error is TimeoutException ? 'audio_timeout' : 'audio_failed',
           '声音输出尚未完成确认。',
           {'diagnostics': entry.diagnostics},
@@ -870,7 +839,7 @@ class _AudioOutput {
   Timer? startTimer;
   String? relay, appliedState;
   String reason = 'starting';
-  ApplicationCommandException? failure;
+  RequestFailure? failure;
   bool closed = false, timedOut = false, opened = false, evidenceReady = false;
   bool mediaInfoReady = false,
       playingConfirmed = false,
@@ -895,12 +864,11 @@ class _AudioOutput {
   }
 }
 
-ApplicationCommandException _cancelled() =>
-    const ApplicationCommandException('cancelled', '此声音操作已结束。');
+RequestFailure _cancelled() => const RequestFailure('cancelled', '此声音操作已结束。');
 String _text(AudioJson data, String key) {
   final value = data[key];
   if (value is! String || value.isEmpty || value.length > 256) {
-    throw ApplicationCommandException('invalid_argument', '声音参数无效：$key。');
+    throw RequestFailure('invalid_argument', '声音参数无效：$key。');
   }
   return value;
 }
@@ -908,7 +876,7 @@ String _text(AudioJson data, String key) {
 void _input(AudioJson stream) {
   final source = stream['audioSourceId'];
   if (source is! String || !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(source)) {
-    throw const ApplicationCommandException('invalid_endpoint', '缺少有效的原生声音源。');
+    throw const RequestFailure('invalid_endpoint', '缺少有效的原生声音源。');
   }
 }
 
@@ -920,9 +888,6 @@ void _validateSource(AudioJson endpoint) {
       endpoint['detachAddress'] is! int ||
       (endpoint['attachAddress'] as int) <= 0 ||
       (endpoint['detachAddress'] as int) <= 0) {
-    throw const ApplicationCommandException(
-      'invalid_endpoint',
-      '声音输入不是有效的原生数据源。',
-    );
+    throw const RequestFailure('invalid_endpoint', '声音输入不是有效的原生数据源。');
   }
 }

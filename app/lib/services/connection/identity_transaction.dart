@@ -4,7 +4,7 @@ import 'dart:math';
 
 import 'package:path/path.dart' as p;
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/models/device_record.dart' show validDeviceId;
 
 enum IdentityTransactionKind { key, useGlobal, retire }
@@ -50,10 +50,7 @@ final class IdentityTransactionFile {
       if (document is! Map<String, Object?>) _corrupt();
       final version = document['version'];
       if (version is int && version > 1) {
-        throw const ApplicationCommandException(
-          'storage_version',
-          '身份事务版本较新，请更新应用；原文件已保留。',
-        );
+        throw const RequestFailure('storage_version', '身份事务版本较新，请更新应用；原文件已保留。');
       }
       if (version is! int || version != 1) _corrupt();
       final kind = IdentityTransactionKind.values
@@ -137,7 +134,7 @@ final class IdentityTransactionFile {
 
 bool _fingerprint(Object value) =>
     value is String && RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(value);
-Never _corrupt() => throw const ApplicationCommandException(
+Never _corrupt() => throw const RequestFailure(
   'identity_transaction_corrupt',
   '身份事务损坏，原文件已保留；请核对本机存储。',
 );

@@ -2,8 +2,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
-import 'package:scrcpy_connect/services/preference_commands.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/services/app_settings.dart';
 import 'package:scrcpy_connect/models/device_metadata.dart';
 import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
 
@@ -11,7 +11,7 @@ void main() {
   test('导入真实提交回执未知后保留恢复结果，重开核验不重复恢复设备', () async {
     final directory = await Directory.systemTemp.createTemp('import-unknown-');
     addTearDown(() => directory.delete(recursive: true));
-    final preferences = await PreferenceCommands.prepare(directory);
+    final preferences = await AppSettings.prepare(directory);
     var imports = 0, publications = 0;
     final document = {
       'format': 'scrcpy-connect-metadata',
@@ -34,7 +34,7 @@ void main() {
         return '11111111-1111-4111-8111-111111111111';
       },
     );
-    final commands = PreferenceCommands(
+    final commands = AppSettings(
       preferences: preferences,
       records: records,
       onDevicesImported: (_) {},
@@ -45,13 +45,13 @@ void main() {
     );
     await IOOverrides.runWithIOOverrides(() async {
       await expectLater(
-        commands.invoke('settings.import', {
+        commands.importMetadata({
           'metadata': document,
           'fingerprint': fingerprint,
           'importGlobalPreferences': true,
         }),
         throwsA(
-          isA<ApplicationCommandException>()
+          isA<RequestFailure>()
               .having(
                 (error) => error.code,
                 'code',
@@ -76,15 +76,13 @@ void main() {
     expect(publications, 0);
     // 存储确已提交，旧内存仍保持未知提交前的快照；必须读取而非再次导入。
     expect(preferences.current.values['appearance'], 'light');
-    final reopened = await PreferenceCommands.prepare(directory);
+    final reopened = await AppSettings.prepare(directory);
     expect(reopened.current.values['appearance'], 'dark');
     await commands.reconcile();
     expect(commands.settings['appearance'], 'dark');
     expect(imports, 1);
     expect(publications, 1);
-    final checked = await commands.invoke('settings.import.preview', {
-      'metadata': document,
-    }) as Map;
+    final checked = await commands.previewImport({'metadata': document}) as Map;
     expect(checked['alreadyImported'], true);
     expect(checked['preferencesStatus'], 'matchesCurrent');
     expect(checked['newRecords'], 0);

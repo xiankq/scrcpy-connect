@@ -10,7 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/stores/application_host.dart';
 import 'package:scrcpy_connect/services/application_host_record.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/platform/bundled_servers.dart';
 
 void main() {
@@ -44,7 +44,7 @@ void main() {
     await expectLater(
       fixture.client(candidate),
       throwsA(
-        isA<ApplicationCommandException>().having(
+        isA<RequestFailure>().having(
           (error) => error.code,
           'code',
           'application_host_cleanup_unconfirmed',
@@ -103,10 +103,7 @@ void main() {
     );
     expect(owner.closed, isTrue);
     expect(owner.closeAttempts, 1);
-    await expectLater(
-      fixture.client(path),
-      throwsA(isA<ApplicationCommandException>()),
-    );
+    await expectLater(fixture.client(path), throwsA(isA<RequestFailure>()));
     expect(fixture.dependencies.owners, hasLength(1));
 
     await Directory(record.path).delete();
@@ -137,7 +134,7 @@ void main() {
     await expectLater(
       fixture.release(path),
       throwsA(
-        isA<ApplicationCommandException>().having(
+        isA<RequestFailure>().having(
           (error) => error.code,
           'code',
           'application_host_stale',

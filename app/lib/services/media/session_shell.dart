@@ -3,7 +3,7 @@ import 'dart:math' as math;
 
 import 'package:scrcpy_connect/services/connection/device_query.dart';
 import 'package:adb/adb.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 
 final class SessionShellResult {
@@ -138,5 +138,4 @@ int scaledDisplayDensity(
         .round()
         .clamp(72, 65535);
 
-Never _fail(String code, String message) =>
-    throw ApplicationCommandException(code, message);
+Never _fail(String code, String message) => throw RequestFailure(code, message);

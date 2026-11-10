@@ -1,7 +1,31 @@
 import 'package:scrcpy_connect/models/application_request.dart';
+export 'package:scrcpy_connect/services/files/file_type_policy.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/file_browser.dart';
 import 'package:scrcpy_connect/services/files/file_type_policy.dart';
+
+enum FileViewMode { grid, list }
+
+enum FileSortKey { name, size, modified, type }
+
+enum FileTypeFilter { all, documents, images, videos, audio }
+
+class FileBreadcrumb {
+  const FileBreadcrumb({required this.label, required this.path});
+
+  final String label;
+  final String path;
+}
+
+class DirectoryListing {
+  DirectoryListing({required this.folders, required this.files})
+    : entries = List<Json>.unmodifiable([...folders, ...files]);
+
+  final List<Json> folders;
+  final List<Json> files;
+  final List<Json> entries;
+
+  bool get isEmpty => folders.isEmpty && files.isEmpty;
+}
 
 DirectoryListing buildDirectoryListing({
   required List<Json> entries,
@@ -150,3 +174,14 @@ String fileDirectoryLabel(String path) {
   final crumbs = fileBreadcrumbs(path);
   return crumbs.isEmpty ? path : crumbs.last.label;
 }
+
+bool fileCanOpen(Json file) =>
+    file['path'] is String &&
+    value(file, 'path').isNotEmpty &&
+    file['canOpen'] != false;
+bool fileCanManage(Json file) =>
+    file['path'] is String &&
+    value(file, 'path').isNotEmpty &&
+    file['canManage'] != false;
+String fileUnavailableReason(Json file) =>
+    value(file, 'reason', '文件名无法解析为有效路径，暂时无法操作。');

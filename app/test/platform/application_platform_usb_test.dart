@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/platform/application_platform.dart';
 
 void main() {
@@ -285,8 +285,5 @@ ApplicationPlatform _platform(String? owner) => ApplicationPlatform(
   usbOwnerLeaseId: owner,
 );
 
-Matcher _code(String code) => isA<ApplicationCommandException>().having(
-  (error) => error.code,
-  'code',
-  code,
-);
+Matcher _code(String code) =>
+    isA<RequestFailure>().having((error) => error.code, 'code', code);

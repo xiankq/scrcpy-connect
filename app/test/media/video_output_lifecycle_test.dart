@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/stores/media/video_output_coordinator.dart';
 import 'package:scrcpy_connect/stores/media/video_output_lifecycle.dart';
-import 'package:scrcpy_connect/services/media/video_player_port.dart';
+import 'package:scrcpy_connect/services/media/video_player.dart';
 
 final _token = List.filled(64, 'a').join();
 

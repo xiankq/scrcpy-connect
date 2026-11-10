@@ -3,8 +3,8 @@ import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
-import 'package:scrcpy_connect/services/preference_commands.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/services/app_settings.dart';
 import 'package:scrcpy_connect/stores/preference_store.dart';
 
 const _forgotten = '7b2a4273-cd2e-4aca-b86e-1e6d81170c81';
@@ -16,7 +16,7 @@ void main() {
   late DeviceRecordStore records;
   final changes = <Map<String, dynamic>>[];
 
-  PreferenceCommands commands({bool failApply = false}) => PreferenceCommands(
+  AppSettings commands({bool failApply = false}) => AppSettings(
     preferences: preferences,
     records: records,
     onDevicesImported: (_) => fail('清理偏好不重放设备导入'),
@@ -29,7 +29,7 @@ void main() {
   setUp(() async {
     changes.clear();
     directory = await Directory.systemTemp.createTemp('forgotten-preferences-');
-    preferences = await PreferenceCommands.prepare(directory);
+    preferences = await AppSettings.prepare(directory);
     records = await DeviceRecordStore.open(directory: directory);
     await preferences.update({
       'appearance': 'dark',
@@ -50,13 +50,13 @@ void main() {
   tearDown(() => directory.delete(recursive: true));
 
   test('保存冲突保留其他所有者的修改并允许只重试偏好清理', () async {
-    final other = await PreferenceCommands.prepare(directory);
+    final other = await AppSettings.prepare(directory);
     await other.update({'appearance': 'system'});
     final runtime = commands();
     await expectLater(
       runtime.forgetDevicePreferences(_forgotten),
       throwsA(
-        isA<ApplicationCommandException>()
+        isA<RequestFailure>()
             .having(
               (error) => error.code,
               'code',
@@ -74,10 +74,10 @@ void main() {
       ),
     );
     expect(changes, isEmpty);
-    final beforeRetry = await PreferenceCommands.prepare(directory);
+    final beforeRetry = await AppSettings.prepare(directory);
     expect(beforeRetry.current.values['deviceQuality'], contains(_forgotten));
     await runtime.forgetDevicePreferences(_forgotten);
-    final reopened = await PreferenceCommands.prepare(directory);
+    final reopened = await AppSettings.prepare(directory);
     expect(reopened.current.values['appearance'], 'system');
     expect(
       reopened.current.values['deviceQuality'],
@@ -95,7 +95,7 @@ void main() {
     await expectLater(
       runtime.forgetDevicePreferences(_forgotten),
       throwsA(
-        isA<ApplicationCommandException>()
+        isA<RequestFailure>()
             .having(
               (error) => error.code,
               'code',
@@ -117,9 +117,7 @@ void main() {
     await file.writeAsBytes(original, flush: true);
     await runtime.forgetDevicePreferences(_forgotten);
     expect(
-      (await PreferenceCommands.prepare(directory))
-          .current
-          .values['deviceQuality'],
+      (await AppSettings.prepare(directory)).current.values['deviceQuality'],
       isNot(contains(_forgotten)),
     );
   });
@@ -129,7 +127,7 @@ void main() {
     await expectLater(
       runtime.forgetDevicePreferences(_forgotten),
       throwsA(
-        isA<ApplicationCommandException>()
+        isA<RequestFailure>()
             .having((error) => error.code, 'code', 'preferences_apply_unknown')
             .having(
               (error) => error.details,
@@ -142,7 +140,7 @@ void main() {
             ),
       ),
     );
-    preferences = await PreferenceCommands.prepare(directory);
+    preferences = await AppSettings.prepare(directory);
     expect(
       preferences.current.values['deviceQuality'],
       isNot(contains(_forgotten)),
@@ -167,7 +165,7 @@ void main() {
     final revision = preferences.current.revision;
     await runtime.forgetDevicePreferences(_forgotten);
     expect(preferences.current.revision, revision);
-    final reopened = await PreferenceCommands.prepare(directory);
+    final reopened = await AppSettings.prepare(directory);
     expect(reopened.current.values['deviceQuality'], {
       _remaining: {'maxFps': 45},
     });

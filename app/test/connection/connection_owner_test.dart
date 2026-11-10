@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 
 final class _Client implements AdbClient {
@@ -28,13 +28,8 @@ DeviceConnection _connection(
   releasePlatformResources: releasePlatformResources,
 );
 
-Matcher _failure(String code) => throwsA(
-  isA<ApplicationCommandException>().having(
-    (error) => error.code,
-    'code',
-    code,
-  ),
-);
+Matcher _failure(String code) =>
+    throwsA(isA<RequestFailure>().having((error) => error.code, 'code', code));
 
 void main() {
   test('模式切换同步撤准入，活动排空后才借用原传输并按顺序释放平台租约', () async {

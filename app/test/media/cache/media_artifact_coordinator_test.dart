@@ -9,7 +9,7 @@ import 'support/media_file_fixture.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/files/file_executor.dart';
 import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
 import 'package:scrcpy_connect/stores/media/media_artifact_coordinator.dart';
@@ -82,11 +82,7 @@ void main() {
         'path': '/sdcard/raw.png',
       }),
       throwsA(
-        isA<ApplicationCommandException>().having(
-          (e) => e.code,
-          'code',
-          'source_changed',
-        ),
+        isA<RequestFailure>().having((e) => e.code, 'code', 'source_changed'),
       ),
     );
     expect((await cache.status())['reservedBytes'], 0);
@@ -133,7 +129,7 @@ void main() {
         'path': '/sdcard/image.png',
       }),
       throwsA(
-        isA<ApplicationCommandException>().having(
+        isA<RequestFailure>().having(
           (e) => e.code,
           'code',
           'invalid_thumbnail',
@@ -149,11 +145,7 @@ void main() {
         'path': '/sdcard/image.png',
       }),
       throwsA(
-        isA<ApplicationCommandException>().having(
-          (e) => e.code,
-          'code',
-          'source_changed',
-        ),
+        isA<RequestFailure>().having((e) => e.code, 'code', 'source_changed'),
       ),
     );
     expect((await cache.status())['reservedBytes'], 0);
@@ -313,13 +305,7 @@ void main() {
         'path': '/sdcard/image.png',
         'operationId': operation,
       }),
-      throwsA(
-        isA<ApplicationCommandException>().having(
-          (e) => e.code,
-          'code',
-          'cancelled',
-        ),
-      ),
+      throwsA(isA<RequestFailure>().having((e) => e.code, 'code', 'cancelled')),
     );
     expect(companion.phases, isEmpty);
   });

@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'package:scrcpy_connect/stores/files/documents_coordinator.dart';
 
@@ -37,11 +37,11 @@ class SystemDeliveryCoordinator {
 
   Future<DocumentsJson> save(DocumentsJson params) async {
     if (_closed) {
-      throw const ApplicationCommandException('cancelled', '系统保存已停止。');
+      throw const RequestFailure('cancelled', '系统保存已停止。');
     }
     final path = params['localPath'];
     if (path is! String || path.isEmpty) {
-      throw const ApplicationCommandException('invalid_path', '缺少本机原件位置。');
+      throw const RequestFailure('invalid_path', '缺少本机原件位置。');
     }
     final random = Random.secure();
     final operationId =
@@ -50,10 +50,7 @@ class SystemDeliveryCoordinator {
     if (operationId is! String ||
         operationId.isEmpty ||
         _pending.containsKey(operationId)) {
-      throw const ApplicationCommandException(
-        'delivery_operation_reused',
-        '请使用新的系统保存操作标识。',
-      );
+      throw const RequestFailure('delivery_operation_reused', '请使用新的系统保存操作标识。');
     }
     final source = <String, dynamic>{
       'sourceId': params['sourceId'] ?? 'local',
@@ -91,7 +88,7 @@ class SystemDeliveryCoordinator {
         } catch (error) {
           // 这些协调器拒绝发生在选择器创建和复制之前。
           final rejectedBeforeWrite =
-              error is ApplicationCommandException &&
+              error is RequestFailure &&
               [
                 'documents_busy',
                 'operation_id_reused',
@@ -132,7 +129,7 @@ class SystemDeliveryCoordinator {
       final record = receipt['record'];
       if (record is! Map<Object?, Object?> ||
           record['result'] is! Map<Object?, Object?>) {
-        throw const ApplicationCommandException(
+        throw const RequestFailure(
           'delivery_receipt_missing',
           '系统保存结果尚未可靠记录，请重新核验。',
         );

@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
 import 'package:scrcpy_connect/services/connection/scrcpy_server_queries.dart';
@@ -64,10 +64,7 @@ final class MediaOwnerFixture {
   String get deviceId => _deviceId;
   DeviceConnection get connection =>
       _connection ??
-      (throw const ApplicationCommandException(
-        'disconnected',
-        '测试宿主尚未取得真实连接。',
-      ));
+      (throw const RequestFailure('disconnected', '测试宿主尚未取得真实连接。'));
   ScrcpyClient get scrcpy => _host.scrcpy;
   late final SessionCoordinator sessions;
   late final DeviceAudioSourceCoordinator audio;
@@ -145,7 +142,7 @@ final class MediaOwnerFixture {
 
   DeviceConnection _requireConnection(String id) {
     if (id != deviceId || _closed || _disconnected) {
-      throw const ApplicationCommandException('disconnected', '这次测试的精确连接已撤销。');
+      throw const RequestFailure('disconnected', '这次测试的精确连接已撤销。');
     }
     return connection;
   }
@@ -165,7 +162,7 @@ final class MediaOwnerFixture {
       if (status.captureRef != captureRef ||
           status.sourceId != nativeSourceId ||
           status.kind != ScrcpySourceKind.video) {
-        throw const ApplicationCommandException('stale_capture', '测试视频来源已被替换。');
+        throw const RequestFailure('stale_capture', '测试视频来源已被替换。');
       }
       return {
         'relayId': nativeSourceId,

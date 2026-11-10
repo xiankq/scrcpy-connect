@@ -5,7 +5,7 @@ import 'dart:math' as math;
 import 'package:uuid/uuid.dart';
 import 'package:adb/adb.dart';
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/services/media/video_quality_policy.dart';
 import 'package:scrcpy_connect/services/media/virtual_display_policy.dart';
@@ -532,7 +532,7 @@ final class SessionCoordinator {
     } catch (error, stack) {
       if (work.failure != null) {
         Error.throwWithStackTrace(
-          ApplicationCommandException(work.failure!, '这次捕获操作已撤销，仍需核对远端结果。'),
+          RequestFailure(work.failure!, '这次捕获操作已撤销，仍需核对远端结果。'),
           stack,
         );
       }
@@ -1095,10 +1095,9 @@ final class SessionCoordinator {
   }
 }
 
-Never _fail(String code, String message) =>
-    throw ApplicationCommandException(code, message);
+Never _fail(String code, String message) => throw RequestFailure(code, message);
 String _code(Object error) => switch (error) {
-  ApplicationCommandException(:final code) ||
+  RequestFailure(:final code) ||
   AdbException(:final code) ||
   ScrcpyException(:final code) => code,
   _ => 'session_failed',
@@ -1107,15 +1106,9 @@ Future<T> _boundary<T>(Future<T> Function() action) async {
   try {
     return await action();
   } on AdbException catch (error, stack) {
-    Error.throwWithStackTrace(
-      ApplicationCommandException(error.code, error.message),
-      stack,
-    );
+    Error.throwWithStackTrace(RequestFailure(error.code, error.message), stack);
   } on ScrcpyException catch (error, stack) {
-    Error.throwWithStackTrace(
-      ApplicationCommandException(error.code, error.message),
-      stack,
-    );
+    Error.throwWithStackTrace(RequestFailure(error.code, error.message), stack);
   }
 }
 
@@ -1286,10 +1279,7 @@ extension _SessionCommands on SessionCoordinator {
               'move' => ScrcpyTouchAction.move,
               'cancel' => ScrcpyTouchAction.cancel,
               'hover' => ScrcpyTouchAction.hoverMove,
-              _ => throw const ApplicationCommandException(
-                'invalid_argument',
-                '触控动作无效。',
-              ),
+              _ => throw const RequestFailure('invalid_argument', '触控动作无效。'),
             };
             final point = _point(
               slot,
@@ -1975,5 +1965,5 @@ String _mime(String codec) => switch (codec) {
   'av1' => 'video/av01',
   'vp8' => 'video/x-vnd.on2.vp8',
   'vp9' => 'video/x-vnd.on2.vp9',
-  _ => throw const ApplicationCommandException('invalid_argument', '视频格式无效。'),
+  _ => throw const RequestFailure('invalid_argument', '视频格式无效。'),
 };

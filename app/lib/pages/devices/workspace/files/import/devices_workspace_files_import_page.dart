@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/hooks/use_document_operation_controller.dart';
+import 'package:scrcpy_connect/widgets/documents/document_operation.dart';
 import 'package:scrcpy_connect/services/files/file_browser.dart';
 import 'package:scrcpy_connect/utils/formatters.dart';
 import 'package:scrcpy_connect/services/display_labels.dart';

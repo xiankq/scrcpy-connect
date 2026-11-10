@@ -5,7 +5,7 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/stores/connection/device_coordinator.dart';
 import 'package:scrcpy_connect/stores/connection/device_discovery.dart';
@@ -64,10 +64,7 @@ void main() {
       expect(connection.device.id, 'handle-2');
       expect(fixture.owner.current(id), isNull);
       expect(fixture.client.disconnected, ['handle-1']);
-      throw const ApplicationCommandException(
-        'display_recovery_unconfirmed',
-        '恢复结果尚未确认',
-      );
+      throw const RequestFailure('display_recovery_unconfirmed', '恢复结果尚未确认');
     };
     final configuring = fixture.configure(id);
     final rejected = expectLater(
@@ -239,7 +236,7 @@ void main() {
   test('已配对零端口记录通过发现核验真实 GUID 后才提交当前端点', () async {
     final id = await fixture.paired();
     await fixture.records.setAutoReconnect(id, true);
-    fixture.candidates.error = const ApplicationCommandException(
+    fixture.candidates.error = const RequestFailure(
       'discovery_unavailable',
       '组播暂时不可用',
     );
@@ -259,7 +256,7 @@ void main() {
 
   test('保存的明确 TLS 地址可无发现跨网直连，手填配置仍直接核验', () async {
     final id = await fixture.paired(port: 5555);
-    fixture.candidates.error = const ApplicationCommandException(
+    fixture.candidates.error = const RequestFailure(
       'discovery_unavailable',
       '没有组播',
     );
@@ -955,10 +952,7 @@ void main() {
         port: 43777,
         checkCandidate: () {
           if (!valid) {
-            throw const ApplicationCommandException(
-              'discovery_changed',
-              '答案已撤回',
-            );
+            throw const RequestFailure('discovery_changed', '答案已撤回');
           }
         },
         open: (client, stop) =>
@@ -1079,7 +1073,7 @@ void main() {
           port: 5555,
           open: (_, _) async => _device('never'),
         ),
-        throwsA(isA<ApplicationCommandException>()),
+        throwsA(isA<RequestFailure>()),
       );
       await fixture.owner.admitTcpipCandidate(
         deviceId: id,
@@ -1195,7 +1189,7 @@ void main() {
     await expectLater(
       fixture.connect(id),
       throwsA(
-        isA<ApplicationCommandException>()
+        isA<RequestFailure>()
             .having((error) => error.code, 'code', 'auth_failed')
             .having((error) => error.message, 'message', '设备拒绝了本次授权'),
       ),
@@ -1765,13 +1759,8 @@ void main() {
   });
 }
 
-Matcher _failure(String code) => throwsA(
-  isA<ApplicationCommandException>().having(
-    (error) => error.code,
-    'code',
-    code,
-  ),
-);
+Matcher _failure(String code) =>
+    throwsA(isA<RequestFailure>().having((error) => error.code, 'code', code));
 
 final class _ReconnectTimer implements Timer {
   _ReconnectTimer(this._run);

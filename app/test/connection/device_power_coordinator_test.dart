@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/stores/connection/device_power_coordinator.dart';
 
@@ -82,7 +82,7 @@ void main() {
     await expectLater(
       fixture.wake(),
       throwsA(
-        isA<ApplicationCommandException>()
+        isA<RequestFailure>()
             .having((error) => error.code, 'code', 'wake_failed')
             .having((error) => error.details, 'details', {'exitCode': 127}),
       ),
@@ -351,13 +351,8 @@ void main() {
   });
 }
 
-Matcher _failure(String code) => throwsA(
-  isA<ApplicationCommandException>().having(
-    (error) => error.code,
-    'code',
-    code,
-  ),
-);
+Matcher _failure(String code) =>
+    throwsA(isA<RequestFailure>().having((error) => error.code, 'code', code));
 
 NativeAdbEvent _exit(int? code) => _event('exit', done: true, exitCode: code);
 NativeAdbEvent _data(String text) => NativeAdbEvent(

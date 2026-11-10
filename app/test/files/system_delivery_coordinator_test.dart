@@ -9,8 +9,6 @@ import 'package:scrcpy_connect/services/files/desktop_document_delivery.dart';
 import 'documents_coordinator_test.dart' show Fixture, identity;
 
 import 'package:scrcpy_connect/stores/files/system_delivery_coordinator.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart'
-    show ApplicationCommandException;
 
 ApplicationRequest _journal({
   Future<Json>? admission,
@@ -121,7 +119,7 @@ void main() {
       applicationRequest: _journal(
         finish: (params) {
           if (++receipts == 1) {
-            throw const ApplicationCommandException(
+            throw const RequestFailure(
               'delivery_capacity',
               'receipt too large',
             );
@@ -168,7 +166,7 @@ void main() {
       final delivery = SystemDeliveryCoordinator(
         applicationRequest: _journal(),
         write: (_) async {
-          throw const ApplicationCommandException('documents_busy', '已有系统文档任务');
+          throw const RequestFailure('documents_busy', '已有系统文档任务');
         },
       );
       final result = await delivery.save({

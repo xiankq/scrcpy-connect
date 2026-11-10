@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:adb/adb.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 /// 一次实际连接及其 SDK 所有者；业务记录 ID 不进入原生连接登记表。
 final class DeviceConnection {
@@ -58,14 +58,11 @@ final class ConnectionOwner {
 
   DeviceConnection require(String recordId) =>
       current(recordId) ??
-      (throw const ApplicationCommandException(
-        'disconnected',
-        '这台设备当前没有可用连接。',
-      ));
+      (throw const RequestFailure('disconnected', '这台设备当前没有可用连接。'));
 
   void _checkOpen() {
     if (_closed) {
-      throw const ApplicationCommandException('disposed', '连接所有者已关闭。');
+      throw const RequestFailure('disposed', '连接所有者已关闭。');
     }
   }
 
@@ -113,7 +110,7 @@ final class ConnectionOwner {
 
   void _checkAttempt(_DeviceSlot slot, _Attempt attempt) {
     if (!_isCurrent(slot, attempt)) {
-      throw const ApplicationCommandException('cancelled', '本次连接已失效。');
+      throw const RequestFailure('cancelled', '本次连接已失效。');
     }
   }
 
@@ -221,7 +218,7 @@ final class ConnectionOwner {
     _checkOpen();
     cancellation?.check();
     if (!identical(current(recordId), expected)) {
-      throw const ApplicationCommandException('stale_connection', '目标连接已变化。');
+      throw const RequestFailure('stale_connection', '目标连接已变化。');
     }
     final invalidation = _invalidate(recordId);
     final slot = invalidation.slot;
@@ -310,7 +307,7 @@ final class ConnectionOwner {
             await _drain(recordId, slot);
           } catch (_) {
             // 保留精确旧句柄和阶段，后续替换必须先重试清理。
-            throw const ApplicationCommandException(
+            throw const RequestFailure(
               'connection_cleanup_unconfirmed',
               '旧连接尚未确认释放，请先重试断开。',
             );

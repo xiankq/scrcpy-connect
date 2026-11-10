@@ -9,7 +9,7 @@ import 'dart:typed_data';
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/services/connection/scrcpy_server_queries.dart';
 import 'package:scrcpy_connect/stores/media/app_launch_store.dart';
@@ -192,10 +192,7 @@ void main() {
   test('首帧等待中的关闭失败可重试，迟到首帧不能复活', () async {
     f.native.media = Completer<ScrcpySessionInfo>();
     final starting = f.start();
-    final failed = expectLater(
-      starting,
-      throwsA(isA<ApplicationCommandException>()),
-    );
+    final failed = expectLater(starting, throwsA(isA<RequestFailure>()));
     await _until(
       () => f.native.stages.any((value) => value.startsWith('media:')),
     );
@@ -896,11 +893,8 @@ void main() {
   });
 }
 
-Matcher _error(String code) => isA<ApplicationCommandException>().having(
-  (error) => error.code,
-  'code',
-  code,
-);
+Matcher _error(String code) =>
+    isA<RequestFailure>().having((error) => error.code, 'code', code);
 String _id(int n) =>
     '00000000-0000-4000-8000-${n.toRadixString(16).padLeft(12, '0')}';
 Future<void> _until(bool Function() condition) async {

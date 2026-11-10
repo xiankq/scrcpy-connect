@@ -13,8 +13,7 @@ import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
 import 'package:scrcpy_connect/stores/media/media_artifact_coordinator.dart';
 import 'package:scrcpy_connect/stores/files/share_coordinator.dart';
 import 'package:scrcpy_connect/services/application_command_dispatcher.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
-import 'package:scrcpy_connect/models/application_command.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
 import 'package:scrcpy_connect/stores/files/file_catalog.dart';
 import 'package:scrcpy_connect/stores/files/file_mutation_coordinator.dart';
@@ -22,7 +21,7 @@ import 'package:scrcpy_connect/services/files/file_executor.dart';
 
 import '../files/support/file_executor_fixture.dart';
 
-import 'package:scrcpy_connect/services/preference_commands.dart';
+import 'package:scrcpy_connect/services/app_settings.dart';
 import 'package:scrcpy_connect/stores/preference_store.dart';
 
 const _device = '7b2a4273-cd2e-4aca-b86e-1e6d81170c81';
@@ -39,7 +38,7 @@ void main() {
       Directory(p.join(directory.path, 'files')),
       FixtureExecutor(),
     );
-    preferences = await PreferenceCommands.prepare(directory);
+    preferences = await AppSettings.prepare(directory);
     records = await DeviceRecordStore.open(directory: directory);
     await preferences.update({
       'deviceQuality': {
@@ -87,7 +86,7 @@ void main() {
       catalog: catalog,
       mutations: mutations,
       transfers: transfers,
-      preferences: PreferenceCommands(
+      preferences: AppSettings(
         preferences: preferences,
         records: records,
         onDevicesImported: (_) => fail('此测试不应导入设备'),
@@ -134,7 +133,7 @@ void main() {
       await expectLater(
         commands.invokeCommand(command, params),
         throwsA(
-          isA<ApplicationCommandException>().having(
+          isA<RequestFailure>().having(
             (error) => error.code,
             'code',
             'invalid_argument',
@@ -146,7 +145,7 @@ void main() {
     await expectLater(
       commands.invoke('files.lsit', {'deviceId': _device}),
       throwsA(
-        isA<ApplicationCommandException>().having(
+        isA<RequestFailure>().having(
           (error) => error.code,
           'code',
           'unknown_command',
@@ -280,7 +279,7 @@ void main() {
     await expectLater(
       commands.invoke('sharing.import', {'shareId': 'incoming'}),
       throwsA(
-        isA<ApplicationCommandException>().having(
+        isA<RequestFailure>().having(
           (error) => error.code,
           'code',
           'platform_unavailable',
@@ -346,7 +345,7 @@ void main() {
     });
     expect((await operation)['forgotten'], isTrue);
     expect(calls, ['devices.forget']);
-    final reopened = await PreferenceCommands.prepare(directory);
+    final reopened = await AppSettings.prepare(directory);
     expect(reopened.current.values['deviceQuality'], isNot(contains(_device)));
     expect(reopened.current.values['deviceSettings'], isNot(contains(_device)));
   });
@@ -361,7 +360,7 @@ void main() {
       preferences: preferences,
       execute: (command, params) async {
         calls.add(command);
-        throw const ApplicationCommandException('cleanup_unknown', '连接回收尚未确认。');
+        throw const RequestFailure('cleanup_unknown', '连接回收尚未确认。');
       },
       onSettingsChanged: (_) {},
       applyBackgroundPolicy: (_) async {},
@@ -369,7 +368,7 @@ void main() {
     await expectLater(
       commands.invoke('devices.forget', {'deviceId': _device}),
       throwsA(
-        isA<ApplicationCommandException>().having(
+        isA<RequestFailure>().having(
           (error) => error.code,
           'code',
           'cleanup_unknown',
@@ -377,7 +376,7 @@ void main() {
       ),
     );
     expect(calls, ['devices.forget']);
-    final reopened = await PreferenceCommands.prepare(directory);
+    final reopened = await AppSettings.prepare(directory);
     expect(reopened.current.values['deviceQuality'], contains(_device));
     expect(reopened.current.values['deviceSettings'], contains(_device));
   });

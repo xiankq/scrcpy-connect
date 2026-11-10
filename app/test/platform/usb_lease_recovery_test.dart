@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/usb_lease_recovery.dart';
 
 void main() {
@@ -270,8 +270,5 @@ void main() {
   }
 }
 
-Matcher _code(String code) => isA<ApplicationCommandException>().having(
-  (error) => error.code,
-  'code',
-  code,
-);
+Matcher _code(String code) =>
+    isA<RequestFailure>().having((error) => error.code, 'code', code);

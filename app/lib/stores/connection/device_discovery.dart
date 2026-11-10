@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:adb/adb.dart';
 import 'package:multicast_dns/multicast_dns.dart';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 enum AdbDiscoveryKind { pairing, tlsConnect, tcpConnect }
 
@@ -96,28 +96,22 @@ final class DeviceDiscovery {
     String? pairingInstance,
   }) {
     if (_closed) {
-      return Future.error(
-        const ApplicationCommandException('disposed', '发现所有者已关闭。'),
-      );
+      return Future.error(const RequestFailure('disposed', '发现所有者已关闭。'));
     }
     if (pairingInstance != null &&
         (pairingInstance.isEmpty ||
             pairingInstance.length > 255 ||
             pairingInstance.contains(RegExp(r'[\r\n\x00]')))) {
-      return Future.error(
-        const ApplicationCommandException('invalid_argument', '配对服务名无效。'),
-      );
+      return Future.error(const RequestFailure('invalid_argument', '配对服务名无效。'));
     }
     for (final old in _operations) {
-      old.stop(const ApplicationCommandException('cancelled', '已被后继发现请求取代。'));
+      old.stop(const RequestFailure('cancelled', '已被后继发现请求取代。'));
     }
     final operation = _DiscoveryScan();
     _latest = operation;
     _operations.add(operation);
     final unregister = cancellation?.onCancel(
-      () => operation.stop(
-        const ApplicationCommandException('cancelled', '本次发现已取消。'),
-      ),
+      () => operation.stop(const RequestFailure('cancelled', '本次发现已取消。')),
     );
     final result = _tail.then((_) => _run(operation, pairingInstance));
     _tail = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
@@ -183,13 +177,13 @@ final class DeviceDiscovery {
       ]);
       operation.check();
       if (clients.isEmpty) {
-        throw ApplicationCommandException(
+        throw RequestFailure(
           'discovery_unavailable',
           '无法打开多播发现：${startupErrors.firstOrNull}',
         );
       }
       if (operation.windowEnded) {
-        throw const ApplicationCommandException('timeout', '多播发现启动超时。');
+        throw const RequestFailure('timeout', '多播发现启动超时。');
       }
       final queue = Queue<Future<void> Function()>();
       final running = <Future<void>>{};
@@ -241,10 +235,7 @@ final class DeviceDiscovery {
           return;
         }
         if (!services.contains(fullname) && services.length >= maxServices) {
-          throw const ApplicationCommandException(
-            'discovery_limit',
-            '发现服务超过本次查询上限。',
-          );
+          throw const RequestFailure('discovery_limit', '发现服务超过本次查询上限。');
         }
         services.add(fullname);
         if (!queried.add((client, fullname))) return;
@@ -283,7 +274,7 @@ final class DeviceDiscovery {
       await _cleanup(operation);
       operation.check();
       if (_closed || !identical(_latest, operation)) {
-        throw const ApplicationCommandException('cancelled', '本次发现已结束或被后继取代。');
+        throw const RequestFailure('cancelled', '本次发现已结束或被后继取代。');
       }
       _expire();
       // 一轮完整服务解析替换该服务的旧地址；无回答只能由 TTL 失效，不能假定离线。
@@ -314,10 +305,7 @@ final class DeviceDiscovery {
         );
       }
       if (retained.length > maxEndpoints) {
-        throw const ApplicationCommandException(
-          'discovery_limit',
-          '有效发现缓存超过端点上限。',
-        );
+        throw const RequestFailure('discovery_limit', '有效发现缓存超过端点上限。');
       }
       _endpoints
         ..clear()
@@ -371,10 +359,7 @@ final class DeviceDiscovery {
         final hostname = _canonical(srv.target);
         if (!targets.add('$hostname:${srv.port}')) return;
         if (targets.length > 8) {
-          throw const ApplicationCommandException(
-            'discovery_limit',
-            '服务目标数量超过上限。',
-          );
+          throw const RequestFailure('discovery_limit', '服务目标数量超过上限。');
         }
         for (final query in [
           ResourceRecordQuery.addressIPv4(hostname),
@@ -415,10 +400,7 @@ final class DeviceDiscovery {
               }
               if (!found.containsKey(endpoint._key) &&
                   found.length >= maxEndpoints) {
-                throw const ApplicationCommandException(
-                  'discovery_limit',
-                  '发现端点超过本次查询上限。',
-                );
+                throw const RequestFailure('discovery_limit', '发现端点超过本次查询上限。');
               }
               found[endpoint._key] = endpoint;
             }).catchError((Object error, StackTrace stack) {
@@ -452,10 +434,7 @@ final class DeviceDiscovery {
             }
             try {
               if (++count > 1024) {
-                throw const ApplicationCommandException(
-                  'discovery_limit',
-                  '发现响应超过本次查询上限。',
-                );
+                throw const RequestFailure('discovery_limit', '发现响应超过本次查询上限。');
               }
               accept(record);
             } catch (error, stack) {
@@ -514,7 +493,7 @@ final class DeviceDiscovery {
       }
     }
     if (failure != null) {
-      throw ApplicationCommandException(
+      throw RequestFailure(
         'discovery_cleanup_unconfirmed',
         '发现资源尚未确认释放：$failure',
       );
@@ -527,9 +506,7 @@ final class DeviceDiscovery {
     _closed = true;
     _latest = null;
     for (final operation in _operations) {
-      operation.stop(
-        const ApplicationCommandException('cancelled', '发现所有者已关闭。'),
-      );
+      operation.stop(const RequestFailure('cancelled', '发现所有者已关闭。'));
     }
     final closing = () async {
       await _tail;

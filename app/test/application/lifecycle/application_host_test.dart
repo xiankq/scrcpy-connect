@@ -10,7 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/stores/application_host.dart';
 import 'package:scrcpy_connect/services/application_host_record.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
 import 'package:scrcpy_connect/services/platform/bundled_servers.dart';
 import 'package:scrcpy_connect/stores/usb_lease_recovery.dart';
@@ -826,11 +826,8 @@ Future<void> _seedMobile(_Fixture fixture) async {
   );
 }
 
-Matcher _code(String code) => isA<ApplicationCommandException>().having(
-  (error) => error.code,
-  'code',
-  code,
-);
+Matcher _code(String code) =>
+    isA<RequestFailure>().having((error) => error.code, 'code', code);
 
 Future<_Fixture> _fixture({bool desktop = false}) async {
   final directory = await Directory.systemTemp.createTemp('application-host-');

@@ -1,10 +1,10 @@
-import 'package:scrcpy_connect/models/companion_exception.dart';
+import 'package:scrcpy_connect/services/companion_protocol.dart';
 
 import 'dart:async';
 
 import 'package:adb/adb.dart';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 
 import 'package:scrcpy_connect/services/files/file_paths.dart';
@@ -54,10 +54,7 @@ final class MediaJobCoordinator {
     AdbCancellation? cancellation,
   }) {
     if (!handles(name)) {
-      throw const ApplicationCommandException(
-        'unknown_command',
-        '媒体任务不处理这项命令。',
-      );
+      throw const RequestFailure('unknown_command', '媒体任务不处理这项命令。');
     }
     final device = _text(params, 'deviceId');
     final operation = _uuid(params['operationId']);
@@ -67,7 +64,7 @@ final class MediaJobCoordinator {
       return _cancel(operation, key);
     }
     if (_closed) {
-      throw const ApplicationCommandException('disposed', '媒体任务所有者已关闭。');
+      throw const RequestFailure('disposed', '媒体任务所有者已关闭。');
     }
     cancellation?.check();
     final path = FilePaths.remote(_text(params, 'path'));
@@ -80,37 +77,28 @@ final class MediaJobCoordinator {
         size < 64 ||
         size > 512 ||
         allowStart != null && allowStart is! bool) {
-      throw const ApplicationCommandException(
-        'invalid_argument',
-        '媒体类型、尺寸或启动选项无效。',
-      );
+      throw const RequestFailure('invalid_argument', '媒体类型、尺寸或启动选项无效。');
     }
     final execution = name == 'media.stat' ? 'stat' : params['execution'];
     if (execution != 'stat' && execution != 'thumbnail') {
-      throw const ApplicationCommandException(
-        'invalid_argument',
-        '媒体任务必须明确指定执行阶段。',
-      );
+      throw const RequestFailure('invalid_argument', '媒体任务必须明确指定执行阶段。');
     }
     final previous = _seen[key];
     if (previous != null) {
-      throw ApplicationCommandException(
+      throw RequestFailure(
         previous ? 'cancelled' : 'operation_reused',
         '媒体操作已结束或取消，请使用新的标识。',
       );
     }
     if (_seen.length >= 65536) {
-      throw const ApplicationCommandException(
-        'operation_limit',
-        '媒体操作标识已达到本次附着上限。',
-      );
+      throw const RequestFailure('operation_limit', '媒体操作标识已达到本次附着上限。');
     }
     if (_active.values.where((job) => job.device == device).length >= 16) {
-      throw const ApplicationCommandException('busy', '这台设备正在处理的媒体任务已达到上限。');
+      throw const RequestFailure('busy', '这台设备正在处理的媒体任务已达到上限。');
     }
     final connection = requireConnection(device);
     if (_retiredConnections.contains(connection)) {
-      throw const ApplicationCommandException('cancelled', '原连接已停止媒体任务准入。');
+      throw const RequestFailure('cancelled', '原连接已停止媒体任务准入。');
     }
     final job = _MediaJob(device, operation, key, connection);
     _seen[key] = false;
@@ -143,10 +131,7 @@ final class MediaJobCoordinator {
   void _interrupt(_MediaJob job, String code, String message) {
     if (!job.interrupted.isCompleted) {
       job.interrupted.complete(
-        _Reply.failure(
-          ApplicationCommandException(code, message),
-          StackTrace.current,
-        ),
+        _Reply.failure(RequestFailure(code, message), StackTrace.current),
       );
     }
   }
@@ -256,7 +241,7 @@ final class MediaJobCoordinator {
         if (reply.error != null || reply.value?['reaped'] != true) {
           job.cancelReply = null;
           if (!job.reaped) {
-            throw const ApplicationCommandException(
+            throw const RequestFailure(
               'media_cleanup_unknown',
               '远端媒体进程尚未确认退出。',
             );
@@ -268,7 +253,7 @@ final class MediaJobCoordinator {
       await job.execution?.timeout(cleanupTimeout);
       _release(job);
     } catch (_) {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'media_cleanup_unknown',
         '媒体任务的远端退出或原请求收尾尚未核验，请重试停止。',
       );
@@ -281,10 +266,7 @@ final class MediaJobCoordinator {
       final fresh = !_seen.containsKey(key);
       if (fresh) {
         if (_seen.length >= 65536) {
-          throw const ApplicationCommandException(
-            'operation_limit',
-            '媒体操作标识已达到本次附着上限。',
-          );
+          throw const RequestFailure('operation_limit', '媒体操作标识已达到本次附着上限。');
         }
         _seen[key] = true;
       }
@@ -366,8 +348,10 @@ final class _Reply {
 
 Never _throw(_Reply reply) {
   final error = switch (reply.error!) {
-    CompanionException(:final code, :final message) =>
-      ApplicationCommandException(code, message),
+    CompanionException(:final code, :final message) => RequestFailure(
+      code,
+      message,
+    ),
     final error => error,
   };
   Error.throwWithStackTrace(error, reply.stack!);
@@ -376,7 +360,7 @@ Never _throw(_Reply reply) {
 String _text(Map<String, Object?> params, String field) {
   final value = params[field];
   if (value is! String || value.isEmpty || value.contains('\u0000')) {
-    throw const ApplicationCommandException('invalid_argument', '媒体任务参数无效。');
+    throw const RequestFailure('invalid_argument', '媒体任务参数无效。');
   }
   return value;
 }
@@ -386,10 +370,7 @@ String _uuid(Object? value) {
       !RegExp(
         r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
       ).hasMatch(value)) {
-    throw const ApplicationCommandException(
-      'invalid_argument',
-      '媒体操作标识必须是 UUID。',
-    );
+    throw const RequestFailure('invalid_argument', '媒体操作标识必须是 UUID。');
   }
   return value.toLowerCase();
 }

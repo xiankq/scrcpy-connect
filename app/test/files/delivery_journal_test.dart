@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/files/delivery_journal.dart';
 
 typedef Json = Map<String, dynamic>;
@@ -26,11 +26,8 @@ Json finish(String operation, Json result, [Json extra = const {}]) => {
   'result': result,
   ...extra,
 };
-Matcher code(String value) => isA<ApplicationCommandException>().having(
-  (error) => error.code,
-  'code',
-  value,
-);
+Matcher code(String value) =>
+    isA<RequestFailure>().having((error) => error.code, 'code', value);
 Json record(Json receipt) => receipt['record'] as Json;
 Json storedRecord(
   String operation, {
@@ -282,10 +279,7 @@ void main() {
 
     final results = await Future.wait([attempt('one'), attempt('two')]);
     expect(results.whereType<Json>(), hasLength(1));
-    expect(
-      results.whereType<ApplicationCommandException>().single.code,
-      'delivery_busy',
-    );
+    expect(results.whereType<RequestFailure>().single.code, 'delivery_busy');
     final alternate = begin('three', {'sourceId': 'other-device'});
     final pending = journal.command('delivery.begin', alternate);
     alternate['sourceId'] = 'mutated-after-submit';
@@ -617,7 +611,7 @@ void main() {
             'errors': errors,
           }, identity),
         );
-      } on ApplicationCommandException catch (error) {
+      } on RequestFailure catch (error) {
         expect(error.code, 'delivery_capacity');
         expect(
           record(

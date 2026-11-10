@@ -1,12 +1,8 @@
-import 'package:scrcpy_connect/stores/media/device_audio_view_coordinator.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/stores/files/gallery_history.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
-
-import 'package:scrcpy_connect/stores/media/session_view_registry.dart';
-import 'package:scrcpy_connect/stores/media/control_page_registry.dart';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
@@ -19,9 +15,6 @@ class AppController extends _$AppController {
   final galleryHistory = GalleryHistory();
   late AppDependencies _dependencies;
   late StreamController<Json> _events;
-  late SessionViewRegistry _sessionViewRegistry;
-  late ControlPageRegistry _controlPages;
-  late DeviceAudioViewCoordinator _deviceAudio;
 
   ({String device, String session})? _clipboardFocus;
 
@@ -47,28 +40,6 @@ class AppController extends _$AppController {
     });
   }
 
-  /// 调用者只能释放一次，仅最后一个实际画面可请求熄屏。
-  bool Function() claimControlPage(String deviceId, {String? sessionId}) {
-    final pages = _controlPages;
-    final token = pages.claim(deviceId, sessionId: sessionId);
-    return () => pages.release(token);
-  }
-
-  bool hasControlPages(String deviceId) => _controlPages.hasPages(deviceId);
-
-  SessionViewLease claimSessionViewLease(
-    String sessionId, {
-    required bool visible,
-  }) {
-    final view = _sessionViewRegistry.claim(sessionId, visible: visible);
-    _deviceAudio.reconcile();
-    return view;
-  }
-
-  /// 页面即使暂被遮挡仍持有声音租约，最后一个页面释放时停止该设备音源。
-  void Function() claimRemoteDeviceView(String deviceId) =>
-      _deviceAudio.claimView(deviceId);
-
   final _consumedShareIds = <String>{};
   final _appOpenClaims = <(String, String), Object>{};
   Future<void> _settingsQueue = Future<void>.value();
@@ -85,23 +56,8 @@ class AppController extends _$AppController {
     final dependencies = ref.watch(appDependenciesProvider);
     galleryHistory.clear();
     _dependencies = dependencies;
-    _sessionViewRegistry = SessionViewRegistry(dependencies.request);
-    _controlPages = ControlPageRegistry();
-    final ownedViews = _sessionViewRegistry;
     final generation = ++_generation;
     _disposed = false;
-    final ownedAudio = _deviceAudio = DeviceAudioViewCoordinator(
-      request: dependencies.request,
-      readSnapshot: () => DeviceAudioViewSnapshot(
-        devices: state.devices,
-        reconciliationPending: state.reconciliationPending,
-      ),
-      onError: (error) {
-        if (_current(generation)) {
-          state = state.copyWith(audioError: () => error);
-        }
-      },
-    );
     _consumedShareIds.clear();
     _appOpenClaims.clear();
     final events = StreamController<Json>.broadcast(sync: true);
@@ -128,7 +84,6 @@ class AppController extends _$AppController {
         );
         if (event['type'] == 'state.resync' ||
             event['type'] == 'state.resync.failed') {
-          ownedViews.markUncertain();
           _deviceRequest++;
           _settingsRequest++;
           _settingsEpoch++;
@@ -141,7 +96,6 @@ class AppController extends _$AppController {
           );
         } else if (event['type'] == 'state.resynced') {
           final snapshot = jsonObject(event['data']);
-          ownedViews.reconcile(objects(snapshot['sessions']));
           _deviceRequest++;
           _settingsRequest++;
           _settingsEpoch++;
@@ -186,13 +140,8 @@ class AppController extends _$AppController {
           next = _withShare(next, jsonObject(event['data']));
         }
         state = next;
-        ownedAudio.handleEvent(frozen);
         // 绑定页面处理事件前必须先看到校准后的状态。
         events.add(frozen);
-        if (value(event, 'type').startsWith('session.') ||
-            ['state.resynced', 'devices.changed'].contains(event['type'])) {
-          _deviceAudio.reconcile();
-        }
         if (value(event, 'type').startsWith('device')) {
           unawaited(refreshDevices());
         }
@@ -204,11 +153,9 @@ class AppController extends _$AppController {
       },
     );
     ref.onDispose(() {
-      ownedViews.invalidate();
       if (_generation == generation) {
         _disposed = true;
       }
-      ownedAudio.dispose();
       unawaited(subscription.cancel());
       unawaited(events.close());
       final close = dependencies.close;
@@ -227,54 +174,19 @@ class AppController extends _$AppController {
   bool isDisposed() => _disposed || !ref.mounted;
   AppState snapshot() => state;
   Stream<Json> eventStream() => _events.stream;
-  Future<Json> execute(
-    ApplicationCommand command, [
-    Json params = const {},
-  ]) async {
-    _announceStop(command.wire, params);
-    final audio = _deviceAudio;
-    final revision = audio.playbackRequestRevision(command.wire, params);
-    final result = await _dependencies.execute(command, params);
-    audio.playbackSucceeded(command.wire, params, result, revision);
-    return result;
-  }
+  int get generation => _generation;
 
-  Future<Json> request(String command, [Json params = const {}]) async {
-    _announceStop(command, params);
-    final audio = _deviceAudio;
-    final revision = audio.playbackRequestRevision(command, params);
-    final result = await _dependencies.request(command, params);
-    audio.playbackSucceeded(command, params, result, revision);
-    return result;
-  }
-
-  void _announceStop(String command, Json params) {
-    // 回执前先发布用户停止意图，避免传输失败与停止竞争时页面重建画面；桥接内部清理不走此入口。
-    final activity = command == 'activities.stop' ? params['activityId'] : null;
-    final sessionStop = command == 'session.stop'
-        ? params['sessionId']
-        : activity is String && activity.startsWith('session:')
-        ? activity.substring(8)
-        : null;
-    final deviceStop =
-        ['devices.disconnect', 'devices.forget'].contains(command)
-        ? params['deviceId']
-        : activity is String && activity.startsWith('connection:')
-        ? activity.substring(11)
-        : null;
-    if (!_events.isClosed && sessionStop is String) {
-      _events.add({
-        'type': 'session.stop.requested',
-        'data': {'sessionId': sessionStop},
-      });
-    } else if (!_events.isClosed && deviceStop is String) {
-      _events.add({
-        'type': 'device.disconnect.requested',
-        'deviceId': deviceStop,
-        'data': <String, dynamic>{},
-      });
+  void updateAudioError(String? error) {
+    if (!isDisposed() && state.audioError != error) {
+      state = state.copyWith(audioError: () => error);
     }
   }
+
+  Future<Json> execute(ApplicationCommand command, [Json params = const {}]) =>
+      _dependencies.execute(command, params);
+
+  Future<Json> request(String command, [Json params = const {}]) =>
+      _dependencies.request(command, params);
 
   Future<void> initialize() =>
       Future.wait([refreshDevices(), loadSettings(), loadPendingShares()]);
@@ -345,7 +257,6 @@ class AppController extends _$AppController {
         loading: false,
         deviceError: () => null,
       );
-      _deviceAudio.reconcile();
     } catch (error) {
       if (_current(generation) && requestId == _deviceRequest) {
         state = state.copyWith(loading: false, deviceError: () => '$error');

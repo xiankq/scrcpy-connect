@@ -1,4 +1,3 @@
-import 'package:scrcpy_connect/services/files/file_access.dart';
 import 'package:scrcpy_connect/services/files/file_browser.dart';
 import 'package:scrcpy_connect/services/display_labels.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
@@ -29,7 +28,6 @@ import 'package:scrcpy_connect/pages/devices/workspace/widgets/device_source_row
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/file_actions.dart';
-import 'package:scrcpy_connect/models/file_browser.dart';
 import 'package:scrcpy_connect/widgets/command_query.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';

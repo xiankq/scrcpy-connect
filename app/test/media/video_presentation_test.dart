@@ -3,7 +3,7 @@ import 'package:scrcpy_connect/services/media/video_output_snapshot.dart';
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/media/video_presentation.dart';
 
 void main() {
@@ -156,10 +156,7 @@ void main() {
     'failed local pause never suspends capture and restores the consumer',
     () async {
       final calls = <String>[];
-      const failure = ApplicationCommandException(
-        'pause_unconfirmed',
-        'not confirmed',
-      );
+      const failure = RequestFailure('pause_unconfirmed', 'not confirmed');
       final owner = VideoPresentation(
         request: (command, _) async {
           calls.add(command);
@@ -183,10 +180,7 @@ void main() {
     'capture failure restores only its own output and preserves original error',
     () async {
       final calls = <String>[];
-      const failure = ApplicationCommandException(
-        'disconnected',
-        'capture ended',
-      );
+      const failure = RequestFailure('disconnected', 'capture ended');
       final owner = VideoPresentation(
         request: (command, params) async => throw failure,
         pauseOutput: (id) async {

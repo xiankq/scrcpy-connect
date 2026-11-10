@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 typedef QualityJson = Map<String, dynamic>;
 typedef QualityRequest = Future<QualityJson> Function(String, QualityJson);
@@ -35,7 +35,7 @@ class DeviceQualityCoordinator {
   Future<QualityJson> change(QualityJson params) {
     final device = params['deviceId'];
     if (device is! String || device.isEmpty) {
-      throw const ApplicationCommandException('invalid_argument', '缺少设备标识。');
+      throw const RequestFailure('invalid_argument', '缺少设备标识。');
     }
     final epoch = _deviceEpoch[device] ?? 0;
     return _serialize(device, () => _change(params, device, epoch));
@@ -47,7 +47,7 @@ class DeviceQualityCoordinator {
     final epoch = _deviceEpoch[device] ?? 0;
     return _serialize(device, () {
       if (!_current(device, epoch)) {
-        throw const ApplicationCommandException('cancelled', '本次画面打开已取消。');
+        throw const RequestFailure('cancelled', '本次画面打开已取消。');
       }
       return work();
     });
@@ -77,15 +77,12 @@ class DeviceQualityCoordinator {
     int epoch,
   ) async {
     if (!_current(device, epoch)) {
-      throw const ApplicationCommandException('cancelled', '设备画面设置已取消。');
+      throw const RequestFailure('cancelled', '设备画面设置已取消。');
     }
     final saved = await request('session.quality', params);
     final quality = _object(saved['current']);
     if (!_current(device, epoch)) {
-      throw const ApplicationCommandException(
-        'cancelled',
-        '设置已保存，设备连接已变化，当前画面未重建。',
-      );
+      throw const RequestFailure('cancelled', '设置已保存，设备连接已变化，当前画面未重建。');
     }
     QualityJson listed;
     try {
@@ -102,10 +99,8 @@ class DeviceQualityCoordinator {
         'failures': [
           {
             'name': '当前画面',
-            'reason': error is ApplicationCommandException
-                ? error.message
-                : '$error',
-            if (error is ApplicationCommandException) 'code': error.code,
+            'reason': error is RequestFailure ? error.message : '$error',
+            if (error is RequestFailure) 'code': error.code,
           },
         ],
         'reason': '画面设置已保存，当前画面状态未能核实，请重试应用。',
@@ -154,10 +149,7 @@ class DeviceQualityCoordinator {
           continue;
         }
         if (stream['sessionId'] != id || stream['deviceId'] != device) {
-          throw const ApplicationCommandException(
-            'session_changed',
-            '重建回执不属于当前设备画面。',
-          );
+          throw const RequestFailure('session_changed', '重建回执不属于当前设备画面。');
         }
         final output = await applyOutput(stream);
         if (!_current(device, epoch, id)) {
@@ -177,10 +169,8 @@ class DeviceQualityCoordinator {
         failures.add({
           'sessionId': id,
           'name': session['name'] ?? session['packageName'] ?? '手机屏幕',
-          'reason': error is ApplicationCommandException
-              ? error.message
-              : '$error',
-          if (error is ApplicationCommandException) 'code': error.code,
+          'reason': error is RequestFailure ? error.message : '$error',
+          if (error is RequestFailure) 'code': error.code,
         });
       } finally {
         endReconfigure?.call(id);

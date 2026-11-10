@@ -3,7 +3,6 @@ import 'package:scrcpy_connect/models/application_request.dart';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
 import 'package:scrcpy_connect/stores/application_session.dart';
 import 'package:scrcpy_connect/stores/application_host.dart';
 
@@ -42,7 +41,7 @@ void main() {
             dataDirectory: '${root.path}/different',
           ),
           throwsA(
-            isA<ApplicationCommandException>().having(
+            isA<RequestFailure>().having(
               (error) => error.code,
               'code',
               'runtime_directory_mismatch',
@@ -69,7 +68,7 @@ void main() {
           adbBinaryDirectory: binaryDirectory,
         ),
         throwsA(
-          isA<ApplicationCommandException>().having(
+          isA<RequestFailure>().having(
             (error) => error.code,
             'code',
             'app_open_storage_invalid',
@@ -90,7 +89,7 @@ void main() {
       await expectLater(
         sessions.single.request('settings.get'),
         throwsA(
-          isA<ApplicationCommandException>().having(
+          isA<RequestFailure>().having(
             (error) => error.code,
             'code',
             'disposed',

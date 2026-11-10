@@ -3,9 +3,9 @@ import 'package:scrcpy_connect/services/media/video_output_snapshot.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart' show debugPrint;
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
-import 'package:scrcpy_connect/services/media/video_player_port.dart';
+import 'package:scrcpy_connect/services/media/video_player.dart';
 
 /// 将本地输出观察关联到已提交核心会话；候选输出在变更回执到达前仍归 VideoOutputCoordinator 持有。
 class VideoOutputLifecycle {
@@ -22,8 +22,7 @@ class VideoOutputLifecycle {
   final VideoRequest request;
 
   /// 播放器保留未确认释放的原生输出及其重试责任。
-  final Future<void> Function(String, {ApplicationCommandException? failure})
-  closeOutput;
+  final Future<void> Function(String, {RequestFailure? failure}) closeOutput;
   final Future<VideoJson> Function(String, VideoJson) reattachOutput;
   final void Function(VideoJson) emit;
   final bool Function() isDisposed;
@@ -71,7 +70,7 @@ class VideoOutputLifecycle {
   }
 
   /// 先撤销本地绑定与监视，再等待播放器释放；失败的原生清理由播放器所有者保留。
-  Future<void> close(String id, {ApplicationCommandException? failure}) async {
+  Future<void> close(String id, {RequestFailure? failure}) async {
     forget(id);
     if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
       debugPrint(

@@ -35,7 +35,14 @@ void main() {
         connectionPolicy: policy,
         adbBinaryDirectory: binaryDirectory,
       );
-      final subscription = session.events.listen(received.add);
+      var disconnectCompleted = false;
+      bool? stopAnnouncedBeforeCompletion;
+      final subscription = session.events.listen((event) {
+        received.add(event);
+        if (event['type'] == 'device.disconnect.requested') {
+          stopAnnouncedBeforeCompletion = !disconnectCompleted;
+        }
+      });
       addTearDown(subscription.cancel);
       final initial = await session.request('state.snapshot');
       expect(initial['devices'], isEmpty);
@@ -58,6 +65,9 @@ void main() {
         'name': '离线测试设备',
       });
       final id = added['deviceId'] as String;
+      await session.request('devices.disconnect', {'deviceId': id});
+      disconnectCompleted = true;
+      expect(stopAnnouncedBeforeCompletion, isTrue);
       await session.request('settings.update', {'appearance': 'dark'});
       final metadata =
           (await session.request('settings.export'))['metadata'] as Map;

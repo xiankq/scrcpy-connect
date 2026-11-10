@@ -6,7 +6,6 @@ import 'dart:typed_data';
 import 'package:adb/adb.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/models/application_command_exception.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/models/document_limits.dart';
 
@@ -73,10 +72,7 @@ final class DesktopDocumentDelivery {
         return {'resolved': false};
       }
       if (!['keepBoth', 'skip', 'cancel'].contains(choice)) {
-        throw const ApplicationCommandException(
-          'invalid_decision',
-          '请选择保留两份、跳过或取消。',
-        );
+        throw const RequestFailure('invalid_decision', '请选择保留两份、跳过或取消。');
       }
       if (params['applyToRemaining'] == true && choice != 'cancel') {
         active!.policy = choice as String;
@@ -92,10 +88,7 @@ final class DesktopDocumentDelivery {
       }
       return {'cancelled': matches};
     }
-    throw const ApplicationCommandException(
-      'platform_unavailable',
-      '此桌面入口仅支持保存本机原件。',
-    );
+    throw const RequestFailure('platform_unavailable', '此桌面入口仅支持保存本机原件。');
   }
 
   Future<Json> write(Json params) async {
@@ -104,10 +97,7 @@ final class DesktopDocumentDelivery {
       await _finish(previous);
     }
     if (_closed || _active != null) {
-      throw const ApplicationCommandException(
-        'documents_busy',
-        '上次桌面保存尚未结束或未确认清理。',
-      );
+      throw const RequestFailure('documents_busy', '上次桌面保存尚未结束或未确认清理。');
     }
     final op = _DesktopSave(params['operationId'] as String);
     _active = op;
@@ -117,10 +107,7 @@ final class DesktopDocumentDelivery {
       final name = params['name'] as String;
       final kind = params['kind'] as String;
       if (!['file', 'directory'].contains(kind) || !_safeName(name)) {
-        throw const ApplicationCommandException(
-          'invalid_argument',
-          '原件类型或名称无效。',
-        );
+        throw const RequestFailure('invalid_argument', '原件类型或名称无效。');
       }
       final chosen = await Future.any([
         pick(name, kind),
@@ -130,10 +117,7 @@ final class DesktopDocumentDelivery {
       if (chosen == null) return op.result('cancelled');
       var destination = _absolute(chosen);
       if (destination == source || p.isWithin(source, destination)) {
-        throw const ApplicationCommandException(
-          'invalid_argument',
-          '保存位置不能位于本机原件内部。',
-        );
+        throw const RequestFailure('invalid_argument', '保存位置不能位于本机原件内部。');
       }
       op.destination = destination;
       op.scope = await (await files()).openScope(
@@ -147,10 +131,7 @@ final class DesktopDocumentDelivery {
       op.check();
       final stat = await op.scope!.stat(_bytes(source));
       if (stat.identity.kind.name != kind) {
-        throw const ApplicationCommandException(
-          'source_changed',
-          '原件类型已变化，未写入目标。',
-        );
+        throw const RequestFailure('source_changed', '原件类型已变化，未写入目标。');
       }
       destination = await _copyNode(op, source, destination, 0) ?? destination;
       op.destination = destination;
@@ -166,7 +147,7 @@ final class DesktopDocumentDelivery {
               ].contains(error.code);
       final cancelled =
           op.cancelled.isCompleted ||
-          error is ApplicationCommandException && error.code == 'cancelled';
+          error is RequestFailure && error.code == 'cancelled';
       status = uncertain
           ? 'result_unknown'
           : cancelled
@@ -226,17 +207,14 @@ final class DesktopDocumentDelivery {
     }
     op.check();
     if (decision == 'cancel') {
-      throw const ApplicationCommandException('cancelled', '已取消保存，已有内容保留。');
+      throw const RequestFailure('cancelled', '已取消保存，已有内容保留。');
     }
     if (decision == 'skip') {
       op.skipped++;
       return null;
     }
     if (decision != 'keepBoth') {
-      throw const ApplicationCommandException(
-        'invalid_decision',
-        '未确认同名项目处理方式。',
-      );
+      throw const RequestFailure('invalid_decision', '未确认同名项目处理方式。');
     }
     final extension = p.extension(destination);
     return p.join(
@@ -257,10 +235,7 @@ final class DesktopDocumentDelivery {
     if (depth > limits.maxDepth ||
         op.entries > limits.maxEntries ||
         op.pathBytes > limits.maxPathBytes) {
-      throw const ApplicationCommandException(
-        'tree_limit',
-        '原件超过目录、深度或路径上限，请分批处理。',
-      );
+      throw const RequestFailure('tree_limit', '原件超过目录、深度或路径上限，请分批处理。');
     }
     final scope = op.scope!;
     final before = (await scope.stat(_bytes(source))).identity;
@@ -280,10 +255,7 @@ final class DesktopDocumentDelivery {
       for (final child in children.entries) {
         final name = utf8.decode(child.name);
         if (!_safeName(name)) {
-          throw const ApplicationCommandException(
-            'invalid_path',
-            '目录包含无法安全交付的名称。',
-          );
+          throw const RequestFailure('invalid_path', '目录包含无法安全交付的名称。');
         }
         await _copyNode(
           op,
@@ -294,18 +266,12 @@ final class DesktopDocumentDelivery {
       }
     } else if (before.kind == LocalFileKind.file) {
       if (before.size > BigInt.from(limits.maxBytes - op.bytes)) {
-        throw const ApplicationCommandException(
-          'byte_limit',
-          '原件超过本次系统保存上限，请分批处理。',
-        );
+        throw const RequestFailure('byte_limit', '原件超过本次系统保存上限，请分批处理。');
       }
       final free = (await scope.stat(_bytes(p.dirname(destination)))).freeBytes;
       if (free == null ||
           free < before.size + BigInt.from(limits.reserveBytes)) {
-        throw const ApplicationCommandException(
-          'storage_full',
-          '所选位置可用空间不足或无法核验，未写入文件。',
-        );
+        throw const RequestFailure('storage_full', '所选位置可用空间不足或无法核验，未写入文件。');
       }
       op.check();
       final copy = await scope.copy(
@@ -345,10 +311,7 @@ final class DesktopDocumentDelivery {
         await copy.close();
       }
     } else {
-      throw const ApplicationCommandException(
-        'unsupported_source',
-        '符号链接及特殊文件不会保存。',
-      );
+      throw const RequestFailure('unsupported_source', '符号链接及特殊文件不会保存。');
     }
     final after = (await scope.stat(_bytes(source))).identity;
     if (before.device != after.device ||
@@ -357,10 +320,7 @@ final class DesktopDocumentDelivery {
         before.modifiedSeconds != after.modifiedSeconds ||
         before.modifiedNanos != after.modifiedNanos ||
         before.kind != after.kind) {
-      throw const ApplicationCommandException(
-        'source_changed',
-        '复制期间原件发生变化，请核对已保存内容。',
-      );
+      throw const RequestFailure('source_changed', '复制期间原件发生变化，请核对已保存内容。');
     }
     return destination;
   }
@@ -390,10 +350,7 @@ String _absolute(Object? path) {
       !p.isAbsolute(path) ||
       path.contains('\u0000') ||
       p.split(path).any((part) => part == '.' || part == '..')) {
-    throw const ApplicationCommandException(
-      'invalid_argument',
-      '请选择有效的绝对文件位置。',
-    );
+    throw const RequestFailure('invalid_argument', '请选择有效的绝对文件位置。');
   }
   return p.normalize(path);
 }
@@ -430,7 +387,7 @@ final class _DesktopSave {
 
   void check() {
     if (cancelled.isCompleted) {
-      throw const ApplicationCommandException('cancelled', '已取消本次桌面保存。');
+      throw const RequestFailure('cancelled', '已取消本次桌面保存。');
     }
   }
 

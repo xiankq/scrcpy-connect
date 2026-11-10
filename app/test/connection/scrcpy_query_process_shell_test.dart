@@ -6,7 +6,7 @@ import 'dart:typed_data';
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/services/connection/scrcpy_query_process.dart';
 
@@ -44,13 +44,7 @@ void main() {
     final cancellation = AdbCancellation();
     final result = expectLater(
       fixture.query.run(cancellation),
-      throwsA(
-        isA<ApplicationCommandException>().having(
-          (e) => e.code,
-          'code',
-          'cancelled',
-        ),
-      ),
+      throwsA(isA<RequestFailure>().having((e) => e.code, 'code', 'cancelled')),
     );
     await fixture.api.running.future;
     cancellation.cancel();
@@ -75,11 +69,7 @@ void main() {
     await expectLater(
       fixture.query.run(AdbCancellation()),
       throwsA(
-        isA<ApplicationCommandException>().having(
-          (e) => e.code,
-          'code',
-          'process_identity',
-        ),
+        isA<RequestFailure>().having((e) => e.code, 'code', 'process_identity'),
       ),
     );
     try {
@@ -113,13 +103,7 @@ void main() {
     final cancellation = AdbCancellation();
     final result = expectLater(
       fixture.query.run(cancellation),
-      throwsA(
-        isA<ApplicationCommandException>().having(
-          (e) => e.code,
-          'code',
-          'cancelled',
-        ),
-      ),
+      throwsA(isA<RequestFailure>().having((e) => e.code, 'code', 'cancelled')),
     );
     await fixture.api.created.future;
     cancellation.cancel();

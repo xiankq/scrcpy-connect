@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:adb/adb.dart' as adb;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/services/files/adb_file_executor.dart';
 import 'package:scrcpy_connect/services/files/file_executor.dart';
@@ -39,13 +39,7 @@ void main() {
         'deviceId': 'device',
         'path': '/sdcard/another.png',
       }),
-      throwsA(
-        isA<ApplicationCommandException>().having(
-          (e) => e.code,
-          'code',
-          'disposed',
-        ),
-      ),
+      throwsA(isA<RequestFailure>().having((e) => e.code, 'code', 'disposed')),
     );
     fixture.api.rejectClose = false;
     await fixture.owner.cancelDevice('device');
@@ -147,7 +141,7 @@ void main() {
   });
 }
 
-final _cleanup = isA<ApplicationCommandException>().having(
+final _cleanup = isA<RequestFailure>().having(
   (e) => e.code,
   'code',
   'media_cleanup_unconfirmed',

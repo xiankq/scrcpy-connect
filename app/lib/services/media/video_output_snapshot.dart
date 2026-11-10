@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/services/media/video_player_port.dart';
+import 'package:scrcpy_connect/services/media/video_player.dart';
 
 /// 合并核心会话状态与最新渲染输出。
 /// 播放器回执可能携带恢复请求时的旧核心状态，因此只有渲染证据可覆盖当前会话快照。

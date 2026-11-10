@@ -5,7 +5,7 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/models/device_record.dart';
 
@@ -34,24 +34,21 @@ final class DevicePowerCoordinator {
     AdbCancellation? cancellation,
   }) {
     if (_closed) {
-      throw const ApplicationCommandException('disposed', '设备唤醒已停止。');
+      throw const RequestFailure('disposed', '设备唤醒已停止。');
     }
     if (!handles(name)) {
-      throw const ApplicationCommandException('unknown_command', '未知设备电源操作。');
+      throw const RequestFailure('unknown_command', '未知设备电源操作。');
     }
     final id = params['deviceId'];
     if (id is! String || !validDeviceId(id)) {
-      throw const ApplicationCommandException('invalid_device_id', '设备记录标识无效。');
+      throw const RequestFailure('invalid_device_id', '设备记录标识无效。');
     }
     final expected = params['connectionId'];
     if (expected != null && (expected is! String || expected.isEmpty)) {
-      throw const ApplicationCommandException(
-        'invalid_connection_id',
-        '设备连接标识无效。',
-      );
+      throw const RequestFailure('invalid_connection_id', '设备连接标识无效。');
     }
     if (cancellation?.isCancelled == true) {
-      throw const ApplicationCommandException('cancelled', '本次唤醒已取消。');
+      throw const RequestFailure('cancelled', '本次唤醒已取消。');
     }
     final request = _WakeRequest(id, requireConnection(id));
     _assertCurrent(request);
@@ -61,7 +58,7 @@ final class DevicePowerCoordinator {
           previous.done.isCompleted &&
           !previous.released,
     )) {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'wake_cleanup_unconfirmed',
         '上次唤醒资源尚未确认释放，请先重试断开，不能重复发送。',
       );
@@ -77,12 +74,12 @@ final class DevicePowerCoordinator {
 
   void _assertCurrent(_WakeRequest request) {
     if (_closed || request.cancellation.isCancelled) {
-      throw const ApplicationCommandException('cancelled', '本次唤醒已取消，不能自动重放。');
+      throw const RequestFailure('cancelled', '本次唤醒已取消，不能自动重放。');
     }
     DeviceConnection current;
     try {
       current = requireConnection(request.deviceId);
-    } on ApplicationCommandException catch (error) {
+    } on RequestFailure catch (error) {
       if (error.code != 'disconnected') rethrow;
       _stale();
     }
@@ -143,16 +140,10 @@ final class DevicePowerCoordinator {
         _assertCurrent(request);
         bytes += event.bytes.length;
         if (bytes > 8192) {
-          throw const ApplicationCommandException(
-            'byte_limit',
-            '唤醒命令输出超过限额，结果尚未确认。',
-          );
+          throw const RequestFailure('byte_limit', '唤醒命令输出超过限额，结果尚未确认。');
         }
         if (terminal) {
-          throw const ApplicationCommandException(
-            'invalid_data',
-            '唤醒命令返回了无效回执。',
-          );
+          throw const RequestFailure('invalid_data', '唤醒命令返回了无效回执。');
         }
         if (!v2) {
           if (event.kind == 'data' && !event.done) {
@@ -161,7 +152,7 @@ final class DevicePowerCoordinator {
             // 原始服务的 end 表示远端 EOF；单独的尾部标记不能代替完整收尾。
             terminal = true;
           } else {
-            throw const ApplicationCommandException(
+            throw const RequestFailure(
               'result_unknown',
               '旧式唤醒通道没有返回完整 EOF，不能确认命令完成。',
             );
@@ -169,47 +160,35 @@ final class DevicePowerCoordinator {
           continue;
         }
         if (!const {'stdout', 'stderr', 'exit'}.contains(event.kind)) {
-          throw const ApplicationCommandException(
-            'invalid_data',
-            '唤醒命令返回了无效回执。',
-          );
+          throw const RequestFailure('invalid_data', '唤醒命令返回了无效回执。');
         }
         if (event.kind == 'exit') {
           if (!event.done || event.bytes.isNotEmpty) {
-            throw const ApplicationCommandException(
-              'invalid_data',
-              '唤醒退出回执不完整。',
-            );
+            throw const RequestFailure('invalid_data', '唤醒退出回执不完整。');
           }
           if (event.exitCode == null) {
-            throw const ApplicationCommandException(
+            throw const RequestFailure(
               'result_unknown',
               '设备未提供退出码，不能确认唤醒命令完成。',
             );
           }
           if (event.exitCode != 0) {
-            throw ApplicationCommandException('wake_failed', '设备拒绝执行唤醒命令。', {
+            throw RequestFailure('wake_failed', '设备拒绝执行唤醒命令。', {
               'exitCode': event.exitCode,
             });
           }
           terminal = true;
         } else if (event.done) {
-          throw const ApplicationCommandException(
-            'result_unknown',
-            '唤醒命令缺少退出回执。',
-          );
+          throw const RequestFailure('result_unknown', '唤醒命令缺少退出回执。');
         }
       }
       if (!terminal) {
-        throw const ApplicationCommandException(
-          'result_unknown',
-          '唤醒命令未返回明确终态，不能自动重放。',
-        );
+        throw const RequestFailure('result_unknown', '唤醒命令未返回明确终态，不能自动重放。');
       }
       if (nonce != null) {
         final status = _legacyStatus(legacyOutput.takeBytes(), nonce);
         if (status != 0) {
-          throw ApplicationCommandException('wake_failed', '设备拒绝执行唤醒命令。', {
+          throw RequestFailure('wake_failed', '设备拒绝执行唤醒命令。', {
             'exitCode': status,
           });
         }
@@ -233,7 +212,7 @@ final class DevicePowerCoordinator {
       };
     } on AdbException catch (error, stack) {
       Error.throwWithStackTrace(
-        ApplicationCommandException(error.code, error.message),
+        RequestFailure(error.code, error.message),
         stack,
       );
     } finally {
@@ -303,10 +282,7 @@ int _legacyStatus(Uint8List output, String nonce) {
       status > 255 ||
       text.indexOf(nonce) != match.start + 1 ||
       text.lastIndexOf(nonce) != match.start + 1) {
-    throw const ApplicationCommandException(
-      'result_unknown',
-      '旧式唤醒缺少本次完整退出回执，不能自动重放。',
-    );
+    throw const RequestFailure('result_unknown', '旧式唤醒缺少本次完整退出回执，不能自动重放。');
   }
   return status;
 }
@@ -333,18 +309,14 @@ final class _WakeRequest {
       _released = true;
     } catch (error, stack) {
       Error.throwWithStackTrace(
-        ApplicationCommandException(
-          'wake_cleanup_unconfirmed',
-          '唤醒操作资源尚未确认释放，请重试清理。',
-          {'cause': '$error'},
-        ),
+        RequestFailure('wake_cleanup_unconfirmed', '唤醒操作资源尚未确认释放，请重试清理。', {
+          'cause': '$error',
+        }),
         stack,
       );
     }
   }
 }
 
-Never _stale() => throw const ApplicationCommandException(
-  'stale_connection',
-  '唤醒请求所属连接已变化，请核对当前画面。',
-);
+Never _stale() =>
+    throw const RequestFailure('stale_connection', '唤醒请求所属连接已变化，请核对当前画面。');

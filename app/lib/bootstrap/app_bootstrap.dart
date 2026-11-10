@@ -2,12 +2,11 @@ import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:io';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
 import 'package:scrcpy_connect/stores/application_session.dart';
 import 'package:scrcpy_connect/services/platform/diagnostic_log.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
-import 'package:scrcpy_connect/services/media/outgoing_media_directory.dart';
+import 'package:scrcpy_connect/services/files/local_directories.dart';
 
 /// 全部启动配置成功前由 bootstrap 拥有应用依赖，返回依赖后交给 provider scope。
 Future<AppDependencies> bootstrapApplication({
@@ -41,21 +40,11 @@ Future<AppDependencies> _createDependencies(DiagnosticLog? diagnostics) async {
     dataDirectory: await directory.resolveSymbolicLinks(),
     diagnostics: diagnostics,
   );
-  Future<Json> invoke(Future<Json> Function() operation) async {
-    try {
-      return await operation();
-    } on ApplicationCommandException catch (error) {
-      throw RequestFailure(error.code, error.message, error.details);
-    }
-  }
-
   return AppDependencies(
     bindClipboardAdmission: session.bindClipboardAdmission,
-    execute: (command, params) =>
-        invoke(() => session.execute(command, params)),
+    execute: session.execute,
     diagnostics: diagnostics,
-    request: (command, [params = const {}]) =>
-        invoke(() => session.request(command, params)),
+    request: session.request,
     events: session.events,
     close: session.dispose,
   );

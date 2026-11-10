@@ -7,13 +7,13 @@ import 'package:adb/adb.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/stores/media/physical_display_recovery.dart';
 import 'package:scrcpy_connect/services/platform/bundled_servers.dart';
 import 'package:scrcpy_connect/stores/usb_lease_recovery.dart';
-import 'package:scrcpy_connect/services/preference_commands.dart';
+import 'package:scrcpy_connect/services/app_settings.dart';
 import 'package:scrcpy_connect/stores/preference_store.dart';
 
 import 'package:scrcpy_connect/services/application_host_record.dart';
@@ -153,7 +153,7 @@ final class ApplicationHost {
         await host.close();
       } catch (cleanup) {
         _retiring.add(host);
-        throw ApplicationCommandException(
+        throw RequestFailure(
           'application_host_cleanup_unconfirmed',
           '宿主初始化失败，部分原生资源尚未确认关闭，可重试清理。',
           {'cause': error.toString(), 'cleanup': cleanup.toString()},
@@ -187,7 +187,7 @@ final class ApplicationHost {
 
   void _checkPolicy(Map<String, Object?> policy) {
     if (!sameHostPolicy(connectionPolicy.toJson(), policy)) {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'runtime_connection_policy_mismatch',
         '存活的应用宿主正在使用另一套连接策略，请重启进程。',
       );
@@ -205,7 +205,7 @@ final class ApplicationHost {
         (_binaryDirectory == null ||
             await binary.resolveSymbolicLinks() !=
                 await _binaryDirectory.resolveSymbolicLinks())) {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'host_executable_mismatch',
         '存活宿主的执行文件目录不能改变。',
       );
@@ -221,10 +221,7 @@ final class ApplicationHost {
     if (_scope == null ||
         current?.scopeId != _scope!.scopeId ||
         current?.accepting != true) {
-      throw const ApplicationCommandException(
-        'application_host_stale',
-        '应用宿主已被后继所有者接管。',
-      );
+      throw const RequestFailure('application_host_stale', '应用宿主已被后继所有者接管。');
     }
   }
 
@@ -245,7 +242,7 @@ final class ApplicationHost {
         bindings is! NativeAdbHandshakeApi ||
         bindings is! AdbIdentities ||
         (_dependencies.desktop && bindings is! NativeAdbScopedServerApi)) {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'application_host_capability_unavailable',
         '宿主缺少精确恢复和排空所需的执行能力。',
       );
@@ -255,7 +252,7 @@ final class ApplicationHost {
     if (existing != null) {
       _record = await ApplicationHostRecord.read(_records, existing.scopeId);
       if (!sameHostPolicy(_record.policy, connectionPolicy.toJson())) {
-        throw const ApplicationCommandException(
+        throw const RequestFailure(
           'runtime_connection_policy_mismatch',
           '存活的应用宿主正在使用另一套连接策略，请重启进程。',
         );
@@ -296,7 +293,7 @@ final class ApplicationHost {
       scan: _unclaimedConnectionScope != null || _usbRecoveryPending,
     );
     await _completeUsbRecovery();
-    preferences = await PreferenceCommands.prepare(directory);
+    preferences = await AppSettings.prepare(directory);
     await _checkAuthority();
     return this;
   }
@@ -377,10 +374,7 @@ final class ApplicationHost {
     if (_scope == null ||
         current?.scopeId != _scope!.scopeId ||
         current?.accepting != true) {
-      throw const ApplicationCommandException(
-        'application_host_stale',
-        '应用宿主已被后继所有者接管。',
-      );
+      throw const RequestFailure('application_host_stale', '应用宿主已被后继所有者接管。');
     }
   }
 
@@ -450,7 +444,7 @@ final class ApplicationHost {
       await _requireRecoveryAuthority();
       final facts = await bindings.connectionFacts(recovery.device.id);
       if (facts.admissionScopeKey != _scopeKey) {
-        throw const ApplicationCommandException(
+        throw const RequestFailure(
           'application_host_connection_mismatch',
           '待恢复连接不属于本宿主准入域，保留责任但不操作其他所有者。',
         );
@@ -548,7 +542,7 @@ final class ApplicationHost {
   Future<void> _verifyIdentity(ApplicationIdentityHost identity) async {
     final actual = await identities.inspectIdentity(identity.identityPath);
     if (actual == null || actual.fingerprint != identity.fingerprint) {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'host_identity_mismatch',
         '存活宿主的授权身份已改变，不能替换或复用原服务器。',
       );
@@ -589,7 +583,7 @@ final class ApplicationHost {
       return null;
     }
     if (matches.length != 1) {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'host_resource_missing',
         '原服务器登记缺失或不唯一，不能启动替代服务器。',
       );
@@ -599,10 +593,7 @@ final class ApplicationHost {
     if (server.launch.environment['ADB_VENDOR_KEYS'] != identity.identityPath ||
         home == null ||
         !p.isWithin(prefix, home)) {
-      throw const ApplicationCommandException(
-        'host_identity_mismatch',
-        '原服务器与已登记身份或目录不一致。',
-      );
+      throw const RequestFailure('host_identity_mismatch', '原服务器与已登记身份或目录不一致。');
     }
     // SDK 在 claim 前失败时，保留原全局标记和确定的待恢复对象供 close 重试。
     _pendingRestores[key] = identity;
@@ -629,7 +620,7 @@ final class ApplicationHost {
       await _checkAuthority();
       await _recoverConnections(scan: _unclaimedConnectionScope != null);
       if (_preparationFailed) {
-        throw const ApplicationCommandException(
+        throw const RequestFailure(
           'application_host_cleanup_unconfirmed',
           '上次宿主创建尚未确认清理，不能启动替代服务器。',
         );
@@ -637,7 +628,7 @@ final class ApplicationHost {
       final path = await _identityPath(identityPath);
       final key = _identityKey(path, fingerprint);
       if (_releasingIdentities.contains(key)) {
-        throw const ApplicationCommandException(
+        throw const RequestFailure(
           'application_host_cleanup_unconfirmed',
           '此身份客户端正在回收，须先重试确认关闭。',
         );
@@ -723,7 +714,7 @@ final class ApplicationHost {
         await client.close();
       } else if (_preparationFailed) {
         // 尚未交付的原生 reservation 仍归整个准入域回收，不能删掉恢复事实。
-        throw const ApplicationCommandException(
+        throw const RequestFailure(
           'application_host_cleanup_unconfirmed',
           '身份宿主创建尚未确认清理，请先重试关闭应用宿主。',
         );
@@ -787,7 +778,7 @@ final class ApplicationHost {
               );
             } else {
               if (current == null) {
-                throw const ApplicationCommandException(
+                throw const RequestFailure(
                   'application_host_recovery_unconfirmed',
                   '宿主标记缺失不能证明旧连接已回收，仍保留精确责任供重试。',
                 );

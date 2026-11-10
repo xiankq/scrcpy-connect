@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:adb/adb.dart';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
 import 'package:scrcpy_connect/services/connection/device_details_reader.dart';
@@ -27,7 +27,7 @@ const _transientConnectionErrors = {
 
 String? _connectionErrorCode(Object error) => switch (error) {
   AdbException() => error.code,
-  ApplicationCommandException() => error.code,
+  RequestFailure() => error.code,
   _ => null,
 };
 
@@ -137,10 +137,7 @@ final class DeviceCoordinator {
 
   DeviceConnection requireConnection(String id) =>
       current(id) ??
-      (throw const ApplicationCommandException(
-        'disconnected',
-        '这台设备当前没有可用连接。',
-      ));
+      (throw const RequestFailure('disconnected', '这台设备当前没有可用连接。'));
 
   /// 模式切换只借用已核验的精确旧连接；原端点与身份字段保持不变。
   /// 调用即撤准入，切换无论成败都收回原连接；失败清理沿既有退休队列重试。
@@ -424,23 +421,20 @@ final class DeviceCoordinator {
   }) {
     _checkOpen();
     if (cancellation?.isCancelled == true) {
-      throw const ApplicationCommandException('cancelled', '本次设备操作已取消。');
+      throw const RequestFailure('cancelled', '本次设备操作已取消。');
     }
     if (!handles(name)) {
-      throw const ApplicationCommandException(
-        'unknown_command',
-        '此设备协调器不处理这项命令。',
-      );
+      throw const RequestFailure('unknown_command', '此设备协调器不处理这项命令。');
     }
     return _track(_command(name, params, cancellation));
   }
 
   Future<T> _track<T>(Future<T> pending) {
     final operation = pending.onError<AdbException>((error, stack) {
-      // 应用消费者读取 ApplicationCommandException 的错误码；保留 SDK 的具体事实及原始堆栈。
+      // 应用消费者读取 RequestFailure 的错误码；保留 SDK 的具体事实及原始堆栈。
       // AdbException 没有 details 字段，未知 Object 不经过此类型化映射。
       Error.throwWithStackTrace(
-        ApplicationCommandException(
+        RequestFailure(
           error.code,
           error.message.isNotEmpty
               ? error.message
@@ -1009,7 +1003,7 @@ final class DeviceCoordinator {
       }
       if (cleanupFailure != null) {
         Error.throwWithStackTrace(
-          ApplicationCommandException(
+          RequestFailure(
             'connection_cleanup_unconfirmed',
             '业务接纳失败，精确连接尚未确认释放，请重试断开。',
             {'cause': '$cleanupFailure'},
@@ -1235,7 +1229,7 @@ final class DeviceCoordinator {
 
   DeviceRecord _record(String id) =>
       records.current.find(id) ??
-      (throw const ApplicationCommandException('not_found', '这台设备的本机记录已不存在。'));
+      (throw const RequestFailure('not_found', '这台设备的本机记录已不存在。'));
   void _changed() {
     if (!_closed) emit?.call('devices.changed', {'devices': projectDevices()});
   }
@@ -1426,5 +1420,4 @@ DeviceRecord _configured(
 
 String _address(DeviceRecord record) =>
     '${record.address.contains(':') ? '[${record.address}]' : record.address}:${record.port}';
-Never _fail(String code, String message) =>
-    throw ApplicationCommandException(code, message);
+Never _fail(String code, String message) => throw RequestFailure(code, message);

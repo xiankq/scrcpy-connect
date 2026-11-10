@@ -4,7 +4,7 @@ import 'package:scrcpy_connect/services/files/cache_storage_space.dart';
 
 import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
 import 'package:scrcpy_connect/stores/media/media_artifact_coordinator.dart';
-import 'package:scrcpy_connect/services/preference_commands.dart';
+import 'package:scrcpy_connect/services/app_settings.dart';
 import 'package:scrcpy_connect/services/command_contract.dart';
 import 'package:scrcpy_connect/stores/files/delivery_journal.dart';
 import 'package:scrcpy_connect/stores/files/document_sources.dart';
@@ -33,13 +33,25 @@ import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
 import 'package:scrcpy_connect/stores/files/file_catalog.dart';
 import 'package:scrcpy_connect/stores/files/file_mutation_coordinator.dart';
 import 'package:scrcpy_connect/stores/files/share_coordinator.dart';
-import 'package:scrcpy_connect/models/application_command.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 import 'package:scrcpy_connect/stores/application_host.dart';
 import 'package:scrcpy_connect/services/application_command_dispatcher.dart';
-import 'package:scrcpy_connect/services/application_business_commands.dart';
+import 'package:flutter/services.dart'
+    show MissingPluginException, PlatformException;
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:scrcpy_connect/services/application_snapshot_reader.dart';
+import 'package:scrcpy_connect/stores/connection/device_coordinator.dart';
+import 'package:scrcpy_connect/stores/connection/device_power_coordinator.dart';
+import 'package:scrcpy_connect/models/device_record.dart'
+    show validDeviceId, DeviceRecordsFailure;
+import 'package:scrcpy_connect/services/connection/scrcpy_server_queries.dart';
+import 'package:scrcpy_connect/stores/companion_client.dart';
+import 'package:scrcpy_connect/stores/companion_coordinator.dart';
+import 'package:scrcpy_connect/stores/observation_coordinator.dart';
+import 'package:scrcpy_connect/stores/media_job_coordinator.dart';
+import 'package:scrcpy_connect/stores/media/device_audio_source_coordinator.dart';
 import 'package:scrcpy_connect/services/platform/application_platform.dart';
 import 'package:scrcpy_connect/services/platform/application_background_coordinator.dart';
 import 'package:scrcpy_connect/services/application_platform_events.dart';
@@ -55,23 +67,13 @@ import 'package:scrcpy_connect/services/connection/device_reconnection_candidate
 import 'package:scrcpy_connect/stores/connection/reconnection_coordinator.dart';
 
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
-import 'package:scrcpy_connect/stores/connection/device_coordinator.dart';
 import 'package:scrcpy_connect/stores/connection/device_health_coordinator.dart';
-import 'package:scrcpy_connect/stores/connection/device_power_coordinator.dart';
 import 'package:scrcpy_connect/stores/connection/device_discovery.dart';
 import 'package:scrcpy_connect/stores/connection/identity_manager.dart';
 import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
-import 'package:scrcpy_connect/services/application_snapshot_reader.dart';
-import 'package:scrcpy_connect/services/connection/scrcpy_server_queries.dart';
-import 'package:scrcpy_connect/stores/companion_coordinator.dart';
 import 'package:scrcpy_connect/stores/companion_recovery.dart';
-import 'package:scrcpy_connect/stores/companion_client.dart'
-    show CompanionConfig;
-import 'package:scrcpy_connect/stores/observation_coordinator.dart';
-import 'package:scrcpy_connect/stores/media_job_coordinator.dart';
 import 'package:scrcpy_connect/stores/media/app_launch_store.dart';
 import 'package:scrcpy_connect/stores/media/session_coordinator.dart';
-import 'package:scrcpy_connect/stores/media/device_audio_source_coordinator.dart';
 import 'package:scrcpy_connect/stores/media/device_keep_awake_coordinator.dart';
 
 /// 按应用生命周期组装独立设备能力；ADB 传输与媒体解码由各自的包负责。
@@ -114,10 +116,10 @@ class ApplicationSession {
     cache: _cache,
     executor: _fileExecutor,
     request: (command, params) =>
-        _business.execute(validateCommandRequest(command, params), params),
+        _executeBusiness(validateCommandRequest(command, params), params),
     emit: _events.emit,
   );
-  late final _preferences = PreferenceCommands(
+  late final _preferences = AppSettings(
     preferences: _host.preferences,
     records: _records,
     onDevicesImported: (receipt) =>
@@ -146,7 +148,7 @@ class ApplicationSession {
         sharing: _sharing,
         artifacts: _artifacts,
         onMediaEvent: _events.emit,
-        execute: _business.execute,
+        execute: _executeBusiness,
       );
 
   late final _captures = MediaCaptureOperations(
@@ -156,18 +158,6 @@ class ApplicationSession {
     devices: _devices,
     state: _state,
     scrcpy: _host.scrcpy,
-  );
-  late final _business = ApplicationBusinessCommands(
-    devices: _devices,
-    power: _power,
-    audio: _audio,
-    captures: _captures,
-    mediaJobs: _mediaJobs,
-    observations: _observations,
-    companion: _companion,
-    serverQueries: _serverQueries,
-    state: _state,
-    isDisposed: () => _disposed,
   );
 
   final ConnectionPolicy _connectionPolicy;
@@ -562,7 +552,7 @@ class ApplicationSession {
   }) {
     if (_active case final existing? when !existing._disposed) {
       return Future.error(
-        const ApplicationCommandException(
+        const RequestFailure(
           'application_already_initialized',
           '此引擎已有应用会话，请复用现有实例。',
         ),
@@ -570,7 +560,7 @@ class ApplicationSession {
     }
     if (_initializing != null && _initializingDirectory != dataDirectory) {
       return Future.error(
-        const ApplicationCommandException(
+        const RequestFailure(
           'runtime_directory_mismatch',
           '应用正在使用另一个私有目录，请重新启动应用。',
         ),
@@ -579,7 +569,7 @@ class ApplicationSession {
     final policyJson = jsonEncode(connectionPolicy.toJson());
     if (_initializing != null && _initializingPolicyJson != policyJson) {
       return Future.error(
-        const ApplicationCommandException(
+        const RequestFailure(
           'runtime_connection_policy_mismatch',
           '应用正在使用另一套连接策略，请重新启动应用。',
         ),
@@ -590,7 +580,7 @@ class ApplicationSession {
         binaryPath != null &&
         binaryPath != _initializingBinaryDirectory) {
       return Future.error(
-        const ApplicationCommandException(
+        const RequestFailure(
           'runtime_adb_binary_mismatch',
           '应用正在使用另一套 ADB 执行产物初始化。',
         ),
@@ -797,7 +787,7 @@ class ApplicationSession {
     }
     // isolate 重启会丢失播放器及一次性媒体流；回收孤立捕获，不能接管未经核验的播放。
     await _media.retireUnownedAudio();
-    final settings = await _commands.invoke('settings.get', const {});
+    final settings = await _preferences.read();
     final backgroundStatus = await _background.apply(
       settings['backgroundKeepAlive'] == true,
       automatic: true,
@@ -826,16 +816,19 @@ class ApplicationSession {
   ]) async {
     final command = operation.wire;
     if (_disposed) {
-      throw const ApplicationCommandException('disposed', '连接界面已关闭。');
+      throw const RequestFailure('disposed', '连接界面已关闭。');
     }
     // 拒绝必须早于连接准备与重连意图钩子，未受理命令不能撤销已有尝试。
     validateTypedCommandRequest(operation, params);
     _requireVerifiedState(command, params);
+    _announceStop(command, params);
     await _setup.beforeRequest(command, params);
     final finishReconnect = _reconnections.beforeRequest(command, params);
     final watch = Stopwatch()..start();
     try {
-      final result = await _media.dispatch(operation, params, _request);
+      final result = _media.handles(operation)
+          ? await _media.dispatch(operation, params, _request)
+          : await _request(operation, params);
       _diagnostics.command(command, params, watch.elapsedMilliseconds);
       return result;
     } catch (error) {
@@ -851,12 +844,37 @@ class ApplicationSession {
     }
   }
 
+  void _announceStop(String command, Map<String, dynamic> params) {
+    // 回执前先发布用户停止意图，避免传输失败与停止竞争时页面重建画面；桥接内部清理不走此入口。
+    final activity = command == 'activities.stop' ? params['activityId'] : null;
+    final sessionStop = command == 'session.stop'
+        ? params['sessionId']
+        : activity is String && activity.startsWith('session:')
+        ? activity.substring(8)
+        : null;
+    final deviceStop =
+        ['devices.disconnect', 'devices.forget'].contains(command)
+        ? params['deviceId']
+        : activity is String && activity.startsWith('connection:')
+        ? activity.substring(11)
+        : null;
+    if (sessionStop is String) {
+      _events.emit({
+        'type': 'session.stop.requested',
+        'data': {'sessionId': sessionStop},
+      });
+    } else if (deviceStop is String) {
+      _events.emit({
+        'type': 'device.disconnect.requested',
+        'deviceId': deviceStop,
+        'data': <String, dynamic>{},
+      });
+    }
+  }
+
   void _requireVerifiedState(String command, Map<String, dynamic> params) {
     if (_stateRecovery.pending && needsVerifiedState(command, params)) {
-      throw const ApplicationCommandException(
-        'state_unverified',
-        '正在重新核验设备状态，完成后再操作。',
-      );
+      throw const RequestFailure('state_unverified', '正在重新核验设备状态，完成后再操作。');
     }
   }
 
@@ -867,10 +885,7 @@ class ApplicationSession {
   }) async {
     final command = operation.wire;
     if (_disposed || intent?.cancelled == true) {
-      throw const ApplicationCommandException(
-        'cancelled',
-        '已停止本次打开，不会重新启动画面或声音。',
-      );
+      throw const RequestFailure('cancelled', '已停止本次打开，不会重新启动画面或声音。');
     }
     if (command == 'state.reconcile') return _stateRecovery.refresh();
     _requireVerifiedState(command, params);
@@ -892,7 +907,9 @@ class ApplicationSession {
     }
     final local = await _platform.intercept(command, params);
     if (local != null) return local;
-    return _media.execute(operation, params, intent: intent);
+    return _media.handles(operation)
+        ? _media.execute(operation, params, intent: intent)
+        : _commands.invokeCommand(operation, params);
   }
 
   /// 结束当前应用所有者；关闭失败保留原对象，下一次调用继续排空。
@@ -938,5 +955,179 @@ class ApplicationSession {
       _closeHost,
       _events.close,
     ]);
+  }
+
+  Future<Map<String, dynamic>> _executeBusiness(
+    ApplicationCommand operation,
+    Map<String, dynamic> params,
+  ) async {
+    final command = operation.wire;
+    try {
+      if (operation == ApplicationCommand.systemInfo) {
+        // 读取实际安装包元数据，沿用构建时版本，不在 Rust 或 Dart 另存一份版本号。
+        final PackageInfo info;
+        try {
+          info = await PackageInfo.fromPlatform();
+        } on PlatformException catch (error, stack) {
+          Error.throwWithStackTrace(
+            RequestFailure(
+              'application_info_unavailable',
+              '无法读取当前安装包信息，请重新启动应用后重试。',
+              {'platformCode': error.code},
+            ),
+            stack,
+          );
+        } on MissingPluginException catch (_, stack) {
+          Error.throwWithStackTrace(
+            const RequestFailure(
+              'application_info_unavailable',
+              '当前宿主尚未提供安装包信息，请重新启动应用后重试。',
+            ),
+            stack,
+          );
+        }
+        if (_disposed) {
+          throw const RequestFailure('disposed', '应用会话已关闭。');
+        }
+        if (info.version.isEmpty) {
+          throw const RequestFailure(
+            'application_info_unavailable',
+            '当前安装包没有可核实的版本信息。',
+          );
+        }
+        return {
+          'appName': info.appName,
+          'packageName': info.packageName,
+          'version': info.version,
+          'buildNumber': info.buildNumber,
+        };
+      }
+      if (operation == ApplicationCommand.stateSnapshot) {
+        return await _state.readSnapshot();
+      }
+      if (operation == ApplicationCommand.activitiesList) {
+        final snapshot = await _state.readSnapshot();
+        return {
+          'activities': snapshot['activities'],
+          'sessions': snapshot['sessions'],
+        };
+      }
+      if (operation == ApplicationCommand.activitiesStop) {
+        return await _stopActivity(params);
+      }
+      if (operation == ApplicationCommand.callsOpenPhoneApp) {
+        final id = _deviceId(params);
+        return Map.from(
+          await _companion.request(
+            id,
+            command,
+            const {},
+            allowStart: true,
+            expectedConnection: _devices.requireConnection(id),
+          ),
+        );
+      }
+      if (_power.handles(command)) {
+        return Map.from(await _power.command(command, params));
+      }
+      if (_devices.handles(command)) {
+        final result = await _devices.command(command, params);
+        if (operation == ApplicationCommand.devicesForget) {
+          await _observations.forget(_deviceId(params));
+        }
+        return Map.from(result);
+      }
+      if (_captures.handles(operation)) {
+        return await _captures.execute(operation, params);
+      }
+      if (_mediaJobs.handles(command)) {
+        return Map.from(await _mediaJobs.command(command, params));
+      }
+      if (_observations.handles(command)) {
+        return Map.from(await _observations.command(command, params));
+      }
+      if (operation == ApplicationCommand.appsList &&
+          (params['filter'] ?? 'installed') == 'installed') {
+        final id = _deviceId(params);
+        final connection = _devices.requireConnection(id);
+        final result = await _serverQueries.installedApps(
+          connection,
+          AdbCancellation(),
+        );
+        if (!identical(_devices.current(id), connection)) {
+          throw const RequestFailure('cancelled', '设备连接已改变，安装清单不再适用。');
+        }
+        return {'apps': result};
+      }
+      if (_companion.handles(command)) {
+        return Map.from(await _companion.command(command, params));
+      }
+      throw RequestFailure('unknown_command', '应用尚未提供此操作：$command');
+    } on DeviceRecordsFailure catch (error, stack) {
+      Error.throwWithStackTrace(
+        RequestFailure(error.code, error.message, error.details),
+        stack,
+      );
+    } on CompanionException catch (error, stack) {
+      Error.throwWithStackTrace(
+        RequestFailure(error.code, error.message),
+        stack,
+      );
+    } on AdbException catch (error, stack) {
+      Error.throwWithStackTrace(
+        RequestFailure(error.code, error.message),
+        stack,
+      );
+    }
+  }
+
+  String _deviceId(Map<String, dynamic> params) {
+    final id = params['deviceId'];
+    if (id is! String || !validDeviceId(id)) {
+      throw const RequestFailure('invalid_device_id', '设备标识无效。');
+    }
+    return id;
+  }
+
+  Future<Map<String, dynamic>> _stopActivity(
+    Map<String, dynamic> params,
+  ) async {
+    final id = params['activityId'];
+    if (id is! String) {
+      throw const RequestFailure('invalid_argument', '活动标识无效。');
+    }
+    final separator = id.indexOf(':');
+    if (separator < 1 || separator == id.length - 1) {
+      throw const RequestFailure('not_found', '此活动已结束或标识无效。');
+    }
+    final target = id.substring(separator + 1);
+    switch (id.substring(0, separator)) {
+      case 'connection':
+        return _executeBusiness(ApplicationCommand.devicesDisconnect, {
+          'deviceId': target,
+        });
+      case 'session':
+        return _executeBusiness(ApplicationCommand.sessionStop, {
+          'sessionId': target,
+        });
+      case 'observation':
+        return _executeBusiness(ApplicationCommand.observationStop, {
+          'deviceId': target,
+        });
+      case 'audio':
+        final source = _audio
+            .snapshots()
+            .where((source) => source['sourceId'] == target)
+            .firstOrNull;
+        if (source == null) {
+          throw const RequestFailure('not_found', '这代音源已结束。');
+        }
+        return _executeBusiness(ApplicationCommand.audioStop, {
+          'deviceId': source['deviceId'],
+          'sourceId': target,
+        });
+      default:
+        throw const RequestFailure('not_found', '此活动已结束或标识无效。');
+    }
   }
 }

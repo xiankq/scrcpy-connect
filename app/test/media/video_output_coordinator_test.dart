@@ -5,9 +5,9 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/services/platform/diagnostic_log.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/media/video_output_coordinator.dart';
-import 'package:scrcpy_connect/services/media/video_player_port.dart';
+import 'package:scrcpy_connect/services/media/video_player.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_presentation.dart';
 
 final _token = List.filled(64, 'a').join();
@@ -32,7 +32,7 @@ VideoJson _endpoint(String id, {int generation = 1}) => {
   'detachAddress': 8192,
 };
 Matcher _code(String code) =>
-    isA<ApplicationCommandException>().having((e) => e.code, 'code', code);
+    isA<RequestFailure>().having((e) => e.code, 'code', code);
 
 class _Player implements VideoPlayerPort {
   final changes = StreamController<VideoJson>.broadcast(sync: true);
@@ -50,7 +50,7 @@ class _Player implements VideoPlayerPort {
     calls.add('open');
     await Future<void>.delayed(Duration.zero);
     if (nullFrame) {
-      throw const ApplicationCommandException('no_frame', 'No decoded frame');
+      throw const RequestFailure('no_frame', 'No decoded frame');
     }
     return opening == null ? VideoTexture(texture, 720, 1280) : opening!.future;
   }
@@ -207,10 +207,7 @@ void main() {
       final failure = expectLater(starting, throwsA(_code('control_closed')));
       await h.output.stop(
         'A',
-        failure: const ApplicationCommandException(
-          'control_closed',
-          '控制连接意外结束。',
-        ),
+        failure: const RequestFailure('control_closed', '控制连接意外结束。'),
       );
       await failure;
       h.opening!.complete(_endpoint('late-A'));

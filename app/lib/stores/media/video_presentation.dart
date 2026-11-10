@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
-import 'package:scrcpy_connect/services/media/video_player_port.dart';
+import 'package:scrcpy_connect/services/media/video_player.dart';
 
 /// 协调本地呈现与核心转发状态；官方服务在本地呈现暂停时仍继续捕获。
 class VideoPresentation {
@@ -28,29 +28,20 @@ class VideoPresentation {
           .whereType<Map<Object?, Object?>>()
           .where((s) => s['deviceId'] == params['deviceId']);
       if (matches.isEmpty) {
-        throw const ApplicationCommandException(
-          'session_required',
-          '请先打开这台设备的实时画面。',
-        );
+        throw const RequestFailure('session_required', '请先打开这台设备的实时画面。');
       }
       if (matches.length > 1) {
-        throw const ApplicationCommandException(
-          'ambiguous_session',
-          '这台设备有多个控制会话，请选择具体画面。',
-        );
+        throw const RequestFailure('ambiguous_session', '这台设备有多个控制会话，请选择具体画面。');
       }
       id = matches.first['sessionId'];
     }
     if (id is! String || id.isEmpty) {
-      throw const ApplicationCommandException('session_required', '缺少控制会话。');
+      throw const RequestFailure('session_required', '缺少控制会话。');
     }
     final session = id;
     final count = _queued[session] ?? 0;
     if (count >= 8) {
-      throw const ApplicationCommandException(
-        'renderer_busy',
-        '视频状态操作过于频繁，请稍后再试。',
-      );
+      throw const RequestFailure('renderer_busy', '视频状态操作过于频繁，请稍后再试。');
     }
     _queued[session] = count + 1;
     final operation = (_tails[session] ?? Future<void>.value()).then((_) async {

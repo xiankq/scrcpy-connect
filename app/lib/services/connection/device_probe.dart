@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:adb/adb.dart';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/services/connection/device_query.dart';
 import 'package:scrcpy_connect/models/device_record.dart';
@@ -31,13 +31,13 @@ final class DeviceFacts {
   void assertMatches(DeviceRecord record, {bool requireKnownSerial = false}) {
     if (record.serial != null && serial != null && record.serial != serial ||
         record.guid != null && guid != null && record.guid != guid) {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'device_identity_mismatch',
         '连接目标与原设备身份不符，请核对设备。',
       );
     }
     if (requireKnownSerial && (record.serial == null || serial == null)) {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'device_identity_unverified',
         '无法核验原设备身份，请检查设备授权与连接。',
       );
@@ -139,10 +139,7 @@ done''';
     cancellation?.check();
     final fields = text.split('\x00');
     if (fields.length != 7 || fields.last.isNotEmpty) {
-      throw const ApplicationCommandException(
-        'invalid_data',
-        '设备属性回执不完整或边界无效。',
-      );
+      throw const RequestFailure('invalid_data', '设备属性回执不完整或边界无效。');
     }
     final serial = _property(fields[0]);
     final bootSerial = _property(fields[1]);
@@ -180,7 +177,7 @@ String? _property(String raw) {
   if (value.isEmpty || value == 'unknown' || value == 'null') return null;
   if (value.length > 256 ||
       value.runes.any((c) => c < 32 || c >= 127 && c <= 159)) {
-    throw const ApplicationCommandException('invalid_data', '设备属性包含无效或过长内容。');
+    throw const RequestFailure('invalid_data', '设备属性包含无效或过长内容。');
   }
   return value;
 }

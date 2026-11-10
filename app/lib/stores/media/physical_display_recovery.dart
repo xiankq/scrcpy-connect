@@ -3,7 +3,7 @@ import 'dart:math';
 
 import 'package:adb/adb.dart';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/services/media/physical_display_command.dart';
 import 'package:scrcpy_connect/services/media/physical_display_script.dart';
@@ -203,4 +203,4 @@ String _nonce() {
 }
 
 Never _unknown(String message) =>
-    throw ApplicationCommandException('display_recovery_unconfirmed', message);
+    throw RequestFailure('display_recovery_unconfirmed', message);

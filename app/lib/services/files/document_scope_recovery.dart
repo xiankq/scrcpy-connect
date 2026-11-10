@@ -6,7 +6,7 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 /// 文档访问的本机边界；启动接管和用户操作必须使用同一资源名称与根集合。
 final class DocumentScopeConfiguration {
@@ -43,10 +43,7 @@ final class DocumentScopeConfiguration {
   ) async {
     final cache = environment['cacheDirectory'];
     if (cache is! String || !p.isAbsolute(cache)) {
-      throw const ApplicationCommandException(
-        'cache_unavailable',
-        '系统没有提供本机暂存位置。',
-      );
+      throw const RequestFailure('cache_unavailable', '系统没有提供本机暂存位置。');
     }
     final filtered = Map<String, dynamic>.from(environment);
     // 只解析平台明确授予的根。账本返回实际路径，复制也必须使用同一根；
@@ -61,7 +58,7 @@ final class DocumentScopeConfiguration {
     if (scopeKey is! String ||
         !p.isAbsolute(scopeKey) ||
         p.basename(scopeKey) != 'documents') {
-      throw const ApplicationCommandException('cache_unavailable', '文档资源名称无效。');
+      throw const RequestFailure('cache_unavailable', '文档资源名称无效。');
     }
     filtered['cacheDirectory'] = cacheRoot;
     // 平台适配与协调器都会核验环境。保留最初逻辑名称，避免第二次核验
@@ -81,10 +78,7 @@ final class DocumentScopeConfiguration {
       final logicalScreenshots =
           environment['_documentScreenshotsRoot'] ?? screenshots;
       if (logicalScreenshots is! String || !p.isAbsolute(logicalScreenshots)) {
-        throw const ApplicationCommandException(
-          'cache_unavailable',
-          '截图库位置无效。',
-        );
+        throw const RequestFailure('cache_unavailable', '截图库位置无效。');
       }
       filtered['_documentScreenshotsRoot'] = logicalScreenshots;
     }
@@ -141,7 +135,7 @@ final class DocumentScopeRecovery {
         params,
       ).timeout(const Duration(seconds: 120));
     } on TimeoutException {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'document_cleanup_unconfirmed',
         '文档平台接管尚未确认，请重试恢复；不会继续读取缓存。',
       );
@@ -156,10 +150,7 @@ final class DocumentScopeRecovery {
       );
       final previous = environment['ownerLeaseId'];
       if (previous != null && previous is! String) {
-        throw const ApplicationCommandException(
-          'document_cleanup_unconfirmed',
-          '文档平台代次无效。',
-        );
+        throw const RequestFailure('document_cleanup_unconfirmed', '文档平台代次无效。');
       }
       _configuration = await DocumentScopeConfiguration.fromEnvironment(
         environment,
@@ -190,7 +181,7 @@ final class DocumentScopeRecovery {
       'ownerLeaseId': _candidate,
     });
     if (response['claimed'] != true || response['ownerLeaseId'] != _candidate) {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'document_cleanup_unconfirmed',
         '文档平台尚未确认新代次。',
       );

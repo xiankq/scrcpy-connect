@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 /// 副作用记录的阶段，不表示 Android 应用当前的生命周期。
 enum AppLaunchStatus { pending, unknown, observed, closed }
@@ -124,13 +124,13 @@ final class AppLaunchStore {
     final result = (_queues[key] ?? Future<void>.value()).then((_) {
       if (!opening) {
         if (!identical(_owners[key]?.target, this)) {
-          throw const ApplicationCommandException(
+          throw const RequestFailure(
             'app_open_owner_replaced',
             '应用打开记录已被后继接管。',
           );
         }
         if (_uncertain) {
-          throw const ApplicationCommandException(
+          throw const RequestFailure(
             'app_open_storage_unknown',
             '应用打开记录提交结果未知，请重新打开核验，不要重放打开请求。',
           );
@@ -209,10 +209,7 @@ final class AppLaunchStore {
       }),
     );
     if (bytes.length > _maximumBytes) {
-      throw const ApplicationCommandException(
-        'app_open_capacity',
-        '应用打开记录已满，请先核对并关闭待处理记录。',
-      );
+      throw const RequestFailure('app_open_capacity', '应用打开记录已满，请先核对并关闭待处理记录。');
     }
     final temporary = File('${file.path}.${_random.nextInt(1 << 32)}.tmp');
     var created = false;
@@ -240,7 +237,7 @@ final class AppLaunchStore {
       for (final permit in _permits.values) {
         permit.cancel();
       }
-      throw ApplicationCommandException(
+      throw RequestFailure(
         'app_open_storage_unknown',
         '应用打开记录未能确认保存，请重新打开核验。',
         {
@@ -262,7 +259,7 @@ final class AppLaunchStore {
         )
         .firstOrNull;
     if (record != null) {
-      throw ApplicationCommandException(
+      throw RequestFailure(
         'app_launch_unknown',
         '应用打开结果尚待核对，不会再次提交打开请求。',
         record.projection,
@@ -291,10 +288,7 @@ final class AppLaunchStore {
     _decode(operationId, record.toJson());
     _available(deviceId, packageName);
     if (_records.containsKey(operationId)) {
-      throw const ApplicationCommandException(
-        'app_open_conflict',
-        '这次打开意图已经处理。',
-      );
+      throw const RequestFailure('app_open_conflict', '这次打开意图已经处理。');
     }
     final next = Map<String, AppLaunchRecord>.of(_records);
     if (next.length >= _maximumRecords) {
@@ -304,7 +298,7 @@ final class AppLaunchStore {
               .toList()
             ..sort((a, b) => a.updatedAt.compareTo(b.updatedAt));
       if (closed.isEmpty) {
-        throw const ApplicationCommandException(
+        throw const RequestFailure(
           'app_open_capacity',
           '应用打开记录已满，请先核对并关闭待处理记录。',
         );
@@ -324,17 +318,11 @@ final class AppLaunchStore {
       _exclusive(() async {
         final previous = _records[operationId];
         if (previous == null) {
-          throw const ApplicationCommandException(
-            'app_open_not_found',
-            '找不到这次应用打开记录。',
-          );
+          throw const RequestFailure('app_open_not_found', '找不到这次应用打开记录。');
         }
         if (previous.status == AppLaunchStatus.closed ||
             previous.status == AppLaunchStatus.unknown && failureCode == null) {
-          throw const ApplicationCommandException(
-            'cancelled',
-            '这次打开已关闭或需要核对，不接受迟到结果。',
-          );
+          throw const RequestFailure('cancelled', '这次打开已关闭或需要核对，不接受迟到结果。');
         }
         if (failureCode != null) _permits[operationId]?.cancel();
         final status = failureCode != null
@@ -362,10 +350,7 @@ final class AppLaunchStore {
         final previous = _records[operationId];
         if (previous == null) return false;
         if (deviceId != null && previous.deviceId != deviceId) {
-          throw const ApplicationCommandException(
-            'invalid_argument',
-            '应用打开记录不属于所选设备。',
-          );
+          throw const RequestFailure('invalid_argument', '应用打开记录不属于所选设备。');
         }
         _permits.remove(operationId)?.cancel();
         if (previous.status == AppLaunchStatus.closed) return true;
@@ -393,7 +378,7 @@ final class AppLaunchStore {
   );
 }
 
-Never _invalid() => throw const ApplicationCommandException(
+Never _invalid() => throw const RequestFailure(
   'app_open_storage_invalid',
   '应用打开记录内容或版本无效，原文件已保留。',
 );

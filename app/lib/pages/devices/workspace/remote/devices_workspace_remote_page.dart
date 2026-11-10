@@ -7,7 +7,7 @@ import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
 import 'package:scrcpy_connect/router/remote_launch_intent.dart';
 import 'package:scrcpy_connect/router/route_observers.dart';
-import 'package:scrcpy_connect/stores/media/session_view_registry.dart';
+import 'package:scrcpy_connect/widgets/remote_views.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart'
     show confirm, glassSnackBar;
 import 'package:scrcpy_connect/router/app_router.dart';
@@ -330,6 +330,7 @@ class _RemotePageState extends State<RemotePage>
     super.initState();
     window = RemoteWindow(
       controller: controller,
+      views: RemoteViewsScope.of(context),
       deviceId: value(widget.device, 'id'),
     );
     inputs = RemoteInputOwner(

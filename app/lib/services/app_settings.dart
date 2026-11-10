@@ -5,15 +5,15 @@ import 'package:scrcpy_connect/stores/preference_store.dart';
 import 'package:scrcpy_connect/models/device_metadata.dart';
 import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
 import 'package:scrcpy_connect/models/preference_schema.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/media/video_quality_policy.dart'
     show defaultVideoQuality;
 
 const _devicePreferences = {'deviceQuality', 'deviceSettings', 'appOpenModes'};
 
-/// 拥有偏好命令、元数据迁移和应用回执；直接调用各自持久所有者。
-final class PreferenceCommands {
-  PreferenceCommands({
+/// 串行更新应用设置和导入元数据；持久化由偏好与设备记录所有者执行。
+final class AppSettings {
+  AppSettings({
     required this.preferences,
     required this.records,
     required this.onDevicesImported,
@@ -51,36 +51,14 @@ final class PreferenceCommands {
       ? {...native, 'data': settings}
       : native;
 
-  bool handles(String command) => const {
-    'settings.get',
-    'settings.update',
-    'settings.reset',
-    'settings.export',
-    'settings.import',
-    'settings.import.preview',
-  }.contains(command);
-
-  Future<Map<String, dynamic>> invoke(
-    String command,
-    Map<String, dynamic> parameters,
-  ) => _enqueue(() => _invoke(command, parameters));
-
   Future<T> _enqueue<T>(Future<T> Function() action) {
     final operation = _tail.then((_) async {
       try {
         return await action();
       } on PreferenceFailure catch (error) {
-        throw ApplicationCommandException(
-          error.code,
-          error.message,
-          error.details,
-        );
+        throw RequestFailure(error.code, error.message, error.details);
       } on DeviceRecordsFailure catch (error) {
-        throw ApplicationCommandException(
-          error.code,
-          error.message,
-          error.details,
-        );
+        throw RequestFailure(error.code, error.message, error.details);
       }
     });
     _tail = operation.then<void>((_) {}, onError: (Object _, StackTrace _) {});
@@ -119,7 +97,7 @@ final class PreferenceCommands {
       final unknown =
           error is! PreferenceFailure ||
           error.code == 'preferences_write_unknown';
-      throw ApplicationCommandException(
+      throw RequestFailure(
         unknown ? 'preferences_cleanup_unknown' : 'preferences_cleanup_partial',
         unknown ? '设备已遗忘，偏好清理结果未知，请重新读取后核对。' : '设备已遗忘，偏好尚未清理，可单独重试偏好清理。',
         {
@@ -136,7 +114,7 @@ final class PreferenceCommands {
       // 重复清理只发布已保存的快照，不重复设备遗忘或原生业务调用。
       await _publishAndApply();
     } catch (error) {
-      throw ApplicationCommandException(
+      throw RequestFailure(
         'preferences_apply_unknown',
         '设备已遗忘且偏好已清理，应用状态通知或后台策略尚未确认。',
         {
@@ -152,14 +130,8 @@ final class PreferenceCommands {
     }
   });
 
-  Future<Map<String, dynamic>> _invoke(
-    String command,
-    Map<String, dynamic> parameters,
-  ) async {
-    switch (command) {
-      case 'settings.get':
-        return settings;
-      case 'settings.update':
+  Future<Map<String, dynamic>> update(Map<String, dynamic> parameters) =>
+      _enqueue(() async {
         final changes = {...parameters}..remove('expectedRevision');
         await preferences.update(
           changes,
@@ -168,7 +140,10 @@ final class PreferenceCommands {
         return await _publishAndApply(
           forceBackgroundPolicy: changes.containsKey('backgroundKeepAlive'),
         );
-      case 'settings.reset':
+      });
+
+  Future<Map<String, dynamic>> reset(Map<String, dynamic> parameters) =>
+      _enqueue(() async {
         final keys = parameters['keys'];
         if (keys != null &&
             (keys is! List || keys.any((key) => key is! String))) {
@@ -182,16 +157,20 @@ final class PreferenceCommands {
           forceBackgroundPolicy:
               keys == null || (keys as List).contains('backgroundKeepAlive'),
         );
-      case 'settings.export':
-        await records.reload();
-        return records.exportMetadata(
-          settings: {
-            for (final entry in settings.entries)
-              if (!_devicePreferences.contains(entry.key))
-                entry.key: entry.value,
-          },
-        );
-      case 'settings.import.preview':
+      });
+
+  Future<Map<String, dynamic>> exportMetadata() => _enqueue(() async {
+    await records.reload();
+    return records.exportMetadata(
+      settings: {
+        for (final entry in settings.entries)
+          if (!_devicePreferences.contains(entry.key)) entry.key: entry.value,
+      },
+    );
+  });
+
+  Future<Map<String, dynamic>> previewImport(Map<String, dynamic> parameters) =>
+      _enqueue(() async {
         final metadata = DeviceMetadata.parse(parameters['metadata']);
         final imported = preferences.schema.importSettings(
           metadata.document['settings'] ?? <String, Object?>{},
@@ -216,100 +195,97 @@ final class PreferenceCommands {
                 },
           ],
         };
-      case 'settings.import':
-        final metadata = DeviceMetadata.parse(parameters['metadata']);
-        final imported = preferences.schema.importSettings(
-          metadata.document['settings'] ?? <String, Object?>{},
-        );
-        final fingerprint = parameters['fingerprint'];
-        if (fingerprint is! String || fingerprint != metadata.fingerprint) {
-          throw const PreferenceFailure(
-            'invalid_import_preview',
-            '请先预览当前文件，再确认导入。',
-          );
-        }
-        final importGlobal = parameters['importGlobalPreferences'] == true;
-        final expected = _revision(parameters) ?? revision;
-        if (importGlobal && expected != revision) {
-          throw const PreferenceFailure(
-            'preferences_conflict',
-            '设置已被其他操作更新，请重新预览。',
-          );
-        }
-        late final DeviceRecordsImport importedRecords;
-        try {
-          importedRecords = await records.importMetadata(
-            metadata.document,
-            expectedFingerprint: fingerprint,
-            importGlobalPreferences: importGlobal,
-          );
-          if (!importedRecords.alreadyImported) {
-            onDevicesImported(importedRecords);
-          }
-        } catch (error) {
-          if (error is DeviceRecordsFailure &&
-              (error.code.startsWith('invalid_') ||
-                  error.code == 'records_too_large' ||
-                  error.code == 'import_history_full')) {
-            rethrow;
-          }
-          throw PreferenceFailure(
-            'preferences_import_unknown',
-            '导入结果尚待核对，请重新预览同一文件；不会自动追加设备记录。',
-            {
-              'fingerprint': fingerprint,
-              'preferencesSaved': false,
-              'devicesRestored': 'unknown',
-              'authorizationRestored': false,
-            },
-          );
-        }
-        final restored = importedRecords.toJson();
-        if (importedRecords.alreadyImported) {
-          await preferences.reload();
-          return {
-            ...restored,
-            'preferencesStatus': _importStatus(
-              imported,
-              importedRecords.receipt.importGlobalPreferences,
-            ),
-          };
-        }
-        if (!importGlobal || imported.isEmpty) {
-          return {...restored, 'preferencesStatus': 'preserved'};
-        }
-        try {
-          await preferences.update(imported, expectedRevision: expected);
-        } catch (error) {
-          final unknown =
-              error is! PreferenceFailure ||
-              error.code == 'preferences_write_unknown';
-          throw PreferenceFailure(
-            unknown
-                ? 'preferences_import_unknown'
-                : 'preferences_import_partial',
-            unknown
-                ? '设备记录已导入，全局偏好提交结果待核对。请重新预览同一文件，勿重复导入。'
-                : '设备记录已导入，全局偏好尚未保存。请检查当前设置。',
-            {
-              'fingerprint': fingerprint,
-              'preferencesSaved': unknown ? 'unknown' : false,
-              'devicesRestored': restored,
-              'authorizationRestored': false,
-              'cause': error is PreferenceFailure
-                  ? error.code
-                  : 'preferences_io',
-              if (error is PreferenceFailure && error.details.isNotEmpty)
-                'preferenceFailure': error.details,
-            },
-          );
-        }
-        await _publishAndApply(forceBackgroundPolicy: true);
-        return {...restored, 'preferencesStatus': 'imported'};
-      default:
-        throw const PreferenceFailure('unknown_command', '未知设置操作。');
+      });
+
+  Future<Map<String, dynamic>> importMetadata(
+    Map<String, dynamic> parameters,
+  ) => _enqueue(() async {
+    final metadata = DeviceMetadata.parse(parameters['metadata']);
+    final imported = preferences.schema.importSettings(
+      metadata.document['settings'] ?? <String, Object?>{},
+    );
+    final fingerprint = parameters['fingerprint'];
+    if (fingerprint is! String || fingerprint != metadata.fingerprint) {
+      throw const PreferenceFailure(
+        'invalid_import_preview',
+        '请先预览当前文件，再确认导入。',
+      );
     }
-  }
+    final importGlobal = parameters['importGlobalPreferences'] == true;
+    final expected = _revision(parameters) ?? revision;
+    if (importGlobal && expected != revision) {
+      throw const PreferenceFailure(
+        'preferences_conflict',
+        '设置已被其他操作更新，请重新预览。',
+      );
+    }
+    late final DeviceRecordsImport importedRecords;
+    try {
+      importedRecords = await records.importMetadata(
+        metadata.document,
+        expectedFingerprint: fingerprint,
+        importGlobalPreferences: importGlobal,
+      );
+      if (!importedRecords.alreadyImported) {
+        onDevicesImported(importedRecords);
+      }
+    } catch (error) {
+      if (error is DeviceRecordsFailure &&
+          (error.code.startsWith('invalid_') ||
+              error.code == 'records_too_large' ||
+              error.code == 'import_history_full')) {
+        rethrow;
+      }
+      throw PreferenceFailure(
+        'preferences_import_unknown',
+        '导入结果尚待核对，请重新预览同一文件；不会自动追加设备记录。',
+        {
+          'fingerprint': fingerprint,
+          'preferencesSaved': false,
+          'devicesRestored': 'unknown',
+          'authorizationRestored': false,
+        },
+      );
+    }
+    final restored = importedRecords.toJson();
+    if (importedRecords.alreadyImported) {
+      await preferences.reload();
+      return {
+        ...restored,
+        'preferencesStatus': _importStatus(
+          imported,
+          importedRecords.receipt.importGlobalPreferences,
+        ),
+      };
+    }
+    if (!importGlobal || imported.isEmpty) {
+      return {...restored, 'preferencesStatus': 'preserved'};
+    }
+    try {
+      await preferences.update(imported, expectedRevision: expected);
+    } catch (error) {
+      final unknown =
+          error is! PreferenceFailure ||
+          error.code == 'preferences_write_unknown';
+      throw PreferenceFailure(
+        unknown ? 'preferences_import_unknown' : 'preferences_import_partial',
+        unknown
+            ? '设备记录已导入，全局偏好提交结果待核对。请重新预览同一文件，勿重复导入。'
+            : '设备记录已导入，全局偏好尚未保存。请检查当前设置。',
+        {
+          'fingerprint': fingerprint,
+          'preferencesSaved': unknown ? 'unknown' : false,
+          'devicesRestored': restored,
+          'authorizationRestored': false,
+          'cause': error is PreferenceFailure ? error.code : 'preferences_io',
+          if (error is PreferenceFailure && error.details.isNotEmpty)
+            'preferenceFailure': error.details,
+        },
+      );
+    }
+    await _publishAndApply(forceBackgroundPolicy: true);
+    return {...restored, 'preferencesStatus': 'imported'};
+  });
 
   String _importStatus(Map<String, Object?> imported, bool importGlobal) {
     if (!importGlobal) return 'preserved';

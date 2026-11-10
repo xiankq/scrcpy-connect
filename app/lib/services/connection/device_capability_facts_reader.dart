@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:adb/adb.dart';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
 import 'package:scrcpy_connect/services/connection/device_query.dart';
@@ -132,11 +132,11 @@ done''';
     AdbCancellation? cancellation,
   }) async {
     if (!validDeviceId(deviceId)) {
-      throw const ApplicationCommandException('invalid_device_id', '设备记录标识无效。');
+      throw const RequestFailure('invalid_device_id', '设备记录标识无效。');
     }
     final record = records.current.find(deviceId);
     if (record == null) {
-      throw const ApplicationCommandException('device_not_found', '设备记录已不存在。');
+      throw const RequestFailure('device_not_found', '设备记录已不存在。');
     }
     final connection = connectionForDevice(deviceId);
     final fingerprint =
@@ -154,7 +154,7 @@ done''';
           (records.current.deviceIdentityFingerprints[deviceId] ??
                   records.current.identityFingerprint) !=
               fingerprint) {
-        throw const ApplicationCommandException(
+        throw const RequestFailure(
           'stale_connection',
           '检查期间设备连接、地址或授权身份已改变，请重新检查。',
         );
@@ -170,10 +170,7 @@ done''';
       } catch (error, stack) {
         final (code, message) = switch (error) {
           AdbException(:final code, :final message) => (code, message),
-          ApplicationCommandException(:final code, :final message) => (
-            code,
-            message,
-          ),
+          RequestFailure(:final code, :final message) => (code, message),
           _ => Error.throwWithStackTrace(error, stack),
         };
         if (const {
@@ -215,16 +212,10 @@ done''';
         );
         if (facts.closed ||
             connectionId != null && facts.connectionId != connectionId) {
-          throw const ApplicationCommandException(
-            'stale_connection',
-            '实际设备连接已关闭或替换。',
-          );
+          throw const RequestFailure('stale_connection', '实际设备连接已关闭或替换。');
         }
         if (facts.connectionId == null || facts.connectionId!.isEmpty) {
-          throw const ApplicationCommandException(
-            'query_unavailable',
-            '当前连接的技术身份尚未取得。',
-          );
+          throw const RequestFailure('query_unavailable', '当前连接的技术身份尚未取得。');
         }
         connectionId = facts.connectionId;
         features = facts.features;

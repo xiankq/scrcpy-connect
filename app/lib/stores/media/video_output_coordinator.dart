@@ -4,12 +4,11 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/platform/diagnostic_log.dart';
 import 'package:scrcpy_connect/services/platform/diagnostic_reporter.dart';
 
-import 'package:scrcpy_connect/services/media/video_player_port.dart';
-import 'package:scrcpy_connect/services/media/codec_video_player.dart';
+import 'package:scrcpy_connect/services/media/video_player.dart';
 
 /// 持有本机视频输出及未确认释放的旧输出；捕获协调器拥有远端控制会话与编码进程。
 class VideoOutputCoordinator {
@@ -50,17 +49,14 @@ class VideoOutputCoordinator {
     final existing = _entries[id];
     if (existing != null) {
       if (existing.device != device || existing.codec != _codec(stream)) {
-        throw const ApplicationCommandException(
-          'session_changed',
-          '视频输出与现有会话不一致。',
-        );
+        throw const RequestFailure('session_changed', '视频输出与现有会话不一致。');
       }
       final receipt = await existing.ready!;
       _check(existing);
       return {...receipt};
     }
     if (_entries.length + _pending.length + _retiring.length >= 16) {
-      throw const ApplicationCommandException('resource_busy', '视频输出数量已达上限。');
+      throw const RequestFailure('resource_busy', '视频输出数量已达上限。');
     }
     final entry = _Output(
       id,
@@ -112,10 +108,7 @@ class VideoOutputCoordinator {
         entry.startupClock.elapsedMilliseconds;
     if ((endpoint['kind'] != null && endpoint['kind'] != 'video') ||
         (endpoint['codec'] != null && endpoint['codec'] != entry.codec)) {
-      throw const ApplicationCommandException(
-        'invalid_endpoint',
-        '媒体输入类型或实际编码与视频输出不一致。',
-      );
+      throw const RequestFailure('invalid_endpoint', '媒体输入类型或实际编码与视频输出不一致。');
     }
     _validateSource(endpoint);
     entry.observer = entry.player.events.listen((event) {
@@ -210,10 +203,7 @@ class VideoOutputCoordinator {
         texture.height < 1 ||
         texture.width > 16384 ||
         texture.height > 16384) {
-      throw const ApplicationCommandException(
-        'decoder_error',
-        '播放器返回无效的视频尺寸或纹理。',
-      );
+      throw const RequestFailure('decoder_error', '播放器返回无效的视频尺寸或纹理。');
     }
     entry.texture = texture;
     await _await(entry, entry.player.setPaused(false));
@@ -270,19 +260,13 @@ class VideoOutputCoordinator {
     final old = _entry(id);
     _check(old);
     if (_text(stream, 'deviceId') != old.device) {
-      throw const ApplicationCommandException(
-        'session_changed',
-        '新视频输入不属于当前设备。',
-      );
+      throw const RequestFailure('session_changed', '新视频输入不属于当前设备。');
     }
     final generation = math.max(_generation(stream), old.generation + 1);
     final captureGeneration =
         stream['captureGeneration'] as int? ?? old.captureGeneration + 1;
     if (captureGeneration <= old.captureGeneration) {
-      throw const ApplicationCommandException(
-        'generation_changed',
-        '新视频输入归属已经过期。',
-      );
+      throw const RequestFailure('generation_changed', '新视频输入归属已经过期。');
     }
     final source = _sourceId(stream);
     final opening =
@@ -315,22 +299,16 @@ class VideoOutputCoordinator {
     _check(old);
     final generation = _generation(endpoint);
     if (generation <= old.generation || _pending.containsKey(id)) {
-      throw const ApplicationCommandException(
-        'generation_changed',
-        '请等待当前重配置，或提供更新的画面版本。',
-      );
+      throw const RequestFailure('generation_changed', '请等待当前重配置，或提供更新的画面版本。');
     }
     final actualCodec = endpoint['codec'];
     if (actualCodec != null && actualCodec is! String) {
-      throw const ApplicationCommandException(
-        'invalid_codec',
-        '媒体输入没有有效的实际视频编码。',
-      );
+      throw const RequestFailure('invalid_codec', '媒体输入没有有效的实际视频编码。');
     }
     final nextCodec = codec ?? (actualCodec as String?) ?? old.codec;
     _validateCodec(nextCodec);
     if (_entries.length + _pending.length + _retiring.length >= 16) {
-      throw const ApplicationCommandException('resource_busy', '视频输出数量已达上限。');
+      throw const RequestFailure('resource_busy', '视频输出数量已达上限。');
     }
     final candidate = _Output(
       id,
@@ -381,10 +359,7 @@ class VideoOutputCoordinator {
     final playback = _entry(id).playback;
     if (++playback.queuedControls > 8) {
       playback.queuedControls--;
-      throw const ApplicationCommandException(
-        'renderer_busy',
-        '视频状态操作过于频繁，请稍后再试。',
-      );
+      throw const RequestFailure('renderer_busy', '视频状态操作过于频繁，请稍后再试。');
     }
     final operation = playback.control.then((_) async {
       playback.paused = paused;
@@ -403,10 +378,7 @@ class VideoOutputCoordinator {
           }
         }
       }
-      throw const ApplicationCommandException(
-        'renderer_busy',
-        '画面正在连续调整，请稍后重试。',
-      );
+      throw const RequestFailure('renderer_busy', '画面正在连续调整，请稍后重试。');
     });
     playback.control = operation.then<void>(
       (_) {},
@@ -438,10 +410,7 @@ class VideoOutputCoordinator {
   Future<VideoPixels?> _pixels(_Output entry, int width, int height) async {
     _check(entry);
     if (entry.snapshotBusy) {
-      throw const ApplicationCommandException(
-        'renderer_busy',
-        '正在读取当前画面，请稍后再试。',
-      );
+      throw const RequestFailure('renderer_busy', '正在读取当前画面，请稍后再试。');
     }
     entry.snapshotBusy = true;
     final pending = Future<VideoPixels?>.sync(
@@ -469,11 +438,11 @@ class VideoOutputCoordinator {
     _check(entry);
     final size = entry.texture;
     if (size == null || entry.decodedReceipts == 0) {
-      throw const ApplicationCommandException('no_frame', '当前没有可保存的画面。');
+      throw const RequestFailure('no_frame', '当前没有可保存的画面。');
     }
     final root = Directory(directory);
     if (!root.isAbsolute || !await root.exists()) {
-      throw const ApplicationCommandException('invalid_path', '截图目录尚未准备好。');
+      throw const RequestFailure('invalid_path', '截图目录尚未准备好。');
     }
     _check(entry);
     final factor = math.min(
@@ -487,7 +456,7 @@ class VideoOutputCoordinator {
         height = math.max(1, (size.height * factor).floor());
     final pixels = await _pixels(entry, width, height);
     if (pixels == null || !pixels.valid) {
-      throw const ApplicationCommandException('capture_failed', '未能读取实际视频帧。');
+      throw const RequestFailure('capture_failed', '未能读取实际视频帧。');
     }
     final png = await _await(entry, _png(pixels), operationTimeout);
     _check(entry);
@@ -538,10 +507,7 @@ class VideoOutputCoordinator {
     'continuousFrameTelemetry': false,
   };
 
-  Future<VideoJson> stop(
-    String id, {
-    ApplicationCommandException? failure,
-  }) async {
+  Future<VideoJson> stop(String id, {RequestFailure? failure}) async {
     _stopped.add(id);
     if (_stopped.length > 4096) _stopped.remove(_stopped.first);
     final entries = [
@@ -586,7 +552,7 @@ class VideoOutputCoordinator {
 
   void _checkReleased([String? device]) {
     if (_retiring.any((entry) => device == null || entry.device == device)) {
-      throw const ApplicationCommandException(
+      throw const RequestFailure(
         'video_cleanup_unconfirmed',
         '视频输出尚未确认释放，请沿原所有者重试。',
       );
@@ -697,15 +663,15 @@ class VideoOutputCoordinator {
     });
   }
 
-  ApplicationCommandException _aborted(_Output entry) =>
+  RequestFailure _aborted(_Output entry) =>
       entry.terminalFailure ??
       (entry.timedOut
-          ? ApplicationCommandException('video_timeout', '视频准备超过时限，已有画面保持不变。', {
+          ? RequestFailure('video_timeout', '视频准备超过时限，已有画面保持不变。', {
               'diagnostics': entry.diagnostics,
             })
           : _cancelled());
-  ApplicationCommandException _failure(Object error, _Output entry) =>
-      error is ApplicationCommandException
+  RequestFailure _failure(Object error, _Output entry) =>
+      error is RequestFailure
       ? error
       : error is PlatformException &&
             const {
@@ -713,8 +679,8 @@ class VideoOutputCoordinator {
               'media_codec_handle',
               'media_codec_operation',
             }.contains(error.code)
-      ? ApplicationCommandException(error.code, '本机视频输出未能初始化或完成操作。')
-      : ApplicationCommandException(
+      ? RequestFailure(error.code, '本机视频输出未能初始化或完成操作。')
+      : RequestFailure(
           error is TimeoutException ? 'video_timeout' : 'decoder_error',
           error is TimeoutException ? '视频输出未在时限内确认。' : '视频输出未能完成，请检查实际媒体输入。',
           {'diagnostics': entry.diagnostics},
@@ -723,10 +689,7 @@ class VideoOutputCoordinator {
   _Output _entry(String id) {
     _checkOwner();
     return _entries[id] ??
-        (throw const ApplicationCommandException(
-          'session_required',
-          '该视频输出已结束。',
-        ));
+        (throw const RequestFailure('session_required', '该视频输出已结束。'));
   }
 
   VideoJson _receipt(_Output entry) => {
@@ -779,7 +742,7 @@ class _Output {
   String? relay;
   StreamSubscription<VideoJson>? observer;
   VideoTexture? texture;
-  ApplicationCommandException? terminalFailure;
+  RequestFailure? terminalFailure;
   bool closed = false, snapshotBusy = false;
   bool timedOut = false;
   Timer? startTimer;
@@ -799,12 +762,12 @@ class _Playback {
   Future<void> control = Future.value();
 }
 
-ApplicationCommandException _cancelled() =>
-    const ApplicationCommandException('cancelled', '此视频操作已结束，不会恢复旧画面。');
+RequestFailure _cancelled() =>
+    const RequestFailure('cancelled', '此视频操作已结束，不会恢复旧画面。');
 String _text(VideoJson data, String key) {
   final value = data[key];
   if (value is! String || value.isEmpty || value.length > 256) {
-    throw ApplicationCommandException('invalid_endpoint', '缺少有效媒体参数：$key。');
+    throw RequestFailure('invalid_endpoint', '缺少有效媒体参数：$key。');
   }
   return value;
 }
@@ -817,14 +780,14 @@ String _codec(VideoJson stream) {
 
 void _validateCodec(String codec) {
   if (!const ['h264', 'h265', 'av1', 'vp8', 'vp9'].contains(codec)) {
-    throw const ApplicationCommandException('invalid_codec', '未知视频编码。');
+    throw const RequestFailure('invalid_codec', '未知视频编码。');
   }
 }
 
 int _generation(VideoJson value) {
   final generation = value['generation'] ?? 1;
   if (generation is! int || generation < 1) {
-    throw const ApplicationCommandException('invalid_endpoint', '视频版本无效。');
+    throw const RequestFailure('invalid_endpoint', '视频版本无效。');
   }
   return generation;
 }
@@ -832,7 +795,7 @@ int _generation(VideoJson value) {
 String _sourceId(VideoJson stream) {
   final id = stream['videoSourceId'];
   if (id is! String || !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(id)) {
-    throw const ApplicationCommandException('invalid_endpoint', '缺少有效的原生视频源。');
+    throw const RequestFailure('invalid_endpoint', '缺少有效的原生视频源。');
   }
   return id;
 }
@@ -844,10 +807,7 @@ void _validateSource(VideoJson endpoint) {
       endpoint['detachAddress'] is! int ||
       (endpoint['attachAddress'] as int) <= 0 ||
       (endpoint['detachAddress'] as int) <= 0) {
-    throw const ApplicationCommandException(
-      'invalid_endpoint',
-      '媒体输入不是有效的原生数据源。',
-    );
+    throw const RequestFailure('invalid_endpoint', '媒体输入不是有效的原生数据源。');
   }
 }
 
@@ -866,7 +826,7 @@ Future<List<int>> _png(VideoPixels pixels) async {
     image = (await codec.getNextFrame()).image;
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
     if (data == null) {
-      throw const ApplicationCommandException('capture_failed', '截图编码未完成。');
+      throw const RequestFailure('capture_failed', '截图编码未完成。');
     }
     return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
   } finally {

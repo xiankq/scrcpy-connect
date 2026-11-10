@@ -5,7 +5,7 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 
 String _quote(String value) {
@@ -18,8 +18,7 @@ String _nonce() => List.generate(
   (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
 ).join();
 
-Never _fail(String code, String message) =>
-    throw ApplicationCommandException(code, message);
+Never _fail(String code, String message) => throw RequestFailure(code, message);
 
 /// 固定 scrcpy 清单查询的执行结果；退出码来自监督器对原查询子进程的 wait。
 final class ScrcpyQueryResult {
@@ -64,7 +63,7 @@ final class ScrcpyQueryProcess {
   Future<ScrcpyQueryResult>? _running;
   AdbServiceSession? _session;
   int? _pid, _started, _exitCode;
-  ({ApplicationCommandException error, StackTrace stack})? _protocolFailure;
+  ({RequestFailure error, StackTrace stack})? _protocolFailure;
   int _lineBytes = 0, _bytes = 0, _contentBytes = 0;
   bool _startAttempted = false, _closed = false, _released = false;
   bool _lineOverflow = false, _timedOut = false, _tooLarge = false;
@@ -162,7 +161,7 @@ final class ScrcpyQueryProcess {
           if (byte == 10) {
             try {
               _acceptLine();
-            } on ApplicationCommandException catch (error, stack) {
+            } on RequestFailure catch (error, stack) {
               // 诊断或坏帧阻止查询交付，但不能切断随后真实的监督退出证明。
               _protocolFailure ??= (error: error, stack: stack);
               if (!_ready.isCompleted) _ready.completeError(error, stack);
@@ -222,7 +221,7 @@ final class ScrcpyQueryProcess {
     _processReleased = true;
     if (!_ready.isCompleted) {
       _ready.completeError(
-        const ApplicationCommandException('process_identity', '查询在取得启动身份前已退出。'),
+        const RequestFailure('process_identity', '查询在取得启动身份前已退出。'),
       );
     }
   }

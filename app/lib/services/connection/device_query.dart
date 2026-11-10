@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 
-import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 
 /// 有界设备文本查询，共用旧版 shell 与 shell v2 的退出、取消及解码规则。
@@ -29,21 +29,18 @@ Future<String> readDeviceText(
       maxBytes: maxBytes,
       onExit: (code) {
         if (code != null && code != 0) {
-          throw const ApplicationCommandException(
-            'query_unavailable',
-            '目标设备未能提供此项数据。',
-          );
+          throw const RequestFailure('query_unavailable', '目标设备未能提供此项数据。');
         }
       },
     );
-  } on ApplicationCommandException catch (error) {
+  } on RequestFailure catch (error) {
     if (error.code != 'result_unknown') rethrow;
-    throw const ApplicationCommandException('query_unavailable', '设备查询在完成前中断。');
+    throw const RequestFailure('query_unavailable', '设备查询在完成前中断。');
   }
   try {
     return utf8.decode(result.stdout);
   } on FormatException {
-    throw const ApplicationCommandException('invalid_data', '设备数据不是有效的 UTF-8。');
+    throw const RequestFailure('invalid_data', '设备数据不是有效的 UTF-8。');
   }
 }
 
@@ -67,14 +64,11 @@ Future<({Uint8List stdout, Uint8List stderr, int? exitCode})> readDeviceShell(
   )) {
     cancellation?.check();
     if (terminal) {
-      throw const ApplicationCommandException(
-        'invalid_data',
-        '设备命令在终态后继续返回数据。',
-      );
+      throw const RequestFailure('invalid_data', '设备命令在终态后继续返回数据。');
     }
     count += event.bytes.length;
     if (count > maxBytes) {
-      throw const ApplicationCommandException('byte_limit', '设备命令输出超过本次限额。');
+      throw const RequestFailure('byte_limit', '设备命令输出超过本次限额。');
     }
     switch (event.channel) {
       case AdbShellChannel.stdout:
@@ -83,10 +77,7 @@ Future<({Uint8List stdout, Uint8List stderr, int? exitCode})> readDeviceShell(
         stderr.add(event.bytes);
       case AdbShellChannel.exit:
         if (event.bytes.isNotEmpty) {
-          throw const ApplicationCommandException(
-            'invalid_data',
-            '设备退出回执包含无效字节。',
-          );
+          throw const RequestFailure('invalid_data', '设备退出回执包含无效字节。');
         }
         exitCode = event.exitCode;
         onExit?.call(exitCode);
@@ -95,7 +86,7 @@ Future<({Uint8List stdout, Uint8List stderr, int? exitCode})> readDeviceShell(
   }
   cancellation?.check();
   if (!terminal) {
-    throw const ApplicationCommandException('result_unknown', '设备命令没有返回完整终态。');
+    throw const RequestFailure('result_unknown', '设备命令没有返回完整终态。');
   }
   return (
     stdout: stdout.takeBytes(),
