@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:design_system/design_system.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 
 class SectionTitle extends StatelessWidget {
   const SectionTitle(this.title, {super.key, this.action});

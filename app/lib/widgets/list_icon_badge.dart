@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'generated/design_tokens.g.dart';
+import '../styles/generated/design_tokens.g.dart';
 
 /// 内容列表行的紧凑功能前导图标。
 class ListIconBadge extends StatelessWidget {

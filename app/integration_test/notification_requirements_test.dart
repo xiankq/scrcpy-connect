@@ -4,7 +4,7 @@ import 'package:scrcpy_connect/models/application_request.dart';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
-import 'package:design_system/design_system.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

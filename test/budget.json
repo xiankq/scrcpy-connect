@@ -8,19 +8,14 @@
     "registrations": 34
   },
   "app/host": {
-    "lines": 49906,
-    "registrations": 1037,
-    "cases": 1173
+    "lines": 50613,
+    "registrations": 1046,
+    "cases": 1182
   },
   "packages/adb": {
     "lines": 6052,
     "registrations": 154,
     "cases": 175
-  },
-  "packages/design_system": {
-    "lines": 707,
-    "registrations": 9,
-    "cases": 9
   },
   "packages/media_codec": {
     "lines": 1402,

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:design_system/design_system.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// 本机文件播放不属于只接收原始压缩包的远控媒体引擎。

@@ -10,7 +10,7 @@ import 'support/router_test_app.dart';
 
 import 'dart:async';
 
-import 'package:design_system/design_system.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

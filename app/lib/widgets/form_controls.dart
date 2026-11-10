@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'generated/design_tokens.g.dart';
+import '../styles/generated/design_tokens.g.dart';
 
 /// 填充式选择字段在同一表面呈现标签和所选值。
 class ConnectSelectionField<T> extends StatelessWidget {

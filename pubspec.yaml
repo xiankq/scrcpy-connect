@@ -5,7 +5,6 @@ environment:
   sdk: ^3.13.5
 workspace:
   - app
-  - packages/design_system
   - packages/adb
   - packages/scrcpy
   - packages/media_codec

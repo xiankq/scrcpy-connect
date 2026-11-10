@@ -1,4 +1,4 @@
-import 'package:design_system/design_system.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/widgets/media_controls_protection.dart';

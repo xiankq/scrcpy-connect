@@ -3,7 +3,8 @@ import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
 
-import 'package:design_system/design_system.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/index/devices_workspace_gallery_index_page.dart';

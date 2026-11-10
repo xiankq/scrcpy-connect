@@ -1,7 +1,9 @@
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:flutter/material.dart';
-import 'package:design_system/design_system.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 
 void feedback(BuildContext context, String message) =>
     ScaffoldMessenger.of(context).showSnackBar(glassSnackBar(message));

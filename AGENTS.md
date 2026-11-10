@@ -1,6 +1,6 @@
 # 项目约束
 
-业务归app，通用能力归packages，对应Rust实现归rust同名目录，被控产物归servers。app只使用能力包公开Dart接口。
+业务与应用视觉归app，通用能力归packages，对应Rust实现归rust同名目录，被控产物归servers。app只使用能力包公开Dart接口。
 
 ## 按任务读取
 
@@ -10,7 +10,7 @@
 | 产品行为 | [产品规格](designs/prod/README.md) |
 | 界面与设计稿 | [视觉约束](designs/AGENTS.md)、[视觉规范](designs/design.md) |
 | Flutter页面与路由 | [应用约束](app/lib/AGENTS.md) |
-| 共享控件 | [设计系统](packages/design_system/AGENTS.md) |
+| 主题、token与共享控件 | [应用约束](app/lib/AGENTS.md)、[视觉规范](designs/design.md) |
 | 原生与被控执行端 | [原生边界](docs/agents/native.md)、[servers](servers/AGENTS.md) |
 | 资源、生成、构建或测试 | [架构](docs/implementation/architecture.md)、[工具链](docs/implementation/repository-tooling.md) |
 

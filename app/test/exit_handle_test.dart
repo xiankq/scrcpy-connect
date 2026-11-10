@@ -1,5 +1,6 @@
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/exit_handle.dart';
-import 'package:design_system/design_system.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_press_feedback.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

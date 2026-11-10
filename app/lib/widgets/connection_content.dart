@@ -1,4 +1,5 @@
-import 'package:design_system/design_system.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:flutter/material.dart';
 
 /// 连接与授权表单共用正文和字段反馈，适用于设备设置以及内嵌 USB、二维码内容。

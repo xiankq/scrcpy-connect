@@ -4,7 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart' show Drag;
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:design_system/design_system.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 
 class PageFrame extends StatefulWidget {
   const PageFrame({

@@ -14,12 +14,12 @@ const applicationLayers = {
   'utils',
   'pages',
   'widgets',
+  'styles',
   'router',
   'hooks',
 };
 
 const capabilityDependencies = <String, Set<String>>{
-  'design_system': {},
   'adb': {},
   'scrcpy': {'adb'},
   'media_codec': {},

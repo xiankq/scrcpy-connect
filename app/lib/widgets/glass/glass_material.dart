@@ -4,8 +4,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 
-import 'generated/design_tokens.g.dart';
-import 'connect_theme.dart';
+import '../../styles/generated/design_tokens.g.dart';
+import '../../styles/theme.dart';
 import 'glass_preferences.dart';
 import 'glass_geometry.dart';
 

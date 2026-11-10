@@ -16,8 +16,6 @@ dependencies:
   open_filex: ^5.0.0
   flutter:
     sdk: flutter
-  design_system:
-    path: ../packages/design_system
   liquid_glass_widgets: ^1.15.0
   hooks_riverpod: ^3.4.3
   flutter_hooks: ^0.21.3+1

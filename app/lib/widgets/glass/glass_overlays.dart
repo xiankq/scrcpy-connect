@@ -4,11 +4,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 
-import 'generated/design_tokens.g.dart';
+import '../../styles/generated/design_tokens.g.dart';
 import 'glass_preferences.dart';
 import 'glass_geometry.dart';
 import 'glass_material.dart';
-import 'connect_theme.dart';
+import '../../styles/theme.dart';
 import 'glass_press_feedback.dart';
 
 /// 带玻璃提示的普通图标动作；表面、命中几何、焦点和手势识别器仍由 Material 图标按钮负责。

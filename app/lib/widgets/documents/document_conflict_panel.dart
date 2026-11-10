@@ -3,7 +3,8 @@ import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
 
-import 'package:design_system/design_system.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';

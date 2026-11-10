@@ -6,8 +6,8 @@ import { lintDesign } from './lint.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const defaultSource = resolve(root, 'designs/design.md');
-const defaultOutput = resolve(root, 'packages/design_system/lib/src/generated/design_tokens.g.dart');
-const consumer = resolve(root, 'packages/design_system/lib/design_system.dart');
+const defaultOutput = resolve(root, 'app/lib/styles/generated/design_tokens.g.dart');
+const consumer = resolve(root, 'app/lib/styles/theme.dart');
 
 function identifier(path) {
   const words = path.split(/[.\-_]/);

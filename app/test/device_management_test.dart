@@ -1,5 +1,5 @@
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:design_system/design_system.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/details/convert_ip/devices_details_convert_ip_page.dart';

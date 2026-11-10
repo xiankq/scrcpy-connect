@@ -63,8 +63,6 @@ test_report="$(mktemp)"
 trap 'rm -f "$test_report"' EXIT
 (cd app && flutter test --no-pub --file-reporter="json:$test_report")
 dart --disable-dart-dev scripts/check_test_budget.dart --runtime app/host "$test_report"
-(cd packages/design_system && flutter test --no-pub --file-reporter="json:$test_report")
-dart --disable-dart-dev scripts/check_test_budget.dart --runtime packages/design_system "$test_report"
 for capability in adb scrcpy media_codec; do
   (cd "packages/$capability" && flutter test --no-pub --file-reporter="json:$test_report")
   dart --disable-dart-dev scripts/check_test_budget.dart --runtime "packages/$capability" "$test_report"

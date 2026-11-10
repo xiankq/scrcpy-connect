@@ -1,4 +1,6 @@
-import 'package:design_system/design_system.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 

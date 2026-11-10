@@ -1,6 +1,6 @@
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/widgets/ambient_loading_field.dart';
-import 'package:design_system/design_system.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/connection/index/connection_index_page.dart';

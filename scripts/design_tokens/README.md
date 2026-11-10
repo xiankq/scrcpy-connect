@@ -1,6 +1,6 @@
 # DESIGN.md → Flutter tokens
 
-`generate.mjs` 使用锁定的官方 `@google/design.md/linter` 解析模型，结合项目扩展 schema 及 Dart emitter；视觉值唯一来自 `designs/design.md`。生成与 lint 共用 `lint.mjs`。
+`generate.mjs` 使用锁定的官方 `@google/design.md/linter` 解析模型，结合项目扩展 schema 及 Dart emitter；视觉值唯一来自 `designs/design.md`，输出到 `app/lib/styles/generated/design_tokens.g.dart`。生成与 lint 共用 `lint.mjs`。
 
 ```sh
 npm ci --ignore-scripts --prefix scripts/design_tokens

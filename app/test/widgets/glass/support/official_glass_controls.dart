@@ -1,4 +1,7 @@
-import 'package:design_system/design_system.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
+import 'package:scrcpy_connect/widgets/glass/navigation_selection_lens.dart';
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 

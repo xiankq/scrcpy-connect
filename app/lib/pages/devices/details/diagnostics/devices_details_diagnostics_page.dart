@@ -12,7 +12,8 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/pages/devices/details/diagnostics/widgets/device_function_checks.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
-import 'package:design_system/design_system.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class DiagnosticsPage extends HookWidget {

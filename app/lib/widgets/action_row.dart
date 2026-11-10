@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:design_system/design_system.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ActionRow extends StatelessWidget {

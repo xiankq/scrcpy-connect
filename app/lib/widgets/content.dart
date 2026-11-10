@@ -1,8 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-import 'generated/design_tokens.g.dart';
-import 'connect_theme.dart';
+import '../styles/generated/design_tokens.g.dart';
+import '../styles/theme.dart';
 
 class ContentLoadingIndicator extends StatelessWidget {
   const ContentLoadingIndicator({super.key});

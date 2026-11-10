@@ -2,7 +2,7 @@ import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:flutter/material.dart';
-import 'package:design_system/design_system.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class RouteErrorPage extends StatelessWidget {

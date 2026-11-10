@@ -9,7 +9,8 @@ import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/startup_error/startup_error_page.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:design_system/design_system.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
