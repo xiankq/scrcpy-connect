@@ -8,7 +8,7 @@
 | --- | --- |
 | 术语、身份或连接边界 | [词表](GLOSSARY.md)、[ADR](docs/adr/) |
 | 产品行为 | [产品规格](designs/prod/README.md) |
-| 界面与Pencil | [视觉约束](designs/AGENTS.md)、[视觉规范](designs/design.md) |
+| 界面与设计稿 | [视觉约束](designs/AGENTS.md)、[视觉规范](designs/design.md) |
 | Flutter页面与路由 | [应用约束](app/lib/AGENTS.md) |
 | 共享控件 | [设计系统](packages/design_system/AGENTS.md) |
 | 原生与被控执行端 | [原生边界](docs/agents/native.md)、[servers](servers/AGENTS.md) |

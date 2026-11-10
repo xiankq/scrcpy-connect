@@ -2,7 +2,7 @@
 
 字体来自小米 [MiSans 官方下载页](https://hyperos.mi.com/font/zh/download/)，下载归档为 [MiSans.zip](https://hyperos.mi.com/font-download/MiSans.zip)，2026-10-23 获取。下列原始文件提取自归档 `MiSans/woff2/`，未经修改。
 
-`mobile.pen` 注册字体族 MiSans，相对路径 `./assets/fonts/misans/MiSans-<字重>.woff2`：
+旧稿 `mobile.pen` 注册字体族 MiSans，相对路径 `./assets/fonts/misans/MiSans-<字重>.woff2`。当前 Ardot 工作稿也使用 MiSans；协作者需在本机安装对应字重，或由组织提供字体，以免显示替代字体。Ardot 桌面端读取系统字体，本仓库的 WOFF2 可转换为 OTF 后安装。
 
 | 文件 | 设计稿字重 | SHA-256 |
 | --- | --- | --- |

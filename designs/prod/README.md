@@ -12,4 +12,4 @@
 
 产品和视觉以 [iOS 27 设计原则与项目配色](../design.md#设计依据与原则)为当前目标；能力交付情况以[平台与能力](compatibility.md)为准，设计稿不作为已实现证明。
 
-术语见[词表](../../GLOSSARY.md)，视觉见 [design.md](../design.md)，源稿为 [mobile.pen](../mobile.pen)。Pencil 先看设计导览 `DYMK6`，再按左侧规范、中间页面、右侧局部状态阅读；分组编号与图层顺序一致。页面定位入口：设备 `lUDPa`、工作台 `nqQEb`、设备详情 `t5gM3`、连接诊断 `eWu3m`、连接配置 `q3bM72`、添加整页 `W3GRn`、连接中 `ScGZP`、远控 `DtZbX`／首帧等待 `te8k9`、文件 `MaHXL`、文件选择列表 `NZsei`／宫格 `J7rba`、相册 `RqDYL`、通知 `a7A57`、电话来电 `l9Bmu`／通话中深色 `qQYNx`、设置 `w6WUAT`。添加设备其他表单集中在状态行 `oOBt8`：扫码 `qXZn2`、USB 支持平台 `O7XaK`、IP `i2r5Je`，iOS USB 限制 `wfOmx`；设备连接异常 `P2736`／结果待确认 `uDZS2`，屏幕启动异常集中在状态行 `jRXim`：失败浅色 `XKB7X`／深色 `X2waZs`、结果待确认 `RkW2C`；其他状态通过源稿对象查找。电话完整接力为待验证目标；Frame 不等于路由，设计状态不等于已交付功能。
+术语见[词表](../../GLOSSARY.md)，视觉见 [design.md](../design.md)。当前工作稿为 Ardot《邻接 Interconnect》；[mobile.pen](../mobile.pen) 只用于迁移对照。先看“入口 / 设计导览”，再按规范与组件、完整页面、局部状态阅读；分组编号与图层顺序一致。通过图层名称定位页面和状态，电话完整接力仍是待验证目标；设计画板不等于路由或已交付功能。
