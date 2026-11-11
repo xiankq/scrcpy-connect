@@ -4,13 +4,13 @@
     "registrations": 0
   },
   "app/device": {
-    "lines": 12291,
-    "registrations": 34
+    "lines": 11883,
+    "registrations": 33
   },
   "app/host": {
-    "lines": 50613,
-    "registrations": 1046,
-    "cases": 1182
+    "lines": 50203,
+    "registrations": 1043,
+    "cases": 1164
   },
   "packages/adb": {
     "lines": 6052,
@@ -44,7 +44,7 @@
     "registrations": 0
   },
   "scripts": {
-    "lines": 3207,
-    "registrations": 84
+    "lines": 2445,
+    "registrations": 70
   }
 }

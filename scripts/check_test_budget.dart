@@ -140,7 +140,7 @@ Future<void> main(List<String> arguments) async {
   }
   if (failed) {
     stderr.writeln(
-      '测试净增长：先复用或替换同一风险的覆盖；独立高风险缺口须说明理由后人工调整预算。见 docs/implementation/repository-tooling.md#测试取舍。',
+      '测试净增长：先复用或替换同一风险的覆盖；独立高风险缺口须说明理由后人工调整预算。见 test/README.md#测试取舍。',
     );
     exitCode = 1;
   } else {

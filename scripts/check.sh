@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# macOS 的临时目录可能经过 /var 链接，路径归属和故障注入须使用同一物理路径。
+export TMPDIR="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
 flutter pub get --enforce-lockfile
 dart --disable-dart-dev scripts/check_test_budget.dart
 dart --disable-dart-dev scripts/check_architecture.dart
