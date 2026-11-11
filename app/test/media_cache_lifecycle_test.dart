@@ -41,10 +41,7 @@ void main() {
         var status = 'running';
         final released = <String>[];
         final events = StreamController<Json>.broadcast(sync: true);
-        final controller = createTestController((
-          command, [
-          params = const {},
-        ]) async {
+        final controller = createTestController((command, params) async {
           if (command == 'transfers.get') return {..._task, 'status': status};
           if (command == 'media.cache.acquire') {
             return {'leaseId': 'preparation-lease'};
@@ -96,10 +93,7 @@ void main() {
         final retained = Completer<Json>();
         final commands = <String>[];
         var status = 'running';
-        final controller = createTestController((
-          command, [
-          params = const {},
-        ]) async {
+        final controller = createTestController((command, params) async {
           commands.add(command);
           if (command == 'transfers.get') {
             return {
@@ -195,10 +189,7 @@ void main() {
         final released = <Json>[];
         var originalRequests = 0;
         final command = thumbnail ? 'media.thumbnail' : 'media.preview';
-        final controller = createTestController((
-          name, [
-          params = const {},
-        ]) async {
+        final controller = createTestController((name, params) async {
           if (name == command) {
             originalRequests++;
             if (blocked) {

@@ -18,7 +18,7 @@ import 'package:scrcpy_connect/router/remote_launch_intent.dart';
 import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/models/connection_validation.dart';
 
-import 'product_flow_test.dart' show waitFor;
+import 'support/production_app.dart' show waitFor;
 import 'video_performance_test.dart' show pattern;
 
 // 真实 adbd 位于宿主驱动的逐连接 TCP 代理之后；不模拟设备状态或视频端点，仅切断本测试传输。

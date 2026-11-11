@@ -231,10 +231,7 @@ void main() {
     tester,
   ) async {
     final calls = <String>[];
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
+    final controller = createTestController((command, params) async {
       calls.add(command);
       return {'sessionId': 'actual-session', 'reason': '设备未提供解码画面'};
     });
@@ -257,10 +254,7 @@ void main() {
     'multitouch uses source pixels and preserves pointer identities',
     (tester) async {
       final touches = <Json>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'session.touch') {
           touches.add(Map<String, dynamic>.from(params));
         }
@@ -313,7 +307,7 @@ void main() {
 }
 
 AppStore _controller(List<(String, Json)> commands, {int? captureGeneration}) =>
-    createTestController((command, [params = const {}]) async {
+    createTestController((command, params) async {
       commands.add((command, params));
       if (command == 'session.start') {
         return {

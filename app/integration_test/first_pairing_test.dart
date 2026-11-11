@@ -17,7 +17,7 @@ import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/models/connection_validation.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
-import 'product_flow_test.dart' show waitFor;
+import 'support/production_app.dart' show waitFor;
 
 // 经生产应用检查首次配对与撤销；宿主提供隔离的安全 Android 无线调试夹具，不代替应用为此安装的 Rust 身份配对。
 void main() {

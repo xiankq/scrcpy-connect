@@ -26,7 +26,7 @@ class _AudioFixture {
   int stopsToFail = 0;
   Completer<Json>? pendingStop;
   late final controller =
-      createTestController((command, [params = const {}]) async {
+      createTestController((command, params) async {
           calls.add((command, Map.of(params)));
           final device = value(params, 'deviceId');
           if (command == 'audio.sources') {

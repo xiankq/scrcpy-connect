@@ -38,10 +38,7 @@ void main() {
         final requests = <(String, Json)>[];
         var transferStopped = false;
         var transferRemoved = false;
-        final controller = createTestController((
-          command, [
-          params = const {},
-        ]) async {
+        final controller = createTestController((command, params) async {
           requests.add((command, params));
           if (command == 'state.reconcile') {
             events.add({'type': 'state.resync', 'data': <String, dynamic>{}});

@@ -19,10 +19,7 @@ void main() {
       final pending = Completer<Json>();
       Json? pairParams;
       Json? cancelParams;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'devices.pair') {
           pairParams = Map<String, dynamic>.from(params);
           return pending.future;

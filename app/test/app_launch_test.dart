@@ -35,7 +35,7 @@ List<Json> _sent(List<(String, Json)> calls, String command) => [
 AppStore _controller(
   List<(String, Json)> calls,
   Future<Json> Function(String, Json) respond,
-) => createTestController((command, [params = const {}]) {
+) => createTestController((command, params) {
   calls.add((command, params));
   return respond(command, params);
 });
@@ -451,10 +451,7 @@ void main() {
     ) async {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       final calls = <String>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add(command);
         if (command == 'session.start') throw failure;
         return command == 'session.list' ? {'sessions': <Json>[]} : {};

@@ -20,7 +20,7 @@ void main() {
     () async {
       final events = StreamController<Json>();
       final controller = createTestController(
-        (command, [params = const {}]) async => command == 'sharing.pending'
+        (command, params) async => command == 'sharing.pending'
             ? {
                 'shares': [
                   {
@@ -59,7 +59,7 @@ void main() {
     (tester) async {
       final requests = <String>[];
       final controller =
-          createTestController((command, [params = const {}]) async {
+          createTestController((command, params) async {
               requests.add(command);
               return {'applied': false, 'reason': '尚未确认手机剪贴板写入，分享文字仍保留。'};
             })
@@ -95,7 +95,7 @@ void main() {
     final events = StreamController<Json>();
     final share = {'shareId': 'share-1', 'text': 'shared text'};
     final controller = createTestController(
-      (command, [params = const {}]) async => command == 'sharing.pending'
+      (command, params) async => command == 'sharing.pending'
           ? {
               'shares': [share],
             }
@@ -120,10 +120,7 @@ void main() {
     var reads = 0;
     const first = {'shareId': 'share-1', 'status': 'ready'};
     const second = {'shareId': 'share-2', 'status': 'ready'};
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
+    final controller = createTestController((command, params) async {
       if (command == 'sharing.pending') {
         if (++reads == 2) return stale.future;
         return {
@@ -156,10 +153,7 @@ void main() {
     (tester) async {
       final requests = <(String, Json)>[];
       var acknowledgments = 0;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         requests.add((command, params));
         if (command == 'sharing.consume' && acknowledgments++ == 0) {
           throw StateError('acknowledgment unavailable');

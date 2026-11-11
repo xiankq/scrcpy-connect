@@ -53,10 +53,7 @@ void main() {
       'old management address redirects to the workspace without replay: $oldAddress',
       (tester) async {
         final calls = <String>[];
-        final controller = createTestController((
-          command, [
-          params = const {},
-        ]) async {
+        final controller = createTestController((command, params) async {
           calls.add(command);
           return {};
         });
@@ -98,10 +95,7 @@ void main() {
     (tester) async {
       final calls = <(String, Json)>[];
       var closed = false;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add((command, params));
         final pending = <String, dynamic>{
           'deviceId': 'phone',
@@ -182,10 +176,7 @@ void main() {
     (tester) async {
       final sessions = _sessions();
       final calls = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add((command, params));
         if (command == 'session.list') {
           return {'sessions': sessions.map(Map<String, dynamic>.of).toList()};
@@ -249,10 +240,7 @@ void main() {
     'the current window screenshot captures B without a device fallback',
     (tester) async {
       final calls = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add((command, params));
         if (command == 'session.list') return {'sessions': _sessions()};
         if (command == 'session.screenshot') {
@@ -337,10 +325,7 @@ void main() {
       final events = StreamController<Json>.broadcast();
       final resumed = Completer<Json>();
       final resumeRequested = Completer<void>();
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add((command, params));
         if (command == 'session.list') return {'sessions': sessions};
         if (command == 'session.resume') {

@@ -66,7 +66,7 @@ void main() {
     };
     binding.reportData = report;
     final controller = createTestController(
-      (command, [params = const {}]) async => <String, dynamic>{},
+      (command, params) async => <String, dynamic>{},
       initialState: AppState(loading: false),
     );
     final previousFatal = WidgetController.hitTestWarningShouldBeFatal;

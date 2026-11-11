@@ -23,10 +23,7 @@ void main() {
       (tester) async {
         final commands = <(String, Json)>[];
         final opening = Completer<Json>();
-        final controller = createTestController((
-          command, [
-          params = const {},
-        ]) async {
+        final controller = createTestController((command, params) async {
           commands.add((command, params));
           if (command == 'calls.open') return opening.future;
           if (command == 'calls.list') {
@@ -89,10 +86,7 @@ void main() {
     'a limited partial notification snapshot preserves items and disables unavailable actions',
     (tester) async {
       final commands = <String>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         commands.add(command);
         return command == 'notifications.list'
             ? {
@@ -142,10 +136,7 @@ void main() {
           final starting = Completer<Json>();
           final events = StreamController<Json>.broadcast();
           var requested = false;
-          final controller = createTestController((
-            command, [
-            params = const {},
-          ]) async {
+          final controller = createTestController((command, params) async {
             commands.add((command, params));
             if (command == 'observation.start') {
               requested = true;
@@ -297,10 +288,7 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       final events = StreamController<Json>.broadcast();
       final commands = <String>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         commands.add(command);
         if (command == 'device.info') return device;
         return command == 'devices.list'
@@ -371,10 +359,7 @@ void main() {
         );
         final events = StreamController<Json>.broadcast();
         final commands = <String>[];
-        final controller = createTestController((
-          command, [
-          params = const {},
-        ]) async {
+        final controller = createTestController((command, params) async {
           commands.add(command);
           return command == 'devices.list'
               ? {
@@ -440,7 +425,7 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       final events = StreamController<Json>.broadcast();
       final controller = createTestController(
-        (command, [params = const {}]) async => command == 'devices.list'
+        (command, params) async => command == 'devices.list'
             ? {
                 'devices': [device],
               }

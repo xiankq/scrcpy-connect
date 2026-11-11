@@ -31,7 +31,7 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
       final controller = createTestController(
-        (command, [params = const {}]) async =>
+        (command, params) async =>
             command == 'files.list' ? {'entries': <Json>[]} : {},
       );
       const device = {'id': 'phone', 'name': '手机', 'status': 'connected'};

@@ -14,7 +14,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:scrcpy_connect/main.dart' as app;
 
-import 'product_flow_test.dart' show expectHealthyRemote, waitFor;
+import 'support/production_app.dart' show expectHealthyRemote, waitFor;
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();

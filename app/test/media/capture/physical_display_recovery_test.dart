@@ -1,9 +1,10 @@
+import '../../support/adb_event_fixture.dart';
+
 import 'package:scrcpy_connect/models/device_connection.dart';
 
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -362,16 +363,8 @@ final class _Operation {
     changed = null;
   }
 
-  void line(String line) => add(
-    NativeAdbEvent(
-      kind: 'stdout',
-      bytes: Uint8List.fromList(utf8.encode('$line\n')),
-      done: false,
-    ),
-  );
-  void end() => add(
-    NativeAdbEvent(kind: 'exit', bytes: Uint8List(0), done: true, exitCode: 0),
-  );
+  void line(String line) => add(adbText('$line\n', kind: 'stdout'));
+  void end() => add(adbDone(kind: 'exit', exitCode: 0));
   Future<NativeAdbEvent?> next() async {
     while (queue.isEmpty) {
       changed = Completer<void>();

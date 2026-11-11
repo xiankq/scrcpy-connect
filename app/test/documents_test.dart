@@ -208,10 +208,7 @@ void main() {
     (tester) async {
       var submissions = 0;
       Json? retry;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'delivery.get') {
           return {
             'record': submissions == 0
@@ -253,10 +250,7 @@ void main() {
     'a saved original reopens with its receipt and additional copying requires explicit confirmation',
     (tester) async {
       Json? submitted;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'delivery.get') {
           return {
             'record': {
@@ -303,10 +297,7 @@ void main() {
     tester,
   ) async {
     var writes = 0;
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
+    final controller = createTestController((command, params) async {
       if (command == 'delivery.get') throw StateError('journal unavailable');
       if (command == 'documents.export') writes++;
       return {};
@@ -335,10 +326,7 @@ void main() {
     'unknown system save still requires review after leaving and reopening its source',
     (tester) async {
       var writes = 0;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'delivery.get') {
           return {
             'record': writes == 0
@@ -386,10 +374,7 @@ void main() {
     (tester) async {
       Json? pushed;
       var submitted = false;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'documents.importDirectory') {
           return {
             'status': 'partial',
@@ -455,10 +440,7 @@ void main() {
       final pending = Completer<Json>();
       Json? exported;
       Json? cancelled;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'documents.export') {
           exported = params;
           return pending.future;

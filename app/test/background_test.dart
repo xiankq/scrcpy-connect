@@ -1,3 +1,5 @@
+import 'support/app_lifecycle.dart';
+
 import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
@@ -21,10 +23,7 @@ void main() {
       final events = StreamController<Json>.broadcast(sync: true);
       final commands = <String>[];
       var title = '后台正在核验';
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         commands.add(command);
         return command == 'background.status'
             ? {'title': title, 'reason': '当前状态', 'canRequest': true}
@@ -55,13 +54,9 @@ void main() {
         commands.where((command) => command == 'background.status'),
         hasLength(2),
       );
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.pauseApp();
       title = '通知权限已变更';
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      tester.resumeApp();
       await tester.pumpAndSettle();
       expect(find.text(title), findsOneWidget);
       expect(
@@ -71,12 +66,8 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       final before = commands.length;
       events.add({'type': 'background.changed', 'data': <String, dynamic>{}});
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      tester.pauseApp();
+      tester.resumeApp();
       await tester.pumpAndSettle();
       expect(commands.length, before);
       expect(tester.takeException(), isNull);
@@ -89,10 +80,7 @@ void main() {
     'background switch and explicit recovery save the preference before requesting permission',
     (tester) async {
       final commands = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         commands.add((command, params));
         return command == 'background.status'
             ? {

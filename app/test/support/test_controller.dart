@@ -20,7 +20,7 @@ class _TestController extends AppStore {
 }
 
 AppStore createTestController(
-  ApplicationRequest request, {
+  Future<Json> Function(String command, Json params) request, {
   Stream<Json>? events,
   AppState? initialState,
   Future<void> Function()? close,

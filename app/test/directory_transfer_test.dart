@@ -16,10 +16,7 @@ void main() {
     (tester) async {
       Json? pushed;
       Json? imported;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'files.list') return {'entries': <Json>[]};
         if (command == 'documents.importDirectory') {
           imported = params;

@@ -1,3 +1,5 @@
+import '../../support/adb_event_fixture.dart';
+
 import 'package:scrcpy_connect/models/device_connection.dart';
 
 import '../../support/scrcpy_event_fixture.dart';
@@ -1220,14 +1222,7 @@ final class _UploadApi implements NativeAdbApi {
     if (input.kind == AdbInputKind.bytes) {
       _bytes[id] = _bytes[id]! + input.bytes.length;
     } else if (input.kind == AdbInputKind.finish) {
-      _pending[id]!.complete(
-        NativeAdbEvent(
-          kind: 'done',
-          bytes: Uint8List(0),
-          done: true,
-          transferred: _bytes[id]!,
-        ),
-      );
+      _pending[id]!.complete(adbDone(transferred: _bytes[id]!));
     }
   }
 
@@ -1260,15 +1255,8 @@ final class _Exec {
   Completer<NativeAdbEvent?>? pending;
   String? queryNonce, owner;
   int? width, height;
-  void add(String text) => _event(
-    NativeAdbEvent(
-      kind: 'data',
-      bytes: Uint8List.fromList(utf8.encode(text)),
-      done: false,
-    ),
-  );
-  void finish() =>
-      _event(NativeAdbEvent(kind: 'done', bytes: Uint8List(0), done: true));
+  void add(String text) => _event(adbText(text));
+  void finish() => _event(adbDone());
   void _event(NativeAdbEvent event) {
     final waiting = pending;
     if (waiting != null) {

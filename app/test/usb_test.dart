@@ -17,10 +17,7 @@ void main() {
     'USB discovery requires an explicit device choice before opening its connected workspace',
     (tester) async {
       final requests = <Json>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'device.info') {
           return {
             'id': 'usb-phone',
@@ -94,10 +91,7 @@ void main() {
       final attempts = <Json>[];
       final cancellations = <Json>[];
       final pending = <Completer<Json>>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'devices.usb') {
           attempts.add(params);
           final result = Completer<Json>();

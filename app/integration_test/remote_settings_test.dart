@@ -6,22 +6,19 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:scrcpy_connect/app.dart';
-import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/apps/devices_workspace_apps_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/models/remote_display_settings.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_icon.dart';
 
-import 'product_flow_test.dart' show waitFor, tapPageAction;
+import 'support/production_app.dart'
+    show startProductionApp, waitFor, tapPageAction;
 
 /// 可选运行：test/driver/remote_settings.dart 拥有隔离独立目标。产品动作使用真实控件与生产传输；直接请求仅用于夹具准备、观察与最终清理。
 void main() {
@@ -55,22 +52,7 @@ void main() {
       expect(address, isNotEmpty);
       expect(port, inInclusiveRange(1, 65535));
       final semantics = tester.ensureSemantics();
-      await app.main();
-      await waitFor(
-        tester,
-        () => find.byType(ConnectApp).evaluate().isNotEmpty,
-        reason: 'The production app must initialize.',
-      );
-      final controller = ProviderScope.containerOf(
-        tester.element(find.byType(ConnectApp)),
-      ).read(appStoreProvider.notifier);
-      await waitFor(
-        tester,
-        () =>
-            !controller.snapshot().loading &&
-            !controller.snapshot().reconciliationPending,
-        reason: 'Initial state must be verified.',
-      );
+      final controller = await startProductionApp(tester);
       Future<Json> request(String command, [Json params = const {}]) =>
           controller
               .request(command, params)

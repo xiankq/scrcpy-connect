@@ -20,7 +20,7 @@ import 'package:scrcpy_connect/models/connection_validation.dart';
 import 'package:scrcpy_connect/widgets/system_notifications.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 
-import 'product_flow_test.dart' show waitFor;
+import 'support/production_app.dart' show waitFor;
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();

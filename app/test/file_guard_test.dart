@@ -17,10 +17,7 @@ void main() {
     'unrepresentable file paths cannot open, select or mutate a valid replacement-character name',
     (tester) async {
       final deletes = <Json>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'files.delete') deletes.add(params);
         return command == 'files.list'
             ? {

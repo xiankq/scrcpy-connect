@@ -1,3 +1,5 @@
+import '../support/adb_event_fixture.dart';
+
 import 'package:scrcpy_connect/models/device_connection.dart';
 
 import 'dart:async';
@@ -236,7 +238,7 @@ void main() {
   test('同一 Dart 连接下的实际物理连接身份变化也拒绝旧查询', () async {
     fixture.client.reply = (command) async* {
       fixture.client.native.physicalId = 'physical-2';
-      yield* _output(fixture.client.responses[command]!);
+      yield* shellText(fixture.client.responses[command]!);
     };
     await expectLater(
       fixture.request('device.capabilities'),
@@ -250,7 +252,7 @@ void main() {
       fixture.client.reply = (command) async* {
         entered.complete();
         await release.future;
-        yield* _output(fixture.client.responses[command]!);
+        yield* shellText(fixture.client.responses[command]!);
       };
       final result = expectLater(
         fixture.request('device.capabilities'),
@@ -291,7 +293,7 @@ void main() {
     fixture.client.reply = (command) async* {
       entered.complete();
       await release.future;
-      yield* _output(fixture.client.responses[command]!);
+      yield* shellText(fixture.client.responses[command]!);
     };
     final result = expectLater(
       fixture.reader().read(fixture.id, diagnose: false, cancellation: stop),
@@ -389,14 +391,6 @@ final class _Fixture {
   }
 }
 
-Stream<AdbShellEvent> _output(String text) async* {
-  yield AdbShellEvent(
-    AdbShellChannel.stdout,
-    Uint8List.fromList(utf8.encode(text)),
-  );
-  yield AdbShellEvent(AdbShellChannel.exit, Uint8List(0), exitCode: 0);
-}
-
 final class _Client implements AdbClient {
   final commands = <String>[], finished = <String>[];
   final timeouts = <Duration>[];
@@ -437,7 +431,7 @@ final class _Client implements AdbClient {
       } else {
         final output =
             responses[command] ?? (throw StateError('意外远端命令：$command'));
-        yield* _output(output);
+        yield* shellText(output);
       }
     } finally {
       finished.add(command);

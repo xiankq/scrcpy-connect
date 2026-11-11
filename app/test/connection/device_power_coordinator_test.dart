@@ -1,7 +1,8 @@
+import '../support/adb_event_fixture.dart';
+
 import 'package:scrcpy_connect/models/device_connection.dart';
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
@@ -49,9 +50,9 @@ void main() {
         final nonce = _legacyNonce(fixture);
         if (read++ == 0) {
           nonces.add(nonce);
-          return _data('diagnostic output\n${nonce.substring(0, 10)}');
+          return adbText('diagnostic output\n${nonce.substring(0, 10)}');
         }
-        if (read == 2) return _data('${nonce.substring(10)}:0\n');
+        if (read == 2) return adbText('${nonce.substring(10)}:0\n');
         return _event('end', done: true);
       };
       final receipt = await fixture.wake();
@@ -79,7 +80,7 @@ void main() {
     fixture.api.features = [];
     var read = 0;
     fixture.api.read = (_) async => read++ == 0
-        ? _data('\n${_legacyNonce(fixture)}:127\n')
+        ? adbText('\n${_legacyNonce(fixture)}:127\n')
         : _event('end', done: true);
     await expectLater(
       fixture.wake(),
@@ -108,7 +109,7 @@ void main() {
     for (final output in invalidOutputs) {
       var read = 0;
       fixture.api.read = (_) async => read++ == 0
-          ? _data(output(_legacyNonce(fixture)))
+          ? adbText(output(_legacyNonce(fixture)))
           : _event('end', done: true);
       await expectLater(fixture.wake(), _failure('result_unknown'));
     }
@@ -125,7 +126,7 @@ void main() {
     fixture.api.features = [];
     var read = 0;
     fixture.api.read = (_) async =>
-        read++ == 0 ? _data('\n${_legacyNonce(fixture)}:0\n') : null;
+        read++ == 0 ? adbText('\n${_legacyNonce(fixture)}:0\n') : null;
     await expectLater(fixture.wake(), _failure('result_unknown'));
     expect(fixture.api.requests, hasLength(1));
     expect(fixture.api.cancelled, ['wake-1']);
@@ -137,7 +138,7 @@ void main() {
     final eof = Completer<NativeAdbEvent?>();
     var read = 0;
     fixture.api.read = (_) async {
-      if (read++ == 0) return _data('\n${_legacyNonce(fixture)}:0\n');
+      if (read++ == 0) return adbText('\n${_legacyNonce(fixture)}:0\n');
       readEof.complete();
       return eof.future;
     };
@@ -357,11 +358,6 @@ Matcher _failure(String code) =>
     throwsA(isA<RequestFailure>().having((error) => error.code, 'code', code));
 
 NativeAdbEvent _exit(int? code) => _event('exit', done: true, exitCode: code);
-NativeAdbEvent _data(String text) => NativeAdbEvent(
-  kind: 'data',
-  bytes: Uint8List.fromList(utf8.encode(text)),
-  done: false,
-);
 String _legacyNonce(_Fixture fixture) =>
     RegExp(r'SCRCPY_WAKE_[0-9a-f]{32}')
         .firstMatch(fixture.api.requests.last.service)![0]!;

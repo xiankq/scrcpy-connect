@@ -9,6 +9,7 @@ import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../../scripts/src/process.dart';
 import 'support/cleanup.dart';
+import 'support/inspection.dart';
 
 Future<void> main() async {
   final directory = Directory(
@@ -113,57 +114,22 @@ Future<void> main() async {
   }
 
   final driver = await FlutterDriver.connect();
-  var finished = false;
-  Object? inspectionError;
-  final inspection =
-      () async {
-        String? previous;
-        final deadline = DateTime.now().add(const Duration(minutes: 5));
-        while (!finished && DateTime.now().isBefore(deadline)) {
-          try {
-            final response = await driver.serviceClient
-                .callServiceExtension(
-                  'ext.connect.sessions',
-                  isolateId: driver.appIsolate.id,
-                )
-                .timeout(const Duration(seconds: 5));
-            if (finished) return;
-            final checkpoint = response.json?['checkpoint'];
-            if (checkpoint is Map && checkpoint['name'] != previous) {
-              final state = Map<String, dynamic>.from(checkpoint);
-              previous = state['name'] as String;
-              String? error;
-              try {
-                await verifyProcesses(state);
-              } catch (failure) {
-                error = failure.toString();
-                inspectionError ??= failure;
-              }
-              if (finished) return;
-              await driver.serviceClient
-                  .callServiceExtension(
-                    'ext.connect.sessions',
-                    isolateId: driver.appIsolate.id,
-                    args: {'ack': previous, 'error': ?error},
-                  )
-                  .timeout(const Duration(seconds: 5));
-              if (error != null) return;
-            }
-          } catch (error) {
-            if (finished) return;
-            if (!error.toString().contains('ext.connect.sessions') &&
-                !error.toString().contains('Method not found')) {
-              rethrow;
-            }
-          }
-          await Future<void>.delayed(const Duration(milliseconds: 100));
-        }
-        if (!finished) {
-          throw StateError('Timed out inspecting actual session processes.');
-        }
-      }().catchError((Object error) {
-        inspectionError ??= error;
-      });
+  final inspection = DriverInspection(
+    request: ([args]) async =>
+        (await driver.serviceClient.callServiceExtension(
+          'ext.connect.sessions',
+          isolateId: driver.appIsolate.id,
+          args: args,
+        )).json ??
+        {},
+    timeout: const Duration(minutes: 5),
+    key: 'name',
+    stopOnFailure: true,
+    inspect: (checkpoint) async {
+      await verifyProcesses(checkpoint);
+      return null;
+    },
+  );
   await withDriverCleanup(
     () async {
       await integrationDriver(
@@ -172,13 +138,12 @@ Future<void> main() async {
         onScreenshot: (name, bytes, [args]) =>
             saveScreenshot(directory, name, bytes),
         responseDataCallback: (data) async {
-          finished = true;
-          await inspection;
+          await inspection.stop();
           final metadata = {...?data}..remove('screenshots');
           metadata['independentProcessChecks'] = processChecks;
           await File('${directory.path}/result.json')
               .writeAsString(jsonEncode(metadata));
-          if (inspectionError != null ||
+          if (inspection.error != null ||
               metadata['sessionWorkspaceComplete'] != true ||
               metadata['phoneScreenAppResumed'] != true ||
               metadata['phoneScreenRenderedApp'] != true ||
@@ -194,10 +159,7 @@ Future<void> main() async {
       );
     },
     () => {
-      'inspection': () async {
-        finished = true;
-        await inspection;
-      },
+      'inspection': inspection.stop,
       'driver connection': () => driverRpc(driver.close()),
     },
   );

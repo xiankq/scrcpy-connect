@@ -43,7 +43,7 @@ class _ClipboardFixture {
   String? local = 'original local';
   bool ignoreWrite = false;
   late final controller =
-      createTestController((command, [params = const {}]) async {
+      createTestController((command, params) async {
           final device = value(params, 'deviceId');
           if (command == 'clipboard.get') {
             remoteReads.add(device);

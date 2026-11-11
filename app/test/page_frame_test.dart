@@ -31,9 +31,7 @@ void _viewport(
 }
 
 Future<void> _mount(WidgetTester tester, Widget frame) async {
-  final controller = createTestController(
-    (command, [params = const {}]) async => {},
-  );
+  final controller = createTestController((command, params) async => {});
   addTearDown(controller.dispose);
   await tester.pumpWidget(
     RouterTestApp(

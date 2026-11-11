@@ -1,3 +1,5 @@
+import 'support/app_lifecycle.dart';
+
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/app_store.dart';
 
@@ -23,10 +25,7 @@ void main() {
     (tester) async {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       final commands = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         commands.add((command, params));
         return command == 'session.start' ? _sessionReceipt() : {};
       });
@@ -100,10 +99,7 @@ void main() {
       final events = StreamController<Json>.broadcast(sync: true);
       final commands = <(String, Json)>[];
       var starts = 0;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         commands.add((command, params));
         if (command == 'session.start' || command == 'session.resume') {
           if (command == 'session.start') starts++;
@@ -128,25 +124,9 @@ void main() {
         );
         await tester.pump();
         if (interruption == 'pause') {
-          tester.binding.handleAppLifecycleStateChanged(
-            AppLifecycleState.inactive,
-          );
-          tester.binding.handleAppLifecycleStateChanged(
-            AppLifecycleState.hidden,
-          );
-          tester.binding.handleAppLifecycleStateChanged(
-            AppLifecycleState.paused,
-          );
+          tester.pauseApp();
           await tester.pumpAndSettle();
-          tester.binding.handleAppLifecycleStateChanged(
-            AppLifecycleState.hidden,
-          );
-          tester.binding.handleAppLifecycleStateChanged(
-            AppLifecycleState.inactive,
-          );
-          tester.binding.handleAppLifecycleStateChanged(
-            AppLifecycleState.resumed,
-          );
+          tester.resumeApp();
           await tester.pumpAndSettle();
         } else if (interruption == 'replacement') {
           events.add({
@@ -194,10 +174,7 @@ void main() {
         final semantics = tester.ensureSemantics();
         final pending = Completer<Json>();
         final commands = <(String, Json)>[];
-        final controller = createTestController((
-          command, [
-          params = const {},
-        ]) async {
+        final controller = createTestController((command, params) async {
           commands.add((command, params));
           if (command == 'session.start') {
             return _sessionReceipt();
@@ -268,10 +245,7 @@ void main() {
       final events = StreamController<Json>.broadcast(sync: true);
       final cleanup = Completer<Json>();
       final commands = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         commands.add((command, params));
         if (command == 'session.touch' && params['action'] == 'cancel') {
           return cleanup.future;
@@ -344,10 +318,7 @@ void main() {
       final events = StreamController<Json>.broadcast(sync: true);
       final launched = Completer<Json>();
       final commands = <String>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         commands.add(command);
         return command == 'session.start' ? launched.future : {};
       }, events: events.stream);
@@ -406,10 +377,7 @@ void main() {
     final semantics = tester.ensureSemantics();
     final down = Completer<Json>();
     final commands = <(String, Json)>[];
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
+    final controller = createTestController((command, params) async {
       commands.add((command, params));
       if (command == 'session.start') {
         return _sessionReceipt();
@@ -465,10 +433,7 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       for (final code in ['invalid_argument', 'disconnected']) {
         final commands = <(String, Json)>[];
-        final controller = createTestController((
-          command, [
-          params = const {},
-        ]) async {
+        final controller = createTestController((command, params) async {
           commands.add((command, params));
           if (command == 'session.start') {
             return _sessionReceipt(id: code);
@@ -498,10 +463,7 @@ void main() {
     (tester) async {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       final commands = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         commands.add((command, params));
         return command == 'session.start' ? _sessionReceipt() : {};
       });
@@ -536,9 +498,7 @@ void main() {
         ),
         lessThan(commands.indexWhere((c) => c.$1 == 'session.pause')),
       );
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      tester.resumeApp();
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
     },
@@ -552,10 +512,7 @@ void main() {
       final oldKey = Completer<Json>();
       final commands = <(String, Json)>[];
       var starts = 0;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         commands.add((command, params));
         if (command == 'session.start') {
           return _sessionReceipt(
@@ -611,10 +568,7 @@ void main() {
     'temporary system focus loss releases input while keeping visible video live',
     (tester) async {
       final commands = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         commands.add((command, params));
         return command == 'session.start' ? _sessionReceipt(id: 'session') : {};
       });
@@ -663,10 +617,7 @@ void main() {
       final events = StreamController<Json>.broadcast();
       final commands = <(String, Json)>[];
       final resume = Completer<Json>();
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         commands.add((command, params));
         if (command == 'session.resume') return resume.future;
         return command == 'session.start' ? _sessionReceipt(id: 'session') : {};

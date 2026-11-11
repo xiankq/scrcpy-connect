@@ -49,7 +49,7 @@ void main() {
       final pending = <Completer<Json>>[];
       var active = 0;
       var maximum = 0;
-      final controller = createTestController((command, [params = const {}]) {
+      final controller = createTestController((command, params) {
         if (command != 'media.thumbnail') return Future.value({});
         requests.add(Map.of(params));
         active++;
@@ -81,7 +81,7 @@ void main() {
     final requests = <Json>[];
     final cancellations = <Json>[];
     final pending = Completer<Json>();
-    final controller = createTestController((command, [params = const {}]) {
+    final controller = createTestController((command, params) {
       if (command == 'media.thumbnail') {
         requests.add(Map.of(params));
         return pending.future;
@@ -115,10 +115,7 @@ void main() {
     tester,
   ) async {
     final requests = <Json>[];
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
+    final controller = createTestController((command, params) async {
       if (command != 'media.thumbnail') return {};
       requests.add(Map.of(params));
       if (requests.length == 1) throw const RequestFailure('busy', '解码器忙');
@@ -139,10 +136,7 @@ void main() {
     'terminal failure explains the thumbnail and offers manual retry',
     (tester) async {
       var calls = 0;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command != 'media.thumbnail') return {};
         calls++;
         if (calls == 1) {
@@ -175,7 +169,7 @@ void main() {
     final pending = <Completer<Json>>[];
     var active = 0;
     var maximum = 0;
-    final controller = createTestController((command, [params = const {}]) {
+    final controller = createTestController((command, params) {
       if (command != 'media.thumbnail') return Future.value({});
       active++;
       if (active > maximum) maximum = active;
@@ -216,7 +210,7 @@ void main() {
   ) async {
     final requests = <Json>[];
     final pending = <Completer<Json>>[];
-    final controller = createTestController((command, [params = const {}]) {
+    final controller = createTestController((command, params) {
       if (command != 'media.thumbnail') return Future.value({});
       requests.add(Map.of(params));
       final reply = Completer<Json>();
@@ -251,10 +245,7 @@ void main() {
     tester,
   ) async {
     var attempts = 0;
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
+    final controller = createTestController((command, params) async {
       if (command != 'media.thumbnail') return {};
       attempts++;
       throw const RequestFailure('busy', '解码器忙，请稍后重试');
@@ -281,7 +272,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final reply = Completer<Json>();
     var requests = 0;
-    final controller = createTestController((command, [params = const {}]) {
+    final controller = createTestController((command, params) {
       if (command != 'media.thumbnail') return Future.value({});
       requests++;
       return reply.future;
@@ -303,10 +294,7 @@ void main() {
     'provided thumbnails bypass remote work and explain image errors',
     (tester) async {
       var requests = 0;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         requests++;
         return {};
       });

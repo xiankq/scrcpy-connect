@@ -14,7 +14,7 @@ import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/incoming_share/incoming_share_page.dart';
 import 'package:scrcpy_connect/stores/app_store.dart';
 
-import 'product_flow_test.dart' show waitFor;
+import 'support/production_app.dart' show waitFor;
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();

@@ -6,8 +6,78 @@ import 'package:test/test.dart';
 import '../../driver/support/cleanup.dart';
 import '../../driver/support/android_ui.dart';
 import '../../driver/support/capture.dart';
+import '../../driver/support/inspection.dart';
 
 void main() {
+  test('检查点等待扩展注册、去重并回传核验错误与结果', () async {
+    final inspected = <String>[];
+    final acknowledgements = <Map<String, String>>[];
+    final completed = Completer<void>();
+    final failure = StateError('target state differs');
+    var reads = 0;
+    final inspection = DriverInspection(
+      interval: Duration.zero,
+      request: ([args]) async {
+        if (args != null) {
+          acknowledgements.add(args);
+          if (args['ack'] == 'second') completed.complete();
+          return {};
+        }
+        reads++;
+        if (reads == 1) throw StateError('Method not found: -32601');
+        return {
+          'checkpoint': {'id': reads < 4 ? 'first' : 'second'},
+        };
+      },
+      inspect: (checkpoint) async {
+        inspected.add(checkpoint['id'] as String);
+        if (checkpoint['id'] == 'first') throw failure;
+        return {'verified': true};
+      },
+    );
+    await completed.future.timeout(const Duration(seconds: 1));
+    await inspection.stop();
+    expect(inspected, ['first', 'second']);
+    expect(acknowledgements, [
+      {'ack': 'first', 'error': '$failure'},
+      {'ack': 'second', 'result': '{"verified":true}'},
+    ]);
+    expect(inspection.error, same(failure));
+  });
+
+  test('停止检查点核验时先排空在途任务，随后恢复且不再回执', () async {
+    final entered = Completer<void>(), release = Completer<void>();
+    final order = <String>[];
+    final inspection = DriverInspection(
+      request: ([args]) async {
+        expect(args, isNull, reason: '停止之后不能回执旧检查点。');
+        return {
+          'checkpoint': {'id': 'in-flight'},
+        };
+      },
+      inspect: (_) async {
+        entered.complete();
+        await release.future;
+        order.add('inspection-drained');
+        return null;
+      },
+    );
+    await entered.future;
+    final cleanup = withDriverCleanup(
+      () async {},
+      () => {
+        'inspection': inspection.stop,
+        'device': () => order.add('device-restored'),
+      },
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(order, isEmpty);
+    release.complete();
+    await cleanup;
+    await inspection.stop();
+    expect(order, ['inspection-drained', 'device-restored']);
+  });
+
   test('系统 UI 节点保留实体、祖先和自闭合节点，拒绝损坏层级', () {
     final nodes = parseAndroidUi(r'''<?xml version="1.0"?>
 <hierarchy><node resource-id="root"><node resource-id="item">

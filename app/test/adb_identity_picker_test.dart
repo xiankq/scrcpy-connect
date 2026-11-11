@@ -116,10 +116,7 @@ void main() {
       final mutations = <(String, Json)>[];
       for (final scenario in [('global-file', true), ('global-text', false)]) {
         final calls = <String>[];
-        final controller = createTestController((
-          command, [
-          params = const {},
-        ]) async {
+        final controller = createTestController((command, params) async {
           calls.add(command);
           if (command.endsWith('.import')) mutations.add((command, params));
           return command.startsWith('identity.')
@@ -175,10 +172,7 @@ void main() {
     'picker cancellation preserves typed text and malformed text never reaches confirmation',
     (tester) async {
       final calls = <String>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add(command);
         return {'scope': 'global', 'fingerprint': 'SHA256:public-only'};
       });
@@ -215,10 +209,7 @@ void main() {
     'file size read errors and binary failures preserve the draft and redact platform details',
     (tester) async {
       final calls = <String>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add(command);
         return {'scope': 'global', 'fingerprint': 'SHA256:public-only'};
       });
@@ -289,10 +280,7 @@ void main() {
     tester,
   ) async {
     final calls = <String>[];
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
+    final controller = createTestController((command, params) async {
       calls.add(command);
       return {'scope': 'global', 'fingerprint': 'SHA256:public-only'};
     });

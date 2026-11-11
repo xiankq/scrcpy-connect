@@ -1,3 +1,5 @@
+import '../support/adb_event_fixture.dart';
+
 import 'package:scrcpy_connect/models/companion_exception.dart';
 
 import 'package:scrcpy_connect/models/companion_config.dart';
@@ -145,9 +147,7 @@ class CoordinatorApi implements NativeAdbApi {
     return id;
   }
 
-  void raw(Uint8List bytes) => operations[rpcId]!.add(
-    NativeAdbEvent(kind: 'data', bytes: bytes, done: false),
-  );
+  void raw(Uint8List bytes) => operations[rpcId]!.add(adbData(bytes));
   void disconnectRpc() => operations[rpcId]!.close();
   void message(Map<String, Object?> message, {bool split = false}) {
     final bytes = Uint8List.fromList(utf8.encode('${jsonEncode(message)}\n'));
@@ -171,13 +171,7 @@ class CoordinatorApi implements NativeAdbApi {
       final operation = _open('exec');
       expect(request.service, contains('watch_input'));
       operations[operation]!.add(
-        NativeAdbEvent(
-          kind: 'data',
-          done: false,
-          bytes: Uint8List.fromList(
-            utf8.encode('__INTEROP_PID__77:9001\nINTEROP_COMPANION_READY 77\n'),
-          ),
-        ),
+        adbText('__INTEROP_PID__77:9001\nINTEROP_COMPANION_READY 77\n'),
       );
       if (!execCreated.isCompleted) execCreated.complete();
       await execGate?.future;
@@ -211,14 +205,7 @@ class CoordinatorApi implements NativeAdbApi {
         pushBytes[id] = pushBytes[id]! + input.bytes.length;
       }
       if (input.kind == AdbInputKind.finish) {
-        operations[id]!.add(
-          NativeAdbEvent(
-            kind: 'done',
-            bytes: Uint8List(0),
-            done: true,
-            transferred: pushBytes[id]!,
-          ),
-        );
+        operations[id]!.add(adbDone(transferred: pushBytes[id]!));
       }
       return;
     }
@@ -275,21 +262,8 @@ class CoordinatorApi implements NativeAdbApi {
       response = wrongIdentity ? 'identity-mismatch\n' : 'signalled\n';
       if (wrongIdentity) exit = 41;
     }
-    operations[operation]!.add(
-      NativeAdbEvent(
-        kind: 'stdout',
-        bytes: Uint8List.fromList(utf8.encode(response)),
-        done: false,
-      ),
-    );
-    operations[operation]!.add(
-      NativeAdbEvent(
-        kind: 'exit',
-        bytes: Uint8List(0),
-        done: true,
-        exitCode: exit,
-      ),
-    );
+    operations[operation]!.add(adbText(response, kind: 'stdout'));
+    operations[operation]!.add(adbDone(kind: 'exit', exitCode: exit));
     return operation;
   }
 

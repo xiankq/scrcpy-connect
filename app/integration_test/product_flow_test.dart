@@ -24,63 +24,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:scrcpy_connect/main.dart' as app;
 
 import 'flows.dart';
-
-void expectHealthyRemote() {
-  final remote = find.byType(RemotePage);
-  expect(
-    find.descendant(of: remote, matching: find.byType(SnackBar)),
-    findsNothing,
-    reason: 'Feedback from another page must not cover the remote device.',
-  );
-  expect(
-    find.descendant(of: remote, matching: find.text('画面已暂停')),
-    findsNothing,
-  );
-  expect(
-    find.descendant(of: remote, matching: find.text('暂时无法打开实时画面')),
-    findsNothing,
-  );
-}
-
-Future<void> waitFor(
-  WidgetTester tester,
-  bool Function() ready, {
-  Duration timeout = const Duration(seconds: 35),
-  required String reason,
-}) async {
-  final deadline = DateTime.now().add(timeout);
-  while (!ready() && DateTime.now().isBefore(deadline)) {
-    await tester.pump(const Duration(milliseconds: 200));
-  }
-  expect(ready(), isTrue, reason: reason);
-}
-
-Future<void> tapPageAction(
-  WidgetTester tester,
-  Finder page,
-  Finder action, {
-  double delta = 250,
-}) async {
-  final route = ModalRoute.of(tester.element(page));
-  await waitFor(
-    tester,
-    () => route?.animation?.status == AnimationStatus.completed,
-    timeout: const Duration(seconds: 5),
-    reason: 'Wait for the actual page transition before scrolling.',
-  );
-  await tester.scrollUntilVisible(
-    action,
-    delta,
-    scrollable: find
-        .descendant(of: page, matching: find.byType(Scrollable))
-        .first,
-    maxScrolls: 12,
-  );
-  await Scrollable.ensureVisible(tester.element(action), alignment: .5);
-  await tester.pump(const Duration(milliseconds: 300));
-  expect(action.hitTestable(), findsOneWidget);
-  await tester.tap(action.hitTestable());
-}
+import 'support/production_app.dart';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();

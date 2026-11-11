@@ -1,3 +1,5 @@
+import '../support/adb_event_fixture.dart';
+
 import 'package:scrcpy_connect/models/device_connection.dart';
 
 import 'dart:async';
@@ -151,7 +153,7 @@ void main() {
     client.reply = (command) async* {
       started.complete();
       await release.future;
-      yield* _output('[ro.product.model]: [旧手机]');
+      yield* shellText('[ro.product.model]: [旧手机]');
     };
     final rejected = expectLater(
       request('device.data.get'),
@@ -167,7 +169,7 @@ void main() {
   test('同一 Dart 句柄下物理连接替换也不能发布旧查询', () async {
     client.reply = (_) async* {
       client.physicalId = 'physical-2';
-      yield* _output(_addresses);
+      yield* shellText(_addresses);
     };
     await expectLater(
       request('device.network.get'),
@@ -187,7 +189,7 @@ void main() {
   test('普通分组失败保留具体原因，其他未知字段不转成确定值', () async {
     client.reply = (command) => command == 'dumpsys battery'
         ? Stream.error(const AdbException('permission_denied', '受限'))
-        : _output('');
+        : shellText('');
     final result = await request('device.data.get');
     expect(_map(result, 'failures'), {
       'battery': {'code': 'permission_denied', 'message': '受限'},
@@ -202,7 +204,7 @@ void main() {
     final cancellation = AdbCancellation();
     client.reply = (_) async* {
       cancellation.cancel();
-      yield* _output('');
+      yield* shellText('');
     };
     await expectLater(
       request('device.data.get', cancellation: cancellation),
@@ -285,7 +287,7 @@ void main() {
           Uint8List.fromList(utf8.encode('level: 99\nscale: 100')),
         );
       } else {
-        yield* _output('');
+        yield* shellText('');
       }
     };
     final result = await request('device.data.get');
@@ -317,14 +319,6 @@ const _addresses =
     '2: wlan0 inet6 ff02::1/16 scope link\n'
     '2: wlan0 inet 0.0.0.0/0 scope global';
 
-Stream<AdbShellEvent> _output(String text) async* {
-  yield AdbShellEvent(
-    AdbShellChannel.stdout,
-    Uint8List.fromList(utf8.encode(text)),
-  );
-  yield AdbShellEvent(AdbShellChannel.exit, Uint8List(0), exitCode: 0);
-}
-
 final class _Client implements AdbClient {
   final responses = <String, String>{};
   final commands = <String>[];
@@ -347,7 +341,7 @@ final class _Client implements AdbClient {
     AdbCancellation? cancellation,
   }) {
     commands.add(command);
-    return reply?.call(command) ?? _output(responses[command] ?? '');
+    return reply?.call(command) ?? shellText(responses[command] ?? '');
   }
 
   @override

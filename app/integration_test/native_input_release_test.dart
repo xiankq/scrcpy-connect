@@ -1,9 +1,7 @@
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/models/connection_validation.dart';
 
 import 'dart:convert';
@@ -12,11 +10,10 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:scrcpy_connect/main.dart' as app;
 
-import 'product_flow_test.dart' show expectHealthyRemote, waitFor;
+import 'support/production_app.dart'
+    show startProductionApp, expectHealthyRemote, waitFor;
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -42,22 +39,7 @@ void main() {
     'real target dispatchKeyEvent observes key-up after actual controller HOME',
     (tester) async {
       final semantics = tester.ensureSemantics();
-      await app.main();
-      await waitFor(
-        tester,
-        () => find.byType(ConnectApp).evaluate().isNotEmpty,
-        reason: 'The production app must initialize.',
-      );
-      final controller = ProviderScope.containerOf(
-        tester.element(find.byType(ConnectApp)),
-      ).read(appStoreProvider.notifier);
-      await waitFor(
-        tester,
-        () =>
-            !controller.snapshot().loading &&
-            !controller.snapshot().reconciliationPending,
-        reason: 'Startup reconciliation must finish before fixture changes.',
-      );
+      final controller = await startProductionApp(tester);
       Future<Json> request(String command, [Json params = const {}]) =>
           controller
               .request(command, params)

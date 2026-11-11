@@ -1,3 +1,5 @@
+import '../../support/adb_event_fixture.dart';
+
 import 'package:scrcpy_connect/services/application_host_dependencies.dart';
 import 'package:scrcpy_connect/models/application_identity_host.dart';
 import 'package:scrcpy_connect/models/bundled_server_files.dart';
@@ -1118,26 +1120,13 @@ class _Api
       );
     }
     _displayEvents[id]!.add(
-      NativeAdbEvent(
-        kind: 'data',
-        bytes: Uint8List.fromList(
-          utf8.encode(
-            failed
-                ? '__DISPLAY_ERROR__$nonce:busy_or_unknown\n'
-                : '__DISPLAY_CURRENT__$nonce:empty\n',
-          ),
-        ),
-        done: false,
+      adbText(
+        failed
+            ? '__DISPLAY_ERROR__$nonce:busy_or_unknown\n'
+            : '__DISPLAY_CURRENT__$nonce:empty\n',
       ),
     );
-    _displayEvents[id]!.add(
-      NativeAdbEvent(
-        kind: 'done',
-        bytes: Uint8List(0),
-        done: true,
-        exitCode: failed ? 41 : 0,
-      ),
-    );
+    _displayEvents[id]!.add(adbDone(exitCode: failed ? 41 : 0));
     unawaited(_displayEvents[id]!.close());
   }
 

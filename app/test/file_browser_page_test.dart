@@ -21,10 +21,7 @@ void main() {
     tester,
   ) async {
     const device = {'id': 'phone', 'name': '我的手机', 'status': 'connected'};
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
+    final controller = createTestController((command, params) async {
       if (command == 'files.list') {
         final root = params['path'] == '/sdcard';
         return {
@@ -80,10 +77,7 @@ void main() {
       var disconnected = false;
       var missing = false;
       var truncated = false;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add((command, params));
         if (command == 'files.list') {
           if (disconnected) {

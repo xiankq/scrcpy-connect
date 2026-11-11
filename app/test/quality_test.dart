@@ -64,10 +64,7 @@ void main() {
         'videoCodec': 'h264',
         'videoEncoder': 'c2.avc.encoder',
       };
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         requests.add((command, params));
         if (command == 'session.quality') {
           current.addAll({...params}..remove('deviceId'));
@@ -139,10 +136,7 @@ void main() {
     'unconfirmed decoder choices show their actual reasons and a rejected change preserves the current quality',
     (tester) async {
       final requests = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         requests.add((command, params));
         if (command == 'session.quality') {
           throw const RequestFailure(

@@ -26,10 +26,7 @@ void main() {
       };
       Json? cancelled;
       final events = StreamController<Json>.broadcast(sync: true);
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'transfers.get') return task;
         if (command == 'transfers.cancel') cancelled = params;
         return {};
@@ -100,7 +97,7 @@ void main() {
       };
       Json? resolved;
       final controller =
-          createTestController((command, [params = const {}]) async {
+          createTestController((command, params) async {
               if (command == 'transfers.get') return task;
               if (command == 'transfers.resolve') resolved = params;
               return {};
@@ -141,10 +138,7 @@ void main() {
       final requests = <(String, Json)>[];
       var stopped = false;
       var removed = false;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         requests.add((command, params));
         if (command == 'transfers.cancel') stopped = true;
         if (command == 'transfers.remove') removed = true;
@@ -252,10 +246,7 @@ void main() {
     (tester) async {
       final requests = <(String, Json)>[];
       var removed = false;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         requests.add((command, params));
         if (command == 'transfers.remove') removed = true;
         if (command == 'transfers.list') {
@@ -316,10 +307,7 @@ void main() {
         'name': 'document.pdf',
       };
       final events = StreamController<Json>.broadcast(sync: true);
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'transfers.get') return task;
         if (command == 'transfers.resume') restart = params;
         return {};

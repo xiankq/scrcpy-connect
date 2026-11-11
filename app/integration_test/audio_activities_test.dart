@@ -5,18 +5,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:scrcpy_connect/app.dart';
-import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/devices/workspace/activities/devices_workspace_activities_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/models/connection_validation.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 
-import 'product_flow_test.dart' show waitFor;
+import 'support/production_app.dart' show startProductionApp, waitFor;
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -29,23 +25,7 @@ void main() {
       expect(int.tryParse(port), inInclusiveRange(1, 65535));
       binding.reportData = {'audioActivitiesComplete': false};
       final report = binding.reportData!;
-      await app.main();
-      await waitFor(
-        tester,
-        () => find.byType(ConnectApp).evaluate().isNotEmpty,
-        reason: 'Production app must initialize before taking its baseline.',
-      );
-      final controller = ProviderScope.containerOf(
-        tester.element(find.byType(ConnectApp)),
-      ).read(appStoreProvider.notifier);
-      await waitFor(
-        tester,
-        () =>
-            !controller.snapshot().loading &&
-            !controller.snapshot().reconciliationPending,
-        reason:
-            'Production bootstrap must settle before preserving preferences.',
-      );
+      final controller = await startProductionApp(tester);
       Future<Json> request(String command, [Json params = const {}]) =>
           controller
               .request(command, params)

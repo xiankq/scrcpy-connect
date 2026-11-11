@@ -112,7 +112,7 @@ notificationFixture({
 }) async {
   final events = StreamController<Json>.broadcast(sync: true);
   final controller = createTestController(
-    (command, [params = const {}]) async {
+    (command, params) async {
       commands?.add(command);
       return {};
     },
@@ -488,7 +488,7 @@ void main() {
 
   test('status refresh waits for initialization and cold-launch activations are retained once', () async {
     final controller = createTestController(
-      (_, [params = const {}]) async => {},
+      (_, params) async => {},
       initialState: AppState(loading: false),
     );
     final gate = Completer<void>();
@@ -575,7 +575,7 @@ void main() {
   test('native Stop before observation blocks late owners until a fresh connection lifecycle', () async {
     final events = StreamController<Json>.broadcast(sync: true);
     final controller = createTestController(
-      (_, [params = const {}]) async => {
+      (_, params) async => {
         'devices': [
           {'id': 'phone', 'status': 'connected'},
         ],
@@ -698,7 +698,7 @@ void main() {
     () async {
       final events = StreamController<Json>.broadcast(sync: true);
       final controller = createTestController(
-        (_, [params = const {}]) async => {},
+        (_, params) async => {},
         events: events.stream,
         initialState: AppState(
           loading: false,

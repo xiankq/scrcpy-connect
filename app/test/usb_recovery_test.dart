@@ -22,10 +22,7 @@ void main() {
         tester.platformDispatcher.clearTextScaleFactorTestValue();
       });
       final requests = <Json>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'devices.usb') {
           requests.add(params);
           throw const RequestFailure('permission_denied', '尚未允许主控应用访问 USB 设备。');

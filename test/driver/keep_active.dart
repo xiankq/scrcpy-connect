@@ -6,6 +6,7 @@ import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../../scripts/src/process.dart';
 import 'support/cleanup.dart';
+import 'support/inspection.dart';
 
 /// 为 keep_active_test.dart 提供独立 Android 进程与电源证据，不注入产品 ready 回执、会话或设置。
 ///
@@ -327,64 +328,27 @@ Future<void> main() async {
   }
 
   final driver = await FlutterDriver.connect();
-  var finished = false;
-  Object? inspectionError;
-  final inspection =
-      () async {
-        String? previous;
-        final deadline = DateTime.now().add(const Duration(minutes: 10));
-        while (!finished && DateTime.now().isBefore(deadline)) {
-          try {
-            final response = await driverRpc(
-              driver.serviceClient.callServiceExtension(
-                'ext.connect.keepActive',
-                isolateId: driver.appIsolate.id,
-              ),
-            );
-            if (finished) return;
-            final checkpoint = response.json?['checkpoint'];
-            if (checkpoint is Map && checkpoint['id'] != previous) {
-              final data = Map<String, dynamic>.from(checkpoint);
-              previous = data['id'] as String;
-              String? error;
-              try {
-                await inspect(data);
-              } catch (failure) {
-                error = failure.toString();
-                inspectionError ??= failure;
-              }
-              if (finished) return;
-              await driverRpc(
-                driver.serviceClient.callServiceExtension(
-                  'ext.connect.keepActive',
-                  isolateId: driver.appIsolate.id,
-                  args: {'ack': previous, 'error': ?error},
-                ),
-              );
-            }
-          } catch (error) {
-            if (finished) return;
-            if (!error.toString().contains('ext.connect.keepActive') &&
-                !error.toString().contains('Method not found')) {
-              rethrow;
-            }
-          }
-          await Future<void>.delayed(const Duration(milliseconds: 100));
-        }
-        if (!finished) {
-          throw StateError('Timed out inspecting actual keep-active state.');
-        }
-      }().catchError((Object error) {
-        inspectionError ??= error;
-      });
+  final inspection = DriverInspection(
+    request: ([args]) async =>
+        (await driver.serviceClient.callServiceExtension(
+          'ext.connect.keepActive',
+          isolateId: driver.appIsolate.id,
+          args: args,
+        )).json ??
+        {},
+    timeout: const Duration(minutes: 10),
+    inspect: (checkpoint) async {
+      await inspect(checkpoint);
+      return null;
+    },
+  );
   await withDriverCleanup(
     () async {
       await integrationDriver(
         driver: driver,
         writeResponseOnFailure: true,
         responseDataCallback: (data) async {
-          finished = true;
-          await inspection;
+          await inspection.stop();
           // SDK 回调返回后直接退出进程，因此正常和失败回执都先恢复本次休眠。
           if (sleepingFixture) {
             await shell('input keyevent 224');
@@ -392,24 +356,21 @@ Future<void> main() async {
           }
           final result = {...?data}..remove('screenshots');
           result['independentTargetChecks'] = checks;
-          result['inspectionError'] = inspectionError?.toString();
+          result['inspectionError'] = inspection.error?.toString();
           await File('${directory.path}/result.json')
               .writeAsString(jsonEncode(result));
-          if (inspectionError != null ||
+          if (inspection.error != null ||
               result['keepActiveComplete'] != true ||
               (result['cleanupErrors'] as List?)?.isEmpty != true) {
             throw StateError(
-              'Actual dynamic keep-active acceptance incomplete: $inspectionError',
+              'Actual dynamic keep-active acceptance incomplete: ${inspection.error}',
             );
           }
         },
       );
     },
     () => {
-      'keep-active inspection': () async {
-        finished = true;
-        await inspection;
-      },
+      'keep-active inspection': inspection.stop,
       'driver connection': () => driverRpc(driver.close()),
       'target power state': () async {
         if (sleepingFixture) {

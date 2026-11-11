@@ -27,7 +27,7 @@ void main() {
       final replacedRead = Completer<Json>();
       final calls = <Json>[];
       late AppStore controller;
-      controller = createTestController((command, [params = const {}]) async {
+      controller = createTestController((command, params) async {
         if (command != 'device.data.get') return {};
         calls.add(Map.of(params));
         final connectionId =

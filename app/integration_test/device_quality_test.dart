@@ -6,14 +6,10 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:scrcpy_connect/app.dart';
-import 'package:scrcpy_connect/main.dart' as app;
-import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/models/connection_validation.dart';
 
-import 'product_flow_test.dart' show waitFor;
+import 'support/production_app.dart' show startProductionApp;
 
 // 配合 test/driver/integration_test.dart 和 CONNECT_E2E_ACCEPTANCE=media 运行。失败及关闭竞争由 device_quality_coordinator_test.dart、video_output_coordinator_test.dart 和 quality_reconfiguration_android.rs 覆盖；本测试提供真实 Flutter/MDK 双输出证据，不模拟渲染器、伪造就绪回执或逐窗口修改画质。
 void main() {
@@ -26,22 +22,7 @@ void main() {
     (tester) async {
       expect(address, isNotEmpty);
       expect(port, inInclusiveRange(1, 65535));
-      await app.main();
-      await waitFor(
-        tester,
-        () => find.byType(ConnectApp).evaluate().isNotEmpty,
-        reason: 'Initialize the production app.',
-      );
-      final controller = ProviderScope.containerOf(
-        tester.element(find.byType(ConnectApp)),
-      ).read(appStoreProvider.notifier);
-      await waitFor(
-        tester,
-        () =>
-            !controller.snapshot().loading &&
-            !controller.snapshot().reconciliationPending,
-        reason: 'Finish real bridge reconciliation.',
-      );
+      final controller = await startProductionApp(tester);
       Future<Json> request(String command, [Json params = const {}]) =>
           controller
               .request(command, params)

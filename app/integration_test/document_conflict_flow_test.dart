@@ -9,17 +9,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:scrcpy_connect/app.dart';
-import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/transfers/details/export/transfers_details_export_page.dart';
 import 'package:scrcpy_connect/widgets/documents/document_conflict_panel.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/models/connection_validation.dart';
 
-import 'product_flow_test.dart' show waitFor;
+import 'support/production_app.dart' show startProductionApp, waitFor;
 
 /// 配合 test/driver/document_conflict.dart 运行；宿主仅控制真实 Android 选择器和隔离公共文件，产品动作全部经过 app.main。
 void main() {
@@ -65,22 +61,7 @@ void main() {
   testWidgets('system directory conflicts use the actual shared export page', (
     tester,
   ) async {
-    await app.main();
-    await waitFor(
-      tester,
-      () => find.byType(Scaffold).evaluate().isNotEmpty,
-      reason: 'The production app must initialize.',
-    );
-    final controller = ProviderScope.containerOf(
-      tester.element(find.byType(ConnectApp)),
-    ).read(appStoreProvider.notifier);
-    await waitFor(
-      tester,
-      () =>
-          !controller.snapshot().loading &&
-          !controller.snapshot().reconciliationPending,
-      reason: 'Production bootstrap must settle before the fixture.',
-    );
+    final controller = await startProductionApp(tester);
     Future<Json> request(String command, [Json params = const {}]) => controller
         .request(command, params)
         .timeout(const Duration(seconds: 45));

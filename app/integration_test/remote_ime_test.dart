@@ -6,18 +6,14 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:scrcpy_connect/app.dart';
-import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/models/connection_validation.dart';
 
-import 'product_flow_test.dart'
-    show expectHealthyRemote, tapPageAction, waitFor;
+import 'support/production_app.dart'
+    show startProductionApp, expectHealthyRemote, tapPageAction, waitFor;
 
 // 配合 test/driver/remote_ime.dart 运行，仅注入 Flutter 输入法编辑值，不声称覆盖 Gboard 中文候选界面。
 void main() {
@@ -49,22 +45,7 @@ void main() {
       tester.testTextInput.register();
       expect(address, isNotEmpty);
       expect(port, inInclusiveRange(1, 65535));
-      await app.main();
-      await waitFor(
-        tester,
-        () => find.byType(ConnectApp).evaluate().isNotEmpty,
-        reason: 'The production app must initialize before reading providers.',
-      );
-      final controller = ProviderScope.containerOf(
-        tester.element(find.byType(ConnectApp)),
-      ).read(appStoreProvider.notifier);
-      await waitFor(
-        tester,
-        () =>
-            !controller.snapshot().loading &&
-            !controller.snapshot().reconciliationPending,
-        reason: 'Production startup reconciliation must finish before fixtures change state.',
-      );
+      final controller = await startProductionApp(tester);
       Future<Json> request(String command, [Json params = const {}]) =>
           controller
               .request(command, params)

@@ -72,10 +72,7 @@ void main() {
     (tester) async {
       final events = StreamController<Json>.broadcast(sync: true);
       final calls = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add((command, params));
         if (command == 'session.start') {
           return {..._session, 'keepActiveError': _failure('保活服务启动失败')};
@@ -135,10 +132,7 @@ void main() {
     (tester) async {
       final started = Completer<Json>();
       final calls = <String>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add(command);
         if (command == 'session.start') return started.future;
         return {};
@@ -179,10 +173,7 @@ void main() {
       (tester) async {
         final stopped = Completer<Json>();
         final calls = <String>[];
-        final controller = createTestController((
-          command, [
-          params = const {},
-        ]) async {
+        final controller = createTestController((command, params) async {
           calls.add(command);
           if (command == 'session.start') {
             return {..._session, if (!pixels) 'textureId': null};

@@ -42,7 +42,7 @@ void main() {
         ),
       );
       final controller =
-          createTestController((command, [params = const {}]) async {
+          createTestController((command, params) async {
               if (command == 'transfers.get') return transfer;
               return {};
             }, events: events.stream)

@@ -16,7 +16,7 @@ import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/models/connection_validation.dart';
 import 'package:scrcpy_connect/main.dart' as app;
 
-import 'product_flow_test.dart' show waitFor;
+import 'support/production_app.dart' show waitFor;
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();

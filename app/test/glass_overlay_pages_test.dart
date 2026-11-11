@@ -35,9 +35,7 @@ void main() {
         if (call.method == 'cancel') cancelled = true;
         return null;
       });
-      final controller = createTestController(
-        (_, [params = const {}]) async => {},
-      );
+      final controller = createTestController((_, params) async => {});
       addTearDown(() {
         controller.dispose();
         debugDefaultTargetPlatformOverride = null;
@@ -171,10 +169,7 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
       final actions = <Json>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'calls.action') actions.add(params);
         return command == 'calls.list'
             ? {

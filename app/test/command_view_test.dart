@@ -15,11 +15,11 @@ void main() {
     tester,
   ) async {
     final pending = Completer<Json>();
-    final first = createTestController((command, [params = const {}]) async {
+    final first = createTestController((command, params) async {
       return {'name': 'previous owner'};
     });
     var reads = 0;
-    final second = createTestController((command, [params = const {}]) {
+    final second = createTestController((command, params) {
       reads++;
       return pending.future;
     });

@@ -6,18 +6,14 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:scrcpy_connect/app.dart';
-import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/devices/workspace/calls/devices_workspace_calls_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/models/connection_validation.dart';
 
-import 'product_flow_test.dart'
-    show expectHealthyRemote, tapPageAction, waitFor;
+import 'support/production_app.dart'
+    show startProductionApp, expectHealthyRemote, tapPageAction, waitFor;
 
 // 仅配合 test/driver/current_call_ui.dart 的隔离虚拟调制解调器运行；生产 CallsPage 拥有观察和 calls.open，本验收流程必须实际点击产品动作，不能以运行时调用替代。
 void main() {
@@ -52,22 +48,7 @@ void main() {
       expect(address, isNotEmpty);
       expect(port, inInclusiveRange(1, 65535));
       final report = binding.reportData!;
-      await app.main();
-      await waitFor(
-        tester,
-        () => find.byType(ConnectApp).evaluate().isNotEmpty,
-        reason: 'The production app must initialize before preserving state.',
-      );
-      final controller = ProviderScope.containerOf(
-        tester.element(find.byType(ConnectApp)),
-      ).read(appStoreProvider.notifier);
-      await waitFor(
-        tester,
-        () =>
-            !controller.snapshot().loading &&
-            !controller.snapshot().reconciliationPending,
-        reason: 'Production reconciliation must finish before fixture setup.',
-      );
+      final controller = await startProductionApp(tester);
       Future<Json> request(String command, [Json params = const {}]) =>
           controller
               .request(command, params)

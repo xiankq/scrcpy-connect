@@ -1,3 +1,5 @@
+import '../support/adb_event_fixture.dart';
+
 import 'package:scrcpy_connect/models/device_connection.dart';
 import 'package:scrcpy_connect/models/device_facts.dart';
 
@@ -20,7 +22,7 @@ const _device = AdbDevice(
 void main() {
   test('身份来自固定属性查询，连接选择器不是设备序列号', () async {
     final cancellation = AdbCancellation();
-    final client = _Client((_) => _output(_properties()));
+    final client = _Client((_) => shellOutput(_properties()));
     final connection = DeviceConnection(client: client, device: _device);
     final facts = await const DeviceProbe().readIdentity(
       connection,
@@ -61,7 +63,7 @@ void main() {
 
   test('未知属性不使用地址、缓存或另一种序列号属性填充', () async {
     final client = _Client(
-      (_) => _output(
+      (_) => shellOutput(
         _properties(
           serial: 'unknown',
           bootSerial: 'null',
@@ -84,7 +86,7 @@ void main() {
     expect(unknown.serial, isNull);
     final bootOnly = await const DeviceProbe().readIdentity(
       DeviceConnection(
-        client: _Client((_) => _output(_properties(serial: ''))),
+        client: _Client((_) => shellOutput(_properties(serial: ''))),
         device: _device,
       ),
     );
@@ -127,7 +129,7 @@ void main() {
     [..._properties(), 0],
   ].indexed) {
     test('拒绝无效 UTF-8、字段边界、控制字符或超长属性 $index', () async {
-      final client = _Client((_) => _output(malformed));
+      final client = _Client((_) => shellOutput(malformed));
       await expectLater(
         const DeviceProbe().readIdentity(
           DeviceConnection(client: client, device: _device),
@@ -139,7 +141,7 @@ void main() {
 
   test('API 级别按十进制 u32 解析，无效属性保持未知', () async {
     for (final invalid in ['0x24', '4294967296', 'NaN', '']) {
-      final client = _Client((_) => _output(_properties(api: invalid)));
+      final client = _Client((_) => shellOutput(_properties(api: invalid)));
       final facts = await const DeviceProbe().readIdentity(
         DeviceConnection(client: client, device: _device),
       );
@@ -173,7 +175,7 @@ void main() {
 
   test('退出之后的迟到输出不能被拼接成成功回执', () async {
     final client = _Client((_) async* {
-      yield* _output(_properties());
+      yield* shellOutput(_properties());
       yield AdbShellEvent(AdbShellChannel.stderr, Uint8List(0));
     });
     await expectLater(
@@ -278,7 +280,7 @@ void main() {
     final released = Completer<void>();
     final client = _Client((_) async* {
       try {
-        yield* _output(_properties());
+        yield* shellOutput(_properties());
       } finally {
         closing.complete();
         await released.future;
@@ -302,7 +304,7 @@ void main() {
     final cleanupFailure = StateError('原生 worker 尚未退出');
     final client = _Client((_) async* {
       try {
-        yield* _output(_properties());
+        yield* shellOutput(_properties());
       } finally {
         throw cleanupFailure;
       }
@@ -316,7 +318,7 @@ void main() {
   });
 
   test('已取消或无效超时不启动任何设备命令', () async {
-    final client = _Client((_) => _output(_properties()));
+    final client = _Client((_) => shellOutput(_properties()));
     final connection = DeviceConnection(client: client, device: _device);
     final cancellation = AdbCancellation()..cancel();
     await expectLater(
@@ -338,14 +340,14 @@ void main() {
         expect(query.timeout, const Duration(seconds: 3));
         batteryStarted.complete();
         await batteryResponse.future;
-        yield* _output(
+        yield* shellOutput(
           utf8.encode(
             'level: 39\nscale: 50\nstatus: 4\nUSB powered: true\n'
             'temperature: 321\nvoltage: 4120\nhealth: 2\n',
           ),
         );
       } else {
-        yield* _output(_properties());
+        yield* shellOutput(_properties());
       }
     });
     final connection = DeviceConnection(client: client, device: _device);
@@ -378,11 +380,6 @@ List<int> _properties({
 }) => utf8.encode(
   '$serial\x00$bootSerial\x00$model\x00$release\x00$api\x00$guid\x00',
 );
-
-Stream<AdbShellEvent> _output(List<int> bytes, {int? exitCode = 0}) async* {
-  yield AdbShellEvent(AdbShellChannel.stdout, Uint8List.fromList(bytes));
-  yield AdbShellEvent(AdbShellChannel.exit, Uint8List(0), exitCode: exitCode);
-}
 
 final class _Query {
   const _Query(this.device, this.command, this.timeout, this.cancellation);

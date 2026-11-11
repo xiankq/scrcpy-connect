@@ -53,10 +53,7 @@ void main() {
   testWidgets(
     'IP conversion follows the current authorized connection and surfaces unsupported reads',
     (tester) async {
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'device.network.get') {
           throw const RequestFailure('unsupported', '当前设备不支持读取网络接口。');
         }
@@ -102,10 +99,7 @@ void main() {
     'new IP attempts use the managed global identity without exposing private keys',
     (tester) async {
       final calls = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add((command, params));
         return {};
       });
@@ -130,10 +124,7 @@ void main() {
     'unknown connection uses ordinary feedback and rechecking never resends the request',
     (tester) async {
       final calls = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add((command, params));
         if (command == 'devices.add') {
           throw const RequestFailure('result_unknown', '连接回执尚未确认。');
@@ -159,10 +150,7 @@ void main() {
     (tester) async {
       var queries = 0;
       final calls = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add((command, params));
         if (command == 'device.network.get') {
           return {
@@ -201,10 +189,7 @@ void main() {
   testWidgets(
     'IP switch rejects another connection receipt and offers a new read',
     (tester) async {
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'device.network.get') {
           return {
             'deviceId': 'other-phone',

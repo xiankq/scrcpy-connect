@@ -1,3 +1,5 @@
+import '../support/adb_event_fixture.dart';
+
 import 'package:scrcpy_connect/models/device_connection.dart';
 
 import 'dart:async';
@@ -681,15 +683,7 @@ final class _Api implements NativeAdbApi {
           if (!startSent.isCompleted) startSent.complete();
           if (startupDiagnostic) {
             operation.add(
-              NativeAdbEvent(
-                kind: 'data',
-                done: false,
-                bytes: Uint8List.fromList(
-                  utf8.encode(
-                    'mksh: /proc/4321/stat: No such file or directory\n',
-                  ),
-                ),
-              ),
+              adbText('mksh: /proc/4321/stat: No such file or directory\n'),
             );
           }
           if (failBeforeReady) {
@@ -698,13 +692,7 @@ final class _Api implements NativeAdbApi {
           }
           if (!loseReady) {
             operation.add(
-              NativeAdbEvent(
-                kind: 'data',
-                done: false,
-                bytes: Uint8List.fromList(
-                  utf8.encode('__INTEROP_QUERY_READY_${token}__:4321:8765\n'),
-                ),
-              ),
+              adbText('__INTEROP_QUERY_READY_${token}__:4321:8765\n'),
             );
           }
           return;
@@ -733,12 +721,7 @@ final class _Api implements NativeAdbApi {
     } else if (input.kind == AdbInputKind.finish) {
       trace.add('finish:$id');
       operation.add(
-        NativeAdbEvent(
-          kind: 'done',
-          bytes: Uint8List(0),
-          done: true,
-          transferred: transferred ?? operation.bytes.length,
-        ),
+        adbDone(transferred: transferred ?? operation.bytes.length),
       );
     }
   }
@@ -762,19 +745,11 @@ final class _Api implements NativeAdbApi {
       final failed = inspectionFailures > 0;
       if (failed) inspectionFailures--;
       operation.add(
-        NativeAdbEvent(
-          kind: 'data',
-          done: false,
-          bytes: Uint8List.fromList(
-            utf8.encode(
-              'released:absent\n\n__INTEROP_QUERY_CHECK_${check[1]}__:${failed ? 42 : 0}\n',
-            ),
-          ),
+        adbText(
+          'released:absent\n\n__INTEROP_QUERY_CHECK_${check[1]}__:${failed ? 42 : 0}\n',
         ),
       );
-      operation.add(
-        NativeAdbEvent(kind: 'done', bytes: Uint8List(0), done: true),
-      );
+      operation.add(adbDone());
       return key;
     }
     trace.add('execute');
@@ -789,35 +764,21 @@ final class _Api implements NativeAdbApi {
 
   void _terminal(_Operation operation, String token, int code) {
     trace.add('terminal');
-    operation.add(
-      NativeAdbEvent(
-        kind: 'data',
-        done: false,
-        bytes: Uint8List.fromList(
-          utf8.encode('\n__INTEROP_QUERY_END_${token}__:$code\n'),
-        ),
-      ),
-    );
-    operation.add(
-      NativeAdbEvent(kind: 'done', bytes: Uint8List(0), done: true),
-    );
+    operation.add(adbText('\n__INTEROP_QUERY_END_${token}__:$code\n'));
+    operation.add(adbDone());
   }
 
   void _queryOutput(_Operation operation) {
     final token = operation.queryToken!;
     operation.add(
-      NativeAdbEvent(
-        kind: 'data',
-        done: false,
-        bytes: Uint8List.fromList(
-          executionBytes ??
-              utf8.encode(
-                executionOutput ??
-                    (operation.queryCommand!.contains('list_apps=true')
-                        ? 'List of apps:\n - Example org.example.app\n'
-                        : 'List of video encoders:\n --video-codec=h264 --video-encoder=c2.vendor.avc.encoder (hw)\n'),
-              ),
-        ),
+      adbData(
+        executionBytes ??
+            utf8.encode(
+              executionOutput ??
+                  (operation.queryCommand!.contains('list_apps=true')
+                      ? 'List of apps:\n - Example org.example.app\n'
+                      : 'List of video encoders:\n --video-codec=h264 --video-encoder=c2.vendor.avc.encoder (hw)\n'),
+            ),
       ),
     );
     if (executionUnknown == 'missing-terminal') {
@@ -825,20 +786,12 @@ final class _Api implements NativeAdbApi {
     } else {
       if (executionUnknown != 'unknown-exit-code') {
         operation.add(
-          NativeAdbEvent(
-            kind: 'data',
-            done: false,
-            bytes: Uint8List.fromList(
-              utf8.encode(
-                '\n__INTEROP_QUERY_END_${wrongTerminalNonce ? '00000000000000000000000000000000' : token}__:$executionExitCode\n',
-              ),
-            ),
+          adbText(
+            '\n__INTEROP_QUERY_END_${wrongTerminalNonce ? '00000000000000000000000000000000' : token}__:$executionExitCode\n',
           ),
         );
       }
-      operation.add(
-        NativeAdbEvent(kind: 'done', bytes: Uint8List(0), done: true),
-      );
+      operation.add(adbDone());
     }
   }
 
@@ -857,34 +810,26 @@ final class _Api implements NativeAdbApi {
       if (marker != null) {
         final receipt = '\n$marker${removeFault == 'nonzero' ? 1 : 0}\n';
         operation.add(
-          NativeAdbEvent(
+          adbText(
+            receipt +
+                (removeFault == 'duplicate' ? receipt : '') +
+                (removeFault == 'trailing' ? 'unexpected\n' : ''),
             kind: 'stdout',
-            done: false,
-            bytes: Uint8List.fromList(
-              utf8.encode(
-                receipt +
-                    (removeFault == 'duplicate' ? receipt : '') +
-                    (removeFault == 'trailing' ? 'unexpected\n' : ''),
-              ),
-            ),
           ),
         );
       }
     }
     if (!remove) {
       operation.add(
-        NativeAdbEvent(
+        adbData(
+          executionBytes ??
+              utf8.encode(
+                executionOutput ??
+                    (command.contains('list_apps=true')
+                        ? 'List of apps:\n - Example org.example.app\n'
+                        : 'List of video encoders:\n --video-codec=h264 --video-encoder=c2.vendor.avc.encoder (hw)\n'),
+              ),
           kind: outputToStderr ? 'stderr' : 'stdout',
-          bytes: Uint8List.fromList(
-            executionBytes ??
-                utf8.encode(
-                  executionOutput ??
-                      (command.contains('list_apps=true')
-                          ? 'List of apps:\n - Example org.example.app\n'
-                          : 'List of video encoders:\n --video-codec=h264 --video-encoder=c2.vendor.avc.encoder (hw)\n'),
-                ),
-          ),
-          done: false,
         ),
       );
     }
@@ -893,10 +838,8 @@ final class _Api implements NativeAdbApi {
       operation.endWithoutTerminal = true;
     } else {
       operation.add(
-        NativeAdbEvent(
+        adbDone(
           kind: 'exit',
-          bytes: Uint8List(0),
-          done: true,
           exitCode:
               legacyShell || !remove && executionUnknown == 'unknown-exit-code'
               ? null

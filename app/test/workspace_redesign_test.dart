@@ -35,10 +35,7 @@ void main() {
     'background grid requests only target tasks and rejects installed-list responses',
     (tester) async {
       final calls = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add((command, params));
         return command == 'apps.list'
             ? {
@@ -80,10 +77,7 @@ void main() {
       });
       final iconRequests = <String>[];
       final image = base64Encode(_icon);
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'apps.list') {
           return {
             'deviceId': 'phone',
@@ -149,10 +143,7 @@ void main() {
     'waiting workspace keeps management and can stop reconnection without forgetting',
     (tester) async {
       final calls = <String>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add(command);
         return {};
       });
@@ -228,10 +219,7 @@ void main() {
     tester,
   ) async {
     final calls = <String>[];
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
+    final controller = createTestController((command, params) async {
       calls.add(command);
       return {};
     });

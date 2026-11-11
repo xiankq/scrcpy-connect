@@ -1,3 +1,5 @@
+import 'support/app_lifecycle.dart';
+
 import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
@@ -60,15 +62,7 @@ void main() {
               scheduled = true;
               // 在根呈现回调执行前失去前台资格，不额外等待一次重建。
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                tester.binding.handleAppLifecycleStateChanged(
-                  AppLifecycleState.inactive,
-                );
-                tester.binding.handleAppLifecycleStateChanged(
-                  AppLifecycleState.hidden,
-                );
-                tester.binding.handleAppLifecycleStateChanged(
-                  AppLifecycleState.paused,
-                );
+                tester.pauseApp();
               });
             }
             return const ConnectApp();
@@ -78,9 +72,7 @@ void main() {
     );
     await tester.pump();
     expect(find.byType(IncomingSharePage), findsNothing);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    tester.resumeApp();
     await tester.pumpAndSettle();
     expect(find.byType(IncomingSharePage), findsOneWidget);
     expect(find.text('保留分享'), findsOneWidget);
@@ -144,9 +136,7 @@ void main() {
       });
       await tester.pumpAndSettle();
       // 系统暂停视图前不一定再允许界面绘制一帧。
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.pauseApp();
       events.add({
         'type': 'notifications.changed',
         'deviceId': 'phone',
@@ -160,9 +150,7 @@ void main() {
         hasLength(1),
         reason: 'Publication eligibility must update in the lifecycle callback, without a rendered frame.',
       );
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      tester.resumeApp();
       await tester.pumpWidget(const SizedBox());
       await events.close();
     },

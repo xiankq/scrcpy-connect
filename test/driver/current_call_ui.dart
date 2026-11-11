@@ -6,6 +6,7 @@ import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../../scripts/src/process.dart';
 import 'support/cleanup.dart';
+import 'support/inspection.dart';
 
 // 仅宿主使用的夹具，由 Android 虚拟调制解调器产生一通隔离来电；只有产品 CallsPage 可以请求真实通话界面。
 //
@@ -37,7 +38,6 @@ Future<void> main() async {
   String? ownedTelecomId;
   final checks = <Map<String, Object?>>[];
   final screenshots = <String>[];
-  Object? inspectionError;
   Future<String> adbTarget(List<String> command) async {
     final result = await runProcess(adb, [
       '-s',
@@ -259,98 +259,52 @@ Future<void> main() async {
   }
 
   final driver = await FlutterDriver.connect();
-  var finished = false;
   var checkpointSequence = 0;
   String? runId;
-  String? previousId;
   final expected = [
     'prepare-ringing-settings',
     'before-open',
     'decoded-incall',
     'cleanup-target',
   ];
-  final inspection =
-      () async {
-        final deadline = DateTime.now().add(const Duration(minutes: 7));
-        while (!finished && DateTime.now().isBefore(deadline)) {
-          try {
-            final response = await driverRpc(
-              driver.serviceClient.callServiceExtension(
-                'ext.connect.currentCallUi',
-                isolateId: driver.appIsolate.id,
-              ),
-            );
-            if (finished) return;
-            final checkpoint = response.json?['checkpoint'];
-            if (checkpoint is Map<String, dynamic> &&
-                checkpoint['id'] != previousId) {
-              final checkpointId = checkpoint['id'] as String;
-              previousId = checkpointId;
-              String? error;
-              Map<String, Object?>? result;
-              try {
-                runId ??= checkpoint['runId'] as String;
-                final stage = checkpoint['name'] as String;
-                // 清理检查点可以在前一阶段失败后执行，但创建和打开检查点不可重放或乱序接受。
-                //
-                final cleanup = stage == 'cleanup-target';
-                if (checkpoint['runId'] != runId ||
-                    checkpoint['sequence'] != checkpointSequence + 1 ||
-                    (!cleanup && stage != expected[checkpointSequence]) ||
-                    (cleanup && checkpointSequence == 0)) {
-                  throw StateError(
-                    'Out-of-order or replayed current-call checkpoint: $checkpoint',
-                  );
-                }
-                checkpointSequence++;
-                result = await inspect(stage);
-              } catch (failure) {
-                error = failure.toString();
-                inspectionError ??= failure;
-              }
-              if (finished) return;
-              await driverRpc(
-                driver.serviceClient.callServiceExtension(
-                  'ext.connect.currentCallUi',
-                  isolateId: driver.appIsolate.id,
-                  args: {
-                    'ack': checkpointId,
-                    'error': ?error,
-                    if (result != null) 'result': jsonEncode(result),
-                  },
-                ),
-              );
-            }
-          } catch (error) {
-            if (finished) return;
-            if (!error.toString().contains('ext.connect.currentCallUi') &&
-                !error.toString().contains('Method not found')) {
-              rethrow;
-            }
-          }
-          await Future<void>.delayed(const Duration(milliseconds: 100));
-        }
-        if (!finished) {
-          throw StateError(
-            'Timed out inspecting the actual current system call UI.',
-          );
-        }
-      }().catchError((Object error) {
-        inspectionError ??= error;
-      });
+  final inspection = DriverInspection(
+    request: ([args]) async =>
+        (await driver.serviceClient.callServiceExtension(
+          'ext.connect.currentCallUi',
+          isolateId: driver.appIsolate.id,
+          args: args,
+        )).json ??
+        {},
+    timeout: const Duration(minutes: 7),
+    inspect: (checkpoint) async {
+      runId ??= checkpoint['runId'] as String;
+      final stage = checkpoint['name'] as String;
+      // 失败后仍允许清理检查点；其余检查点必须属于本次运行且严格有序。
+      final cleanup = stage == 'cleanup-target';
+      if (checkpoint['runId'] != runId ||
+          checkpoint['sequence'] != checkpointSequence + 1 ||
+          (!cleanup && stage != expected[checkpointSequence]) ||
+          (cleanup && checkpointSequence == 0)) {
+        throw StateError(
+          'Out-of-order or replayed current-call checkpoint: $checkpoint',
+        );
+      }
+      checkpointSequence++;
+      return await inspect(stage);
+    },
+  );
   await withDriverCleanup(
     () async {
       await integrationDriver(
         driver: driver,
         writeResponseOnFailure: true,
         responseDataCallback: (data) async {
-          finished = true;
-          await inspection;
+          await inspection.stop();
           // Flutter 在清理检查点前中止时也必须执行。
           try {
             await cleanupTarget();
           } catch (error, stack) {
-            inspectionError = DriverCleanupException(inspectionError, null, [
+            inspection.error = DriverCleanupException(inspection.error, null, [
               DriverCleanupFailure('owned incoming call fixture', error, stack),
             ]);
           }
@@ -363,11 +317,11 @@ Future<void> main() async {
             'independentCallChecks': checks,
             'savedScreenshots': screenshots,
             'targetRestored': targetRestored,
-            'inspectionError': inspectionError?.toString(),
+            'inspectionError': inspection.error?.toString(),
           });
           await File('${directory.path}/result.json')
               .writeAsString(jsonEncode(metadata), flush: true);
-          if (inspectionError != null ||
+          if (inspection.error != null ||
               !targetRestored ||
               checks.map((c) => c['stage']).join(',') != expected.join(',') ||
               [
@@ -388,17 +342,14 @@ Future<void> main() async {
               ].any((key) => metadata[key] != true) ||
               !screenshots.contains('controller-decoded-incall.png')) {
             throw StateError(
-              'Actual CallsPage → system call UI acceptance did not complete: ${inspectionError ?? 'missing required evidence/cleanup'}',
+              'Actual CallsPage → system call UI acceptance did not complete: ${inspection.error ?? 'missing required evidence/cleanup'}',
             );
           }
         },
       );
     },
     () => {
-      'current-call inspection': () async {
-        finished = true;
-        await inspection;
-      },
+      'current-call inspection': inspection.stop,
       'owned incoming call': cleanupTarget,
       'driver connection': () => driverRpc(driver.close()),
     },

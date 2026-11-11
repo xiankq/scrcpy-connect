@@ -49,7 +49,7 @@ AppStore recordingController(
   List<(String, Json)> calls,
   FutureOr<Json> Function(String, Json) respond, {
   Stream<Json>? events,
-}) => createTestController((command, [params = const {}]) async {
+}) => createTestController((command, params) async {
   calls.add((command, params));
   return respond(command, params);
 }, events: events);
@@ -321,7 +321,7 @@ void main() {
     'selecting another discovered pairing target clears the earlier completion panel',
     (tester) async {
       final controller = createTestController(
-        (command, [params = const {}]) async => switch (command) {
+        (command, params) async => switch (command) {
           'devices.pair' => {'deviceId': 'first-paired', 'connected': false},
           'devices.discover' => {
             'devices': [

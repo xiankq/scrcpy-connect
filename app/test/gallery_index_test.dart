@@ -245,10 +245,7 @@ void main() {
   testWidgets(
     'changing device isolates album selection and restores its own scroll',
     (tester) async {
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command != 'media.list') return {};
         return {
           ..._receipt(

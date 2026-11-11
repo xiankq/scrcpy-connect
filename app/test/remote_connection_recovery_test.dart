@@ -33,10 +33,7 @@ void main() {
         'firstFrameDecoded': true,
         'evidence': 'media_codec.decodedFrame',
       };
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'session.start') {
           starts.add({...params});
           return receipt('session-${starts.length}');
@@ -144,10 +141,7 @@ void main() {
         'firstFrameDecoded': true,
         'evidence': 'media_codec.decodedFrame',
       };
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'session.list' &&
             interrupted &&
             interruption != 'stop after submission') {

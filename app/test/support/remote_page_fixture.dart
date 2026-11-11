@@ -14,7 +14,7 @@ import 'test_controller.dart';
 class RemotePageFixture {
   RemotePageFixture({this.onRequest, AppState? initialState}) {
     controller = createTestController(
-      (command, [params = const {}]) async {
+      (command, params) async {
         calls.add((command, params));
         return await onRequest?.call(command, params) ??
             (command == 'session.start' ? pixels : {});

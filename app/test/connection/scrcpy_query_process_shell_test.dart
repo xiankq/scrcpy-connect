@@ -1,3 +1,5 @@
+import '../support/adb_event_fixture.dart';
+
 import 'package:scrcpy_connect/models/device_connection.dart';
 
 import 'dart:async';
@@ -266,36 +268,17 @@ final class _ShellOperation {
           !running.isCompleted) {
         running.complete();
       }
-      events.add(
-        NativeAdbEvent(
-          kind: 'data',
-          bytes: Uint8List.fromList(bytes),
-          done: false,
-        ),
-      );
+      events.add(adbData(bytes));
     });
     final stderrDone = process.stderr.forEach((bytes) {
       errors.addAll(bytes);
       // exec 是合并输出，不能替生产解析器隐藏 shell 错误。
-      events.add(
-        NativeAdbEvent(
-          kind: 'data',
-          bytes: Uint8List.fromList(bytes),
-          done: false,
-        ),
-      );
+      events.add(adbData(bytes));
     });
     drained = () async {
       exitCode = await process.exitCode;
       await Future.wait([stdoutDone, stderrDone]);
-      events.add(
-        NativeAdbEvent(
-          kind: 'done',
-          bytes: Uint8List(0),
-          done: true,
-          exitCode: exitCode,
-        ),
-      );
+      events.add(adbDone(exitCode: exitCode));
       // 原生关闭只等待本机进程与管道，不反向等待尚在消费事件的调用者。
       unawaited(events.close());
     }();

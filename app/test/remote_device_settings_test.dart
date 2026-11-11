@@ -89,10 +89,7 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       _portraitViewport(tester);
       final commands = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         commands.add((command, params));
         if (command == 'session.start') {
           return _autoDisplayReceipt(params);
@@ -156,10 +153,7 @@ void main() {
         'width': 400,
         'height': 800,
       };
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         commands.add((command, params));
         if (command == 'session.list') {
           return {
@@ -227,10 +221,7 @@ void main() {
         );
         final semantics = tester.ensureSemantics();
         final commands = <(String, Json)>[];
-        final controller = createTestController((
-          command, [
-          params = const {},
-        ]) async {
+        final controller = createTestController((command, params) async {
           commands.add((command, params));
           if (command == 'session.start') {
             return {
@@ -313,10 +304,7 @@ void main() {
           'displayAuto': true,
           'displaySize': {'width': 960, 'height': 1920},
         };
-        final controller = createTestController((
-          command, [
-          params = const {},
-        ]) async {
+        final controller = createTestController((command, params) async {
           commands.add((command, params));
           if (command == 'session.resume') {
             return {
@@ -394,7 +382,7 @@ void main() {
       addTearDown(tester.view.resetViewInsets);
       final commands = <(String, Json)>[];
       final controller = createTestController(
-        (command, [params = const {}]) async {
+        (command, params) async {
           commands.add((command, params));
           if (command == 'session.start') {
             return _autoDisplayReceipt(params);

@@ -71,10 +71,7 @@ void main() {
       (tester) async {
         final calls = <(String, Json)>[];
         final usb = {...phone, 'transport': 'usb', 'status': 'offline'};
-        final controller = createTestController((
-          command, [
-          params = const {},
-        ]) async {
+        final controller = createTestController((command, params) async {
           calls.add((command, params));
           return command == 'devices.usb'
               ? {'devices': <Json>[]}
@@ -117,10 +114,7 @@ void main() {
     (tester) async {
       final calls = <(String, Json)>[];
       var removed = false;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add((command, params));
         if (command == 'devices.forget') removed = true;
         return command == 'devices.list'
@@ -157,10 +151,7 @@ void main() {
     'global key reset requires the second confirmation and cancels with zero mutations',
     (tester) async {
       final calls = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add((command, params));
         if (command == 'identity.global.get' ||
             command == 'identity.global.reset') {
@@ -197,10 +188,7 @@ void main() {
     'global import rejects a password and confirmation cancellation never replaces a key',
     (tester) async {
       final calls = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add((command, params));
         return command.startsWith('identity.global.')
             ? {'scope': 'global', 'fingerprint': 'SHA256:public-fingerprint'}
@@ -248,10 +236,7 @@ void main() {
     (tester) async {
       final calls = <(String, Json)>[];
       var attempt = 0;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add((command, params));
         if (command == 'devices.list') {
           return {
@@ -336,10 +321,7 @@ void main() {
     (tester) async {
       final calls = <(String, Json)>[];
       final offline = {...phone, 'status': 'offline'};
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add((command, params));
         return {};
       });
@@ -368,10 +350,7 @@ void main() {
     'existing device USB entry carries its identity before authorization',
     (tester) async {
       final calls = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         calls.add((command, params));
         return command == 'devices.usb'
             ? {'devices': <Json>[]}

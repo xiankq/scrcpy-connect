@@ -41,10 +41,7 @@ void main() {
       (tester) async {
         const device = {'id': 'phone', 'name': '来源手机', 'status': 'connected'};
         final commands = <(String, Json)>[];
-        final controller = createTestController((
-          command, [
-          params = const {},
-        ]) async {
+        final controller = createTestController((command, params) async {
           commands.add((command, params));
           if (command == 'notifications.list') {
             return {
@@ -112,10 +109,7 @@ void main() {
           'canDismiss': false,
         },
       ];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         commands.add((command, params));
         if (command == 'notifications.list') {
           return {
@@ -245,10 +239,7 @@ void main() {
       };
       final commands = <(String, Json)>[];
       final opening = Completer<Json>();
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         commands.add((command, params));
         if (command == 'notifications.list') {
           return {
@@ -305,10 +296,7 @@ void main() {
       var firstPresent = true;
       var opens = 0;
       final opening = Completer<Json>();
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'notifications.list') {
           return {
             'status': firstPresent ? 'limited' : 'available',

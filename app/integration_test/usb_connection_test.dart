@@ -16,7 +16,7 @@ import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_i
 import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
-import 'product_flow_test.dart' show waitFor;
+import 'support/production_app.dart' show waitFor;
 
 // 需要在 Android 主控上预先准备外部 USBIP ADB 夹具；Android UsbManager 和权限界面真实，仅线缆虚拟。
 void main() {

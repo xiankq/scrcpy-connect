@@ -18,7 +18,7 @@ void main() {
   late Directory directory;
   late DiagnosticLog log;
   setUp(() async {
-    controller = createTestController((_, [params = const {}]) async => {});
+    controller = createTestController((_, params) async => {});
     directory = await Directory.systemTemp.createTemp('connect-log-ui-');
     log = await DiagnosticLog.open(directory);
     log.record(

@@ -19,10 +19,7 @@ void main() {
     'switching to a pairing-code form cancels the hidden QR attempt first',
     (tester) async {
       final cancelled = <String>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'device.info') {
           return {'id': 'paired-device', 'name': '配对设备', 'status': 'offline'};
         }
@@ -61,10 +58,7 @@ void main() {
       final events = StreamController<Json>.broadcast();
       final cancelled = <String>[];
       var generation = 0;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'device.info') {
           return {'id': 'paired-device', 'name': '配对设备', 'status': 'offline'};
         }

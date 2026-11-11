@@ -17,10 +17,7 @@ void main() {
       final delayedRead = Completer<Json>();
       final source = ValueNotifier<String>('a');
       final cancelled = <String>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'delivery.get') {
           final owner = params['localPath'] == '/cache/a'
               ? 'owner-a'
@@ -119,10 +116,7 @@ void main() {
     'restored export reads its own pending conflict and resolves in the shared page',
     (tester) async {
       Json? read, resolved;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = createTestController((command, params) async {
         if (command == 'delivery.get') {
           return {
             'record': {'operationId': 'restored-owner', 'status': 'pending'},
