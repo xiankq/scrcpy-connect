@@ -3,13 +3,7 @@ import 'package:scrcpy_connect/models/file_cancellation.dart';
 import 'package:scrcpy_connect/models/file_stamp.dart';
 import 'package:scrcpy_connect/models/file_entry_fact.dart';
 import 'package:scrcpy_connect/models/file_directory_facts.dart';
-import 'package:scrcpy_connect/services/scoped_file_executor.dart';
-import 'package:scrcpy_connect/services/file_mutation_executor.dart';
-import 'package:scrcpy_connect/services/file_mutation_batch.dart';
-import 'package:scrcpy_connect/services/file_execution_resource.dart';
-import 'package:scrcpy_connect/services/file_execution_cleanup_failure.dart';
-import 'package:scrcpy_connect/services/file_read_executor.dart';
-import 'package:scrcpy_connect/services/file_read_batch.dart';
+import 'package:scrcpy_connect/services/file_executor.dart';
 import 'package:scrcpy_connect/models/device_connection.dart';
 
 import 'dart:async';
@@ -19,7 +13,6 @@ import 'dart:io';
 import 'package:adb/adb.dart' as adb;
 import 'package:path/path.dart' as p;
 
-import 'package:scrcpy_connect/services/file_executor.dart';
 
 /// 组合公开 ADB 文件能力；任务、缓存和业务设备身份仍由应用持有。
 final class AdbFileExecutor

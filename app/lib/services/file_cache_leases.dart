@@ -7,3 +7,8 @@ abstract interface class FileCacheLeases {
   Future<String> reserve(List<FileCacheReservation> reservations);
   Future<void> release(String lease);
 }
+
+abstract interface class CacheWriter {
+  String get leaseId;
+  Future<void> close();
+}

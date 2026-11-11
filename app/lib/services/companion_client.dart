@@ -3,7 +3,6 @@ import 'package:scrcpy_connect/models/companion_exception.dart';
 import 'package:scrcpy_connect/models/device_connection.dart';
 import 'package:scrcpy_connect/services/companion_deployment_identity.dart';
 import 'package:scrcpy_connect/models/companion_config.dart';
-import 'package:scrcpy_connect/services/companion_protocol.dart';
 
 import 'dart:async';
 import 'dart:collection';
@@ -17,7 +16,6 @@ import 'package:scrcpy_connect/services/companion_process.dart';
 
 export 'package:scrcpy_connect/services/companion_process.dart'
     show cleanupCompanionDeployment;
-export 'package:scrcpy_connect/services/companion_protocol.dart';
 
 final class _Request {
   _Request(this.id, this.bytes, this.mutation);
@@ -143,7 +141,7 @@ final class CompanionClient {
       _watch(_process!);
       _lifetime.check();
       _shellLines = StreamIterator(
-        companionLines(
+        _companionLines(
           _process!.events.map((event) => event.bytes),
           maximumBytes: 8192,
         ),
@@ -274,11 +272,11 @@ final class CompanionClient {
 
   Future<void> _readMessages() async {
     try {
-      await for (final frame in companionLines(
+      await for (final frame in _companionLines(
         _socket!.events.map((event) => event.bytes),
         maximumBytes: config.maximumMessageBytes,
       )) {
-        _receive(companionMessage(frame));
+        _receive(_companionMessage(frame));
       }
       if (!_lifetime.isCancelled) {
         _fault(const CompanionException('disconnected', '互联服务已断开。'));
@@ -634,5 +632,42 @@ final class CompanionClient {
     _mediaShutdowns.clear();
     _eventsFinished = true;
     _flushEvents();
+  }
+}
+
+/// 按字节限制单帧；不先把无换行输入解码为无界字符串。
+Stream<Uint8List> _companionLines(
+  Stream<Uint8List> chunks, {
+  required int maximumBytes,
+}) async* {
+  final pending = BytesBuilder(copy: false);
+  await for (final chunk in chunks) {
+    var start = 0;
+    for (var index = 0; index < chunk.length; index++) {
+      if (chunk[index] != 10) continue;
+      if (pending.length + index - start > maximumBytes) {
+        throw const CompanionException('protocol_error', '互联服务消息超过限制。');
+      }
+      pending.add(chunk.sublist(start, index));
+      yield pending.takeBytes();
+      start = index + 1;
+    }
+    if (pending.length + chunk.length - start > maximumBytes) {
+      throw const CompanionException('protocol_error', '互联服务消息超过限制。');
+    }
+    pending.add(chunk.sublist(start));
+  }
+  if (pending.isNotEmpty) {
+    throw const CompanionException('protocol_error', '互联服务消息在帧结束前中断。');
+  }
+}
+
+Map<String, Object?> _companionMessage(Uint8List frame) {
+  try {
+    final value = jsonDecode(utf8.decode(frame));
+    if (value is! Map<String, dynamic>) throw const FormatException();
+    return Map<String, Object?>.unmodifiable(value);
+  } on FormatException {
+    throw const CompanionException('protocol_error', '互联服务返回了无效 JSON 对象。');
   }
 }

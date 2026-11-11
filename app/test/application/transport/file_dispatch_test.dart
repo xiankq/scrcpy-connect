@@ -1,8 +1,7 @@
 import 'package:scrcpy_connect/models/file_failure.dart';
 import 'package:scrcpy_connect/models/file_cancellation.dart';
 import 'package:scrcpy_connect/models/file_stamp.dart';
-import 'package:scrcpy_connect/services/file_mutation_executor.dart';
-import 'package:scrcpy_connect/services/file_mutation_batch.dart';
+import 'package:scrcpy_connect/services/file_executor.dart';
 
 import 'dart:async';
 import 'dart:io';

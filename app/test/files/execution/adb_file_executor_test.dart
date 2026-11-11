@@ -2,7 +2,7 @@ import 'package:scrcpy_connect/models/device_connection.dart';
 import 'package:scrcpy_connect/models/file_failure.dart';
 import 'package:scrcpy_connect/models/file_cancellation.dart';
 import 'package:scrcpy_connect/models/file_stamp.dart';
-import 'package:scrcpy_connect/services/file_execution_cleanup_failure.dart';
+import 'package:scrcpy_connect/services/file_executor.dart';
 
 import 'dart:async';
 import 'dart:convert';

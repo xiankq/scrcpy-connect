@@ -2,7 +2,6 @@ import 'package:scrcpy_connect/models/file_cache_reservation.dart';
 import 'package:scrcpy_connect/services/file_cache_leases.dart';
 import 'package:scrcpy_connect/models/media_cache_failure.dart';
 import 'package:scrcpy_connect/stores/media_cache_gate.dart';
-import 'package:scrcpy_connect/services/cache_writer.dart';
 
 import 'dart:async';
 import 'dart:convert';

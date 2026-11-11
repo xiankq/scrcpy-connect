@@ -1,5 +1,5 @@
 import 'package:scrcpy_connect/models/file_failure.dart';
-import 'package:scrcpy_connect/services/managed_file_publication_leases.dart';
+import 'package:scrcpy_connect/services/file_publication_leases.dart';
 
 import 'dart:convert';
 import 'dart:async';

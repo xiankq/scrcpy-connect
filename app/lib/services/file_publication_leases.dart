@@ -22,3 +22,9 @@ abstract interface class FilePublicationLeases {
     Set<String>? coveredSources,
   });
 }
+
+/// 受管来源可在调用方未传发布标识时识别归属，禁止绕过持久租约。
+abstract interface class ManagedFilePublicationLeases
+    implements FilePublicationLeases {
+  Future<String?> ownerForSources(List<String> sources);
+}

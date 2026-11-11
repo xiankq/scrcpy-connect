@@ -119,25 +119,42 @@ List<String> checkArchitecture(
               '${relative(file.path)}: store/service 使用扁平目录与业务文件名前缀',
             );
           }
-          final classes = parsed.unit.declarations
+          final declarations = parsed.unit.declarations;
+          final classes = declarations
               .whereType<ClassDeclaration>()
-              .map((declaration) => declaration.namePart.typeName.lexeme)
-              .where((name) => !name.startsWith('_'))
+              .where(
+                (declaration) =>
+                    !declaration.namePart.typeName.lexeme.startsWith('_'),
+              )
               .toList();
-          if (classes.length > 1) {
+          // 能力接口和配套执行句柄共同描述同一个契约；实现仍只有一个公开主类。
+          if (classes
+                  .where(
+                    (declaration) =>
+                        declaration.abstractKeyword == null ||
+                        declaration.interfaceKeyword == null,
+                  )
+                  .length >
+              1) {
             problems.add(
               '${relative(file.path)}: 每个 store/service 文件只保留一个公开主类',
             );
-          } else if (classes.length == 1) {
-            final expected = classes.single
-                .replaceAllMapped(
-                  RegExp(r'([a-z0-9])([A-Z])'),
-                  (match) => '${match[1]}_${match[2]}',
-                )
-                .toLowerCase();
-            if (p.basenameWithoutExtension(file.path) != expected) {
+          }
+          if (classes.isNotEmpty) {
+            final names = classes.map(
+              (declaration) => declaration.namePart.typeName.lexeme,
+            );
+            final expected = names.map(
+              (name) => name
+                  .replaceAllMapped(
+                    RegExp(r'([a-z0-9])([A-Z])'),
+                    (match) => '${match[1]}_${match[2]}',
+                  )
+                  .toLowerCase(),
+            );
+            if (!expected.contains(p.basenameWithoutExtension(file.path))) {
               problems.add(
-                '${relative(file.path)}: 文件名应与主类 ${classes.single} 一致',
+                '${relative(file.path)}: 文件名应与主类 ${names.join(' / ')} 一致',
               );
             }
           }

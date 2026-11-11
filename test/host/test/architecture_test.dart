@@ -40,10 +40,14 @@ void main() {
         allowedDependencies: dependencies ?? {'a': {}, 'b': {}},
       );
 
-  test('状态和能力文件保持扁平、单公开类及名称一致', () {
+  test('能力契约就近组合并保持扁平及名称一致', () {
     application({
       'stores/file_store.dart': 'class FileStore {} class _Pending {}',
       'services/file_copy.dart': 'class FileCopy {} void _copy() {}',
+      'services/file_executor.dart':
+          'abstract interface class FileExecutor {} '
+          'abstract interface class FileReadBatch {} '
+          'class FileCleanupFailure {}',
     });
     expect(check(), isEmpty);
     application({
