@@ -27,8 +27,8 @@ typedef DeviceRecordsCommit = Future<void> Function(
 
 /// 本 isolate 的设备记录所有者；其他 isolate 向它发请求，不同时写入同一文件。
 /// 同目录实例共用队列与建议锁，每次提交读取最新磁盘值；仅在原子替换成功后发布内存快照。
-final class DeviceStore {
-  DeviceStore._(this.directory, this._idFactory, this._commitFile);
+final class DeviceRecordStorage {
+  DeviceRecordStorage._(this.directory, this._idFactory, this._commitFile);
   final Directory directory;
   final DeviceIdFactory _idFactory;
   final DeviceRecordsCommit _commitFile;
@@ -36,7 +36,7 @@ final class DeviceStore {
   DeviceRecordsSnapshot get current => _current;
   File get file => File.fromUri(directory.uri.resolve('devices.json'));
 
-  static Future<DeviceStore> open({
+  static Future<DeviceRecordStorage> open({
     required Directory directory,
     String? identityFingerprint,
     DeviceIdFactory? idFactory,
@@ -44,7 +44,7 @@ final class DeviceStore {
   }) async {
     if (identityFingerprint != null) _fingerprint(identityFingerprint);
     await directory.create(recursive: true);
-    final owner = DeviceStore._(
+    final owner = DeviceRecordStorage._(
       Directory(await directory.resolveSymbolicLinks()),
       idFactory ?? const Uuid().v4,
       commitFile ??

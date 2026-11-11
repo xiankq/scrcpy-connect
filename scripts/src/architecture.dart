@@ -158,6 +158,35 @@ List<String> checkArchitecture(
               );
             }
           }
+          final hasProvider =
+              declarations.any(
+                (declaration) => declaration.metadata.any(
+                  (annotation) =>
+                      {'riverpod', 'Riverpod'}.contains(annotation.name.name),
+                ),
+              ) ||
+              (parsed.unit.directives.whereType<ImportDirective>().any(
+                    (directive) => RegExp(
+                      r'^package:(hooks_riverpod|flutter_riverpod|riverpod)/',
+                    ).hasMatch(directive.uri.stringValue ?? ''),
+                  ) &&
+                  declarations.whereType<TopLevelVariableDeclaration>().any(
+                    (declaration) => declaration.variables.variables.any(
+                      (variable) => variable.name.lexeme.endsWith('Provider'),
+                    ),
+                  ));
+          if (segments.first == 'stores' &&
+              declarations.any(
+                (declaration) =>
+                    declaration is ClassDeclaration ||
+                    declaration is FunctionDeclaration ||
+                    declaration is TopLevelVariableDeclaration,
+              ) &&
+              !hasProvider) {
+            problems.add(
+              '${relative(file.path)}: store 必须提供 Riverpod provider/notifier',
+            );
+          }
         }
       }
       if (parsed.unit.directives.any(
@@ -188,6 +217,14 @@ List<String> checkArchitecture(
                 ).hasMatch(literal)) {
               problems.add(
                 '${relative(file.path)}: store/service 不得持有 Flutter 视图依赖 $literal',
+              );
+            }
+            if (layer == 'services' &&
+                RegExp(
+                  r'^package:(hooks_riverpod|flutter_riverpod|riverpod|riverpod_annotation)/',
+                ).hasMatch(literal)) {
+              problems.add(
+                '${relative(file.path)}: Riverpod provider 归 stores，service 不依赖 Riverpod',
               );
             }
           }

@@ -42,7 +42,7 @@ final class AppStoreProvider extends $NotifierProvider<AppStore, AppState> {
   }
 }
 
-String _$appStoreHash() => r'6b44401b4b43478a80d2eefcdfe3ce7832e6da5f';
+String _$appStoreHash() => r'999deed7a6b0b0f3d51817f7f0c970dbc84e2a55';
 
 abstract class _$AppStore extends $Notifier<AppState> {
   AppState build();

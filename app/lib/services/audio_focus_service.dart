@@ -2,8 +2,8 @@ import 'package:scrcpy_connect/models/application_request.dart';
 
 /// 为直接混音的宿主登记本机焦点租约，不将租约当作系统焦点证明。
 /// 原生输出创建仍须确认实际系统音频设备。
-class AudioFocusStore {
-  AudioFocusStore({this.backgroundPlaybackSupported = true});
+class AudioFocusService {
+  AudioFocusService({this.backgroundPlaybackSupported = true});
 
   final bool backgroundPlaybackSupported;
   int _nextEpoch = 0;

@@ -32,11 +32,11 @@ final class _AppLaunchPermit implements AppLaunchPermit {
 ///
 /// 只有先排空旧业务所有者后才能打开；跨 isolate 排空由应用宿主负责。
 /// 写入结果未知即封存本实例，重新打开核验原记录，不在内存中解除防重。
-final class AppLaunchStore {
-  AppLaunchStore._(this.file, this._now);
+final class AppLaunchJournal {
+  AppLaunchJournal._(this.file, this._now);
   static const _maximumBytes = 2 * 1024 * 1024, _maximumRecords = 1024;
   static final _queues = <String, Future<void>>{};
-  static final _owners = <String, WeakReference<AppLaunchStore>>{};
+  static final _owners = <String, WeakReference<AppLaunchJournal>>{};
   static final _random = Random.secure();
   final File file;
   final DateTime Function() _now;
@@ -44,13 +44,13 @@ final class AppLaunchStore {
   final _permits = <String, _AppLaunchPermit>{};
   bool _uncertain = false;
 
-  static Future<AppLaunchStore> open({
+  static Future<AppLaunchJournal> open({
     required Directory directory,
     DateTime Function()? now,
   }) async {
     await directory.create(recursive: true);
     final canonical = Directory(await directory.resolveSymbolicLinks());
-    final store = AppLaunchStore._(
+    final store = AppLaunchJournal._(
       File.fromUri(canonical.uri.resolve('app-opens.json')),
       now ?? DateTime.now,
     );

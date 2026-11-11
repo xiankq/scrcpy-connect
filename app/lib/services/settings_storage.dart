@@ -15,20 +15,20 @@ final _random = Random.secure();
 /// 独立持久化的偏好所有者，不写入、重命名或删除设备记录和授权身份。
 /// 只在同一 isolate 内使用，其他 isolate 应向该所有者发请求。
 /// POSIX 建议锁不能串行化同一进程内的多个 isolate。
-final class SettingsStore {
-  SettingsStore._(this.directory, this.schema);
+final class SettingsStorage {
+  SettingsStorage._(this.directory, this.schema);
   final Directory directory;
   final PreferenceSchema schema;
   late SettingsSnapshot _current;
   SettingsSnapshot get current => _current;
   File get _file => File.fromUri(directory.uri.resolve('preferences.json'));
 
-  static Future<SettingsStore> open({
+  static Future<SettingsStorage> open({
     required Directory directory,
     required PreferenceSchema schema,
   }) async {
     await directory.create(recursive: true);
-    final owner = SettingsStore._(
+    final owner = SettingsStorage._(
       Directory(await directory.resolveSymbolicLinks()),
       schema,
     );

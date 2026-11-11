@@ -12,7 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/services/application_platform.dart';
 import 'package:scrcpy_connect/services/file_document_service.dart';
-import 'package:scrcpy_connect/stores/file_document_store.dart';
+import 'package:scrcpy_connect/services/file_document_cache.dart';
 import 'package:scrcpy_connect/services/file_document_recovery.dart';
 
 // 虚拟时钟不会推进可信根解析的真实文件系统回执。等待实际阶段，同时
@@ -46,7 +46,7 @@ Matcher documentFailure(String code) =>
 class Fixture {
   Fixture({this.cacheDirectory = '/cache', this.sources});
   final String cacheDirectory;
-  final FileDocumentStore? sources;
+  final FileDocumentCache? sources;
   bool ownerReady = true;
 
   void mockPlatformChannel() {
@@ -389,7 +389,7 @@ void main() {
   test('managed imports drain before publication and each copy receives the shared remaining budget', () async {
     final cache = await Directory.systemTemp.createTemp('documents-managed-');
     addTearDown(() => cache.delete(recursive: true));
-    final sources = await FileDocumentStore.open(
+    final sources = await FileDocumentCache.open(
       cacheDirectory: cache,
       totalBytes: 5,
     );
@@ -409,7 +409,7 @@ void main() {
     };
     final first = await f.coordinator.request('documents.importDirectory');
     expect(first['status'], 'imported');
-    expect(first['managedSourceId'], startsWith(FileDocumentStore.prefix));
+    expect(first['managedSourceId'], startsWith(FileDocumentCache.prefix));
     expect(await sources.store.sourcePaths, hasLength(1));
     final second = await f.coordinator.request('documents.importDirectory');
     expect(second['status'], 'partial');

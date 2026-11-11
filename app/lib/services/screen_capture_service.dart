@@ -11,7 +11,7 @@ import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/video_quality_policy.dart';
 import 'package:scrcpy_connect/services/virtual_display_policy.dart';
-import 'package:scrcpy_connect/stores/app_launch_store.dart';
+import 'package:scrcpy_connect/services/app_launch_journal.dart';
 import 'package:scrcpy_connect/services/display_lease.dart';
 import 'package:scrcpy_connect/models/session_policy.dart';
 import 'package:scrcpy_connect/services/session_shell.dart';
@@ -99,7 +99,7 @@ final class ScreenCaptureService {
 
   final ScrcpyClient _scrcpy;
   final DeviceConnection Function(String) _requireConnection;
-  final AppLaunchStore _launches;
+  final AppLaunchJournal _launches;
   // 借用应用唯一清单查询所有者；窗口关闭不能关闭并行的安装应用查询。
   final ScrcpyServerQueries _serverQueries;
   final void Function(String, String, Map<String, Object?>) _emitEvent;

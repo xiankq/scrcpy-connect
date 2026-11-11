@@ -10,7 +10,7 @@ import 'dart:math';
 import 'package:uuid/uuid.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/models/share_limits.dart';
-import 'package:scrcpy_connect/services/file_share_store_format.dart';
+import 'package:scrcpy_connect/services/file_share_ledger_format.dart';
 import 'package:scrcpy_connect/services/file_share_storage.dart';
 import 'package:scrcpy_connect/services/file_source_tree.dart';
 
@@ -20,8 +20,8 @@ export 'package:scrcpy_connect/models/share_limits.dart';
 
 /// 分享来源及发布关系的唯一持久所有者；不读取平台 FD，也不拥有传输任务。
 /// 再次打开前必须先排空旧复制 scope。未知存储结果封存旧实例，不能自行解除。
-final class FileShareStore implements FilePublicationLeases {
-  FileShareStore._(
+final class FileShareLedger implements FilePublicationLeases {
+  FileShareLedger._(
     this.root,
     this.limits,
     this._onChanged,
@@ -42,9 +42,9 @@ final class FileShareStore implements FilePublicationLeases {
   bool _uncertain = false;
   int _unknownBatches = 0;
   static final _queues = <String, Future<void>>{};
-  static final _owners = <String, WeakReference<FileShareStore>>{};
+  static final _owners = <String, WeakReference<FileShareLedger>>{};
 
-  static Future<FileShareStore> open({
+  static Future<FileShareLedger> open({
     required Directory cacheDirectory,
     ShareLimits limits = const ShareLimits(),
     void Function(Map<String, dynamic>)? onChanged,
@@ -65,7 +65,7 @@ final class FileShareStore implements FilePublicationLeases {
     }
     await root.create();
     if (await root.resolveSymbolicLinks() != root.path) _bad('分享目录跳转到了其他位置。');
-    final store = FileShareStore._(
+    final store = FileShareLedger._(
       root,
       limits,
       onChanged,

@@ -1,5 +1,5 @@
 import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/stores/gallery_store.dart';
+import 'package:scrcpy_connect/services/gallery_history_cache.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
@@ -16,7 +16,7 @@ class AppStore extends _$AppStore {
       !_disposed &&
       (_dependencies.completeDocumentSelection?.call(id, result) ?? false);
 
-  final galleryHistory = GalleryStore();
+  final galleryHistory = GalleryHistoryCache();
   late AppDependencies _dependencies;
   late StreamController<Json> _events;
 

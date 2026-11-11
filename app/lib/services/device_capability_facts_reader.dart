@@ -13,7 +13,7 @@ import 'package:scrcpy_connect/models/connection_policy.dart';
 import 'package:scrcpy_connect/services/device_query.dart';
 import 'package:scrcpy_connect/services/adb_identity_service.dart';
 import 'package:scrcpy_connect/models/device_record.dart';
-import 'package:scrcpy_connect/stores/device_store.dart';
+import 'package:scrcpy_connect/services/device_record_storage.dart';
 
 /// 从应用的精确连接和公开 SDK 读取有界事实，不承担连接、部署或记录写入。
 final class DeviceCapabilityFactsReader {
@@ -31,7 +31,7 @@ final class DeviceCapabilityFactsReader {
            ((host, port, timeout) =>
                Socket.connect(host, port, timeout: timeout));
 
-  final DeviceStore records;
+  final DeviceRecordStorage records;
   final AdbIdentityService identities;
   final DeviceConnection? Function(String) connectionForDevice;
   final ConnectionPolicy policy;

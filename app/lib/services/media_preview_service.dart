@@ -15,7 +15,7 @@ import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/file_paths.dart';
 import 'package:scrcpy_connect/services/file_type_policy.dart';
-import 'package:scrcpy_connect/stores/media_cache_store.dart';
+import 'package:scrcpy_connect/services/media_cache_service.dart';
 
 typedef MediaArtifactRequest = Future<Map<String, dynamic>> Function(
   String command,
@@ -30,7 +30,7 @@ final class MediaPreviewService {
     required this.request,
     this.emit,
   });
-  final MediaCacheStore cache;
+  final MediaCacheService cache;
   final FileExecutor executor;
   final MediaArtifactRequest request;
   final void Function(Map<String, dynamic>)? emit;
@@ -776,7 +776,7 @@ final class _Operation {
     }
   }
 
-  Future<void> releaseResult(MediaCacheStore cache) async {
+  Future<void> releaseResult(MediaCacheService cache) async {
     if (resultLease case final lease?) {
       await cache.release(lease);
       resultLease = null;

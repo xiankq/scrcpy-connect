@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/services/device_observation_service.dart';
-import 'package:scrcpy_connect/stores/device_store.dart';
+import 'package:scrcpy_connect/services/device_record_storage.dart';
 
 import 'coordinator_fixture.dart';
 
@@ -71,7 +71,7 @@ void main() {
     expect(fixture.writes.attempts, commits + 1);
     expect(await fixture.records.file.readAsString(), before);
     expect(
-      (await DeviceStore.open(directory: fixture.directory)).current
+      (await DeviceRecordStorage.open(directory: fixture.directory)).current
           .find(fixture.id)!
           .observationWanted,
       isFalse,
@@ -82,7 +82,7 @@ void main() {
     fixture.writes.fail = false;
     expect((await fixture.command('observation.start'))['phase'], 'limited');
     expect(
-      (await DeviceStore.open(directory: fixture.directory)).current
+      (await DeviceRecordStorage.open(directory: fixture.directory)).current
           .find(fixture.id)!
           .observationWanted,
       isTrue,
@@ -95,7 +95,9 @@ void main() {
     final result = await fixture.command('observation.start');
     expect(result['phase'], 'limited');
     expect((result['notifications']! as Map)['live'], isFalse);
-    final reopened = await DeviceStore.open(directory: fixture.directory);
+    final reopened = await DeviceRecordStorage.open(
+      directory: fixture.directory,
+    );
     expect(reopened.current.find(fixture.id)!.observationWanted, isTrue);
     expect(fixture.base.companion.capabilityState(fixture.id)['protocol'], 1);
     expect(fixture.base.companion.capabilityState(fixture.id)['apiLevel'], 35);
@@ -345,7 +347,7 @@ class _ObservationFixture {
       'companion-observation-',
     );
     final writes = _Writes();
-    final records = await DeviceStore.open(
+    final records = await DeviceRecordStorage.open(
       directory: directory,
       commitFile: (temporary, destination) async {
         writes.attempts++;
@@ -363,7 +365,7 @@ class _ObservationFixture {
   }
 
   final Directory directory;
-  final DeviceStore records;
+  final DeviceRecordStorage records;
   final String id;
   final _Writes writes;
   final base = CoordinatorFixture();

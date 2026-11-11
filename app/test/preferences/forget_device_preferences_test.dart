@@ -1,19 +1,19 @@
-import 'package:scrcpy_connect/stores/device_store.dart';
+import 'package:scrcpy_connect/services/device_record_storage.dart';
 
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/app_settings.dart';
-import 'package:scrcpy_connect/stores/settings_store.dart';
+import 'package:scrcpy_connect/services/settings_storage.dart';
 
 const _forgotten = '7b2a4273-cd2e-4aca-b86e-1e6d81170c81';
 const _remaining = '8cd3c688-670c-46c1-b605-d140d9d8b4aa';
 
 void main() {
   late Directory directory;
-  late SettingsStore preferences;
-  late DeviceStore records;
+  late SettingsStorage preferences;
+  late DeviceRecordStorage records;
   final changes = <Map<String, dynamic>>[];
 
   AppSettings commands({bool failApply = false}) => AppSettings(
@@ -30,7 +30,7 @@ void main() {
     changes.clear();
     directory = await Directory.systemTemp.createTemp('forgotten-preferences-');
     preferences = await AppSettings.prepare(directory);
-    records = await DeviceStore.open(directory: directory);
+    records = await DeviceRecordStorage.open(directory: directory);
     await preferences.update({
       'appearance': 'dark',
       'appOpenModes': {

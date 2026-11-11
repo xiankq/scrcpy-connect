@@ -1,12 +1,12 @@
 import 'package:scrcpy_connect/models/file_failure.dart';
 import 'package:scrcpy_connect/services/file_publication_leases.dart';
-import 'package:scrcpy_connect/stores/file_document_store.dart';
+import 'package:scrcpy_connect/services/file_document_cache.dart';
 
 /// 只组合来源所有者；任务日志与来源账本仍各自负责持久状态。
 final class FilePublicationLeasePool implements ManagedFilePublicationLeases {
   FilePublicationLeasePool({this.sharing, required this.documents});
   final FilePublicationLeases? sharing;
-  final FileDocumentStore documents;
+  final FileDocumentCache documents;
 
   @override
   Future<Set<String>> get sourcePaths async => {
@@ -24,7 +24,7 @@ final class FilePublicationLeasePool implements ManagedFilePublicationLeases {
     Map<String, Object?> request, {
     String? transferId,
   }) {
-    if (id.startsWith(FileDocumentStore.prefix)) {
+    if (id.startsWith(FileDocumentCache.prefix)) {
       return documents.begin(id, request, transferId: transferId);
     }
     if (sharing case final owner?) {
@@ -39,7 +39,7 @@ final class FilePublicationLeasePool implements ManagedFilePublicationLeases {
     Map<String, Object?>? receipt, {
     bool definitelyUnpublished = false,
   }) {
-    if (id.startsWith(FileDocumentStore.prefix)) {
+    if (id.startsWith(FileDocumentCache.prefix)) {
       return documents.finish(
         id,
         receipt,

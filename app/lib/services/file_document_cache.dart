@@ -6,19 +6,19 @@ import 'dart:math';
 
 import 'package:uuid/uuid.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/stores/file_share_store.dart';
+import 'package:scrcpy_connect/services/file_share_ledger.dart';
 import 'package:scrcpy_connect/services/file_source_tree.dart';
 
 /// 文档复制结果的页面持有权；持久发布关系复用来源账本。
 /// 打开前，调用方必须先排空旧文档 scope 和平台 worker。
-final class FileDocumentStore {
-  FileDocumentStore._(this.store, this._legacyRoot, this.totalBytes);
-  final FileShareStore store;
+final class FileDocumentCache {
+  FileDocumentCache._(this.store, this._legacyRoot, this.totalBytes);
+  final FileShareLedger store;
   final Directory _legacyRoot;
   final int totalBytes;
   static const prefix = 'document:';
 
-  static Future<FileDocumentStore> open({
+  static Future<FileDocumentCache> open({
     required Directory cacheDirectory,
     int totalBytes = 8 * 1024 * 1024 * 1024,
   }) async {
@@ -30,7 +30,7 @@ final class FileDocumentStore {
     }
     await root.create();
     root = Directory(await root.resolveSymbolicLinks());
-    final store = await FileShareStore.open(
+    final store = await FileShareLedger.open(
       cacheDirectory: root,
       directoryName: 'managed',
       directorySources: true,
@@ -40,7 +40,7 @@ final class FileDocumentStore {
         totalBytes: totalBytes,
       ),
     );
-    final owner = FileDocumentStore._(store, root, totalBytes);
+    final owner = FileDocumentCache._(store, root, totalBytes);
     // 页面不会跨进程存活。没有发布租约的页面持有权在恢复栅栏后可以归还；
     // publishing/unknown/bound 租约由同一账本保护，consume 不解除这些租约。
     final pending = await store.pending();

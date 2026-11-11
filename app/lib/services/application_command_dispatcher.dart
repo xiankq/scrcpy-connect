@@ -4,9 +4,9 @@ import 'package:scrcpy_connect/models/file_stamp.dart';
 
 import 'package:scrcpy_connect/models/media_cache_failure.dart';
 import 'package:scrcpy_connect/models/file_failure.dart';
-import 'package:scrcpy_connect/stores/media_cache_store.dart';
+import 'package:scrcpy_connect/services/media_cache_service.dart';
 import 'package:scrcpy_connect/services/media_preview_service.dart';
-import 'package:scrcpy_connect/stores/file_delivery_store.dart';
+import 'package:scrcpy_connect/services/file_delivery_journal.dart';
 
 import 'package:scrcpy_connect/services/file_catalog.dart';
 import 'package:scrcpy_connect/services/file_mutation_service.dart';
@@ -44,8 +44,8 @@ final class ApplicationCommandDispatcher {
   execute;
   final AppSettings _preferences;
   final void Function(Map<String, dynamic>)? _onMediaEvent;
-  final MediaCacheStore? _cache;
-  final FileDeliveryStore? _deliveries;
+  final MediaCacheService? _cache;
+  final FileDeliveryJournal? _deliveries;
   final FileShareService? _sharing;
   final MediaPreviewService? _artifacts;
 

@@ -1,7 +1,7 @@
 import 'package:scrcpy_connect/models/file_cache_reservation.dart';
 import 'package:scrcpy_connect/services/file_cache_leases.dart';
 import 'package:scrcpy_connect/models/media_cache_failure.dart';
-import 'package:scrcpy_connect/stores/media_cache_gate.dart';
+import 'package:scrcpy_connect/services/media_cache_gate.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -28,7 +28,7 @@ typedef CacheConfigurationCommit = Future<void> Function(
 /// 明确持有写入路径及剩余字节预算；本机任务的 finally 中关闭，不用 GC 决定租约寿命。
 final class _CacheWriter implements CacheWriter {
   _CacheWriter._(this._owner, this.leaseId);
-  final MediaCacheStore _owner;
+  final MediaCacheService _owner;
   @override
   final String leaseId;
   bool _closed = false;
@@ -42,8 +42,8 @@ final class _CacheWriter implements CacheWriter {
 
 /// 受管缓存的应用所有者；配置提交结果未知时只允许释放已有租约。
 /// 恢复存储后应结束旧任务、释放租约，再重新打开；旧实例不会自行解除封锁。
-final class MediaCacheStore implements FileCacheLeases {
-  MediaCacheStore._(
+final class MediaCacheService implements FileCacheLeases {
+  MediaCacheService._(
     this.root,
     this.gate,
     this._protectedPaths,
@@ -67,7 +67,7 @@ final class MediaCacheStore implements FileCacheLeases {
   final _leases = <String, List<_Reservation>>{};
   File get _configurationFile => File(p.join(root.path, 'media-cache.json'));
 
-  static Future<MediaCacheStore> open({
+  static Future<MediaCacheService> open({
     required Directory root,
     MediaCacheGate? gate,
     CacheProtectedPaths? protectedPaths,
@@ -77,7 +77,7 @@ final class MediaCacheStore implements FileCacheLeases {
   }) async {
     await _plainPath(root.path);
     await root.create(recursive: true);
-    final owner = MediaCacheStore._(
+    final owner = MediaCacheService._(
       Directory(p.normalize(root.path)),
       gate ?? MediaCacheGate(),
       protectedPaths ?? () => const <String>[],
@@ -287,7 +287,7 @@ final class MediaCacheStore implements FileCacheLeases {
     ]),
   );
 
-  /// FileDeliveryStore 持有同一个 gate 后调用，再在 gate 内提交 pending 记录。
+  /// FileDeliveryJournal 持有同一个 gate 后调用，再在 gate 内提交 pending 记录。
   /// 此方法不排队；protectedPaths 回调也必须遵循 gate → journal 的锁顺序。
   Future<void> validateDeliveryLocked(String path) async {
     _requireConfirmedStorage();

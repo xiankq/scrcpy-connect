@@ -9,7 +9,7 @@ import 'package:adb/adb.dart' as adb;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/adb_file_executor.dart';
-import 'package:scrcpy_connect/stores/media_cache_store.dart';
+import 'package:scrcpy_connect/services/media_cache_service.dart';
 import 'package:scrcpy_connect/services/media_preview_service.dart';
 
 void main() {
@@ -151,14 +151,14 @@ final _cleanup = isA<RequestFailure>().having(
 final class _Fixture {
   _Fixture(this.root, this.cache, this.api, this.replacementApi);
   final Directory root;
-  final MediaCacheStore cache;
+  final MediaCacheService cache;
   final _Api api, replacementApi;
   late final DeviceConnection replacement;
   late DeviceConnection current;
   late final MediaPreviewService owner;
   static Future<_Fixture> open() async {
     final root = await Directory.systemTemp.createTemp('preview-cleanup-');
-    final cache = await MediaCacheStore.open(root: root);
+    final cache = await MediaCacheService.open(root: root);
     final api = _Api(), other = _Api();
     final fixture = _Fixture(root, cache, api, other);
     final client = adb.NativeAdbClient(api, '/unused/key');

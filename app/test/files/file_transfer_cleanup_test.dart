@@ -11,7 +11,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/services/file_transfer_service.dart';
-import 'package:scrcpy_connect/stores/file_transfer_store.dart';
+import 'package:scrcpy_connect/services/file_transfer_journal.dart';
 
 void main() {
   test('取消失败保留精确执行与缓存，所有取消入口和关闭沿原句柄重试', () async {
@@ -33,7 +33,7 @@ void main() {
       expect(task['canRestart'], isFalse);
       expect(task['canCancel'], isTrue);
       expect(fixture.cache.leases, hasLength(1));
-      final saved = (await FileTransferStore(fixture.root).load())[id]!;
+      final saved = (await FileTransferJournal(fixture.root).load())[id]!;
       expect(saved['cleanupPending'], isTrue);
       expect(saved['errorCode'], 'result_unknown');
       await expectLater(
@@ -243,7 +243,7 @@ void main() {
       expect(fixture.executor.copyCalls, 2);
       expect(fixture.cache.leases, isEmpty);
       expect(
-        (await FileTransferStore(fixture.root).load())[id]!['generation'],
+        (await FileTransferJournal(fixture.root).load())[id]!['generation'],
         1,
       );
     } finally {
@@ -299,7 +299,7 @@ void main() {
       await removing;
       await rejected;
       expect((fixture.owner.transfers()['transfers']! as List), isEmpty);
-      expect(await FileTransferStore(fixture.root).load(), isEmpty);
+      expect(await FileTransferJournal(fixture.root).load(), isEmpty);
       expect(fixture.cache.sequence, 1);
       expect(fixture.cache.leases, isEmpty);
     } finally {
@@ -362,7 +362,7 @@ void main() {
         expect(fixture.cache.leases, isEmpty);
         expect(fixture.executor.copyCalls, 0);
         expect(fixture.owner.transfers()['transfers'], isEmpty);
-        expect(await FileTransferStore(fixture.root).load(), isEmpty);
+        expect(await FileTransferJournal(fixture.root).load(), isEmpty);
         expect(fixture.cache.successfulReleases, ['lease-1']);
       } finally {
         await fixture.dispose();
@@ -399,7 +399,7 @@ void main() {
           _throwsCode('cancelled'),
         );
         await stopping.future;
-        final records = await FileTransferStore(fixture.root).load();
+        final records = await FileTransferJournal(fixture.root).load();
         expect(records, hasLength(2));
         expect(
           records.values.map((task) => task['status']),
@@ -461,7 +461,7 @@ void main() {
         _throwsCode('file_cleanup_unconfirmed'),
       );
       expect(fixture.owner.transfers()['transfers'], isEmpty);
-      expect(await FileTransferStore(fixture.root).load(), isEmpty);
+      expect(await FileTransferJournal(fixture.root).load(), isEmpty);
       expect(fixture.cache.leases, {'lease-1'});
       await expectLater(
         fixture.owner.close(),

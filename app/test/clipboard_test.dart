@@ -9,7 +9,7 @@ import 'dart:ui' show ViewFocusDirection, ViewFocusEvent, ViewFocusState;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/services/clipboard_sync.dart';
+import 'package:scrcpy_connect/stores/clipboard_sync_store.dart';
 
 import 'support/test_controller.dart';
 

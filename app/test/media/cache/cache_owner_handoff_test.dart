@@ -8,13 +8,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/services/file_executor.dart';
 import 'package:scrcpy_connect/services/file_transfer_service.dart';
-import 'package:scrcpy_connect/stores/file_transfer_store.dart';
-import 'package:scrcpy_connect/stores/media_cache_store.dart';
+import 'package:scrcpy_connect/services/file_transfer_journal.dart';
+import 'package:scrcpy_connect/services/media_cache_service.dart';
 
 void main() {
   test('新缓存 reserve 失败时保留旧所有者；重试先覆盖全部未知任务再释放各代旧租约', () async {
     final root = await Directory.systemTemp.createTemp('cache-owner-handoff-');
-    final journal = FileTransferStore(root);
+    final journal = FileTransferJournal(root);
     for (final id in ['first', 'second']) {
       final file = File(p.join(root.path, 'media', id, 'original'));
       await file.parent.create(recursive: true);
@@ -36,9 +36,10 @@ void main() {
         'policy': 'ask',
       });
     }
-    final old = _Cache(await MediaCacheStore.open(root: root));
-    final failing = _Cache(await MediaCacheStore.open(root: root))..failOn = 2;
-    final fresh = _Cache(await MediaCacheStore.open(root: root));
+    final old = _Cache(await MediaCacheService.open(root: root));
+    final failing = _Cache(await MediaCacheService.open(root: root))
+      ..failOn = 2;
+    final fresh = _Cache(await MediaCacheService.open(root: root));
     FileTransferService? owner;
     try {
       owner = await FileTransferService.open(
@@ -92,7 +93,7 @@ void main() {
 
 final class _Cache implements FileCacheLeases {
   _Cache(this.owner);
-  final MediaCacheStore owner;
+  final MediaCacheService owner;
   int calls = 0, releases = 0;
   int? failOn;
   final active = <String>{};

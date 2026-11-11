@@ -8,7 +8,7 @@ import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
 import 'package:scrcpy_connect/services/scrcpy_server_queries.dart';
-import 'package:scrcpy_connect/stores/app_launch_store.dart';
+import 'package:scrcpy_connect/services/app_launch_journal.dart';
 import 'package:scrcpy_connect/services/device_audio_service.dart';
 import 'package:scrcpy_connect/services/scrcpy_capture_adapter.dart';
 import 'package:scrcpy_connect/services/screen_capture_service.dart';
@@ -55,7 +55,7 @@ final class MediaOwnerFixture {
   static final _retiring = <MediaOwnerFixture>{};
   final ScrcpyNativeHost _host;
   final ScrcpyServerQueries _queries;
-  final AppLaunchStore _launches;
+  final AppLaunchJournal _launches;
   DeviceConnection? _connection;
   final _eligibilityTasks = <Future<void>>{};
   final _eligibilityFailures = <(Object, StackTrace)>[];
@@ -91,7 +91,7 @@ final class MediaOwnerFixture {
       serverBytes: servers.scrcpyBytes,
       timeout: policy.probeTimeout,
     );
-    final launches = await AppLaunchStore.open(directory: directory);
+    final launches = await AppLaunchJournal.open(directory: directory);
     final host = await createNativeScrcpyHost(
       serverBytes: servers.scrcpyBytes,
       identityPath: p.join(directory.path, 'host_identity.pem'),

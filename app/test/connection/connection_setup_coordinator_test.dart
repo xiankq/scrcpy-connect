@@ -15,7 +15,7 @@ import 'package:scrcpy_connect/services/device_connection_service.dart';
 import 'package:scrcpy_connect/services/device_service.dart';
 import 'package:scrcpy_connect/services/device_discovery.dart';
 import 'package:scrcpy_connect/services/adb_identity_service.dart';
-import 'package:scrcpy_connect/stores/device_store.dart';
+import 'package:scrcpy_connect/services/device_record_storage.dart';
 
 import 'support/disk_identities.dart';
 
@@ -625,7 +625,7 @@ Matcher _failure(String code) =>
 final class _Fixture {
   _Fixture(this.root);
   final Directory root;
-  late final DeviceStore records;
+  late final DeviceRecordStorage records;
   late final AdbIdentityService identities;
   late final DeviceService devices;
   late final DeviceDiscovery discovery;
@@ -652,7 +652,7 @@ final class _Fixture {
     final fixture = _Fixture(
       await Directory.systemTemp.createTemp('setup-typed-'),
     );
-    fixture.records = await DeviceStore.open(
+    fixture.records = await DeviceRecordStorage.open(
       directory: fixture.root,
       idFactory: () =>
           '00000000-0000-4000-8000-${(++fixture._nextId).toString().padLeft(12, '0')}',

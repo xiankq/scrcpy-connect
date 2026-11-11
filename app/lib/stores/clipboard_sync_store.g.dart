@@ -2,7 +2,7 @@
 
 // ignore_for_file: unnecessary_cast
 
-part of 'clipboard_sync.dart';
+part of 'clipboard_sync_store.dart';
 
 // **************************************************************************
 // RiverpodGenerator

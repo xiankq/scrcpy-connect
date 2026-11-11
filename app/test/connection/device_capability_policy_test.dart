@@ -12,7 +12,7 @@ import 'package:scrcpy_connect/models/connection_policy.dart';
 import 'package:scrcpy_connect/services/device_capability_facts_reader.dart';
 import 'package:scrcpy_connect/services/device_capability_policy.dart';
 import 'package:scrcpy_connect/services/adb_identity_service.dart';
-import 'package:scrcpy_connect/stores/device_store.dart';
+import 'package:scrcpy_connect/services/device_record_storage.dart';
 
 void main() {
   late _Fixture fixture;
@@ -324,7 +324,7 @@ Matcher _failure(String code) =>
 final class _Fixture {
   _Fixture(this.directory);
   final Directory directory;
-  late DeviceStore records;
+  late DeviceRecordStorage records;
   late AdbIdentityService identities;
   final identityApi = _Identities();
   final client = _Client();
@@ -339,7 +339,9 @@ final class _Fixture {
     final fixture = _Fixture(
       await Directory.systemTemp.createTemp('capability-facts-'),
     );
-    fixture.records = await DeviceStore.open(directory: fixture.directory);
+    fixture.records = await DeviceRecordStorage.open(
+      directory: fixture.directory,
+    );
     fixture.identities = await AdbIdentityService.open(
       directory: fixture.directory,
       records: fixture.records,

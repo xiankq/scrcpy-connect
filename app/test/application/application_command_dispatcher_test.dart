@@ -1,6 +1,6 @@
-import 'package:scrcpy_connect/stores/media_cache_gate.dart';
+import 'package:scrcpy_connect/services/media_cache_gate.dart';
 import 'package:scrcpy_connect/services/file_cache_leases.dart';
-import 'package:scrcpy_connect/stores/device_store.dart';
+import 'package:scrcpy_connect/services/device_record_storage.dart';
 
 import 'dart:async';
 import 'dart:io';
@@ -10,8 +10,8 @@ import 'package:flutter_test/flutter_test.dart';
 import '../media/cache/support/media_file_fixture.dart';
 
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/stores/file_delivery_store.dart';
-import 'package:scrcpy_connect/stores/media_cache_store.dart';
+import 'package:scrcpy_connect/services/file_delivery_journal.dart';
+import 'package:scrcpy_connect/services/media_cache_service.dart';
 import 'package:scrcpy_connect/services/media_preview_service.dart';
 import 'package:scrcpy_connect/services/file_share_service.dart';
 import 'package:scrcpy_connect/services/application_command_dispatcher.dart';
@@ -24,14 +24,14 @@ import 'package:scrcpy_connect/services/file_executor.dart';
 import '../files/support/file_executor_fixture.dart';
 
 import 'package:scrcpy_connect/services/app_settings.dart';
-import 'package:scrcpy_connect/stores/settings_store.dart';
+import 'package:scrcpy_connect/services/settings_storage.dart';
 
 const _device = '7b2a4273-cd2e-4aca-b86e-1e6d81170c81';
 
 void main() {
   late Directory directory;
-  late SettingsStore preferences;
-  late DeviceStore records;
+  late SettingsStorage preferences;
+  late DeviceRecordStorage records;
   late _FileOwners owners;
   final artifacts = <MediaPreviewService>[];
   setUp(() async {
@@ -41,7 +41,7 @@ void main() {
       FixtureExecutor(),
     );
     preferences = await AppSettings.prepare(directory);
-    records = await DeviceStore.open(directory: directory);
+    records = await DeviceRecordStorage.open(directory: directory);
     await preferences.update({
       'deviceQuality': {
         _device: {'maxFps': 30},
@@ -65,13 +65,13 @@ void main() {
     required FileCatalog catalog,
     required FileMutationService mutations,
     required FileTransferService transfers,
-    required SettingsStore preferences,
+    required SettingsStorage preferences,
     required Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)
     execute,
     required void Function(Map<String, dynamic>) onSettingsChanged,
     required Future<void> Function(bool) applyBackgroundPolicy,
-    MediaCacheStore? cache,
-    FileDeliveryStore? deliveries,
+    MediaCacheService? cache,
+    FileDeliveryJournal? deliveries,
     FileShareService? sharing,
     void Function(Map<String, dynamic>)? onMediaEvent,
   }) {
@@ -163,13 +163,13 @@ void main() {
 
   test('生产分发器在应用执行缓存及保存日志命令，不调用原生业务 owner', () async {
     final gate = MediaCacheGate();
-    late final MediaCacheStore cache;
-    final journal = await FileDeliveryStore.open(
+    late final MediaCacheService cache;
+    final journal = await FileDeliveryJournal.open(
       directory,
       cacheGate: gate,
       validateSource: (path) => cache.validateDeliveryLocked(path),
     );
-    cache = await MediaCacheStore.open(
+    cache = await MediaCacheService.open(
       root: directory,
       gate: gate,
       protectedPaths: () => journal.protectedPaths,
@@ -245,12 +245,12 @@ void main() {
         'saved',
       );
       expect(
-        (await (await MediaCacheStore.open(root: directory))
+        (await (await MediaCacheService.open(root: directory))
             .status())['budgetBytes'],
         8192,
       );
       expect(
-        ((await (await FileDeliveryStore.open(directory))
+        ((await (await FileDeliveryJournal.open(directory))
                 .command('delivery.get', identity))['record']
             as Map)['status'],
         'saved',

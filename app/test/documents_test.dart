@@ -1,5 +1,5 @@
 import 'package:flutter/services.dart';
-import 'package:scrcpy_connect/stores/file_selection_store.dart';
+import 'package:scrcpy_connect/services/file_selection_requests.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:path/path.dart' as p;
@@ -60,7 +60,7 @@ void main() {
             pickerCalls++;
             return chosen.future;
           });
-      final selections = FileSelectionStore(
+      final selections = FileSelectionRequests(
         (plan) =>
             events.add({'type': 'documents.selection.requested', 'data': plan}),
       );

@@ -16,7 +16,7 @@ import 'package:scrcpy_connect/services/device_discovery.dart';
 import 'package:scrcpy_connect/services/device_reconnection_candidates.dart';
 import 'package:scrcpy_connect/services/adb_identity_service.dart';
 import 'package:scrcpy_connect/models/device_record.dart';
-import 'package:scrcpy_connect/stores/device_store.dart';
+import 'package:scrcpy_connect/services/device_record_storage.dart';
 
 const _transientConnectionErrors = {
   'connection_refused',
@@ -63,7 +63,7 @@ final class DeviceService {
     );
   }
 
-  final DeviceStore records;
+  final DeviceRecordStorage records;
   final AdbIdentityService identities;
   final FutureOr<AdbClient> Function(IdentitySelection) clientForIdentity;
 

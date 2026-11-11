@@ -16,7 +16,7 @@ import 'package:scrcpy_connect/pages/devices/workspace/gallery/index/devices_wor
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/services/clipboard_sync.dart';
+import 'package:scrcpy_connect/stores/clipboard_sync_store.dart';
 
 import 'support/test_controller.dart';
 

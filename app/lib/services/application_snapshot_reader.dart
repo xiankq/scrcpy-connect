@@ -8,7 +8,7 @@ import 'package:scrcpy_connect/services/file_share_service.dart';
 import 'package:scrcpy_connect/services/device_audio_service.dart';
 import 'package:scrcpy_connect/services/device_wake_service.dart';
 import 'package:scrcpy_connect/services/screen_capture_service.dart';
-import 'package:scrcpy_connect/stores/settings_store.dart';
+import 'package:scrcpy_connect/services/settings_storage.dart';
 
 /// 借用业务所有者组合只读快照；不建立连接、部署助手或取得资源关闭权。
 /// 等待任一异步读取期间业务版本变化时重读，媒体帧不使读取持续饥饿。
@@ -33,7 +33,7 @@ final class ApplicationSnapshotReader {
   final DeviceObservationService observations;
   final CompanionService companion;
   final FileTransferService transfers;
-  final SettingsStore preferences;
+  final SettingsStorage preferences;
   final FileShareService? sharing;
 
   Future<Map<String, dynamic>> readSnapshot() async {

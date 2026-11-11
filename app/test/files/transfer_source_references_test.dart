@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/file_share_store.dart';
+import 'package:scrcpy_connect/services/file_share_ledger.dart';
 import 'package:scrcpy_connect/services/file_transfer_service.dart';
 
 import 'support/file_executor_fixture.dart';
@@ -21,7 +21,7 @@ void main() {
           );
           FileTransferService? owner;
           try {
-            final store = await FileShareStore.open(cacheDirectory: root);
+            final store = await FileShareLedger.open(cacheDirectory: root);
             const share = '11111111-1111-4111-8111-111111111111';
             const batch = '22222222-2222-4222-8222-222222222222';
             await store.reserve(share);

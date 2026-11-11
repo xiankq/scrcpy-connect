@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/stores/file_selection_store.dart';
+import 'package:scrcpy_connect/services/file_selection_requests.dart';
 
 import 'package:scrcpy_connect/services/file_document_scope.dart';
 import 'package:scrcpy_connect/models/file_failure.dart';
@@ -12,7 +12,7 @@ import 'package:adb/adb.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:scrcpy_connect/models/document_limits.dart';
-import 'package:scrcpy_connect/stores/file_document_store.dart';
+import 'package:scrcpy_connect/services/file_document_cache.dart';
 
 export 'package:scrcpy_connect/models/document_limits.dart';
 
@@ -70,10 +70,10 @@ class FileDocumentService {
   final Future<LocalFiles> Function() _files;
   final DocumentLimits limits;
   final DocumentsRequest _platform;
-  final FileSelectionStore selections;
+  final FileSelectionRequests selections;
   final bool Function() _isDisposed;
   final void Function(DocumentsJson)? onConflictChanged;
-  final FileDocumentStore? sources;
+  final FileDocumentCache? sources;
   final _issued = <String>{};
   _Operation? _active;
   bool _disposed = false;

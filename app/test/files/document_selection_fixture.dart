@@ -1,16 +1,16 @@
 import 'package:adb/adb.dart';
 import 'package:scrcpy_connect/services/file_document_service.dart';
-import 'package:scrcpy_connect/stores/file_document_store.dart';
+import 'package:scrcpy_connect/services/file_document_cache.dart';
 
 import 'dart:async';
 
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/file_selection_store.dart';
+import 'package:scrcpy_connect/services/file_selection_requests.dart';
 
-FileSelectionStore fakeDocumentSelections(
+FileSelectionRequests fakeDocumentSelections(
   Future<Json> Function(String, Json) platform,
 ) {
-  late final FileSelectionStore selections;
+  late final FileSelectionRequests selections;
   Future<void> select(Json plan) async {
     final id = plan['operationId'] as String;
     try {
@@ -27,11 +27,11 @@ FileSelectionStore fakeDocumentSelections(
     }
   }
 
-  selections = FileSelectionStore((plan) => unawaited(select(plan)));
+  selections = FileSelectionRequests((plan) => unawaited(select(plan)));
   return selections;
 }
 
-FileSelectionStore fakeDesktopSelections(
+FileSelectionRequests fakeDesktopSelections(
   Future<String?> Function(String, String) pick,
 ) => fakeDocumentSelections((_, plan) async {
   final path = await pick(plan['name'] as String, plan['kind'] as String);
@@ -43,7 +43,7 @@ FileSelectionStore fakeDesktopSelections(
 FileDocumentService testDocuments({
   required Future<LocalFiles> Function() files,
   required DocumentsRequest platform,
-  FileDocumentStore? sources,
+  FileDocumentCache? sources,
   bool Function()? isDisposed,
   void Function(DocumentsJson)? onConflictChanged,
   DocumentLimits limits = const DocumentLimits(),

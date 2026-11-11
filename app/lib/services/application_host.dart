@@ -17,7 +17,7 @@ import 'package:scrcpy_connect/models/connection_policy.dart';
 import 'package:scrcpy_connect/services/display_recovery.dart';
 import 'package:scrcpy_connect/services/usb_recovery.dart';
 import 'package:scrcpy_connect/services/app_settings.dart';
-import 'package:scrcpy_connect/stores/settings_store.dart';
+import 'package:scrcpy_connect/services/settings_storage.dart';
 
 import 'package:scrcpy_connect/services/application_host_record.dart';
 
@@ -39,7 +39,7 @@ final class ApplicationHost {
   final Directory? _binaryDirectory;
   late final NativeAdbApi bindings;
   AdbIdentities get identities => bindings as AdbIdentities;
-  late final SettingsStore preferences;
+  late final SettingsStorage preferences;
   late final ScrcpyClient scrcpy;
   late final BundledServerFiles _assets;
   Uint8List get scrcpyBytes => _assets.scrcpyBytes;

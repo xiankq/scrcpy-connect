@@ -6,8 +6,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/file_share_store.dart';
-import 'package:scrcpy_connect/services/file_share_store_format.dart';
+import 'package:scrcpy_connect/services/file_share_ledger.dart';
+import 'package:scrcpy_connect/services/file_share_ledger_format.dart';
 
 const share = '11111111-1111-4111-8111-111111111111';
 const second = '22222222-2222-4222-8222-222222222222';
@@ -24,8 +24,8 @@ void main() {
   tearDown(() async {
     await cache.delete(recursive: true);
   });
-  Future<FileShareStore> ready({ShareStoreCommit? commitFile}) async {
-    final store = await FileShareStore.open(
+  Future<FileShareLedger> ready({ShareStoreCommit? commitFile}) async {
+    final store = await FileShareLedger.open(
       cacheDirectory: cache,
       commitFile: commitFile,
     );
@@ -37,7 +37,7 @@ void main() {
     return store;
   }
 
-  Map<String, Object?> request(FileShareStore store) => {
+  Map<String, Object?> request(FileShareLedger store) => {
     'deviceId': 'phone',
     'items': [
       {
@@ -60,7 +60,7 @@ void main() {
       );
       await File('${root.path}/.leases/$leaseId')
           .writeAsString('share=$share\ntransfer=$transfer\n');
-      final store = await FileShareStore.open(cacheDirectory: cache);
+      final store = await FileShareLedger.open(cacheDirectory: cache);
       final row = (await store.pending())['shares'].single;
       expect(row['text'], 'helloworld');
       expect(row['files'].single, {
@@ -86,7 +86,7 @@ void main() {
       final store = await ready();
       final input = request(store);
       expect(await store.begin(share, input), null);
-      final reopened = await FileShareStore.open(cacheDirectory: cache);
+      final reopened = await FileShareLedger.open(cacheDirectory: cache);
       expect(
         (await reopened.sources())['leases'].single['publication'],
         'unknown',
@@ -118,7 +118,7 @@ void main() {
       'status': 'submitted',
       'hugeSnapshot': List.filled(20000, 'x'),
     });
-    final reopened = await FileShareStore.open(cacheDirectory: cache);
+    final reopened = await FileShareLedger.open(cacheDirectory: cache);
     final receipt = await reopened.begin(share, input);
     expect(receipt, {
       'batchId': transfer,
@@ -272,7 +272,7 @@ void main() {
       final journal = File('${root.path}/$share/.share');
       await journal.writeAsString('{"version":999,"id":"$share"}');
       final original = await journal.readAsBytes();
-      final store = await FileShareStore.open(cacheDirectory: cache);
+      final store = await FileShareLedger.open(cacheDirectory: cache);
       await expectLater(
         store.reserve(second),
         throwsA(failure('share_cache_busy')),
@@ -293,11 +293,11 @@ void main() {
     try {
       await Link('${cache.path}/incoming').create(external.path);
       await expectLater(
-        FileShareStore.open(cacheDirectory: cache),
+        FileShareLedger.open(cacheDirectory: cache),
         throwsA(failure('share_source_invalid')),
       );
       await Link('${cache.path}/incoming').delete();
-      final store = await FileShareStore.open(cacheDirectory: cache);
+      final store = await FileShareLedger.open(cacheDirectory: cache);
       await store.reserve(share);
       final outside = File('${external.path}/keep');
       await outside.writeAsString('keep');
@@ -313,7 +313,7 @@ void main() {
       await Directory('${store.root.path}/.leases').delete();
       await Link('${store.root.path}/.leases').create(external.path);
       await expectLater(
-        FileShareStore.open(cacheDirectory: cache),
+        FileShareLedger.open(cacheDirectory: cache),
         throwsA(failure('share_source_invalid')),
       );
       expect(await outside.readAsString(), 'keep');
@@ -348,7 +348,7 @@ void main() {
       store.reserve(second),
       throwsA(failure('share_storage_unknown')),
     );
-    final reopened = await FileShareStore.open(cacheDirectory: cache);
+    final reopened = await FileShareLedger.open(cacheDirectory: cache);
     await reopened.command('sharing.consume', {'shareId': share});
     expect(await journal.exists(), false);
   });
@@ -417,7 +417,7 @@ void main() {
       store.begin(share, request(store)),
       throwsA(failure('share_storage_unknown')),
     );
-    final reopened = await FileShareStore.open(cacheDirectory: cache);
+    final reopened = await FileShareLedger.open(cacheDirectory: cache);
     expect(
       (await reopened.sources())['leases'].single['publication'],
       'unknown',
@@ -429,19 +429,19 @@ void main() {
   });
 
   test('reopen marks drained interrupted import failed and removes only its private fragments', () async {
-    final store = await FileShareStore.open(cacheDirectory: cache);
+    final store = await FileShareLedger.open(cacheDirectory: cache);
     await store.reserve(share);
     final part = File('${store.root.path}/$share/partial');
     await part.writeAsString('partial');
-    final reopened = await FileShareStore.open(cacheDirectory: cache);
+    final reopened = await FileShareLedger.open(cacheDirectory: cache);
     expect((await reopened.pending())['shares'].single['status'], 'error');
     expect(await part.exists(), false);
   });
 
   test('consume drains outside the store queue and does not deadlock a worker finally', () async {
-    late FileShareStore store;
+    late FileShareLedger store;
     final started = Completer<void>(), release = Completer<void>();
-    store = await FileShareStore.open(
+    store = await FileShareLedger.open(
       cacheDirectory: cache,
       beforeRemove: (id) async {
         started.complete();
@@ -459,7 +459,7 @@ void main() {
   });
 
   test('active copies cannot be deleted without a drain callback', () async {
-    final store = await FileShareStore.open(cacheDirectory: cache);
+    final store = await FileShareLedger.open(cacheDirectory: cache);
     await store.reserve(share);
     await expectLater(
       store.command('sharing.cancel', {'shareId': share}),
@@ -471,7 +471,7 @@ void main() {
   test(
     'limits use real file sizes and cannot publish a partially imported batch',
     () async {
-      final store = await FileShareStore.open(
+      final store = await FileShareLedger.open(
         cacheDirectory: cache,
         limits: const ShareLimits(fileBytes: 3, batchBytes: 4, totalBytes: 5),
       );

@@ -5,18 +5,18 @@ import 'package:scrcpy_connect/models/diagnostic_record.dart';
 import 'package:scrcpy_connect/models/companion_exception.dart';
 import 'package:scrcpy_connect/models/device_record.dart';
 
-import 'package:scrcpy_connect/stores/media_cache_gate.dart';
+import 'package:scrcpy_connect/services/media_cache_gate.dart';
 import 'package:scrcpy_connect/services/file_document_scope.dart';
 import 'package:scrcpy_connect/models/media_intent.dart';
 import 'package:scrcpy_connect/models/companion_config.dart';
 import 'package:scrcpy_connect/models/device_connection.dart';
 
-import 'package:scrcpy_connect/stores/media_cache_store.dart';
+import 'package:scrcpy_connect/services/media_cache_service.dart';
 import 'package:scrcpy_connect/services/media_preview_service.dart';
 import 'package:scrcpy_connect/services/app_settings.dart';
 import 'package:scrcpy_connect/services/command_contract.dart';
-import 'package:scrcpy_connect/stores/file_delivery_store.dart';
-import 'package:scrcpy_connect/stores/file_document_store.dart';
+import 'package:scrcpy_connect/services/file_delivery_journal.dart';
+import 'package:scrcpy_connect/services/file_document_cache.dart';
 import 'package:scrcpy_connect/services/file_publication_lease_pool.dart';
 
 import 'package:scrcpy/scrcpy.dart'
@@ -75,9 +75,9 @@ import 'package:scrcpy_connect/services/device_reconnect_service.dart';
 import 'package:scrcpy_connect/services/device_health_service.dart';
 import 'package:scrcpy_connect/services/device_discovery.dart';
 import 'package:scrcpy_connect/services/adb_identity_service.dart';
-import 'package:scrcpy_connect/stores/device_store.dart';
+import 'package:scrcpy_connect/services/device_record_storage.dart';
 import 'package:scrcpy_connect/services/companion_recovery.dart';
-import 'package:scrcpy_connect/stores/app_launch_store.dart';
+import 'package:scrcpy_connect/services/app_launch_journal.dart';
 import 'package:scrcpy_connect/services/screen_capture_service.dart';
 import 'package:scrcpy_connect/services/device_wake_service.dart';
 
@@ -101,18 +101,18 @@ class AppRuntime {
   });
 
   final ApplicationHost _host;
-  final DeviceStore _records;
+  final DeviceRecordStorage _records;
   final AdbIdentityService _identities;
-  final AppLaunchStore _launches;
+  final AppLaunchJournal _launches;
   final AdbClient _defaultClient;
   final FileTransferService _transfers;
   final AdbFileExecutor _fileExecutor;
   late final _fileCatalog = FileCatalog(_fileExecutor);
   late final _fileMutations = FileMutationService(_fileExecutor);
-  final MediaCacheStore _cache;
-  final FileDeliveryStore _deliveries;
+  final MediaCacheService _cache;
+  final FileDeliveryJournal _deliveries;
   final FileShareService? _sharing;
-  final FileDocumentStore? _documentSources;
+  final FileDocumentCache? _documentSources;
 
   final DiagnosticLog? diagnostics;
   Future<AdbClient> get adb => Future.value(_defaultClient);
@@ -677,7 +677,7 @@ class AppRuntime {
   ) async {
     // 旧 isolate 的句柄先真实排空，再打开唯一的 Dart 设备与身份所有者。
     await host.recoverConnections();
-    final records = await DeviceStore.open(directory: host.directory);
+    final records = await DeviceRecordStorage.open(directory: host.directory);
     DeviceService? devices;
     final identities = await AdbIdentityService.open(
       directory: host.directory,
@@ -691,13 +691,13 @@ class AppRuntime {
       identityPath: identity.path,
       fingerprint: identity.fingerprint,
     );
-    final launches = await AppLaunchStore.open(directory: host.directory);
+    final launches = await AppLaunchJournal.open(directory: host.directory);
     // 读取或清理缓存前先排空旧 isolate 的文档复制，避免与恢复产生并发写入。
     await ApplicationPlatform.recoverDocuments(
       localFiles: createNativeScrcpyLocalFiles,
     );
     final documentSources = Platform.isAndroid
-        ? await FileDocumentStore.open(
+        ? await FileDocumentCache.open(
             cacheDirectory: Directory(
               (await FileDocumentScope.fromEnvironment(
                 await ApplicationPlatform.requestPlatform(
@@ -716,14 +716,14 @@ class AppRuntime {
         : null;
     _startingSharing = sharing;
     final gate = MediaCacheGate();
-    late final MediaCacheStore cache;
+    late final MediaCacheService cache;
     FileTransferService? cacheTransfers;
-    final deliveries = await FileDeliveryStore.open(
+    final deliveries = await FileDeliveryJournal.open(
       Directory(dataDirectory),
       cacheGate: gate,
       validateSource: (path) => cache.validateDeliveryLocked(path),
     );
-    cache = await MediaCacheStore.open(
+    cache = await MediaCacheService.open(
       root: Directory(dataDirectory),
       gate: gate,
       protectedPaths: () => deliveries.protectedPaths,

@@ -7,7 +7,7 @@ import 'dart:async';
 
 import 'package:adb/adb.dart';
 
-import 'package:scrcpy_connect/stores/device_store.dart';
+import 'package:scrcpy_connect/services/device_record_storage.dart';
 import 'package:scrcpy_connect/services/companion_service.dart';
 
 Map<String, Object?> _unknown(String section, String phase, String reason) => {
@@ -63,7 +63,7 @@ final class DeviceObservationService {
     _subscription = companion.updates.listen(_update);
   }
   final CompanionService companion;
-  final DeviceStore records;
+  final DeviceRecordStorage records;
   final CompanionEmitter emit;
   late final StreamSubscription<CompanionUpdate> _subscription;
   final _observations = <String, _Observation>{};

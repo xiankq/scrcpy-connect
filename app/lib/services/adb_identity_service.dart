@@ -10,7 +10,7 @@ import 'package:adb/adb.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/device_store.dart';
+import 'package:scrcpy_connect/services/device_record_storage.dart';
 import 'package:scrcpy_connect/models/device_record.dart' show validDeviceId;
 import 'package:scrcpy_connect/services/identity_transaction_file.dart';
 
@@ -31,7 +31,7 @@ final class AdbIdentityService {
     this._invalidate,
   ) : _transactions = IdentityTransactionFile(directory);
   final Directory directory;
-  final DeviceStore records;
+  final DeviceRecordStorage records;
   final AdbIdentities identities;
   final InvalidateIdentities _invalidate;
   final IdentityTransactionFile _transactions;
@@ -55,7 +55,7 @@ final class AdbIdentityService {
 
   static Future<AdbIdentityService> open({
     required Directory directory,
-    required DeviceStore records,
+    required DeviceRecordStorage records,
     required AdbIdentities identities,
     required InvalidateIdentities invalidate,
   }) async {

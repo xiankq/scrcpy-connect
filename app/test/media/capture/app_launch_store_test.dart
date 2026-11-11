@@ -6,7 +6,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/app_launch_store.dart';
+import 'package:scrcpy_connect/services/app_launch_journal.dart';
 
 const _first = '00000000-0000-4000-8000-000000000001';
 const _second = '00000000-0000-4000-8000-000000000002';
@@ -16,7 +16,7 @@ Matcher _code(String value) =>
     isA<RequestFailure>().having((error) => error.code, 'code', value);
 
 Future<AppLaunchPermit> _begin(
-  AppLaunchStore store,
+  AppLaunchJournal store,
   String operation, {
   String? session,
   String device = 'phone',
@@ -47,7 +47,7 @@ void main() {
   tearDown(() => directory.delete(recursive: true));
 
   test('持久化先于准入，同一设备应用的并发意图只交付一次', () async {
-    final store = await AppLaunchStore.open(directory: directory);
+    final store = await AppLaunchJournal.open(directory: directory);
     final first = _begin(store, _first);
     final duplicate = _begin(store, _second);
     await expectLater(duplicate, throwsA(_code('app_launch_unknown')));
@@ -64,12 +64,12 @@ void main() {
   });
 
   test('重开将 pending 和 observed 都恢复为未知，不恢复旧准入', () async {
-    final store = await AppLaunchStore.open(directory: directory);
+    final store = await AppLaunchJournal.open(directory: directory);
     final pending = await _begin(store, _first);
     final observed = await _begin(store, _second, device: 'other');
     expect(observed.claim(), isTrue);
     await store.finish(_second);
-    final reopened = await AppLaunchStore.open(directory: directory);
+    final reopened = await AppLaunchJournal.open(directory: directory);
     expect(pending.claim(), isFalse);
     final records = await reopened.unresolved();
     expect(
@@ -93,7 +93,7 @@ void main() {
   });
 
   test('明确关闭使排队准入失效，迟到呈现不能重新打开记录', () async {
-    final store = await AppLaunchStore.open(directory: directory);
+    final store = await AppLaunchJournal.open(directory: directory);
     final permit = await _begin(store, _first);
     await expectLater(
       store.close(_first, deviceId: 'other'),
@@ -105,13 +105,13 @@ void main() {
     await expectLater(store.finish(_first), throwsA(_code('cancelled')));
     expect(await store.close(_first), isTrue);
     expect(await store.unresolved(), isEmpty);
-    final reopened = await AppLaunchStore.open(directory: directory);
+    final reopened = await AppLaunchJournal.open(directory: directory);
     expect(await reopened.unresolved(), isEmpty);
     await _begin(reopened, _second);
   });
 
   test('副作用失败保留未知证据，迟到成功不覆盖它', () async {
-    final store = await AppLaunchStore.open(directory: directory);
+    final store = await AppLaunchJournal.open(directory: directory);
     final permit = await _begin(store, _first);
     expect(permit.claim(), isTrue);
     await store.finish(_first, failureCode: 'control_write_unknown');
@@ -154,7 +154,7 @@ void main() {
       final bytes = utf8.encode(jsonEncode(invalid));
       await file.writeAsBytes(bytes);
       await expectLater(
-        AppLaunchStore.open(directory: directory),
+        AppLaunchJournal.open(directory: directory),
         throwsA(_code('app_open_storage_invalid')),
       );
       expect(await file.readAsBytes(), bytes);
@@ -169,7 +169,7 @@ void main() {
         id(index): _record(id(index), index == 100 ? 'closed' : 'unknown'),
     };
     await file.writeAsString(jsonEncode({'version': 1, 'records': records}));
-    final store = await AppLaunchStore.open(directory: directory);
+    final store = await AppLaunchJournal.open(directory: directory);
     await _begin(store, _first, device: 'another');
     expect(await store.unresolved(), hasLength(1024));
     final saved = jsonDecode(await file.readAsString()) as Map;
@@ -185,14 +185,14 @@ void main() {
     final bytes = List.filled(2 * 1024 * 1024 + 1, 32);
     await file.writeAsBytes(bytes);
     await expectLater(
-      AppLaunchStore.open(directory: directory),
+      AppLaunchJournal.open(directory: directory),
       throwsA(_code('app_open_storage_invalid')),
     );
     expect(await file.readAsBytes(), bytes);
   });
 
   test('真实 rename 已完成但回执丢失，封存实例并从磁盘恢复未知', () async {
-    final store = await AppLaunchStore.open(directory: directory);
+    final store = await AppLaunchJournal.open(directory: directory);
     final faults = _LostCommit(file.path);
     await IOOverrides.runWithIOOverrides(() async {
       await expectLater(
@@ -209,7 +209,7 @@ void main() {
       _begin(store, _second),
       throwsA(_code('app_open_storage_unknown')),
     );
-    final reopened = await AppLaunchStore.open(directory: directory);
+    final reopened = await AppLaunchJournal.open(directory: directory);
     expect((await reopened.unresolved()).single.operationId, _first);
     await expectLater(
       _begin(reopened, _second),

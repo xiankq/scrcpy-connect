@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:scrcpy_connect/models/application_request.dart';
 
 /// 文档任务等待用户输入的数据通道；选择器由持有该任务的视图打开。
-final class FileSelectionStore {
-  FileSelectionStore(this.onRequested);
+final class FileSelectionRequests {
+  FileSelectionRequests(this.onRequested);
   final void Function(Json) onRequested;
   final _pending = <String, Completer<Json>>{};
 

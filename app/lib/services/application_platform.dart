@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/stores/file_selection_store.dart';
+import 'package:scrcpy_connect/services/file_selection_requests.dart';
 
 import 'package:scrcpy_connect/services/file_document_scope.dart';
 
@@ -9,13 +9,13 @@ import 'package:adb/adb.dart' show LocalFiles;
 import 'package:scrcpy_connect/services/file_desktop_delivery.dart';
 
 import 'package:scrcpy_connect/services/file_document_service.dart';
-import 'package:scrcpy_connect/stores/file_document_store.dart';
+import 'package:scrcpy_connect/services/file_document_cache.dart';
 import 'package:scrcpy_connect/services/file_document_recovery.dart';
 import 'package:scrcpy_connect/services/file_share_service.dart';
 import 'package:scrcpy_connect/services/file_export_service.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:flutter/services.dart';
-import 'package:scrcpy_connect/stores/audio_focus_store.dart';
+import 'package:scrcpy_connect/services/audio_focus_service.dart';
 
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 
@@ -34,7 +34,7 @@ final class ApplicationPlatform {
   applicationRequest;
   final Future<LocalFiles> Function() localFiles;
   final FileShareService? sharing;
-  final FileDocumentStore? documentSources;
+  final FileDocumentCache? documentSources;
   final void Function(Map<String, dynamic>) emit;
   final bool Function() isDisposed;
 
@@ -98,7 +98,7 @@ final class ApplicationPlatform {
   }
 
   Stream<dynamic> get events => _events.receiveBroadcastStream();
-  late final documentSelections = FileSelectionStore((selection) {
+  late final documentSelections = FileSelectionRequests((selection) {
     emit({'type': 'documents.selection.requested', 'data': selection});
   });
   late final _documents = FileDocumentService(
@@ -145,7 +145,7 @@ final class ApplicationPlatform {
     }
   }
 
-  late final _mixerAudio = AudioFocusStore(
+  late final _mixerAudio = AudioFocusService(
     backgroundPlaybackSupported: !Platform.isIOS,
   );
 

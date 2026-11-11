@@ -40,9 +40,14 @@ void main() {
         allowedDependencies: dependencies ?? {'a': {}, 'b': {}},
       );
 
-  test('能力契约就近组合并保持扁平及名称一致', () {
+  test('状态提供 provider，能力契约就近组合并保持扁平及名称一致', () {
     application({
-      'stores/file_store.dart': 'class FileStore {} class _Pending {}',
+      'stores/file_store.dart':
+          '@Riverpod(keepAlive: true) class FileStore {} class _Pending {}',
+      'stores/file_summary.dart': '@riverpod int fileSummary(Ref ref) => 0;',
+      'stores/file_count.dart':
+          "import 'package:hooks_riverpod/hooks_riverpod.dart'; "
+          'final fileCountProvider = Provider((ref) => 0);',
       'services/file_copy.dart': 'class FileCopy {} void _copy() {}',
       'services/file_executor.dart':
           'abstract interface class FileExecutor {} '
@@ -56,12 +61,17 @@ void main() {
       'services/controller.dart': 'class FileDelete {}',
       'stores/focus_store.dart':
           "import 'package:flutter/widgets.dart'; class FocusStore {}",
+      'services/file_provider.dart':
+          "import 'package:riverpod_annotation/riverpod_annotation.dart'; "
+          '@riverpod int fileProvider(Ref ref) => 0;',
     });
     final problems = check();
     expect(problems, contains(contains('扁平目录')));
     expect(problems, contains(contains('一个公开主类')));
     expect(problems, contains(contains('文件名应与主类')));
     expect(problems, contains(contains('Flutter 视图依赖')));
+    expect(problems, contains(contains('store 必须提供 Riverpod')));
+    expect(problems, contains(contains('service 不依赖 Riverpod')));
   });
 
   test('检测多文件循环但不会把正常菱形依赖或 part 当作循环', () {

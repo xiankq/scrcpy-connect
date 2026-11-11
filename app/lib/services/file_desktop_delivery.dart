@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/stores/file_selection_store.dart';
+import 'package:scrcpy_connect/services/file_selection_requests.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -44,7 +44,7 @@ final class FileDesktopDelivery {
   });
   final Future<LocalFiles> Function() files;
   final void Function(Json) emit;
-  final FileSelectionStore selections;
+  final FileSelectionRequests selections;
   final DocumentLimits limits;
   _DesktopSave? _active;
   bool _closed = false;

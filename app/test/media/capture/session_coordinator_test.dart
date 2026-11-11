@@ -13,7 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/scrcpy_server_queries.dart';
-import 'package:scrcpy_connect/stores/app_launch_store.dart';
+import 'package:scrcpy_connect/services/app_launch_journal.dart';
 import 'package:scrcpy_connect/services/screen_capture_service.dart';
 import 'package:scrcpy_connect/services/session_shell.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_presentation.dart';
@@ -940,7 +940,7 @@ final class _Fixture {
     );
   }
   final Directory directory;
-  final AppLaunchStore launches;
+  final AppLaunchJournal launches;
   final adb = _Adb();
   final native = _Native();
   final events = <String>[];
@@ -955,7 +955,10 @@ final class _Fixture {
   void Function(Map<String, dynamic>)? onSessionEvent;
   static Future<_Fixture> open() async {
     final directory = await Directory.systemTemp.createTemp('session-owner-');
-    return _Fixture(directory, await AppLaunchStore.open(directory: directory));
+    return _Fixture(
+      directory,
+      await AppLaunchJournal.open(directory: directory),
+    );
   }
 
   Future<RemotePresentation> startViewed({bool decoded = false}) async {

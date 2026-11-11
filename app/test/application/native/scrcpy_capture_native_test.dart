@@ -10,7 +10,7 @@ import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/scrcpy_server_queries.dart';
-import 'package:scrcpy_connect/stores/app_launch_store.dart';
+import 'package:scrcpy_connect/services/app_launch_journal.dart';
 import 'package:scrcpy_connect/services/scrcpy_capture_adapter.dart';
 import 'package:scrcpy_connect/services/screen_capture_service.dart';
 import 'package:scrcpy_connect/services/bundled_servers.dart';
@@ -63,7 +63,7 @@ void main() {
           serverBytes: servers.scrcpyBytes,
           timeout: const Duration(seconds: 15),
         );
-        final launches = await AppLaunchStore.open(directory: directory);
+        final launches = await AppLaunchJournal.open(directory: directory);
         sessions = ScreenCaptureService(
           scrcpy: host.scrcpy,
           requireConnection: (_) => connection,

@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/audio_focus_store.dart';
+import 'package:scrcpy_connect/services/audio_focus_service.dart';
 
 void main() {
   test('stale release cannot revoke a new mixed output lease', () async {
-    final policy = AudioFocusStore();
+    final policy = AudioFocusService();
     final first = await policy.request('audio.platform.focus.acquire', {
       'ownerId': 'one',
     });

@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/stores/media_cache_gate.dart';
+import 'package:scrcpy_connect/services/media_cache_gate.dart';
 
 import 'dart:convert';
 import 'dart:io';
@@ -10,8 +10,8 @@ import 'package:scrcpy_connect/models/application_request.dart';
 typedef _Json = Map<String, dynamic>;
 
 /// 保存操作的持久准入所有者；原件身份、操作墓碑和未知结果不随页面释放。
-final class FileDeliveryStore {
-  FileDeliveryStore._(
+final class FileDeliveryJournal {
+  FileDeliveryJournal._(
     this._root,
     this._records,
     this._operations,
@@ -31,7 +31,7 @@ final class FileDeliveryStore {
   File get _file => File(p.join(_root.path, 'deliveries.json'));
 
   /// 只接受完整的 v1 账本；重开的 pending 先可靠保存为 unknown，绝不重放保存。
-  static Future<FileDeliveryStore> open(
+  static Future<FileDeliveryJournal> open(
     Directory root, {
     MediaCacheGate? cacheGate,
     Future<void> Function(String)? validateSource,
@@ -97,7 +97,7 @@ final class FileDeliveryStore {
         );
       }
     }
-    final journal = FileDeliveryStore._(
+    final journal = FileDeliveryJournal._(
       root,
       records,
       operations,

@@ -14,7 +14,7 @@ import 'dart:math';
 
 import 'package:uuid/uuid.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/stores/file_transfer_store.dart';
+import 'package:scrcpy_connect/services/file_transfer_journal.dart';
 import 'package:scrcpy_connect/services/file_paths.dart';
 
 /// 持有传输任务、日志、来源租约与精确执行回收；目录快照和文件变更各自独立。
@@ -50,7 +50,7 @@ class FileTransferService {
     ];
   }
 
-  final FileTransferStore _journal;
+  final FileTransferJournal _journal;
   final Map<String, Map<String, Object?>> _tasks;
   final _events = StreamController<Map<String, Object?>>.broadcast(sync: true);
   // worker 结算不等于执行资源退出；精确句柄只在 close 确认后撤销。
@@ -70,7 +70,7 @@ class FileTransferService {
     FileCacheLeases? cache,
     FilePublicationLeases? publication,
   }) async {
-    final journal = FileTransferStore(dataDirectory);
+    final journal = FileTransferJournal(dataDirectory);
     final tasks = await journal.load();
     final owner = FileTransferService._(
       executor,

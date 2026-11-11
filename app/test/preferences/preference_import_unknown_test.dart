@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/app_settings.dart';
 import 'package:scrcpy_connect/models/device_metadata.dart';
-import 'package:scrcpy_connect/stores/device_store.dart';
+import 'package:scrcpy_connect/services/device_record_storage.dart';
 
 void main() {
   test('导入真实提交回执未知后保留恢复结果，重开核验不重复恢复设备', () async {
@@ -27,7 +27,7 @@ void main() {
       'settings': {'appearance': 'dark'},
     };
     final fingerprint = DeviceMetadata.parse(document).fingerprint;
-    final records = await DeviceStore.open(
+    final records = await DeviceRecordStorage.open(
       directory: directory,
       idFactory: () {
         imports++;

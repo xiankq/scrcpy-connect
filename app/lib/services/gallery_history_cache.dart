@@ -3,7 +3,7 @@ import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 
 /// 仅保留本进程同设备已核验的相册集合，不保存授权或恢复扫描。
-class GalleryStore {
+class GalleryHistoryCache {
   final _entries = <String, GalleryHistoryEntry>{};
 
   GalleryHistoryEntry? read(Json device) {

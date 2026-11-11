@@ -9,7 +9,7 @@ import 'package:adb/adb.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/device_query.dart';
 import 'package:scrcpy_connect/models/device_record.dart';
-import 'package:scrcpy_connect/stores/device_store.dart';
+import 'package:scrcpy_connect/services/device_record_storage.dart';
 
 /// 设备详情的只读业务查询。缓存只供离线展示，不证明连接或动态事实。
 /// 一个请求始终绑定同一交付连接及其物理 connectionId，不随重连改查新目标。
@@ -20,7 +20,7 @@ final class DeviceDetailsReader {
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now;
 
-  final DeviceStore records;
+  final DeviceRecordStorage records;
   final DeviceConnection? Function(String) connectionForDevice;
   final DateTime Function() _now;
 

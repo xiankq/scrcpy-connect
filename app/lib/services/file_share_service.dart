@@ -13,7 +13,7 @@ import 'package:uuid/uuid.dart';
 import 'package:adb/adb.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/services/file_share_recovery.dart';
-import 'package:scrcpy_connect/stores/file_share_store.dart';
+import 'package:scrcpy_connect/services/file_share_ledger.dart';
 
 export 'package:scrcpy_connect/models/share_limits.dart';
 
@@ -31,7 +31,7 @@ final class FileShareService implements FilePublicationLeases {
   Future<void> _tail = Future<void>.value();
   Future<void>? _configuring, _closing;
   FileShareOwner? _owner;
-  FileShareStore? _store;
+  FileShareLedger? _store;
   bool _closed = false;
   bool _intakeStopped = false;
 
@@ -142,7 +142,7 @@ final class FileShareService implements FilePublicationLeases {
     _owner = owner;
     // 此处之前不打开 .share/.leases，旧 isolate 仍可能持有正在写入的复制件。
     _store = null;
-    _store = await FileShareStore.open(
+    _store = await FileShareLedger.open(
       cacheDirectory: Directory(owner.cacheDirectory),
       limits: limits,
       onChanged: _changed,

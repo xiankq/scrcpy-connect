@@ -6,8 +6,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 /// 文件传输任务的持久日志；迁移、追加与压缩保持同一条提交序列。
-class FileTransferStore {
-  FileTransferStore(this.root);
+class FileTransferJournal {
+  FileTransferJournal(this.root);
   final Directory root;
   File get file => File(p.join(root.path, 'file_tasks.v2.journal'));
   bool poisoned = false;

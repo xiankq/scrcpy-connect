@@ -6,7 +6,6 @@ import 'package:scrcpy_connect/services/file_executor.dart';
 
 import 'dart:io';
 
-
 final class MediaFileFixture implements FileExecutor, FileReadExecutor {
   @override
   Future<FileReadBatch> beginRead(

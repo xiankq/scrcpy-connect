@@ -9,8 +9,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/services/application_command_dispatcher.dart';
 import 'package:scrcpy_connect/services/app_settings.dart';
-import 'package:scrcpy_connect/stores/settings_store.dart';
-import 'package:scrcpy_connect/stores/device_store.dart';
+import 'package:scrcpy_connect/services/settings_storage.dart';
+import 'package:scrcpy_connect/services/device_record_storage.dart';
 import 'package:scrcpy_connect/models/preference_schema.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/file_catalog.dart';
@@ -45,11 +45,11 @@ void main() {
     commands = ApplicationCommandDispatcher(
       execute: (command, params) async => throw StateError(command.wire),
       preferences: AppSettings(
-        preferences: await SettingsStore.open(
+        preferences: await SettingsStorage.open(
           directory: root,
           schema: PreferenceSchema(defaults: preferenceDefaults),
         ),
-        records: await DeviceStore.open(directory: root),
+        records: await DeviceRecordStorage.open(directory: root),
         onDevicesImported: (_) {},
         onChanged: (_) {},
       ),

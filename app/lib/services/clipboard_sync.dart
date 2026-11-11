@@ -1,15 +1,10 @@
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/stores/app_store.dart';
 
 import 'dart:async';
 
-import 'package:riverpod_annotation/riverpod_annotation.dart';
-
 import 'package:flutter/services.dart';
-
-part 'clipboard_sync.g.dart';
 
 /// 当前获焦控制画面只同步基线之后的新复制，恢复不回灌任一端旧值。
 class ClipboardSync {
@@ -439,25 +434,4 @@ class ClipboardSync {
     _timer?.cancel();
     _events?.cancel();
   }
-}
-
-@Riverpod(keepAlive: true)
-ClipboardSync clipboardSync(Ref ref) {
-  final controller = ref.watch(appStoreProvider.notifier);
-  final coordinator = ClipboardSync(controller);
-  ref.listen(
-    appStoreProvider.select(
-      (state) => (
-        state.settings,
-        state.devices,
-        state.focusedDeviceId,
-        state.reconciliationPending,
-        state.reconciliationError,
-      ),
-    ),
-    (_, next) => coordinator.configure(),
-  );
-  ref.onDispose(coordinator.dispose);
-  Future<void>.microtask(coordinator.configure);
-  return coordinator;
 }

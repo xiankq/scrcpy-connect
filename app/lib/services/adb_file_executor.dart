@@ -13,7 +13,6 @@ import 'dart:io';
 import 'package:adb/adb.dart' as adb;
 import 'package:path/path.dart' as p;
 
-
 /// 组合公开 ADB 文件能力；任务、缓存和业务设备身份仍由应用持有。
 final class AdbFileExecutor
     implements

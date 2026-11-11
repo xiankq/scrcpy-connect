@@ -6,7 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/services/app_runtime.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
-import 'package:scrcpy_connect/stores/app_launch_store.dart';
+import 'package:scrcpy_connect/services/app_launch_journal.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -18,7 +18,7 @@ void main() {
     final directory = Directory(await temporary.resolveSymbolicLinks());
     AppRuntime? session;
     _BlockedSnapshotFile? blockedFile;
-    Future<AppLaunchStore>? replacement;
+    Future<AppLaunchJournal>? replacement;
     Future<void>? reconcileFailure;
     StreamSubscription<Map<String, dynamic>>? subscription;
     final received = <Map<String, dynamic>>[];
@@ -71,7 +71,7 @@ void main() {
       await file.writeAsString('{"version":1,"records":{}}', flush: true);
       blockedFile = _BlockedSnapshotFile(file);
       replacement = IOOverrides.runWithIOOverrides(
-        () => AppLaunchStore.open(directory: directory),
+        () => AppLaunchJournal.open(directory: directory),
         _SnapshotReadOverrides(blockedFile),
       );
       await blockedFile.entered.future;

@@ -13,18 +13,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/services/file_transfer_service.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/media_cache_store.dart';
+import 'package:scrcpy_connect/services/media_cache_service.dart';
 import 'package:scrcpy_connect/services/media_preview_service.dart';
 
 void main() {
   late Directory root;
-  late MediaCacheStore cache;
+  late MediaCacheService cache;
   late MediaFileFixture executor;
   late _Companion companion;
   late MediaPreviewService owner;
   setUp(() async {
     root = await Directory.systemTemp.createTemp('media-artifact-owner-');
-    cache = await MediaCacheStore.open(root: root);
+    cache = await MediaCacheService.open(root: root);
     executor = MediaFileFixture();
     companion = _Companion();
     owner = MediaPreviewService(

@@ -14,7 +14,7 @@ import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/services/application_platform.dart';
 import 'package:scrcpy_connect/services/file_document_recovery.dart';
 import 'package:scrcpy_connect/services/file_desktop_delivery.dart';
-import 'package:scrcpy_connect/stores/file_document_store.dart';
+import 'package:scrcpy_connect/services/file_document_cache.dart';
 import 'package:scrcpy_connect/services/file_document_service.dart';
 
 final class _Descriptors {
@@ -92,7 +92,7 @@ void main() {
       };
       // 生产平台与协调器分两次核验同一环境。
       final boundary = await FileDocumentScope.fromEnvironment(environment);
-      final sources = await FileDocumentStore.open(
+      final sources = await FileDocumentCache.open(
         cacheDirectory: Directory(environment['cacheDirectory'] as String),
       );
       var pickerCount = 0;
@@ -193,7 +193,7 @@ void main() {
     final parent = await Directory.systemTemp.createTemp('document-alias-');
     final files = await createNativeScrcpyLocalFiles();
     LocalFileScope? scope;
-    FileDocumentStore? sources;
+    FileDocumentCache? sources;
     String? managedId;
     try {
       final first = await Directory(p.join(parent.path, 'first')).create();
@@ -205,7 +205,7 @@ void main() {
         'ownerLeaseId': 'old-owner',
       };
       final boundary = await FileDocumentScope.fromEnvironment(original);
-      sources = await FileDocumentStore.open(
+      sources = await FileDocumentCache.open(
         cacheDirectory: Directory(alias.path),
       );
       final source = await sources.reserve();

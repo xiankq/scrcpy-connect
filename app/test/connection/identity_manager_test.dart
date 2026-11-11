@@ -7,11 +7,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/adb_identity_service.dart';
-import 'package:scrcpy_connect/stores/device_store.dart';
+import 'package:scrcpy_connect/services/device_record_storage.dart';
 
 void main() {
   late Directory root;
-  late DeviceStore records;
+  late DeviceRecordStorage records;
   late _Identities sdk;
   late AdbIdentityService owner;
   late List<(Set<String>, bool)> retired;
@@ -36,7 +36,7 @@ void main() {
   setUp(() async {
     root = await Directory.systemTemp.createTemp('identity-manager-');
     nextId = 0;
-    records = await DeviceStore.open(
+    records = await DeviceRecordStorage.open(
       directory: root,
       idFactory: () =>
           '00000000-0000-4000-8000-${(++nextId).toString().padLeft(12, '0')}',
@@ -364,7 +364,7 @@ void main() {
   test('私钥已发布但元数据提交失败时阻断且明确未知，重开核验恢复', () async {
     final id = await add();
     var reject = false;
-    records = await DeviceStore.open(
+    records = await DeviceRecordStorage.open(
       directory: root,
       commitFile: (temporary, destination) async {
         if (reject) throw const FileSystemException('injected commit failure');
@@ -450,7 +450,7 @@ void main() {
   test('全局来源转专属时记录提交失败，重开按提交意图绑定且不扫描停用 PEM', () async {
     final id = await add();
     var reject = false;
-    records = await DeviceStore.open(
+    records = await DeviceRecordStorage.open(
       directory: root,
       commitFile: (temporary, destination) async {
         if (reject) throw const FileSystemException('injected commit failure');
@@ -498,7 +498,7 @@ void main() {
   test('setup 私钥已发布但绑定失败，取消候选后重开仍恢复已提交专属身份', () async {
     final id = await add();
     var reject = false;
-    records = await DeviceStore.open(
+    records = await DeviceRecordStorage.open(
       directory: root,
       commitFile: (temporary, destination) async {
         if (reject) throw const FileSystemException('injected commit failure');
@@ -710,7 +710,7 @@ void main() {
   test('未完成专属事务对应记录已遗忘时，不复建设备且回收其已发布私钥', () async {
     final id = await add();
     var reject = false;
-    records = await DeviceStore.open(
+    records = await DeviceRecordStorage.open(
       directory: root,
       commitFile: (temporary, destination) async {
         if (reject) throw const FileSystemException('injected commit failure');
