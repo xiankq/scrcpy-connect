@@ -16,4 +16,4 @@
 
 测试、设备 driver 与夹具归 [test/](../test/README.md)。
 
-日常仅跑受影响测试；完整门禁及产物保留规则见[工具链](../docs/implementation/repository-tooling.md)。
+测试选择与运行见[测试说明](../test/README.md)；受控产物及来源保留规则见[执行端约束](../servers/AGENTS.md)。
