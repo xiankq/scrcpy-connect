@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/services/device_connection.dart';
+import 'package:scrcpy_connect/models/device_connection.dart';
 import 'package:scrcpy_connect/models/bundled_server_files.dart';
 import 'package:scrcpy_connect/models/application_identity_host.dart';
 import 'package:scrcpy_connect/services/application_host_dependencies.dart';

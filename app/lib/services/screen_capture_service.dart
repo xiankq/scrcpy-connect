@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/services/device_connection.dart';
+import 'package:scrcpy_connect/models/device_connection.dart';
 import 'package:scrcpy_connect/models/app_launch_permit.dart';
 
 import 'dart:async';

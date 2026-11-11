@@ -9,7 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/settings/adb_identity/settings_adb_identity_page.dart';
-import 'package:scrcpy_connect/services/adb_identity_validation.dart';
+import 'package:scrcpy_connect/models/adb_identity_validation.dart';
 import 'package:scrcpy_connect/stores/app_store.dart';
 
 import 'support/router_test_app.dart';

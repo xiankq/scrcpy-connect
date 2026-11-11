@@ -16,7 +16,7 @@ import 'package:scrcpy_connect/pages/devices/workspace/files/search/devices_work
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/models/connection_validation.dart';
 
 import 'product_flow_test.dart' show waitFor;
 

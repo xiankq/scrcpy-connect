@@ -1,7 +1,7 @@
 import 'package:scrcpy_connect/models/companion_exception.dart';
 
 import 'package:scrcpy_connect/models/companion_config.dart';
-import 'package:scrcpy_connect/services/device_connection.dart';
+import 'package:scrcpy_connect/models/device_connection.dart';
 
 import 'dart:async';
 import 'dart:typed_data';

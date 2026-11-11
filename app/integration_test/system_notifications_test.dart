@@ -12,7 +12,7 @@ import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devices_workspace_notifications_index_page.dart';
 import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/models/connection_validation.dart';
 import 'package:scrcpy_connect/widgets/system_notifications.dart';
 
 import 'product_flow_test.dart' show waitFor;

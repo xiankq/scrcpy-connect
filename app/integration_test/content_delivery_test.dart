@@ -19,7 +19,7 @@ import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/devices_w
 import 'package:scrcpy_connect/pages/transfers/details/receive/transfers_details_receive_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/models/connection_validation.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/media_thumbnail.dart';
 
 import 'product_flow_test.dart' show waitFor;

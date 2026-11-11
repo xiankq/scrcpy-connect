@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/services/device_connection.dart';
+import 'package:scrcpy_connect/models/device_connection.dart';
 import 'package:scrcpy_connect/models/identity_selection.dart';
 import 'package:scrcpy_connect/models/device_capability_observation.dart';
 import 'package:scrcpy_connect/models/device_capability_facts.dart';

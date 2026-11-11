@@ -17,7 +17,7 @@ import 'package:scrcpy_connect/pages/transfers/details/export/transfers_details_
 import 'package:scrcpy_connect/widgets/documents/document_conflict_panel.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/models/connection_validation.dart';
 
 import 'product_flow_test.dart' show waitFor;
 

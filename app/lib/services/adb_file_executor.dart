@@ -10,7 +10,7 @@ import 'package:scrcpy_connect/services/file_execution_resource.dart';
 import 'package:scrcpy_connect/services/file_execution_cleanup_failure.dart';
 import 'package:scrcpy_connect/services/file_read_executor.dart';
 import 'package:scrcpy_connect/services/file_read_batch.dart';
-import 'package:scrcpy_connect/services/device_connection.dart';
+import 'package:scrcpy_connect/models/device_connection.dart';
 
 import 'dart:async';
 import 'dart:convert';

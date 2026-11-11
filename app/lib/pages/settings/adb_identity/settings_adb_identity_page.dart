@@ -5,7 +5,7 @@ import 'package:scrcpy_connect/models/application_request.dart';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:scrcpy_connect/services/adb_identity_validation.dart';
+import 'package:scrcpy_connect/models/adb_identity_validation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';

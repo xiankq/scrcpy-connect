@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/services/device_connection.dart';
+import 'package:scrcpy_connect/models/device_connection.dart';
 
 /// 已通过当前部署和精确连接核验的事件；观察意图仍由观察协调器核验。
 final class CompanionUpdate {

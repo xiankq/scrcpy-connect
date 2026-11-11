@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/services/device_connection.dart';
+import 'package:scrcpy_connect/models/device_connection.dart';
 import 'package:scrcpy_connect/models/file_failure.dart';
 
 import 'dart:async';

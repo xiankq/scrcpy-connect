@@ -9,7 +9,7 @@ import 'package:scrcpy_connect/stores/media_cache_gate.dart';
 import 'package:scrcpy_connect/services/file_document_scope.dart';
 import 'package:scrcpy_connect/models/media_intent.dart';
 import 'package:scrcpy_connect/models/companion_config.dart';
-import 'package:scrcpy_connect/services/device_connection.dart';
+import 'package:scrcpy_connect/models/device_connection.dart';
 
 import 'package:scrcpy_connect/stores/media_cache_store.dart';
 import 'package:scrcpy_connect/services/media_preview_service.dart';

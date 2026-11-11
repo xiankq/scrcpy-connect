@@ -20,7 +20,7 @@ import 'package:scrcpy_connect/pages/settings/media_cache/settings_media_cache_p
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/devices_workspace_gallery_preview_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/models/connection_validation.dart';
 
 import '../../test/driver/support/cleanup.dart';
 

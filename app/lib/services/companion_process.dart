@@ -1,6 +1,6 @@
 import 'package:scrcpy_connect/utils/shell_quote.dart';
 import 'package:scrcpy_connect/models/companion_exception.dart';
-import 'package:scrcpy_connect/services/device_connection.dart';
+import 'package:scrcpy_connect/models/device_connection.dart';
 import 'package:scrcpy_connect/services/companion_deployment_identity.dart';
 
 import 'dart:convert';

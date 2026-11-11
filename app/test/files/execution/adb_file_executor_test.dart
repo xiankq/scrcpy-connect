@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/services/device_connection.dart';
+import 'package:scrcpy_connect/models/device_connection.dart';
 import 'package:scrcpy_connect/models/file_failure.dart';
 import 'package:scrcpy_connect/models/file_cancellation.dart';
 import 'package:scrcpy_connect/models/file_stamp.dart';

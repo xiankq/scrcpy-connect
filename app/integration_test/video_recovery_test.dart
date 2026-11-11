@@ -16,7 +16,7 @@ import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/remote_launch_intent.dart';
 import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/models/connection_validation.dart';
 
 import 'product_flow_test.dart' show waitFor;
 import 'video_performance_test.dart' show pattern;
