@@ -1,17 +1,15 @@
 import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
-import 'package:scrcpy_connect/core/recovery/recovery_actions_provider.dart';
-import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/devices/connection_validation.dart';
 import 'package:scrcpy_connect/core/devices/device_connection_control.dart';
 import 'package:scrcpy_connect/core/devices/device_setup.dart';
-import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
-import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
+import 'package:scrcpy_connect/pages/device_setup/connection/connection_attempt_notifier.dart';
+import 'package:scrcpy_connect/pages/device_setup/connection/models/connection_attempt_request.dart';
 import 'package:scrcpy_connect/pages/device_setup/connection/widgets/connection_address_fields.dart';
 import 'package:scrcpy_connect/pages/device_setup/connection/widgets/connection_attempt_status.dart';
 import 'package:scrcpy_connect/pages/device_setup/connection/widgets/connection_mode_selector.dart';
@@ -80,16 +78,16 @@ class ConnectionFormPage extends HookConsumerWidget {
     );
     final code = useTextEditingController();
     final attemptPage = useState(false);
-    final checking = useState(false);
     final form = useMemoized(() => GlobalKey<FormState>());
-    final busy = useState(false);
-    final result = useState<PairingReceipt?>(null);
-    final error = useState<Object?>(null);
-    final cancellation = useState<String?>(null);
-    final activeAttempt = useRef<String?>(null);
-    final pendingCancellation = useRef<String?>(null);
-    final uiEpoch = useRef(0);
-    final cancelling = useState(false);
+    final scope = useMemoized(Object.new, [
+      deviceId,
+      configuring,
+      reauthorizing,
+    ]);
+    final viewScope = useRef(scope)..value = scope;
+    final provider = connectionAttemptProvider(scope: scope);
+    final flow = ref.watch(provider);
+    final actions = ref.read(provider.notifier);
     final selectedTransport = useState(transport ?? ConnectionTransport.tcp);
     final effectiveTransport = completingPairing.value || tlsLocked.value
         ? ConnectionTransport.tls
@@ -100,66 +98,35 @@ class ConnectionFormPage extends HookConsumerWidget {
     final legacyTcp = effectiveTransport == ConnectionTransport.tcp;
     bool ownsScope() =>
         context.mounted &&
+        identical(viewScope.value, scope) &&
         identical(setup, ref.read(deviceSetupProvider)) &&
         identical(connections, ref.read(deviceConnectionsProvider)) &&
         identical(deviceManagement, ref.read(deviceManagementProvider));
     useEffect(() {
-      final epoch = uiEpoch.value;
       Future.microtask(() {
-        if (!context.mounted || !ownsScope() || uiEpoch.value != epoch) return;
-        busy.value = false;
-        cancelling.value = false;
-        checking.value = false;
-        result.value = null;
-        error.value = null;
-        cancellation.value = null;
+        if (ownsScope()) attemptPage.value = false;
       });
-      return () {
-        uiEpoch.value++;
-        final attempt = activeAttempt.value ?? pendingCancellation.value;
-        activeAttempt.value = null;
-        pendingCancellation.value = null;
-        if (attempt != null) {
-          deviceManagement.cancelConnectionAttempt(attempt).ignore();
-        }
-      };
-    }, [setup, connections, deviceManagement]);
-    Future<bool> cancel() async {
-      final epoch = ++uiEpoch.value;
-      checking.value = false;
-      final attempt = activeAttempt.value ?? pendingCancellation.value;
-      activeAttempt.value = null;
-      if (attempt == null) return true;
-      pendingCancellation.value = attempt;
-      cancelling.value = true;
-      try {
-        await deviceManagement.cancelConnectionAttempt(attempt);
-        if (!context.mounted || !ownsScope() || uiEpoch.value != epoch) {
-          return false;
-        }
-        pendingCancellation.value = null;
-        busy.value = false;
-        error.value = null;
-        cancellation.value = result.value?.recorded == true
-            ? '已取消连接，手机上的配对授权已保留。'
-            : '已取消本次尝试。';
-        await ref.read(deviceListProvider.notifier).refresh();
-        return context.mounted;
-      } catch (failure) {
-        if (context.mounted && ownsScope() && uiEpoch.value == epoch) {
-          busy.value = false;
-          error.value = RequestFailure(
-            'result_unknown',
-            '取消结果尚未确认，请重新核对。$failure',
-          );
-        }
-        return false;
-      } finally {
-        if (context.mounted && ownsScope() && uiEpoch.value == epoch) {
-          cancelling.value = false;
-        }
+      return null;
+    }, [scope, setup, connections, deviceManagement]);
+    ref.listen(provider, (previous, next) {
+      if (!ownsScope()) return;
+      if (next.deviceId != null && next.address != null) {
+        currentDeviceId.value = next.deviceId;
+        identityAddress.value = next.address!;
       }
-    }
+      if (next.pairing != null && next.pairing != previous?.pairing) {
+        tlsLocked.value = true;
+        selectedTransport.value = ConnectionTransport.tls;
+        portField.clear();
+      }
+      final connected = next.connectedDeviceId;
+      if (connected != null &&
+          connected != previous?.connectedDeviceId &&
+          attemptPage.value &&
+          ModalRoute.of(context)?.isCurrent != false) {
+        WorkspaceRoute(deviceId: connected).pushReplacement(context);
+      }
+    });
 
     String? targetDeviceId() => host.text.trim() == identityAddress.value
         ? currentDeviceId.value
@@ -183,168 +150,50 @@ class ConnectionFormPage extends HookConsumerWidget {
     }
 
     Future<void> submit() async {
-      if (busy.value || cancelling.value || pendingCancellation.value != null) {
-        return;
-      }
+      if (!flow.canSubmit) return;
       if (!await prepareConnection() ||
           !context.mounted ||
           !ownsScope() ||
-          busy.value) {
+          !ref.read(provider).canSubmit) {
         return;
       }
-      final attempt =
-          '${DateTime.now().microsecondsSinceEpoch}-${identityHashCode(form)}';
-      uiEpoch.value++;
-      activeAttempt.value = attempt;
-      busy.value = true;
-      attemptPage.value = true;
-      error.value = null;
-      result.value = null;
-      cancellation.value = null;
-      try {
-        final targetId = targetDeviceId();
-        final pairingCode = code.text.trim();
-        if (pairing) code.clear();
-        PairingReceipt? response;
-        String? connectedId;
-        DeviceSnapshot? saved;
-        if (!pairing && (configuring || reauthorizing)) {
-          final receipt = await connections.configureDevice(
-            targetId!,
-            DeviceEndpoint(
+      final request = pairing
+          ? ConnectionAttemptRequest.pair(
               address: host.text.trim(),
               port: int.parse(activePort.text.trim()),
-              transport: effectiveTransport == ConnectionTransport.tls
-                  ? .tls
-                  : .tcp,
-            ),
-            attemptId: attempt,
-          );
-          if (receipt.deviceId != targetId ||
-              receipt.device.status != .connected) {
-            throw const RequestFailure(
-              'configuration_unverified',
-              '尚未核验原设备的连接配置，请重新检查。',
+              code: code.text.trim(),
+              deviceId: targetDeviceId(),
+            )
+          : ConnectionAttemptRequest.connect(
+              endpoint: DeviceEndpoint(
+                address: host.text.trim(),
+                port: int.parse(activePort.text.trim()),
+                transport: effectiveTransport == ConnectionTransport.tls
+                    ? .tls
+                    : .tcp,
+              ),
+              deviceId: targetDeviceId(),
+              configure: configuring || reauthorizing,
             );
-          }
-          connectedId = receipt.deviceId;
-        } else if (pairing) {
-          response = await setup.pairDevice(
-            host.text.trim(),
-            int.parse(activePort.text.trim()),
-            pairingCode,
-            deviceId: targetId,
-            attemptId: attempt,
-          );
-          if (pairing &&
-              (configuring || reauthorizing) &&
-              response.deviceId != targetId) {
-            throw const RequestFailure(
-              'configuration_unverified',
-              '尚未核验原设备的连接配置，请重新检查。',
-            );
-          }
-        } else {
-          final endpoint = DeviceEndpoint(
-            address: host.text.trim(),
-            port: int.parse(activePort.text.trim()),
-            transport: effectiveTransport == ConnectionTransport.tls
-                ? .tls
-                : .tcp,
-          );
-          saved = targetId == null
-              ? await deviceManagement.addDevice(endpoint)
-              : await deviceManagement.updateDeviceEndpoint(targetId, endpoint);
-        }
-        if (!context.mounted ||
-            activeAttempt.value != attempt ||
-            !ownsScope()) {
-          return;
-        }
-        result.value = response;
-        final connectionFailure = response?.connectionFailure;
-        if (connectionFailure != null) {
-          final failureCode = connectionFailure.code;
-          if (failureCode.contains('unknown') ||
-              failureCode.contains('unconfirmed') ||
-              failureCode == 'configuration_unverified') {
-            pendingCancellation.value = attempt;
-          }
-          error.value = RequestFailure(failureCode, connectionFailure.message);
-        }
-        currentDeviceId.value =
-            connectedId ?? saved?.id ?? (response?.deviceId ?? targetId);
-        identityAddress.value = host.text.trim();
-        if (pairing) {
-          tlsLocked.value = true;
-          selectedTransport.value = ConnectionTransport.tls;
-          portField.clear();
-        }
-        if (saved case final device?
-            when device.id.isNotEmpty && device.status != .connected) {
-          await connections.connectDevice(device.id, attemptId: attempt);
-        }
-        if (!ownsScope()) {
-          return;
-        }
-        await ref.read(deviceListProvider.notifier).refresh();
-        if (!context.mounted ||
-            !identical(setup, ref.read(deviceSetupProvider)) ||
-            !identical(connections, ref.read(deviceConnectionsProvider)) ||
-            activeAttempt.value != attempt ||
-            ModalRoute.of(context)?.isCurrent == false) {
-          return;
-        }
-        final id = connectedId ?? saved?.id ?? (response?.deviceId ?? targetId);
-        final matches = ref
-            .read(deviceListProvider)
-            .devices
-            .where((d) => d.id == id);
-        if (matches.isNotEmpty &&
-            matches.first.status == DeviceConnectionStatus.connected) {
-          WorkspaceRoute(deviceId: matches.first.id).pushReplacement(context);
-        }
-      } catch (e) {
-        if (context.mounted && activeAttempt.value == attempt && ownsScope()) {
-          error.value = e;
-          if (e is RequestFailure &&
-              (e.code.contains('unknown') ||
-                  e.code.contains('unconfirmed') ||
-                  e.code == 'configuration_unverified')) {
-            pendingCancellation.value = attempt;
-          }
-          if (e case DeviceSetupFailure(receipt: PairingReceipt known)) {
-            result.value = known;
-            currentDeviceId.value = known.deviceId ?? currentDeviceId.value;
-          }
-        }
-      } finally {
-        if (context.mounted && activeAttempt.value == attempt) {
-          busy.value = false;
-          activeAttempt.value = null;
-        }
-      }
+      if (pairing) code.clear();
+      attemptPage.value = true;
+      await actions.submit(request);
     }
 
-    void selectMode(AddDeviceMode next) {
-      uiEpoch.value++;
-      checking.value = false;
-      final attempt = activeAttempt.value;
-      activeAttempt.value = null;
-      if (attempt != null) {
-        deviceManagement.cancelConnectionAttempt(attempt).ignore();
+    Future<bool> selectMode(AddDeviceMode next) async {
+      final reset = await actions.reset();
+      if (!context.mounted || !ownsScope()) return false;
+      if (!reset) {
+        attemptPage.value = true;
+        return false;
       }
-      busy.value = false;
-      cancelling.value = false;
-      error.value = null;
-      cancellation.value = null;
       attemptPage.value = false;
       mode.value = next;
+      return true;
     }
 
-    void completePairing(String address, String? id) {
-      uiEpoch.value++;
-      checking.value = false;
+    Future<void> completePairing(String address, String? id) async {
+      if (!await actions.reset() || !context.mounted || !ownsScope()) return;
       host.text = address;
       currentDeviceId.value = id ?? currentDeviceId.value;
       identityAddress.value = address.trim();
@@ -352,59 +201,20 @@ class ConnectionFormPage extends HookConsumerWidget {
       completingPairing.value = true;
       selectedTransport.value = ConnectionTransport.tls;
       portField.clear();
-      result.value = null;
-      error.value = null;
-      cancellation.value = null;
       mode.value = AddDeviceMode.pairing;
       attemptPage.value = false;
     }
 
     Future<void> closeAttempt() async {
-      final cancelled = await cancel();
-      if (!context.mounted || !cancelled) return;
-      if (pairing && result.value != null) {
-        completePairing(
+      if (!await actions.cancel() || !context.mounted || !ownsScope()) return;
+      final receipt = ref.read(provider).pairing;
+      if (pairing && receipt != null) {
+        await completePairing(
           host.text,
-          (result.value?.deviceId ?? currentDeviceId.value),
+          receipt.deviceId ?? currentDeviceId.value,
         );
       } else {
         attemptPage.value = false;
-      }
-    }
-
-    Future<void> recheck() async {
-      if (checking.value) return;
-      checking.value = true;
-      final epoch = uiEpoch.value;
-      try {
-        final reconcile = ref.read(reconcileStateProvider);
-        await reconcile();
-        if (!ownsScope() ||
-            epoch != uiEpoch.value ||
-            !identical(reconcile, ref.read(reconcileStateProvider))) {
-          return;
-        }
-        await ref.read(deviceListProvider.notifier).refresh();
-        if (!context.mounted ||
-            epoch != uiEpoch.value ||
-            !attemptPage.value ||
-            ModalRoute.of(context)?.isCurrent == false) {
-          return;
-        }
-        final id = (result.value?.deviceId ?? currentDeviceId.value);
-        final matches = ref
-            .read(deviceListProvider)
-            .devices
-            .where((device) => device.id == id);
-        if (id != null &&
-            matches.isNotEmpty &&
-            matches.first.status == DeviceConnectionStatus.connected) {
-          WorkspaceRoute(deviceId: id).pushReplacement(context);
-        }
-      } catch (failure) {
-        if (context.mounted && epoch == uiEpoch.value) error.value = failure;
-      } finally {
-        if (context.mounted && epoch == uiEpoch.value) checking.value = false;
       }
     }
 
@@ -444,7 +254,7 @@ class ConnectionFormPage extends HookConsumerWidget {
                                       child: ActionRow(
                                         icon: LucideIcons.radar,
                                         title: '发现设备',
-                                        onTap: busy.value
+                                        onTap: flow.busy
                                             ? null
                                             : () async {
                                                 final previousMode = mode.value;
@@ -452,34 +262,47 @@ class ConnectionFormPage extends HookConsumerWidget {
                                                         AddDeviceMode.qr ||
                                                     mode.value ==
                                                         AddDeviceMode.usb) {
-                                                  selectMode(
+                                                  if (!await selectMode(
                                                     AddDeviceMode.pairing,
-                                                  );
+                                                  )) {
+                                                    return;
+                                                  }
                                                 }
+                                                if (!context.mounted) return;
                                                 final selection =
                                                     await const DiscoveryRoute(
                                                       selection: true,
                                                     ).push<DiscoveredDevice>(
                                                       context,
                                                     );
-                                                if (!context.mounted) return;
-                                                if (selection == null) {
-                                                  selectMode(previousMode);
+                                                if (!context.mounted ||
+                                                    !ownsScope()) {
                                                   return;
                                                 }
-                                                result.value = null;
-                                                error.value = null;
+                                                if (selection == null) {
+                                                  await selectMode(
+                                                    previousMode,
+                                                  );
+                                                  return;
+                                                }
+                                                actions.clearFeedback();
                                                 final device = selection;
                                                 final endpoint = device
                                                     .endpoints
                                                     .firstOrNull;
                                                 final isPairing =
                                                     device.kind == .pairing;
-                                                selectMode(
+                                                if (!await selectMode(
                                                   isPairing
                                                       ? AddDeviceMode.pairing
                                                       : AddDeviceMode.ip,
-                                                );
+                                                )) {
+                                                  return;
+                                                }
+                                                if (!context.mounted ||
+                                                    !ownsScope()) {
+                                                  return;
+                                                }
                                                 completingPairing.value = false;
                                                 host.text =
                                                     endpoint?.address ?? '';
@@ -554,23 +377,22 @@ class ConnectionFormPage extends HookConsumerWidget {
                                       completingPairing:
                                           completingPairing.value,
                                       legacyTcp: legacyTcp,
-                                      enabled: !busy.value,
+                                      enabled: !flow.busy,
                                       onAddressChanged: (next) {
                                         if (next.trim() !=
                                             identityAddress.value) {
-                                          result.value = null;
-                                          error.value = null;
+                                          actions.clearFeedback();
                                         }
                                       },
                                     ),
-                                    if (cancellation.value != null)
-                                      StateNote(cancellation.value!),
+                                    if (flow.notice != null)
+                                      StateNote(flow.notice!),
                                     const SizedBox(
                                       height: DesignTokens.spacingSectionTitle,
                                     ),
                                     FilledButton(
-                                      onPressed: busy.value ? null : submit,
-                                      child: busy.value
+                                      onPressed: flow.busy ? null : submit,
+                                      child: flow.busy
                                           ? const SizedBox(
                                               width: DesignTokens.spacingMd,
                                               height: DesignTokens.spacingMd,
@@ -642,13 +464,13 @@ class ConnectionFormPage extends HookConsumerWidget {
           if (attemptPage.value)
             Positioned.fill(
               child: ConnectionAttemptStatus(
-                busy: busy.value,
-                checking: checking.value,
-                cancelling: cancelling.value,
-                failure: error.value,
+                busy: flow.busy,
+                checking: flow.checking,
+                cancelling: flow.cancelling,
+                failure: flow.failure,
                 paired:
-                    result.value?.recorded == true ||
-                    (pairing && result.value != null),
+                    flow.pairing?.recorded == true ||
+                    (pairing && flow.pairing != null),
                 deviceName: host.text.trim(),
                 onCancel: closeAttempt,
                 onEdit: closeAttempt,
@@ -660,10 +482,10 @@ class ConnectionFormPage extends HookConsumerWidget {
                     submit();
                   }
                 },
-                onRecheck: recheck,
+                onRecheck: actions.recheck,
                 onConnectionPort: () => completePairing(
                   host.text,
-                  (result.value?.deviceId ?? currentDeviceId.value),
+                  (flow.pairing?.deviceId ?? currentDeviceId.value),
                 ),
               ),
             ),

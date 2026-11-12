@@ -1,0 +1,474 @@
+import 'dart:async';
+
+import 'package:adb/adb.dart' show AdbCancellation;
+import 'package:flutter_test/flutter_test.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/devices/device_connection_control.dart';
+import 'package:scrcpy_connect/core/devices/device_management.dart';
+import 'package:scrcpy_connect/core/devices/device_setup.dart';
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/identity/models/setup_identity.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
+import 'package:scrcpy_connect/core/recovery/recovery_actions_provider.dart';
+import 'package:scrcpy_connect/pages/device_setup/connection/connection_attempt_notifier.dart';
+import 'package:scrcpy_connect/pages/device_setup/connection/models/connection_attempt_request.dart';
+import 'package:scrcpy_connect/pages/device_setup/connection/models/connection_attempt_state.dart';
+import 'package:scrcpy_connect/pages/device_setup/connection/connection_form_page.dart';
+import 'package:scrcpy_connect/pages/device_setup/connection/widgets/connection_address_fields.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+
+const _endpoint = DeviceEndpoint(address: 'phone.local', port: 5555);
+const _connect = ConnectionAttemptRequest.connect(endpoint: _endpoint);
+const _pair = ConnectionAttemptRequest.pair(
+  address: 'phone.local',
+  port: 45678,
+  code: '123456',
+  deviceId: 'device',
+);
+
+void main() {
+  late _Setup setup;
+  late _Management management;
+  late _Connections connections;
+  late _Reconcile probe;
+  late Future<void> Function() reconcile;
+  late ProviderContainer container;
+  final scope = Object();
+  final provider = connectionAttemptProvider(scope: scope);
+  late ConnectionAttemptNotifier actions;
+  late void Function() leave;
+  final session = AppSession(initialize: false);
+  overrides() => [
+    appSessionProvider.overrideWithValue(session),
+    deviceSetupProvider.overrideWithValue(setup),
+    deviceManagementProvider.overrideWithValue(management),
+    deviceConnectionsProvider.overrideWithValue(connections),
+    reconcileStateProvider.overrideWithValue(reconcile),
+  ];
+  setUp(() {
+    setup = _Setup();
+    management = _Management();
+    connections = _Connections();
+    probe = _Reconcile();
+    reconcile = probe.run;
+    container = ProviderContainer(overrides: overrides());
+    final subscription = container.listen(provider, (_, _) {});
+    leave = subscription.close;
+    actions = container.read(provider.notifier);
+  });
+  tearDown(() => container.dispose());
+
+  test('保存记录期间取消，迟到记录不接续连接；回收失败只重试原尝试', () async {
+    final submission = actions.submit(_connect);
+    await actions.submit(_connect);
+    expect(management.saves, hasLength(1));
+    final cancel = actions.cancel();
+    expect(management.saves.single.stop!.isCancelled, isTrue);
+    management.cancellations.single.result.completeError(
+      StateError('still owned'),
+    );
+    expect(await cancel, isFalse);
+    expect(
+      container.read(provider).phase,
+      ConnectionAttemptPhase.cleanupRequired,
+    );
+    management.saves.single.result.complete(const DeviceSnapshot(id: 'saved'));
+    await submission;
+    expect(connections.calls, isEmpty);
+    await actions.submit(_connect);
+    expect(management.saves, hasLength(1));
+    final retry = actions.cancel();
+    expect(management.cancellations.last.id, management.cancellations.first.id);
+    management.cancellations.last.result.complete();
+    expect(await retry, isTrue);
+    expect(container.read(provider).canSubmit, isTrue);
+  });
+
+  test('连接失败保留已保存记录，明确重试沿用同一记录及原传输方式', () async {
+    final submission = actions.submit(_connect);
+    management.saves.single.result.complete(const DeviceSnapshot(id: 'saved'));
+    await container.pump();
+    expect(connections.calls.single.id, 'saved');
+    connections.calls.single.result.completeError(
+      const RequestFailure('timeout', 'connection timeout'),
+    );
+    await submission;
+    expect(container.read(provider).deviceId, 'saved');
+    expect(container.read(provider).failure!.code, 'timeout');
+    expect(container.read(provider).canSubmit, isTrue);
+    final retry = actions.submit(
+      const ConnectionAttemptRequest.connect(
+        endpoint: DeviceEndpoint(
+          address: 'phone.local',
+          port: 45679,
+          transport: .tls,
+        ),
+        deviceId: 'saved',
+      ),
+    );
+    expect(management.saves.last.id, 'saved');
+    expect(management.saves.last.endpoint.transport, DeviceTransport.tls);
+    management.saves.last.result.complete(const DeviceSnapshot(id: 'saved'));
+    await container.pump();
+    management.devices = [
+      const DeviceSnapshot(id: 'saved', status: .connected),
+    ];
+    connections.calls.last.result.complete(_connected('saved'));
+    await retry;
+    expect(container.read(provider).connectedDeviceId, 'saved');
+  });
+
+  test('换源与离页撤销原执行，迟到连接回执不进入新页面', () async {
+    final submission = actions.submit(_connect);
+    management.saves.single.result.complete(const DeviceSnapshot(id: 'saved'));
+    await container.pump();
+    final previousManagement = management;
+    final previousConnections = connections;
+    setup = _Setup();
+    management = _Management();
+    connections = _Connections();
+    container.updateOverrides(overrides());
+    await container.pump();
+    expect(previousConnections.calls.single.stop!.isCancelled, isTrue);
+    expect(
+      previousManagement.cancellations.single.id,
+      previousConnections.calls.single.attempt,
+    );
+    previousManagement.cancellations.single.result.complete();
+    previousConnections.calls.single.result.complete(_connected('saved'));
+    await submission;
+    expect(container.read(provider).phase, ConnectionAttemptPhase.idle);
+    expect(container.read(provider).connectedDeviceId, isNull);
+    final next = actions.submit(_pair);
+    leave();
+    await container.pump();
+    expect(management.cancellations.single.id, setup.calls.single.id);
+    management.cancellations.single.result.complete();
+    setup.calls.single.result.complete(_paired());
+    await next;
+  });
+
+  test('配对事实与连接未知分别保存，核对不重放请求且保留异常反馈', () async {
+    final submission = actions.submit(_pair);
+    setup.calls.single.result.complete(
+      _paired(
+        issue: const SetupIssue('result_unknown', 'awaiting confirmation'),
+      ),
+    );
+    await submission;
+    expect(container.read(provider).pairing!.recorded, isTrue);
+    expect(container.read(provider).canSubmit, isFalse);
+    final check = actions.recheck();
+    await actions.recheck();
+    expect(probe.calls, hasLength(1));
+    expect(container.read(provider).checking, isTrue);
+    expect(container.read(provider).failure!.message, 'awaiting confirmation');
+    await actions.submit(_pair);
+    expect(setup.calls, hasLength(1));
+    management.devices = [
+      const DeviceSnapshot(id: 'device', status: .connected),
+    ];
+    probe.calls.single.complete();
+    await check;
+    expect(container.read(provider).connectedDeviceId, 'device');
+    expect(
+      container.read(provider).phase,
+      ConnectionAttemptPhase.cleanupRequired,
+    );
+    final cancel = actions.cancel();
+    management.cancellations.single.result.complete();
+    expect(await cancel, isTrue);
+    expect(container.read(provider).pairing!.recorded, isTrue);
+    expect(container.read(provider).notice, contains('配对授权已保留'));
+  });
+
+  test('核对换源或取消后忽略旧结果，核对状态能够结束', () async {
+    final submission = actions.submit(_pair);
+    setup.calls.single.result.complete(
+      _paired(
+        issue: const SetupIssue('result_unknown', 'awaiting confirmation'),
+      ),
+    );
+    await submission;
+    final check = actions.recheck();
+    final oldProbe = probe;
+    probe = _Reconcile();
+    reconcile = probe.run;
+    container.updateOverrides(overrides());
+    await container.pump();
+    management.devices = [
+      const DeviceSnapshot(id: 'device', status: .connected),
+    ];
+    oldProbe.calls.single.complete();
+    await check;
+    expect(container.read(provider).checking, isFalse);
+    expect(container.read(provider).connectedDeviceId, isNull);
+    final nextCheck = actions.recheck();
+    final cancel = actions.cancel();
+    probe.calls.single.complete();
+    management.cancellations.single.result.complete();
+    await nextCheck;
+    expect(await cancel, isTrue);
+    expect(container.read(provider).connectedDeviceId, isNull);
+  });
+
+  test('配置回执不属于原设备时，保留原目标及清理责任，禁止重复提交', () async {
+    const request = ConnectionAttemptRequest.connect(
+      endpoint: _endpoint,
+      deviceId: 'device',
+      configure: true,
+    );
+    final submission = actions.submit(request);
+    expect(connections.calls.single.configuring, isTrue);
+    connections.calls.single.result.complete(_connected('wrong-device'));
+    await submission;
+    expect(container.read(provider).deviceId, 'device');
+    expect(container.read(provider).failure!.code, 'configuration_unverified');
+    expect(container.read(provider).connectedDeviceId, isNull);
+    await actions.submit(request);
+    expect(connections.calls, hasLength(1));
+    final reset = actions.reset();
+    management.cancellations.single.result.completeError(
+      StateError('cleanup failed'),
+    );
+    expect(await reset, isFalse);
+    expect(
+      container.read(provider).phase,
+      ConnectionAttemptPhase.cleanupRequired,
+    );
+  });
+
+  test('清理异常不抹去真实配对回执，也不接纳其他设备的回执', () async {
+    final submission = actions.submit(_pair);
+    setup.calls.single.result.completeError(
+      DeviceSetupFailure(
+        'setup_cleanup_unconfirmed',
+        'release failed',
+        receipt: _paired(),
+      ),
+    );
+    await submission;
+    expect(container.read(provider).pairing!.recorded, isTrue);
+    expect(
+      container.read(provider).phase,
+      ConnectionAttemptPhase.cleanupRequired,
+    );
+    final reset = actions.reset();
+    management.cancellations.single.result.complete();
+    expect(await reset, isTrue);
+    final next = actions.submit(_pair);
+    setup.calls.last.result.completeError(
+      const DeviceSetupFailure(
+        'setup_cleanup_unconfirmed',
+        'release failed',
+        receipt: PairingReceipt(
+          guid: 'other',
+          address: 'other',
+          device: DeviceSnapshot(id: 'other'),
+        ),
+      ),
+    );
+    await next;
+    expect(container.read(provider).deviceId, 'device');
+    expect(container.read(provider).pairing, isNull);
+    expect(container.read(provider).canSubmit, isFalse);
+  });
+
+  testWidgets('配对后补充端口沿用记录与 TLS，连接失败原位显示真实原因', (tester) async {
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: ConnectTokens.theme(Brightness.light),
+          home: const ConnectionFormPage(
+            pairing: true,
+            address: 'phone.local',
+            port: '45678',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final fields = tester.widget<ConnectionAddressFields>(
+      find.byType(ConnectionAddressFields),
+    );
+    fields.pairingCode.text = '123456';
+    await tester.ensureVisible(find.text('配对并连接'));
+    await tester.tap(find.text('配对并连接'));
+    await tester.pump();
+    expect(setup.calls, hasLength(1));
+    expect(fields.pairingCode.text, isEmpty);
+    setup.calls.single.result.complete(_paired());
+    await tester.pumpAndSettle();
+    expect(find.text('已配对，尚未连接'), findsOneWidget);
+    await tester.tap(find.text('补充连接端口'));
+    await tester.pumpAndSettle();
+    final completed = tester.widget<ConnectionAddressFields>(
+      find.byType(ConnectionAddressFields),
+    );
+    expect(completed.pairing, isFalse);
+    expect(completed.completingPairing, isTrue);
+    expect(completed.legacyTcp, isFalse);
+    expect(completed.address.text, 'phone.local');
+    expect(completed.port.text, isEmpty);
+    completed.port.text = '45679';
+    await tester.ensureVisible(find.text('连接设备'));
+    await tester.tap(find.text('连接设备'));
+    await tester.pump();
+    expect(management.saves.single.id, 'device');
+    expect(management.saves.single.endpoint.transport, DeviceTransport.tls);
+    management.saves.single.result.complete(const DeviceSnapshot(id: 'device'));
+    await tester.pump();
+    connections.calls.single.result.completeError(
+      const RequestFailure('timeout', 'connection timeout'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('connection timeout'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+    expect(setup.calls, hasLength(1));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const SizedBox.shrink(),
+      ),
+    );
+    await tester.pump();
+  });
+}
+
+DeviceConnectionReceipt _connected(String id) => DeviceConnectionReceipt(
+  device: DeviceSnapshot(id: id, status: .connected),
+);
+PairingReceipt _paired({SetupIssue? issue}) => PairingReceipt(
+  guid: 'guid',
+  address: 'phone.local',
+  device: const DeviceSnapshot(id: 'device'),
+  connectionPortRequired: issue == null,
+  connectionFailure: issue,
+);
+
+final class _Setup implements DeviceSetup {
+  final calls = <({String id, Completer<PairingReceipt> result})>[];
+  @override
+  Future<PairingReceipt> pairDevice(
+    String address,
+    int port,
+    String code, {
+    String? deviceId,
+    String? attemptId,
+    SetupIdentity? identity,
+  }) {
+    final result = Completer<PairingReceipt>();
+    calls.add((id: attemptId!, result: result));
+    return result.future;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _Management implements DeviceManagement {
+  List<DeviceSnapshot> devices = [];
+  final saves =
+      <
+        ({
+          String? id,
+          DeviceEndpoint endpoint,
+          AdbCancellation? stop,
+          Completer<DeviceSnapshot> result,
+        })
+      >[];
+  final cancellations = <({String id, Completer<void> result})>[];
+  Future<DeviceSnapshot> _save(
+    String? id,
+    DeviceEndpoint endpoint,
+    AdbCancellation? stop,
+  ) {
+    final result = Completer<DeviceSnapshot>();
+    saves.add((id: id, endpoint: endpoint, stop: stop, result: result));
+    return result.future;
+  }
+
+  @override
+  Future<DeviceSnapshot> addDevice(
+    DeviceEndpoint endpoint, {
+    String name = 'Android 设备',
+    SetupIdentity? identity,
+    AdbCancellation? cancellation,
+  }) => _save(null, endpoint, cancellation);
+  @override
+  Future<DeviceSnapshot> updateDeviceEndpoint(
+    String deviceId,
+    DeviceEndpoint endpoint, {
+    AdbCancellation? cancellation,
+  }) => _save(deviceId, endpoint, cancellation);
+  @override
+  Future<void> cancelConnectionAttempt(String attemptId) {
+    final result = Completer<void>();
+    cancellations.add((id: attemptId, result: result));
+    return result.future;
+  }
+
+  @override
+  List<DeviceSnapshot> readDevices() => devices;
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _Connections implements DeviceConnectionControl {
+  final calls =
+      <
+        ({
+          String id,
+          String attempt,
+          bool configuring,
+          AdbCancellation? stop,
+          Completer<DeviceConnectionReceipt> result,
+        })
+      >[];
+  Future<DeviceConnectionReceipt> _start(
+    String id,
+    String attempt,
+    bool configuring,
+    AdbCancellation? stop,
+  ) {
+    final result = Completer<DeviceConnectionReceipt>();
+    calls.add((
+      id: id,
+      attempt: attempt,
+      configuring: configuring,
+      stop: stop,
+      result: result,
+    ));
+    return result.future;
+  }
+
+  @override
+  Future<DeviceConnectionReceipt> connectDevice(
+    String deviceId, {
+    String? attemptId,
+    ConnectionCandidateSource candidateSource = .saved,
+    AdbCancellation? cancellation,
+  }) => _start(deviceId, attemptId!, false, cancellation);
+  @override
+  Future<DeviceConnectionReceipt> configureDevice(
+    String deviceId,
+    DeviceEndpoint endpoint, {
+    String? attemptId,
+    ConnectionCandidateSource candidateSource = .saved,
+    AdbCancellation? cancellation,
+  }) => _start(deviceId, attemptId!, true, cancellation);
+}
+
+final class _Reconcile {
+  final calls = <Completer<void>>[];
+  Future<void> run() {
+    final result = Completer<void>();
+    calls.add(result);
+    return result.future;
+  }
+}

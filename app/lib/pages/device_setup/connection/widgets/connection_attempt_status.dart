@@ -1,6 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/devices/models/device_setup_receipt.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
@@ -23,14 +23,12 @@ class ConnectionAttemptStatus extends StatelessWidget {
 
   final bool busy, checking, cancelling, paired;
   final String deviceName;
-  final Object? failure;
+  final SetupIssue? failure;
   final VoidCallback onCancel, onEdit, onRetry, onRecheck, onConnectionPort;
 
   @override
   Widget build(BuildContext context) {
-    final code = failure is RequestFailure
-        ? (failure as RequestFailure).code
-        : '';
+    final code = failure?.code ?? '';
     final mismatched =
         code == 'device_identity_mismatch' || code == 'identity_mismatch';
     final unknown =
@@ -54,7 +52,7 @@ class ConnectionAttemptStatus extends StatelessWidget {
         ? '尚未确认本次连接结果。重新核对只检查当前状态，不会重发连接请求。'
         : paired && failure == null
         ? '配对授权已保留，请补充手机无线调试主页面的连接端口。'
-        : failure?.toString() ?? '尚未确认连接可用，请检查地址、端口和手机授权。';
+        : failure?.message ?? '尚未确认连接可用，请检查地址、端口和手机授权。';
     final text = Theme.of(context).textTheme;
     final colors = Theme.of(context).colorScheme;
     return Scaffold(
