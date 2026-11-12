@@ -13,7 +13,7 @@ cd app
 flutter run -d <device>
 ```
 
-完整检查在仓库根运行 `./scripts/check.sh`。发布见[Android打包](docs/implementation/android-packaging.md)及[桌面构建](scripts/README.md)。
+完整检查在仓库根运行 `./scripts/check.sh`。Android 打包与桌面构建见[脚本入口](scripts/README.md)。
 
 ## 工作区
 
@@ -23,6 +23,6 @@ flutter run -d <device>
 | `packages/`、`rust/` | 同名通用能力包及原生实现 |
 | `servers/` | 被控临时执行产物及来源 |
 | `designs/` | 产品与视觉规范、pen 只读对照源文件 |
-| `scripts/` | 生成、检查、构建与设备驱动 |
+| `scripts/` | 生成、检查与构建 |
 
-入口：[产品](designs/prod/README.md) · [视觉](designs/design.md) · [架构](docs/implementation/architecture.md) · [工具链](docs/implementation/repository-tooling.md) · [词表](GLOSSARY.md) · [ADR](docs/adr/)。
+入口：[产品](designs/prod/README.md) · [视觉](designs/design.md) · [应用约束](app/lib/AGENTS.md) · [脚本](scripts/README.md) · [词表](GLOSSARY.md)。

@@ -16,4 +16,4 @@ await controller.dispose();
 
 先挂载 texture，再等待 `waitForPresentation()`。解码、纹理准备、Flutter 合成与屏幕显示分别取证；硬解可用不表示本次选中硬解。快照是显式 RGBA 复制，PCM 接纳字节不证明声音可闻。单边解码尺寸上限 16384，不限制 scrcpy 协议表达范围。
 
-依赖与构建见[工具链](../../docs/implementation/repository-tooling.md)，真实原生测试见[native/tests](native/tests/README.md)，受控补丁及对应源码要求见[patches](third_party/patches/README.md)。
+依赖与构建见[脚本入口](../../scripts/README.md)，受控补丁及对应源码要求见[patches](third_party/patches/README.md)。

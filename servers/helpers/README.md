@@ -25,4 +25,4 @@ cargo +1.99.1 test --locked --manifest-path rust/adb/device_fs_helper/Cargo.toml
 
 根目录先 `flutter pub get`。构建使用 Rust 1.99.1、NDK 30.0.16248370 和四个 Android ABI；`ANDROID_NDK_HOME` 可选择该版本安装。`--check` 离线核对，`--rebuild` 比较而不替换；源码变化须更新全部产物和 manifest。
 
-[file_helper.rs](../../rust/adb/api/src/file_helper.rs) 为每次执行独占创建私有目录，核验已打开 executable 的字节后从同一 FD 执行。未知执行结果不自动重放；只清理本次创建租约授权的目录。共享打包见[工具链](../../docs/implementation/repository-tooling.md)。
+[file_helper.rs](../../rust/adb/api/src/file_helper.rs) 为每次执行独占创建私有目录，核验已打开 executable 的字节后从同一 FD 执行。未知执行结果不自动重放；只清理本次创建租约授权的目录。共享打包见[脚本入口](../../scripts/README.md)。

@@ -1,6 +1,6 @@
 # 跨设备互联词表
 
-对象定义如下；行为见[产品规格](designs/prod/README.md)，决定见 [ADR](docs/adr/)。
+对象定义如下；行为见[产品规格](designs/prod/README.md)。
 
 ## Language
 

@@ -38,4 +38,4 @@ final devices = await host.client.devices();
 
 `createNativeLocalFiles()` 无需设备连接；调用方提供授权根、预算和期限。Linux/Android 使用目录 FD、真实片段身份和禁止覆盖提交，其他宿主明确不支持。**提交未知不重放、不删除可能已发布目标**；借入 provider FD 的原租约须保留到复制/关闭确认。`attachFileScope` 的父 scope 接管须先排空旧 worker/FD；清理未确认继续占用容量。
 
-Linux 官方进程监督需要 pidfd、可执行 memfd 和 `/proc/self/fd`；macOS 尚无同等精确监督。Windows 使用原生进程句柄。构建方式见[工具链](../../docs/implementation/repository-tooling.md)，测试入口见[test/README](test/README.md)。
+Linux 官方进程监督需要 pidfd、可执行 memfd 和 `/proc/self/fd`；macOS 尚无同等精确监督。Windows 使用原生进程句柄。构建方式见[脚本入口](../../scripts/README.md)。

@@ -1,6 +1,6 @@
 # Android Binder companion
 
-`src/com/interop/companion/Main.java` 编译为临时 DEX JAR，以 shell UID 2000 运行。应用编排见 `app/lib/stores/companion_coordinator.dart`。
+`src/com/interop/companion/Main.java` 编译为临时 DEX JAR，以 shell UID 2000 运行。应用编排见 [CompanionService](../../app/lib/core/companion/companion_service.dart)。
 
 | 能力 | 当前边界 |
 | --- | --- |
