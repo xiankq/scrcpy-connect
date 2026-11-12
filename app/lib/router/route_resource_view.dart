@@ -1,9 +1,8 @@
-import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/pages/route_error/route_error_page.dart';
 import 'package:flutter/material.dart';
 
 /// 主题或事件重建时保留同一次查询及其页面。
-class RouteResourceView extends StatefulWidget {
+class RouteResourceView<T extends Object> extends StatefulWidget {
   const RouteResourceView({
     super.key,
     required this.identity,
@@ -13,17 +12,18 @@ class RouteResourceView extends StatefulWidget {
   });
   final String identity;
   final bool preserveContent;
-  final Future<Json> Function() load;
-  final Widget Function(BuildContext, Json) builder;
+  final Future<T> Function() load;
+  final Widget Function(BuildContext, T) builder;
   @override
-  State<RouteResourceView> createState() => _RouteResourceViewState();
+  State<RouteResourceView<T>> createState() => _RouteResourceViewState<T>();
 }
 
-class _RouteResourceViewState extends State<RouteResourceView> {
-  late Future<Json> resource = widget.load();
+class _RouteResourceViewState<T extends Object>
+    extends State<RouteResourceView<T>> {
+  late Future<T> resource = widget.load();
   Widget? content;
   @override
-  void didUpdateWidget(RouteResourceView oldWidget) {
+  void didUpdateWidget(RouteResourceView<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.identity != widget.identity) {
       resource = widget.load();
@@ -32,7 +32,7 @@ class _RouteResourceViewState extends State<RouteResourceView> {
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<Json>(
+  Widget build(BuildContext context) => FutureBuilder<T>(
     key: ValueKey(widget.identity),
     future: resource,
     builder: (context, snapshot) {

@@ -1,11 +1,11 @@
+import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/pages/devices/index/widgets/device_card.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -16,23 +16,23 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class DevicesPage extends HookConsumerWidget {
   const DevicesPage({super.key, required this.controller});
-  final AppStore controller;
+  final AppNotifier controller;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appDevices = ref.watch(
-      appStoreProvider.select((state) => state.devices),
+      deviceListProvider.select((state) => state.devices),
     );
     final appLoading = ref.watch(
-      appStoreProvider.select((state) => state.loading),
+      deviceListProvider.select((state) => state.loading),
     );
     final appDeviceError = ref.watch(
-      appStoreProvider.select((state) => state.deviceError),
+      deviceListProvider.select((state) => state.error),
     );
     final query = useTextEditingController();
     useListenable(query);
     final devices = appDevices
         .where(
-          (d) => '${deviceName(d)} ${value(d, 'model')}'.toLowerCase().contains(
+          (d) => '${deviceName(d)} ${(d.model ?? '')}'.toLowerCase().contains(
             query.text.toLowerCase(),
           ),
         )
@@ -80,7 +80,7 @@ class DevicesPage extends HookConsumerWidget {
               : null,
           actions: [addButton],
           child: RefreshIndicator(
-            onRefresh: controller.refreshDevices,
+            onRefresh: controller.deviceList.refresh,
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [

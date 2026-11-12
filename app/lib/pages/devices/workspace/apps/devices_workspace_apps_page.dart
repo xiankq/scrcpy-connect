@@ -1,11 +1,12 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/device_query_provider.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_icon.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_launcher.dart';
-import 'package:scrcpy_connect/widgets/command_view.dart';
+import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -13,31 +14,34 @@ import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-class AppsPage extends HookWidget {
+class AppsPage extends HookConsumerWidget {
   const AppsPage({super.key, required this.controller, required this.device});
-  final AppStore controller;
-  final Json device;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final query = useTextEditingController();
     useListenable(query);
+    final provider = installedDeviceAppsProvider(device.id);
+    final result = ref.watch(provider);
+    void refresh() => ref.invalidate(provider);
     return PageFrame(
       title: '全部应用',
-      child: CommandView(
-        controller: controller,
-        command: 'apps.list',
-        params: {'deviceId': device['id']},
+      child: AsyncContent(
+        loading: result.isLoading,
+        data: result.asData?.value,
+        error: result.error,
+        onRefresh: refresh,
         emptyTitle: '暂时无法读取应用',
         alternative: TextButton(
-          onPressed: () =>
-              openRemoteRoute(context, deviceId: value(device, 'id')),
+          onPressed: () => openRemoteRoute(context, deviceId: device.id),
           child: const Text('在手机上继续处理'),
         ),
-        builder: (context, data, refresh) {
-          final apps = objects(data['apps'])
+        builder: (context, data) {
+          final apps = data
               .where(
-                (app) => '${value(app, 'name')} ${value(app, 'packageName')}'
+                (app) => '${app.name} ${app.packageName}'
                     .toLowerCase()
                     .contains(query.text.toLowerCase()),
               )
@@ -98,13 +102,10 @@ class AppsPage extends HookWidget {
                           ),
                           leading: PhoneAppIcon(
                             size: DesignTokens.componentListIconSize,
-                            controller: controller,
-                            deviceId: value(device, 'id'),
-                            packageName: value(app, 'packageName'),
+                            deviceId: device.id,
+                            packageName: app.packageName,
                           ),
-                          title: Text(
-                            value(app, 'name', value(app, 'packageName')),
-                          ),
+                          title: Text(app.name),
                           onTap: () =>
                               openPhoneApp(context, controller, device, app),
                           onLongPress: () => openPhoneApp(

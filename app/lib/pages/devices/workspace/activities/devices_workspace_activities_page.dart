@@ -1,14 +1,16 @@
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+import 'package:scrcpy_connect/core/application/activities_notifier.dart';
+import 'package:scrcpy_connect/core/control/session_activity.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/workspace_call_card.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
-import 'package:scrcpy_connect/widgets/command_view.dart';
+import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 
@@ -18,42 +20,39 @@ import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-class ActivitiesPage extends HookWidget {
+class ActivitiesPage extends HookConsumerWidget {
   const ActivitiesPage({
     super.key,
     required this.controller,
     required this.deviceId,
   });
-  final AppStore controller;
+  final AppNotifier controller;
   final String deviceId;
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final provider = activitiesProvider(deviceId: deviceId);
+    final query = ref.watch(provider);
+    Future<void> refresh() => ref.read(provider.notifier).refresh();
     return PageFrame(
       title: '当前活动',
-      child: CommandView(
-        controller: controller,
-        command: 'activities.list',
-        params: {'deviceId': deviceId},
+      child: AsyncContent<ActivityCollection>(
+        loading: query.loading,
+        data: query.data,
+        error: query.error,
+        onRefresh: refresh,
         emptyTitle: '暂时无法核验活动',
-        builder: (context, data, refresh) {
-          final sessions = objects(data['sessions'])
-              .where((session) => session['deviceId'] == deviceId)
-              .toList();
-          final unresolved = sessions
-              .where(
-                (session) =>
-                    session['launchOutcome'] == 'unknown' ||
-                    session['recordOnly'] == true,
-              )
-              .toList();
+        builder: (context, data) {
+          final unresolved = data.pendingApplications;
           final unresolvedIds = unresolved
-              .map((session) => 'session:${session['sessionId']}')
+              .map((item) => item.sessionId)
               .toSet();
-          final activities = objects(data['activities'])
+          final activities = data.activities
               .where(
                 (activity) =>
-                    value(activity, 'deviceId') == deviceId &&
-                    !unresolvedIds.contains(activity['id']),
+                    activity.target is! SessionActivityTarget ||
+                    !unresolvedIds.contains(
+                      (activity.target as SessionActivityTarget).sessionId,
+                    ),
               )
               .toList();
           if (activities.isEmpty && unresolved.isEmpty) {
@@ -66,9 +65,9 @@ class ActivitiesPage extends HookWidget {
                       controller
                           .snapshot()
                           .devices
-                          .where((device) => device['id'] == deviceId)
+                          .where((device) => device.id == deviceId)
                           .firstOrNull ??
-                      {'id': deviceId},
+                      DeviceSnapshot(id: deviceId),
                 ),
                 EmptyContent(
                   icon: LucideIcons.activity,
@@ -93,11 +92,7 @@ class ActivitiesPage extends HookWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        value(
-                          activities.firstOrNull ?? const {},
-                          'deviceName',
-                          '此设备',
-                        ),
+                        activities.firstOrNull?.deviceName ?? '此设备',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       if (unresolved.isNotEmpty) const SectionTitle('待核对'),
@@ -107,9 +102,9 @@ class ActivitiesPage extends HookWidget {
                             controller
                                 .snapshot()
                                 .devices
-                                .where((device) => device['id'] == deviceId)
+                                .where((device) => device.id == deviceId)
                                 .firstOrNull ??
-                            {'id': deviceId},
+                            DeviceSnapshot(id: deviceId),
                       ),
                     ],
                   ),
@@ -130,39 +125,29 @@ class ActivitiesPage extends HookWidget {
                   if (index == unresolved.length + 1)
                     const SectionTitle('正在进行'),
                   ActionRow(
-                    key: ValueKey(value(activity, 'id')),
+                    key: ValueKey(activity.target),
                     icon: LucideIcons.activity,
-                    title: value(activity, 'name', '当前活动'),
+                    title: activity.name,
                     trailing: GlassTooltip(
-                      message: value(
-                        activity,
-                        'statusLabel',
-                        statusText(value(activity, 'status')),
-                      ),
+                      message: statusText(activity.status),
                       child: TextButton(
-                        onPressed: activity['canStop'] == false
-                            ? null
-                            : () async {
-                                if (await confirm(
-                                      context,
-                                      '停止“${value(activity, 'name')}”？',
-                                      value(
-                                        activity,
-                                        'stopImpact',
-                                        '主动停止后不会自动恢复该活动。其他设备的活动保持各自状态。',
-                                      ),
-                                      action: '停止活动',
-                                    ) &&
-                                    context.mounted) {
-                                  await perform(
-                                    context,
-                                    controller,
-                                    'activities.stop',
-                                    {'activityId': activity['id']},
-                                  );
-                                  refresh();
-                                }
-                              },
+                        onPressed: () async {
+                          if (await confirm(
+                                context,
+                                '停止“${activity.name}”？',
+                                activity.stopImpact,
+                                action: '停止活动',
+                              ) &&
+                              context.mounted) {
+                            await performAction(
+                              context,
+                              () => controller.activities.stopActivity(
+                                activity.target,
+                              ),
+                            );
+                            refresh();
+                          }
+                        },
                         child: const Text('停止'),
                       ),
                     ),
@@ -184,9 +169,9 @@ class _PendingLaunch extends HookWidget {
     required this.session,
     required this.refresh,
   });
-  final AppStore controller;
+  final AppNotifier controller;
   final String deviceId;
-  final Json session;
+  final SessionActivity session;
   final VoidCallback refresh;
 
   @override
@@ -204,18 +189,15 @@ class _PendingLaunch extends HookWidget {
       }
     }
 
-    final id = value(session, 'sessionId');
+    final id = session.sessionId;
     return Padding(
       padding: const EdgeInsets.all(DesignTokens.spacingMd),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            value(session, 'name', value(session, 'packageName', '应用打开')),
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          Text(session.name, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: DesignTokens.spacingXs),
-          Text(value(session, 'reason', '应用打开请求可能已提交，尚未确认画面。')),
+          Text(session.reason ?? '应用打开请求可能已提交，尚未确认画面。'),
           Wrap(
             spacing: DesignTokens.spacingSm,
             children: [
@@ -223,24 +205,26 @@ class _PendingLaunch extends HookWidget {
                 onPressed: busy.value
                     ? null
                     : () => run(() async {
-                        final result = await controller.execute(
-                          ApplicationCommand.sessionList,
-                          {'deviceId': deviceId},
-                        );
+                        final result = await controller.activities
+                            .readActivities(deviceId: deviceId);
                         if (!context.mounted) return;
-                        final linked = value(session, 'linkedSessionId', id);
-                        final live = objects(result['sessions'])
+                        final linked = session.linkedSessionId ?? id;
+                        final pendingIds = result.pendingApplications
+                            .map((item) => item.sessionId)
+                            .toSet();
+                        final live = result.activities
                             .where(
                               (item) =>
-                                  item['deviceId'] == deviceId &&
-                                  item['sessionId'] == linked &&
-                                  item['recordOnly'] != true &&
-                                  item['launchOutcome'] != 'unknown' &&
-                                  ![
+                                  item.target is SessionActivityTarget &&
+                                  (item.target as SessionActivityTarget)
+                                          .sessionId ==
+                                      linked &&
+                                  !pendingIds.contains(linked) &&
+                                  !const {
                                     'failed',
                                     'stopped',
                                     'error',
-                                  ].contains(item['status']),
+                                  }.contains(item.status),
                             )
                             .firstOrNull;
                         refresh();
@@ -248,7 +232,8 @@ class _PendingLaunch extends HookWidget {
                           await openRemoteRoute(
                             context,
                             deviceId: deviceId,
-                            sessionId: value(live, 'sessionId'),
+                            sessionId: (live.target as SessionActivityTarget)
+                                .sessionId,
                           );
                         } else {
                           feedback(context, '本次打开仍待核对，请在手机检查。未重新发送打开请求。');
@@ -269,13 +254,8 @@ class _PendingLaunch extends HookWidget {
                             !context.mounted) {
                           return;
                         }
-                        await controller.execute(
-                          ApplicationCommand.sessionStop,
-                          {
-                            'deviceId': deviceId,
-                            'sessionId': id,
-                            'keepTask': true,
-                          },
+                        await controller.activities.stopActivity(
+                          ActivityTarget.session(id),
                         );
                         refresh();
                       }),

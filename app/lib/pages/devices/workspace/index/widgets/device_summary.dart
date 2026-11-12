@@ -1,5 +1,4 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -14,7 +13,7 @@ class DeviceSummary extends HookWidget {
     required this.device,
     this.connecting = false,
   });
-  final Json device;
+  final DeviceSnapshot device;
   final bool connecting;
 
   @override
@@ -27,18 +26,18 @@ class DeviceSummary extends HookWidget {
       initialData: 0,
     );
     final nowSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final updatedAt = int.tryParse(value(device, 'batteryUpdatedAt'));
+    final updatedAt = int.tryParse((device.batteryUpdatedAt?.toString() ?? ''));
     final liveBattery =
-        device['status'] == 'connected' &&
+        device.status == DeviceConnectionStatus.connected &&
         updatedAt != null &&
         nowSeconds >= updatedAt &&
         nowSeconds - updatedAt <= 90;
     final text = Theme.of(context).textTheme;
     final displayedDevice = connecting
-        ? {...device, 'status': 'connecting'}
+        ? device.copyWith(status: DeviceConnectionStatus.connecting)
         : device;
-    final address = value(device, 'address').trim();
-    final port = int.tryParse(value(device, 'port'));
+    final address = (device.address ?? '').trim();
+    final port = int.tryParse((device.port?.toString() ?? ''));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -59,7 +58,7 @@ class DeviceSummary extends HookWidget {
                       Text(deviceTransportLabel(device), style: text.bodySmall),
                     ],
                   ),
-                  if (device['status'] == 'offline') ...[
+                  if (device.status == DeviceConnectionStatus.offline) ...[
                     const SizedBox(height: DesignTokens.spacingXs),
                     Text(
                       deviceConnectionLabel(device).replaceFirst('离线 · ', ''),
@@ -67,7 +66,7 @@ class DeviceSummary extends HookWidget {
                     ),
                   ],
                   const SizedBox(height: DesignTokens.spacingXs),
-                  if (device['transport'] != 'usb')
+                  if (device.transport != DeviceTransport.usb)
                     Text(
                       address.isEmpty
                           ? '地址未获取'
@@ -76,12 +75,12 @@ class DeviceSummary extends HookWidget {
                                 : address),
                       style: text.bodySmall,
                     ),
-                  if (liveBattery && device['battery'] != null) ...[
+                  if (liveBattery && device.battery != null) ...[
                     const SizedBox(height: DesignTokens.spacingXs),
                     Row(
                       children: [
                         Icon(
-                          device['charging'] == true
+                          device.charging == true
                               ? LucideIcons.batteryCharging
                               : LucideIcons.battery,
                           size: DesignTokens.componentIconSmallSize,
@@ -90,7 +89,7 @@ class DeviceSummary extends HookWidget {
                         const SizedBox(width: DesignTokens.spacingXxs),
                         Flexible(
                           child: Text(
-                            '${device['battery']}%${device['charging'] == true ? ' · 正在充电' : ''}',
+                            '${device.battery}%${device.charging == true ? ' · 正在充电' : ''}',
                             style: text.bodySmall,
                           ),
                         ),
@@ -102,7 +101,7 @@ class DeviceSummary extends HookWidget {
             ),
           ],
         ),
-        if (device['status'] != 'connected')
+        if (device.status != DeviceConnectionStatus.connected)
           Padding(
             padding: const EdgeInsets.only(top: DesignTokens.spacingSm),
             child: Text('信息来自本机记录', style: text.bodySmall),

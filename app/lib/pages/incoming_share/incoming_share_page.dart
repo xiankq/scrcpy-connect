@@ -1,13 +1,18 @@
+import 'package:scrcpy_connect/core/files/incoming_shares.dart';
+import 'package:scrcpy_connect/core/files/file_transfers.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+import 'package:scrcpy_connect/core/clipboard/remote_clipboard.dart';
+import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
+
 import 'widgets/share_device_card.dart';
 
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
@@ -24,26 +29,29 @@ class IncomingSharePage extends HookConsumerWidget {
     required this.controller,
     required this.share,
   });
-  final AppStore controller;
-  final Json share;
+  final AppNotifier controller;
+  final IncomingShare share;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final share =
         ref.watch(
-          appStoreProvider.select(
+          appProvider.select(
             (state) => state.pendingShares
-                .where((item) => item['shareId'] == this.share['shareId'])
+                .where((item) => item.shareId == this.share.shareId)
                 .firstOrNull,
           ),
         ) ??
         this.share;
     final appDevices = ref.watch(
-      appStoreProvider.select((state) => state.devices),
+      deviceListProvider.select((state) => state.devices),
     );
-    final files = objects(share['files']);
-    final text = value(share, 'text');
-    final importing = ['starting', 'importing'].contains(share['status']);
+    final files = share.files;
+    final text = share.text;
+    final importing = [
+      IncomingShareStatus.starting,
+      IncomingShareStatus.importing,
+    ].contains(share.status);
     final deviceId = useState<String?>(null);
     final path = useTextEditingController(text: '/sdcard/Download');
     useListenable(path);
@@ -56,11 +64,9 @@ class IncomingSharePage extends HookConsumerWidget {
     final error = useState<String?>(null);
     final locked = pushed.value || copied.value;
     final devices = appDevices
-        .where((d) => d['status'] == 'connected')
+        .where((d) => d.status == DeviceConnectionStatus.connected)
         .toList();
-    final selected = devices
-        .where((d) => d['id'] == deviceId.value)
-        .firstOrNull;
+    final selected = devices.where((d) => d.id == deviceId.value).firstOrNull;
     final needsPush = includeFiles.value && files.isNotEmpty && !pushed.value;
     final needsCopy = includeText.value && !copied.value;
     final canSubmit =
@@ -72,7 +78,7 @@ class IncomingSharePage extends HookConsumerWidget {
             (path.text.startsWith('/') && !path.text.contains('\u0000')));
 
     Future<void> finish({bool showTransfers = false}) async {
-      await controller.consumeShare(value(share, 'shareId'));
+      await controller.shareInbox.consume(share.shareId);
       if (!context.mounted) return;
       finished.value = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -105,45 +111,36 @@ class IncomingSharePage extends HookConsumerWidget {
       error.value = null;
       try {
         if (needsPush) {
-          await controller.execute(ApplicationCommand.filesList, {
-            'deviceId': target,
-            'path': directory.isEmpty ? '/' : directory,
-          });
-          await controller.execute(ApplicationCommand.filesPush, {
-            'shareId': share['shareId'],
-            'deviceId': target,
-            'items': [
-              for (final file in files)
-                {
-                  'source': file['localPath'],
-                  'destination': '$directory/${value(file, 'name')}',
-                },
-            ],
-            'conflict': 'ask',
-          });
+          if (target == null) {
+            throw const RequestFailure('missing_device', '请先选择目标设备。');
+          }
+          await controller.directories.readDirectory((
+            deviceId: target,
+            path: directory.isEmpty ? '/' : directory,
+          ));
+          await controller.fileTransfers.startTransfer(
+            FileTransferPlan(
+              deviceId: target,
+              direction: .push,
+              items: [
+                for (final file in files)
+                  FileTransferSelection(
+                    source: file.localPath,
+                    destination: '$directory/${file.name}',
+                  ),
+              ],
+            ),
+            shareId: share.shareId,
+          );
           if (!context.mounted) return;
           pushed.value = true;
         }
         if (needsCopy) {
-          final result = await controller.execute(
-            ApplicationCommand.clipboardSet,
-            {'deviceId': target, 'text': text},
+          await controller.clipboard.writeClipboard(
+            ClipboardTarget.device(deviceId: target!),
+            text,
           );
           if (!context.mounted) return;
-          if (result['applied'] != true) {
-            throw RequestFailure(
-              'clipboard_unconfirmed',
-              value(
-                result,
-                'reason',
-                value(
-                  result,
-                  'message',
-                  '手机尚未确认剪贴板写入，分享内容已保留。请在手机核对后再决定是否重新提交。',
-                ),
-              ),
-            );
-          }
           copied.value = true;
         }
         await finish(showTransfers: pushed.value);
@@ -154,7 +151,7 @@ class IncomingSharePage extends HookConsumerWidget {
       }
     }
 
-    final errors = strings(share['errors']);
+    final errors = share.errors;
     final leading = <Widget>[
       const StateNote('选择设备后确认保存目录；提交时固定来源和目标，切换页面不改目标。'),
       if (importing) ...[
@@ -204,7 +201,7 @@ class IncomingSharePage extends HookConsumerWidget {
               ? null
               : () async {
                   final directory = await ShareDirectoryRoute(
-                    deviceId: value(selected, 'id'),
+                    deviceId: selected.id,
                     path: path.text,
                   ).push<String>(context);
                   if (directory != null && context.mounted) {
@@ -253,11 +250,9 @@ class IncomingSharePage extends HookConsumerWidget {
       for (var index = 0; index < errors.length; index++)
         ValueKey(('incoming-error', index)): errorsStart + index,
       for (var index = 0; index < files.length; index++)
-        ValueKey(('incoming-file', value(share, 'shareId'), index)):
-            filesStart + index,
+        ValueKey(('incoming-file', share.shareId, index)): filesStart + index,
       for (var index = 0; index < devices.length; index++)
-        ValueKey(('incoming-device', value(devices[index], 'id'))):
-            devicesStart + index,
+        ValueKey(('incoming-device', devices[index].id)): devicesStart + index,
     };
 
     return PopScope(
@@ -290,21 +285,21 @@ class IncomingSharePage extends HookConsumerWidget {
             if (index < middleStart) {
               final row = index - filesStart;
               return ActionRow(
-                key: ValueKey(('incoming-file', value(share, 'shareId'), row)),
+                key: ValueKey(('incoming-file', share.shareId, row)),
                 icon: LucideIcons.file,
-                title: value(files[row], 'name'),
+                title: files[row].name,
               );
             }
             if (index < devicesStart) return middle[index - middleStart];
             if (index >= trailingStart) return trailing[index - trailingStart];
             final device = devices[index - devicesStart];
             return ShareDeviceCard(
-              key: ValueKey(('incoming-device', value(device, 'id'))),
+              key: ValueKey(('incoming-device', device.id)),
               device: device,
-              selected: deviceId.value == value(device, 'id'),
+              selected: deviceId.value == device.id,
               onTap: busy.value || locked
                   ? null
-                  : () => deviceId.value = value(device, 'id'),
+                  : () => deviceId.value = device.id,
             );
           },
         ),

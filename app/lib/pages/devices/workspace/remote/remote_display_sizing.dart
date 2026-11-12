@@ -1,9 +1,13 @@
+import 'package:scrcpy_connect/core/control/remote_control.dart';
+
+import 'package:scrcpy_connect/core/settings/preferences.dart';
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show Size;
-import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/models/remote_display_settings.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/control/remote_display_settings.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 
 import 'remote_input_owner.dart';
@@ -96,8 +100,9 @@ class RemoteDisplaySizing {
     if (!_auto || window.presentation.sessionId.isEmpty || !canSendInput) {
       return;
     }
-    final target = const RemoteDisplaySettings({'remoteAspectRatio': 'auto'})
-        .dimensions(size);
+    final target = const RemoteDisplaySettings(
+      DevicePreferences(remoteAspectRatio: ScreenAspectRatio.automatic),
+    ).dimensions(size);
     if (target == null || target == _requested) {
       _timer?.cancel();
       return;
@@ -131,11 +136,10 @@ class RemoteDisplaySizing {
         }
         _requested = target;
         _trace('display.request target=$target binding=$binding');
-        await window.controller.execute(ApplicationCommand.sessionDisplay, {
-          'sessionId': binding.$1,
-          'displayWidth': target.width,
-          'displayHeight': target.height,
-        });
+        await window.controller.displays.resizeDisplay(
+          ControlTarget(sessionId: binding.$1),
+          target,
+        );
         _trace(
           'display.return target=$target current=${window.presentation.binding} submitted=$binding',
         );
@@ -165,8 +169,9 @@ class RemoteDisplaySizing {
     final geometry = (width: width, height: height);
     if (geometry == _lastGeometry) return;
     _lastGeometry = geometry;
-    final target = const RemoteDisplaySettings({'remoteAspectRatio': 'auto'})
-        .dimensions(_viewport!);
+    final target = const RemoteDisplaySettings(
+      DevicePreferences(remoteAspectRatio: ScreenAspectRatio.automatic),
+    ).dimensions(_viewport!);
     if (target != null &&
         (width / height - target.width / target.height).abs() > .005) {
       // 手机旋转改变自然坐标映射，视口未变也要重新适配。

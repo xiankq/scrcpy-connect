@@ -1,3 +1,8 @@
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+
+import 'system_notification_sink_provider.dart';
+export 'system_notification_sink_provider.dart';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:scrcpy_connect/widgets/system_notification_sink.dart';
@@ -8,18 +13,16 @@ export 'package:scrcpy_connect/widgets/system_notification_sink.dart'
         systemNotificationIdMax,
         SystemNotificationStatus,
         SystemNotice,
-        SystemNotificationSink;
+        SystemNotificationSink,
+        NoopSystemNotificationSink;
 import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
 
 import 'dart:async';
 import 'dart:convert';
 
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
-
-part 'system_notifications.g.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 
 /// 只向系统交付定位信息，不把它作为授权回执。
 @immutable
@@ -88,25 +91,6 @@ class SystemNotificationActivation {
   final String reason;
 }
 
-class NoopSystemNotificationSink implements SystemNotificationSink {
-  const NoopSystemNotificationSink();
-  @override
-  Stream<String> get activations => const Stream.empty();
-  @override
-  Future<void> initialize() async {}
-  @override
-  Future<SystemNotificationStatus> status() async =>
-      const SystemNotificationStatus();
-  @override
-  Future<SystemNotificationStatus> requestPermission() => status();
-  @override
-  Future<bool> openSettings() async => false;
-  @override
-  Future<void> show(SystemNotice notice) async {}
-  @override
-  Future<void> cancel(int id) async {}
-}
-
 class SystemNotifications {
   final changes = ValueNotifier<int>(0);
   void _changed() {
@@ -117,7 +101,7 @@ class SystemNotifications {
     _events = controller.eventStream().listen(_event);
     _activations = sink.activations.listen(_activate);
   }
-  final AppStore controller;
+  final AppNotifier controller;
   final SystemNotificationSink sink;
   late final StreamSubscription<Json> _events;
   late final StreamSubscription<String> _activations;
@@ -325,15 +309,18 @@ class SystemNotifications {
           .snapshot()
           .devices
           .take(32)
-          .any((d) => d['id'] == deviceId && d['status'] == 'connected');
+          .any(
+            (d) =>
+                d.id == deviceId &&
+                d.status == DeviceConnectionStatus.connected,
+          );
 
   bool _allowed(SystemNotificationKind kind) =>
       status.supported &&
       status.permissionGranted == true &&
-      controller.snapshot().settings[kind == SystemNotificationKind.call
-              ? 'callAlerts'
-              : 'notificationAlerts'] ==
-          true &&
+      (kind == SystemNotificationKind.call
+          ? controller.snapshot().settings.callAlerts
+          : controller.snapshot().settings.notificationAlerts) &&
       (kind == SystemNotificationKind.call
               ? status.callChannelEnabled
               : status.notificationChannelEnabled) !=
@@ -382,7 +369,7 @@ class SystemNotifications {
     }
     if (event['type'] == 'connections.stopped') {
       _nativeStopped.addAll(
-        controller.snapshot().devices.take(32).map((d) => value(d, 'id')),
+        controller.snapshot().devices.take(32).map((d) => d.id),
       );
       for (final entry in _owners.entries.toList()) {
         _invalidate(entry.key, entry.value.generation);
@@ -492,7 +479,7 @@ class SystemNotifications {
         .snapshot()
         .devices
         .take(32)
-        .map((d) => value(d, 'id'))
+        .map((d) => d.id)
         .toSet();
     _invalidThrough.removeWhere((id, _) => !known.contains(id));
     _nativeStopped.removeWhere((id) => !known.contains(id));
@@ -789,10 +776,6 @@ class _Delivery {
   bool issued = false;
 }
 
-@Riverpod(keepAlive: true)
-SystemNotificationSink systemNotificationSink(Ref ref) =>
-    const NoopSystemNotificationSink();
-
 /// 界面拥有提醒订阅、展示与销毁；provider 只提供可替换的系统能力。
 SystemNotifications useSystemNotifications(
   BuildContext context,
@@ -801,14 +784,14 @@ SystemNotifications useSystemNotifications(
   final shared = context
       .dependOnInheritedWidgetOfExactType<SystemNotificationsScope>()
       ?.notifications;
-  final controller = ref.watch(appStoreProvider.notifier);
+  final controller = ref.watch(appProvider.notifier);
   final sink = ref.watch(systemNotificationSinkProvider);
   final notifications = useMemoized(
     () => shared ?? SystemNotifications(controller, sink),
     [shared, controller, sink, controller.generation],
   );
   ref.listen(
-    appStoreProvider.select(
+    appProvider.select(
       (state) => (
         state.devices,
         state.settings,

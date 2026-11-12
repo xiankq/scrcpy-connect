@@ -1,20 +1,19 @@
+import 'package:scrcpy_connect/core/control/session_activity.dart';
+import 'package:scrcpy_connect/core/control/remote_control.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+
 import 'dart:async';
 
-import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
 import 'package:scrcpy_connect/widgets/remote_failure.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
 
 import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_presentation.dart';
 
 class RemoteWindowClose {
-  const RemoteWindowClose({
-    this.receipt = const {},
-    this.lockFailure,
-    this.closeFailure,
-  });
-  final Json receipt;
+  const RemoteWindowClose({this.receipt, this.lockFailure, this.closeFailure});
+  final VideoStopReceipt? receipt;
   final Object? lockFailure;
   final Object? closeFailure;
 }
@@ -26,11 +25,12 @@ class RemoteWindow {
     required this.controller,
     required this.deviceId,
     required this.views,
-  }) {
+  }) : control = controller.control {
     _releaseDeviceView = views.claimRemoteDeviceView(deviceId);
   }
 
-  final AppStore controller;
+  final AppNotifier controller;
+  final RemoteControl control;
   final RemoteViews views;
   final String deviceId;
   final presentation = RemotePresentation();
@@ -67,9 +67,7 @@ class RemoteWindow {
     presentation.detachBinding();
     if (owned != null) {
       unawaited(
-        owned
-            .release(afterInput: releases)
-            .catchError((Object _) => <String, dynamic>{}),
+        owned.release(afterInput: releases).catchError((Object _) => null),
       );
     }
     // 操作记录的检查不依赖旧输入或捕获暂停的回执。
@@ -77,19 +75,21 @@ class RemoteWindow {
   }
 
   Future<String?> convertToIndependent({
-    required Json device,
+    required DeviceSnapshot device,
     required bool Function() canSendInput,
     required Future<void> Function() releaseInputs,
   }) async {
     final binding = presentation.binding;
     final owned = view;
     final id = deviceId;
-    String connectionId() => value(
-      controller.snapshot().devices.where((d) => d['id'] == id).firstOrNull ??
-          device,
-      'connectionId',
-    );
+    String connectionId() =>
+        (controller.snapshot().devices.where((d) => d.id == id).firstOrNull ??
+                device)
+            .connectionId ??
+        '';
     final connection = connectionId();
+    final inspection = controller.inspection;
+    final apps = controller.apps;
     if (connection.isEmpty) {
       throw const RequestFailure('stale_connection', '尚未确认当前设备连接。');
     }
@@ -99,48 +99,44 @@ class RemoteWindow {
         canSendInput() &&
         presentation.binding == binding &&
         view == owned &&
-        connectionId() == connection;
-    final foreground = await controller.request('apps.foreground', {
-      'deviceId': id,
-      'connectionId': connection,
-    });
+        connectionId() == connection &&
+        identical(inspection, controller.inspection) &&
+        identical(apps, controller.apps);
+    final foreground = await inspection.readForegroundApp(
+      id,
+      connectionId: connection,
+    );
     if (!current()) return null;
-    final package = value(foreground, 'packageName');
-    if (foreground['deviceId'] != id ||
-        foreground['connectionId'] != connection ||
-        foreground['source'] != 'resumedActivity' ||
+    final package = foreground.value;
+    if (foreground.deviceId != id ||
+        foreground.connectionId != connection ||
         package.isEmpty) {
       throw const RequestFailure('foreground_unavailable', '无法确认手机当前前台应用。');
     }
-    final running = await controller.request('apps.list', {
-      'deviceId': id,
-      'filter': 'running',
-    });
+    final running = await apps.readRunningApps(id);
     if (!current()) return null;
-    if (running['deviceId'] != id ||
-        running['source'] != 'runningTasks' ||
-        running['live'] != true ||
-        (running['connectionId'] != null &&
-            running['connectionId'] != connection) ||
-        !objects(running['apps']).any((app) => app['packageName'] == package)) {
+    if (running.deviceId != id ||
+        (running.connectionId != null && running.connectionId != connection) ||
+        !running.apps.any((app) => app.packageName == package)) {
       throw const RequestFailure('foreground_unavailable', '当前前台内容没有可接续的应用任务。');
     }
-    final verified = await controller.request('apps.foreground', {
-      'deviceId': id,
-      'connectionId': connection,
-    });
+    final verified = await inspection.readForegroundApp(
+      id,
+      connectionId: connection,
+    );
     if (!current()) return null;
-    if (verified['packageName'] != package ||
-        verified['connectionId'] != connection ||
-        verified['deviceId'] != id ||
-        verified['source'] != 'resumedActivity') {
+    if (verified.value != package ||
+        verified.connectionId != connection ||
+        verified.deviceId != id) {
       throw const RequestFailure('foreground_unavailable', '手机前台应用已变化，请重试。');
     }
     await owned!.close(afterInput: releaseInputs());
     if (_disposed ||
         presentation.exiting ||
         presentation.binding != binding ||
-        connectionId() != connection) {
+        connectionId() != connection ||
+        !identical(inspection, controller.inspection) ||
+        !identical(apps, controller.apps)) {
       return null;
     }
     presentation.detachBinding();
@@ -189,7 +185,7 @@ class RemoteWindow {
       if (_disposed) return RemoteResumeResult.stale;
       final outcome = presentation.completeResume(
         epoch,
-        receipt,
+        receipt?.toSnapshot() ?? const {},
         ownerCurrent: owned.isCurrent,
       );
       if (outcome == RemoteResumeResult.rendererNotReady) {
@@ -214,11 +210,7 @@ class RemoteWindow {
         owned?.isCurrent == true &&
         presentation.controlAvailable &&
         !presentation.stateUnverified &&
-        jsonObject(
-              jsonObject(
-                controller.snapshot().settings['deviceSettings'],
-              )[deviceId],
-            )['lockOnClose'] ==
+        controller.snapshot().settings.deviceSettings[deviceId]?.lockOnClose ==
             true;
     final lastPage = _releaseControlPage?.call() == true;
     _releaseControlPage = null;
@@ -233,14 +225,16 @@ class RemoteWindow {
             !views.hasControlPages(deviceId) &&
             owned!.ownsBinding) {
           try {
-            for (final action in ['down', 'up']) {
-              await controller.execute(ApplicationCommand.sessionKey, {
-                'sessionId': id,
-                if (captureGeneration is int)
-                  'captureGeneration': captureGeneration,
-                'keyCode': 223,
-                'action': action,
-              });
+            for (final action in [ControlKeyAction.down, ControlKeyAction.up]) {
+              await control.sendControl(
+                ControlTarget(
+                  sessionId: id,
+                  captureGeneration: captureGeneration is int
+                      ? captureGeneration
+                      : null,
+                ),
+                ControlAction.key(223, action: action),
+              );
             }
           } catch (failure) {
             lockFailure = failure;
@@ -255,10 +249,9 @@ class RemoteWindow {
       } else if (id.isNotEmpty && owned == null && !presentation.sessionEnded) {
         // 没有首帧也可能已经取得远端身份，明确关闭仍只释放该身份。
         return RemoteWindowClose(
-          receipt: await controller.execute(ApplicationCommand.sessionStop, {
-            'sessionId': id,
-            'keepTask': true,
-          }),
+          receipt: await controller.videos.stopVideo(
+            ControlTarget(sessionId: id),
+          ),
         );
       }
       return RemoteWindowClose(lockFailure: lockFailure);
@@ -277,9 +270,7 @@ class RemoteWindow {
     final owned = _view;
     if (!presentation.exiting && owned != null) {
       unawaited(
-        owned
-            .close(afterInput: release)
-            .catchError((Object _) => <String, dynamic>{}),
+        owned.close(afterInput: release).catchError((Object _) => null),
       );
     }
     return release;

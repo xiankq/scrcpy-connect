@@ -1,9 +1,8 @@
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_access.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_identity.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_status.dart';
 import 'package:flutter/material.dart';
@@ -20,16 +19,16 @@ class DeviceCard extends HookWidget {
     required this.device,
     this.compact = false,
   });
-  final AppStore controller;
-  final Json device;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final pending = useState(false);
     final starting = useState(false);
-    final current = controller.currentDevice(device);
-    final connected = current['status'] == 'connected';
+    final current = controller.deviceList.current(device);
+    final connected = current.status == DeviceConnectionStatus.connected;
     final canStop = starting.value || hasDeviceConnectionIntent(current);
     Future<void> run(Future<void> Function() action) async {
       if (pending.value) return;
@@ -45,8 +44,7 @@ class DeviceCard extends HookWidget {
       padding: EdgeInsets.zero,
       child: InkWell(
         borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
-        onTap: () =>
-            WorkspaceRoute(deviceId: value(device, 'id')).push<void>(context),
+        onTap: () => WorkspaceRoute(deviceId: device.id).push<void>(context),
         child: ConstrainedBox(
           constraints: BoxConstraints(
             minHeight: compact
@@ -114,7 +112,9 @@ class DeviceCard extends HookWidget {
                                           await offerDeviceConnection(
                                             context,
                                             controller,
-                                            controller.currentDevice(device),
+                                            controller.deviceList.current(
+                                              device,
+                                            ),
                                           );
                                         } finally {
                                           if (context.mounted) {
@@ -129,7 +129,7 @@ class DeviceCard extends HookWidget {
                                 onPressed: pending.value
                                     ? null
                                     : () => DeviceConnectionRoute(
-                                        deviceId: value(device, 'id'),
+                                        deviceId: device.id,
                                       ).push<void>(context),
                               ),
                               GlassMenuAction(
@@ -156,7 +156,7 @@ class DeviceCard extends HookWidget {
                             : DesignTokens.spacingXs,
                       ),
                       DeviceStatus(device: current, compact: compact),
-                      if (current['status'] == 'offline') ...[
+                      if (current.status == DeviceConnectionStatus.offline) ...[
                         const SizedBox(height: DesignTokens.spacingXxs),
                         Text(
                           deviceConnectionLabel(current)
@@ -164,10 +164,10 @@ class DeviceCard extends HookWidget {
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ] else if (!compact &&
-                          value(current, 'model').isNotEmpty) ...[
+                          (current.model ?? '').isNotEmpty) ...[
                         const SizedBox(height: DesignTokens.spacingXxs),
                         Text(
-                          value(current, 'model'),
+                          (current.model ?? ''),
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],

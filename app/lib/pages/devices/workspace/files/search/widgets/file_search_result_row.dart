@@ -1,6 +1,5 @@
 import 'package:scrcpy_connect/widgets/file_browser.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/files/file_catalog_entry.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
@@ -17,7 +16,7 @@ class FileSearchResultRow extends StatelessWidget {
     required this.unavailableReason,
   });
 
-  final Json file;
+  final FileCatalogEntry file;
   final bool folder;
   final VoidCallback? onTap;
   final String? unavailableReason;
@@ -25,12 +24,12 @@ class FileSearchResultRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final name = value(file, 'name', '未命名文件');
-    final path = value(file, 'path');
-    final size = folder ? '' : fileSizeLabel(file['size']);
+    final name = file.name;
+    final path = file.path ?? '';
+    final size = folder ? '' : fileSizeLabel(file.size);
     final reason = unavailableReason;
     final location = reason ?? (folder ? '' : fileParentDirectoryLabel(path));
-    final kind = fileKindOf(file);
+    final kind = FileKind.classify(name: file.name, mime: file.mime);
     return Semantics(
       button: onTap != null,
       child: GlassTooltip(

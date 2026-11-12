@@ -1,12 +1,16 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/application/app_dependencies_provider.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+import 'package:scrcpy_connect/core/settings/preferences.dart';
+import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/widgets/notification_card.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/device_source_row.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/widgets/command_view.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
+import 'package:scrcpy_connect/widgets/async_content.dart';
+import 'package:scrcpy_connect/core/devices/device_notifications.dart';
+import 'package:scrcpy_connect/core/devices/device_query_provider.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -26,19 +30,19 @@ class NotificationsPage extends HookConsumerWidget {
     required this.controller,
     required this.device,
   });
-  final AppStore controller;
-  final Json device;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final alerts = useSystemNotifications(context, ref);
     useListenable(alerts.changes);
     final settings = ref.watch(
-      appStoreProvider.select((state) => state.settings),
+      preferencesProvider.select((state) => state.values),
     );
     final enablingAlerts = useState(false);
     final alertStatus = alerts.status;
     final showEnableAlerts =
-        settings['notificationAlerts'] != true ||
+        settings.notificationAlerts != true ||
         !alertStatus.supported ||
         alertStatus.permissionGranted != true ||
         alertStatus.notificationChannelEnabled == false;
@@ -47,7 +51,9 @@ class NotificationsPage extends HookConsumerWidget {
       enablingAlerts.value = true;
       try {
         // 通知页只开启通知意图，来电意图仍由用户单独选择。
-        await controller.updateSetting('notificationAlerts', true);
+        await controller.preferences.update(
+          PreferenceChanges(notificationAlerts: true),
+        );
         var status = await alerts.refreshStatus();
         final requested = status.permissionGranted != true && status.canRequest;
         if (requested) {
@@ -110,7 +116,7 @@ class NotificationsPage extends HookConsumerWidget {
       ),
     );
     final route = ModalRoute.of(context);
-    final deviceId = value(device, 'id');
+    final deviceId = device.id;
     useEffect(
       () => alerts.claimNotificationPage(
         deviceId,
@@ -118,29 +124,36 @@ class NotificationsPage extends HookConsumerWidget {
       ),
       [alerts, deviceId, route],
     );
-    final clearing = useState(false);
-    final refreshing = useRef<VoidCallback?>(null);
+    final notificationsAccess = ref.watch(
+      appDependenciesProvider.select((source) => source.notifications),
+    );
+    final queryProvider = deviceNotificationsProvider(device.id);
+    final query = ref.watch(queryProvider);
+    void refresh() => ref.invalidate(queryProvider);
+    final clearing = useValueNotifier(false, [notificationsAccess, device.id]);
+    useListenable(clearing);
+    final currentClearing = useRef(clearing);
+    currentClearing.value = clearing;
+    bool notificationsCurrent() =>
+        context.mounted &&
+        identical(currentClearing.value, clearing) &&
+        identical(notificationsAccess, controller.notifications);
 
     Future<void> clearAll() async {
-      if (clearing.value) return;
+      if (clearing.value || !notificationsCurrent()) return;
       clearing.value = true;
       try {
-        final current = await perform(
-          context,
-          controller,
-          'notifications.list',
-          {'deviceId': device['id']},
-        );
-        if (current == null || !context.mounted) return;
-        if (current['live'] != true) {
+        final current = await notificationsAccess.readNotifications(device.id);
+        if (!context.mounted || !notificationsCurrent()) return;
+        if (!current.live) {
           feedback(context, '请先核验手机当前通知，再清除。');
           return;
         }
         var cleared = 0;
         var pending = 0;
         var failed = 0;
-        final candidates = objects(current['notifications'])
-            .where((item) => item['canDismiss'] == true)
+        final candidates = current.notifications
+            .where((item) => item.canDismiss == true)
             .toList();
         if (candidates.isNotEmpty &&
             (!await confirm(
@@ -149,27 +162,30 @@ class NotificationsPage extends HookConsumerWidget {
                   '将清除 ${deviceName(device)} 当前可清除的 ${candidates.length} 条通知。常驻通知和无法核验的通知会保留；清除不代表原应用已读。',
                   action: '清除通知',
                 ) ||
-                !context.mounted)) {
+                !notificationsCurrent())) {
           return;
         }
         for (final item in candidates) {
-          // 每个不透明引用都在手机再次核验，不本机隐藏项目，也不重试结果未知的命令。
+          // 每个不透明引用都在手机再次核验，不本机隐藏项目，也不重试结果未知的动作。
+          if (!context.mounted || !notificationsCurrent()) return;
           try {
-            final result = await controller.request('notifications.dismiss', {
-              'deviceId': device['id'],
-              'notificationId': item['id'],
-            });
-            if (result['dismissed'] == true) {
+            final dismissed = await notificationsAccess.dismissNotification(
+              device.id,
+              item.id,
+            );
+            if (!context.mounted || !notificationsCurrent()) return;
+            if (dismissed) {
               cleared++;
             } else {
               pending++;
             }
           } catch (_) {
+            if (!context.mounted || !notificationsCurrent()) return;
             failed++;
           }
         }
-        if (context.mounted) {
-          refreshing.value?.call();
+        if (context.mounted && notificationsCurrent()) {
+          refresh();
           feedback(
             context,
             candidates.isEmpty
@@ -179,12 +195,48 @@ class NotificationsPage extends HookConsumerWidget {
                       '${failed > 0 ? '，$failed 条未能确认，请刷新核对' : ''}。',
           );
         }
+      } catch (error) {
+        if (context.mounted && notificationsCurrent()) {
+          feedback(context, '$error');
+        }
       } finally {
-        if (context.mounted) clearing.value = false;
+        if (notificationsCurrent()) clearing.value = false;
       }
     }
 
-    final starting = useState(false);
+    Future<void> clearNotification(DeviceNotification notification) async {
+      if (clearing.value || !notificationsCurrent()) return;
+      clearing.value = true;
+      try {
+        final dismissed = await notificationsAccess.dismissNotification(
+          device.id,
+          notification.id,
+        );
+        if (context.mounted && notificationsCurrent()) {
+          refresh();
+          feedback(context, dismissed ? '已清除手机上的通知。' : '清除请求已提交，等待手机确认。');
+        }
+      } catch (error) {
+        if (context.mounted && notificationsCurrent()) {
+          refresh();
+          feedback(context, '$error');
+        }
+      } finally {
+        if (notificationsCurrent()) clearing.value = false;
+      }
+    }
+
+    final observation = ref.watch(
+      appDependenciesProvider.select((source) => source.observation),
+    );
+    final starting = useValueNotifier(false, [observation, device.id]);
+    useListenable(starting);
+    final currentStarting = useRef(starting);
+    currentStarting.value = starting;
+    bool observationCurrent() =>
+        context.mounted &&
+        identical(currentStarting.value, starting) &&
+        identical(observation, controller.observation);
     return PageFrame(
       title: '实时通知',
       actions: [
@@ -198,67 +250,63 @@ class NotificationsPage extends HookConsumerWidget {
           ),
         ),
       ],
-      child: CommandView(
-        controller: controller,
-        command: 'notifications.list',
-        params: {'deviceId': device['id']},
+      child: AsyncContent(
+        loading: query.isLoading,
+        data: query.value,
+        error: query.error,
+        onRefresh: refresh,
         emptyTitle: '当前无法同步通知',
         alternative: TextButton(
-          onPressed: () =>
-              openRemoteRoute(context, deviceId: value(device, 'id')),
+          onPressed: () => openRemoteRoute(context, deviceId: device.id),
           child: const Text('在手机上继续处理'),
         ),
-        builder: (context, data, refresh) {
-          refreshing.value = refresh;
+        builder: (context, data) {
           Future<void> verify() async {
             if (starting.value) return;
             starting.value = true;
             try {
-              final result = await perform(
-                context,
-                controller,
-                'observation.start',
-                {'deviceId': device['id']},
-              );
-              if (context.mounted && result != null) refresh();
+              await observation.startObservation(device.id);
+              if (observationCurrent()) refresh();
+            } catch (error) {
+              if (context.mounted && observationCurrent()) {
+                feedback(context, '$error');
+              }
             } finally {
-              if (context.mounted) starting.value = false;
+              if (observationCurrent()) starting.value = false;
             }
           }
 
-          final notifications = objects(data['notifications'])
+          final notifications = data.notifications
               .where(
                 (n) =>
-                    n['groupSummary'] != true ||
-                    value(n, 'title').trim().isNotEmpty ||
-                    value(n, 'body').trim().isNotEmpty,
+                    !n.groupSummary ||
+                    n.title.trim().isNotEmpty ||
+                    n.body.trim().isNotEmpty,
               )
               .toList();
-          final state = value(data, 'status', 'unknown');
-          if (notifications.isEmpty && state != 'available') {
+          final state = data.status;
+          if (notifications.isEmpty && state != .available) {
             return emptyWithHeader(
               EmptyContent(
                 icon: LucideIcons.bellOff,
                 title: switch (state) {
-                  'needsSetup' => '通知访问需要设置',
-                  'stopped' => '通知观察已停止',
-                  'unknown' || 'checking' || 'starting' => '通知状态尚未核验',
-                  _ => '通知同步受限',
+                  .needsSetup => '通知访问需要设置',
+                  .stopped => '通知观察已停止',
+                  .unknown || .checking || .starting => '通知状态尚未核验',
+                  .available || .limited => '通知同步受限',
                 },
-                message: value(data, 'reason', '这台设备尚未提供可靠的通知访问。你可以在手机原应用中处理。'),
+                message: data.reason ?? '这台设备尚未提供可靠的通知访问。你可以在手机原应用中处理。',
                 action: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     FilledButton(
-                      onPressed: () => openRemoteRoute(
-                        context,
-                        deviceId: value(device, 'id'),
-                      ),
+                      onPressed: () =>
+                          openRemoteRoute(context, deviceId: device.id),
                       child: const Text('在手机上查看'),
                     ),
                     TextButton(
                       onPressed: starting.value ? null : verify,
-                      child: Text(state == 'stopped' ? '启用通知与来电观察' : '重新核验通知'),
+                      child: Text(state == .stopped ? '启用通知与来电观察' : '重新核验通知'),
                     ),
                   ],
                 ),
@@ -279,10 +327,10 @@ class NotificationsPage extends HookConsumerWidget {
             );
           }
           final hasStatus =
-              data['status'] == 'limited' && value(data, 'reason').isNotEmpty;
+              data.status == .limited && (data.reason?.isNotEmpty ?? false);
           final offset = hasStatus ? 2 : 1;
-          Key notificationKey(Json item) =>
-              ValueKey('${value(device, 'id')}:${value(item, 'id')}');
+          Key notificationKey(DeviceNotification item) =>
+              ValueKey('${device.id}:${item.id}');
           final indices = <Key, int>{
             for (var index = 0; index < notifications.length; index++)
               notificationKey(notifications[index]): index + offset,
@@ -299,10 +347,7 @@ class NotificationsPage extends HookConsumerWidget {
                   return notificationHeader;
                 }
                 if (hasStatus && index == 1) {
-                  return StateNote(
-                    value(data, 'reason'),
-                    icon: LucideIcons.circleAlert,
-                  );
+                  return StateNote(data.reason!, icon: LucideIcons.circleAlert);
                 }
                 final notification = notifications[index - offset];
                 return Padding(
@@ -315,34 +360,7 @@ class NotificationsPage extends HookConsumerWidget {
                     device: device,
                     notification: notification,
                     clearing: clearing.value,
-                    onClear: () async {
-                      if (clearing.value) return;
-                      clearing.value = true;
-                      try {
-                        final result = await perform(
-                          context,
-                          controller,
-                          'notifications.dismiss',
-                          {
-                            'deviceId': device['id'],
-                            'notificationId': notification['id'],
-                          },
-                        );
-                        if (context.mounted) {
-                          refresh();
-                          if (result != null) {
-                            feedback(
-                              context,
-                              result['dismissed'] == true
-                                  ? '已清除手机上的通知。'
-                                  : '清除请求已提交，等待手机确认。',
-                            );
-                          }
-                        }
-                      } finally {
-                        if (context.mounted) clearing.value = false;
-                      }
-                    },
+                    onClear: () => clearNotification(notification),
                   ),
                 );
               },

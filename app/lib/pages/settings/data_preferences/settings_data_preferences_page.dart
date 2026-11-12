@@ -1,7 +1,8 @@
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/devices/device_metadata.dart';
+import 'package:scrcpy_connect/core/settings/metadata_management.dart';
 import 'package:scrcpy_connect/pages/settings/data_preferences/widgets/metadata_import_preview.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -20,7 +21,7 @@ import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 
 class DataPreferencesPage extends StatelessWidget {
   const DataPreferencesPage({super.key, required this.controller});
-  final AppStore controller;
+  final AppNotifier controller;
   @override
   Widget build(BuildContext context) => PageFrame(
     title: '本地数据',
@@ -38,33 +39,24 @@ class DataPreferencesPage extends StatelessWidget {
               title: '导出设备记录',
 
               onTap: () async {
-                final result = await perform(
-                  context,
-                  controller,
-                  'settings.export',
-                );
-                if (result != null && context.mounted) {
-                  if (result['metadata'] is! Map) {
-                    feedback(context, '尚未获得可导出的设备记录');
-                    return;
-                  }
-                  try {
-                    final saved = await FilePicker.saveFile(
-                      fileName: 'interconnect-devices.json',
-                      mimeType: 'application/json',
-                      bytes: Uint8List.fromList(
-                        utf8.encode(
-                          const JsonEncoder.withIndent('  ')
-                              .convert(result['metadata']),
-                        ),
+                try {
+                  final metadata = await controller.metadata.exportMetadata();
+                  if (!context.mounted) return;
+                  final saved = await FilePicker.saveFile(
+                    fileName: 'interconnect-devices.json',
+                    mimeType: 'application/json',
+                    bytes: Uint8List.fromList(
+                      utf8.encode(
+                        const JsonEncoder.withIndent('  ')
+                            .convert(metadata.document),
                       ),
-                    );
-                    if (saved != null && context.mounted) {
-                      feedback(context, '设备记录已保存至 $saved');
-                    }
-                  } catch (e) {
-                    if (context.mounted) feedback(context, '保存记录失败：$e');
+                    ),
+                  );
+                  if (saved != null && context.mounted) {
+                    feedback(context, '设备记录已保存至 $saved');
                   }
+                } catch (e) {
+                  if (context.mounted) feedback(context, '保存记录失败：$e');
                 }
               },
             ),
@@ -73,7 +65,7 @@ class DataPreferencesPage extends StatelessWidget {
               title: '导入设备记录',
 
               onTap: () async {
-                Json? result;
+                SettingsImportResult? result;
                 try {
                   final picked = await FilePicker.pickFile(
                     type: FileType.custom,
@@ -88,19 +80,14 @@ class DataPreferencesPage extends StatelessWidget {
                     }
                     return;
                   }
-                  final metadata = jsonDecode(await input.readAsString());
-                  if (!context.mounted) return;
-                  if (metadata is! Map) {
-                    feedback(context, '此文件不包含有效的设备记录');
-                    return;
-                  }
-                  final preview = await perform(
-                    context,
-                    controller,
-                    'settings.import.preview',
-                    {'metadata': metadata},
+                  final metadata = DeviceMetadata.parse(
+                    jsonDecode(await input.readAsString()),
                   );
-                  if (preview == null || !context.mounted) return;
+                  if (!context.mounted) return;
+                  final preview = await controller.metadata.previewImport(
+                    metadata,
+                  );
+                  if (!context.mounted) return;
                   final importGlobal = await showGlassModalSheet<bool>(
                     context: context,
                     isScrollControlled: true,
@@ -109,27 +96,20 @@ class DataPreferencesPage extends StatelessWidget {
                   if (importGlobal == null || !context.mounted) {
                     return;
                   }
-                  result = await perform(
-                    context,
-                    controller,
-                    'settings.import',
-                    {
-                      'metadata': metadata,
-                      'fingerprint': preview['fingerprint'],
-                      'expectedRevision': preview['expectedRevision'],
-                      'importGlobalPreferences': importGlobal,
-                    },
+                  result = await controller.metadata.importMetadata(
+                    preview,
+                    importGlobalPreferences: importGlobal,
                   );
                 } catch (e) {
                   if (context.mounted) feedback(context, '无法读取记录文件：$e');
                 }
                 if (result != null) {
-                  await controller.loadSettings();
-                  await controller.refreshDevices();
+                  await controller.preferences.load();
+                  await controller.deviceList.refresh();
                   if (context.mounted) {
                     feedback(
                       context,
-                      result['alreadyImported'] == true
+                      result.records.alreadyImported
                           ? '此文件已导入，已核对本机记录。'
                           : '设备记录已导入，请在被控手机重新核验授权。',
                     );

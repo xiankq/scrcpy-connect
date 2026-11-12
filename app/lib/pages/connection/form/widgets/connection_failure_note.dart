@@ -1,7 +1,7 @@
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 /// 保留原始请求失败，同时提供可操作的表单反馈。

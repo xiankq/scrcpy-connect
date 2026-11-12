@@ -3,7 +3,7 @@ import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
 
 class ConnectionAttemptStatus extends StatelessWidget {
   const ConnectionAttemptStatus({

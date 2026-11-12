@@ -1,9 +1,8 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/models/connection_validation.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
+import 'package:scrcpy_connect/core/devices/connection_validation.dart';
 
 class AddDevicePage extends StatelessWidget {
   const AddDevicePage({
@@ -16,8 +15,8 @@ class AddDevicePage extends StatelessWidget {
     this.transport,
     this.deviceId,
   });
-  final AppStore controller;
-  final Json? initialDevice;
+  final AppNotifier controller;
+  final DeviceSnapshot? initialDevice;
   final AddDeviceMode initialMode;
   final String address;
   final String port;
@@ -30,11 +29,9 @@ class AddDevicePage extends StatelessWidget {
     reauthorizing: initialDevice != null,
     initialMode: initialMode,
     pairing: initialMode == AddDeviceMode.pairing,
-    address: address.isNotEmpty
-        ? address
-        : value(initialDevice ?? {}, 'address'),
+    address: address.isNotEmpty ? address : initialDevice?.address ?? '',
     port: port,
-    deviceId: deviceId ?? responseDeviceId(initialDevice),
+    deviceId: deviceId ?? initialDevice?.id,
     transport: initialDevice == null
         ? transport
         : connectionTransportForRecord(initialDevice!),

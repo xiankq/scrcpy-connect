@@ -1,7 +1,8 @@
-import 'package:scrcpy_connect/models/diagnostic_record.dart';
-import 'package:scrcpy_connect/services/application_diagnostics.dart';
-import 'package:scrcpy_connect/services/diagnostic_log.dart' show DiagnosticLog;
-import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
+import 'package:scrcpy_connect/core/diagnostics/diagnostic_record.dart';
+import 'package:scrcpy_connect/core/diagnostics/application_diagnostics.dart';
+import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart'
+    show DiagnosticLog;
+import 'package:scrcpy_connect/core/application/app_dependencies_provider.dart';
 import 'package:scrcpy_connect/bootstrap/app_bootstrap.dart';
 import 'package:scrcpy_connect/widgets/system_notification_sink.dart';
 import 'package:scrcpy_connect/widgets/system_notifications.dart';

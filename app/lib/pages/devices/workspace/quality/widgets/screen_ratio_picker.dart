@@ -1,29 +1,29 @@
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/settings/preferences.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/models/remote_display_settings.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
+import 'package:scrcpy_connect/core/control/remote_display_settings.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 
 Future<void> chooseScreenRatio(
   BuildContext context,
-  AppStore controller,
+  AppNotifier controller,
   String deviceId,
-  Json preferences,
+  DevicePreferences preferences,
 ) async {
   const options = {
-    'original': '原始比例',
-    'auto': '自动适应可用空间',
-    '9:16': '9:16',
-    '3:4': '3:4',
-    '1:1': '1:1',
-    '16:9': '16:9',
-    'custom': '自定义',
+    ScreenAspectRatio.original: '原始比例',
+    ScreenAspectRatio.automatic: '自动适应可用空间',
+    ScreenAspectRatio.portrait: '9:16',
+    ScreenAspectRatio.photo: '3:4',
+    ScreenAspectRatio.square: '1:1',
+    ScreenAspectRatio.landscape: '16:9',
+    ScreenAspectRatio.custom: '自定义',
   };
-  final choice = await showGlassDialog<String>(
+  final choice = await showGlassDialog<ScreenAspectRatio>(
     context: context,
     builder: (context) => GlassAlertDialog(
       title: const Text('屏幕比例'),
@@ -39,7 +39,10 @@ Future<void> chooseScreenRatio(
                   backgroundColor: functionalIconColor(LucideIcons.ratio),
                 ),
                 title: Text(item.value),
-                trailing: RemoteDisplaySettings(preferences).mode == item.key
+                trailing:
+                    (preferences.remoteAspectRatio ??
+                            ScreenAspectRatio.original) ==
+                        item.key
                     ? const Icon(LucideIcons.check)
                     : null,
                 onTap: () => Navigator.of(context).pop(item.key),
@@ -51,11 +54,11 @@ Future<void> chooseScreenRatio(
   );
   if (choice == null || !context.mounted) return;
   String? custom;
-  if (choice == 'custom') {
+  if (choice == ScreenAspectRatio.custom) {
     final input = await askText(
       context,
       title: '自定义屏幕比例',
-      initial: '${preferences['remoteCustomRatio'] ?? '9:16'}',
+      initial: preferences.remoteCustomRatio ?? '9:16',
       label: '宽:高，例如 9:16，范围 1:5 至 5:1',
     );
     if (input == null || !context.mounted) return;
@@ -71,10 +74,10 @@ Future<void> chooseScreenRatio(
   }
   try {
     // 同一事务保存两个字段，避免失败后把新自定义比例与旧模式混用。
-    await controller.updateDeviceSettings(deviceId, {
-      'remoteAspectRatio': choice,
-      'remoteCustomRatio': ?custom,
-    });
+    await controller.preferences.updateDevice(
+      deviceId,
+      DevicePreferences(remoteAspectRatio: choice, remoteCustomRatio: custom),
+    );
     if (context.mounted) feedback(context, '屏幕比例已保存，用于新建画面。');
   } catch (error) {
     if (context.mounted) feedback(context, '$error');

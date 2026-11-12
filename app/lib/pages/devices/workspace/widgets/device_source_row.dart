@@ -1,5 +1,5 @@
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -11,7 +11,7 @@ class DeviceSourceRow extends StatelessWidget {
     this.padding = EdgeInsets.zero,
   });
 
-  final Json device;
+  final DeviceSnapshot device;
   final EdgeInsetsGeometry padding;
 
   @override

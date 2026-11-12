@@ -1,10 +1,10 @@
+import 'package:scrcpy_connect/core/files/file_catalog_entry.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/utils/formatters.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/file_actions.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -21,13 +21,13 @@ class FileDetailsPage extends StatelessWidget {
     required this.device,
     required this.file,
   });
-  final AppStore controller;
-  final Json device;
-  final Json file;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
+  final FileCatalogEntry file;
   @override
   Widget build(BuildContext context) {
-    final name = value(file, 'name');
-    final mime = value(file, 'mime');
+    final name = file.name;
+    final mime = file.mime;
     final extension = name.contains('.')
         ? name.split('.').last.toUpperCase()
         : '';
@@ -76,7 +76,7 @@ class FileDetailsPage extends StatelessWidget {
                         SelectableText(name, style: theme.textTheme.titleLarge),
                         const SizedBox(height: DesignTokens.spacingXs),
                         Text(
-                          '$type · ${bytes(file['size'])}',
+                          '$type · ${bytes(file.size)}',
                           style: theme.textTheme.bodySmall,
                         ),
                       ],
@@ -110,7 +110,7 @@ class FileDetailsPage extends StatelessWidget {
                 Text('手机上的位置', style: theme.textTheme.bodySmall),
                 const SizedBox(height: DesignTokens.spacingSm),
                 SelectableText(
-                  value(file, 'path'),
+                  (file.path ?? ''),
                   style: theme.textTheme.bodyLarge,
                 ),
               ],

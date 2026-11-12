@@ -1,8 +1,14 @@
+import 'package:scrcpy_connect/core/media/video_sessions.dart';
+import 'package:scrcpy_connect/core/media/video_output.dart';
+import 'package:scrcpy_connect/core/control/session_activity.dart';
+import 'package:scrcpy_connect/core/control/remote_control.dart';
+import 'package:scrcpy_connect/core/media/audio_sources.dart';
+
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 
 import 'remote_audio_views.dart';
@@ -11,14 +17,14 @@ import 'remote_audio_views.dart';
 class RemoteViews {
   RemoteViews(this.controller) : _generation = controller.generation {
     _sessionViewRegistry = SessionViewRegistry(
-      controller.request,
+      controller.videos,
       current: () =>
           !_disposed &&
           !controller.isDisposed() &&
           controller.generation == _generation,
     );
     _deviceAudio = DeviceAudioViewCoordinator(
-      request: controller.request,
+      audio: controller.remoteAudio,
       readSnapshot: () => DeviceAudioViewSnapshot(
         devices: controller.snapshot().devices,
         reconciliationPending: controller.snapshot().reconciliationPending,
@@ -31,7 +37,7 @@ class RemoteViews {
     }
   }
 
-  final AppStore controller;
+  final AppNotifier controller;
   final int _generation;
   bool _disposed = false;
   late final SessionViewRegistry _sessionViewRegistry;
@@ -57,10 +63,17 @@ class RemoteViews {
 
   void reconcile() => _deviceAudio.reconcile();
 
-  Future<Json> request(String command, [Json params = const {}]) async {
-    final revision = _deviceAudio.playbackRequestRevision(command, params);
-    final result = await controller.request(command, params);
-    _deviceAudio.playbackSucceeded(command, params, result, revision);
+  Future<DeviceAudioPlayback> startAudio(String deviceId) async {
+    final revision = _deviceAudio.playbackRequestRevision(deviceId);
+    final result = await controller.remoteAudio.startAudio(deviceId);
+    _deviceAudio.playbackSucceeded(result, revision);
+    return result;
+  }
+
+  Future<DeviceAudioPlayback> resumeAudio(DeviceAudioTarget target) async {
+    final revision = _deviceAudio.playbackRequestRevision(target.deviceId);
+    final result = await controller.remoteAudio.resumeAudio(target);
+    _deviceAudio.playbackSucceeded(result, revision);
     return result;
   }
 
@@ -119,16 +132,15 @@ class RemoteViewsScope extends InheritedWidget {
 }
 
 typedef SessionJson = Map<String, dynamic>;
-typedef SessionRequest = Future<SessionJson> Function(String, [SessionJson]);
 
 /// 路由拥有打开的控制窗口；可见性与明确关闭分开，单会话队列先排空旧输入再恢复新画面。
 class SessionViewRegistry {
-  SessionViewRegistry(this.request, {bool Function()? current})
+  SessionViewRegistry(this.videos, {bool Function()? current})
     : _current = current ?? (() => true);
   final bool Function() _current;
   bool _owns(SessionViewLease view) =>
       _current() && identical(_owners[view.id], view);
-  final SessionRequest request;
+  final VideoSessions videos;
   final _owners = <String, SessionViewLease>{};
   final _tails = <String, Future<void>>{};
   final _closed = <String>{};
@@ -170,15 +182,15 @@ class SessionViewRegistry {
     }
   }
 
-  Future<SessionJson> _close(SessionViewLease view, Future<void>? afterInput) {
+  Future<VideoStopReceipt?> _close(
+    SessionViewLease view,
+    Future<void>? afterInput,
+  ) {
     final operation = Future<void>.value().then((_) async {
       await afterInput;
-      if (!_owns(view)) return <String, dynamic>{};
+      if (!_owns(view)) return null;
       try {
-        return await request('session.stop', {
-          'sessionId': view.id,
-          'keepTask': true,
-        });
+        return await videos.stopVideo(ControlTarget(sessionId: view.id));
       } finally {
         if (_owns(view)) _owners.remove(view.id);
       }
@@ -193,7 +205,7 @@ class SessionViewRegistry {
     });
   }
 
-  Future<SessionJson> _visibility(
+  Future<VideoPlaybackReceipt?> _visibility(
     SessionViewLease view,
     bool visible, {
     Future<void>? afterInput,
@@ -203,22 +215,22 @@ class SessionViewRegistry {
     final operation = (_tails[view.id] ?? Future<void>.value()).then((_) async {
       // 即使旧视图已被替换，也必须先排空其释放输入再恢复新视图。
       await afterInput;
-      if (!_owns(view)) return <String, dynamic>{};
+      if (!_owns(view)) return null;
       if ((_uncertain && visible) || (revision != view._revision && !release)) {
-        return <String, dynamic>{};
+        return null;
       }
       var succeeded = false;
       try {
         if (!visible && !view._visible && !_uncertain) {
           succeeded = true;
-          return <String, dynamic>{};
+          return null;
         }
         // 恢复可能已显示画面但就绪回执失败；暂停成功前仍按可见状态处理。
         if (visible) view._visible = true;
-        final receipt = await request(
-          visible ? 'session.resume' : 'session.pause',
-          {'sessionId': view.id},
-        );
+        final target = ControlTarget(sessionId: view.id);
+        final receipt = await (visible
+            ? videos.resumeVideo(target)
+            : videos.pauseVideo(target));
         if (revision == view._revision && _owns(view)) {
           view._visible = visible;
         }
@@ -260,22 +272,22 @@ class SessionViewLease {
     if (_registry._owns(this)) _registry._owners.remove(id);
   }
 
-  Future<SessionJson> resume({Future<void>? afterInput}) => _released
-      ? Future.value({})
+  Future<VideoPlaybackReceipt?> resume({Future<void>? afterInput}) => _released
+      ? Future.value(null)
       : _registry._visibility(this, true, afterInput: afterInput);
-  Future<SessionJson> pause({Future<void>? afterInput}) => _released
-      ? Future.value({})
+  Future<VideoPlaybackReceipt?> pause({Future<void>? afterInput}) => _released
+      ? Future.value(null)
       : _registry._visibility(this, false, afterInput: afterInput);
-  Future<SessionJson> close({Future<void>? afterInput}) {
-    if (_released) return Future.value({});
+  Future<VideoStopReceipt?> close({Future<void>? afterInput}) {
+    if (_released) return Future.value(null);
     _released = true;
     _revision++;
     if (ownsBinding) _registry._closed.add(id);
     return _registry._close(this, afterInput);
   }
 
-  Future<SessionJson> release({Future<void>? afterInput}) {
-    if (_released) return Future.value({});
+  Future<VideoPlaybackReceipt?> release({Future<void>? afterInput}) {
+    if (_released) return Future.value(null);
     _released = true;
     return _registry
         ._visibility(this, false, afterInput: afterInput, release: true)

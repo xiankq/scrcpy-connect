@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/core/files/file_catalog_entry.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+
 import 'dart:io';
 
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
@@ -6,15 +9,12 @@ import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/widgets/video_preview.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/cached_file_image.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/file_actions.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/widgets/media_cache_lease.dart';
-import 'package:scrcpy_connect/services/file_type_policy.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/core/content/content_cache_lease.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/media_cache_blocker.dart';
 
 import 'widgets/media_preview_toolbar.dart';
@@ -26,27 +26,25 @@ class MediaPreviewPage extends HookWidget {
     required this.device,
     required this.file,
   });
-  final AppStore controller;
-  final Json device;
-  final Json file;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
+  final FileCatalogEntry file;
   @override
   Widget build(BuildContext context) {
-    final video = value(
-      file,
-      'mime',
-      FileTypePolicy.mime(value(file, 'path')),
-    ).startsWith('video/');
+    final video = file.mime.startsWith('video/');
     final retry = useState(0);
     final request = useMemoized(
       () => video
           ? null
-          : MediaCacheRequest(
-              controller.request,
-              controller.execute,
-              'media.preview',
-              {'deviceId': device['id'], 'path': file['path']},
+          : ContentCacheRequest(
+              () => controller.content.preview(
+                deviceId: device.id,
+                path: (file.path ?? ''),
+              ),
+              controller.content.releaseLease,
+              leaseId: (content) => content.leaseId,
             ),
-      [controller, device['id'], file['path'], video, retry.value],
+      [controller, device.id, file.path, video, retry.value],
     );
     useEffect(() => request?.dispose, [request]);
     final result = useFuture(request?.result, preserveState: false);
@@ -77,7 +75,7 @@ class MediaPreviewPage extends HookWidget {
                 ),
                 TextButton(
                   onPressed: () =>
-                      openRemoteRoute(context, deviceId: value(device, 'id')),
+                      openRemoteRoute(context, deviceId: device.id),
                   child: const Text('在手机上查看'),
                 ),
               ],
@@ -85,14 +83,13 @@ class MediaPreviewPage extends HookWidget {
           )
         : Builder(
             builder: (context) {
-              final data = result.data ?? <String, dynamic>{};
-
-              final source = value(data, 'localPath', value(data, 'url'));
+              final data = result.data;
+              final source = data?.path ?? '';
               if (source.isEmpty) {
                 return EmptyContent(
                   icon: LucideIcons.imageOff,
                   title: '无法预览此格式',
-                  message: value(data, 'reason', '可以保存原文件，或在被控手机上查看。'),
+                  message: data?.reason ?? '可以保存原文件，或在被控手机上查看。',
                   action: FilledButton(
                     onPressed: () =>
                         retrieveFile(context, controller, device, file),
@@ -131,11 +128,7 @@ class MediaPreviewPage extends HookWidget {
               );
             },
           );
-    final mediaSource = value(
-      result.data ?? {},
-      'localPath',
-      value(result.data ?? {}, 'url'),
-    );
+    final mediaSource = result.data?.path ?? '';
     final reserveChrome =
         video ||
         result.connectionState != ConnectionState.done ||
@@ -192,7 +185,7 @@ class MediaPreviewPage extends HookWidget {
               Align(
                 alignment: Alignment.topCenter,
                 child: MediaPreviewToolbar(
-                  title: value(file, 'name'),
+                  title: file.name,
                   onBack: () => closePage<void>(context),
                   onSave: () => retrieveFile(context, controller, device, file),
                   onShare: () => retrieveFile(

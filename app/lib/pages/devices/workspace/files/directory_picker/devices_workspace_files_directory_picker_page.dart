@@ -1,10 +1,11 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+import 'package:scrcpy_connect/core/files/file_directory_notifier.dart';
+import 'package:scrcpy_connect/widgets/async_content.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/widgets/command_view.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:flutter/material.dart';
@@ -13,21 +14,27 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 
-class ShareDirectoryPickerPage extends HookWidget {
+class ShareDirectoryPickerPage extends HookConsumerWidget {
   const ShareDirectoryPickerPage({
     super.key,
     required this.controller,
     required this.device,
     required this.initialPath,
   });
-  final AppStore controller;
-  final Json device;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
   final String initialPath;
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final path = useState(
       initialPath.startsWith('/') ? initialPath : '/sdcard',
     );
+    final provider = fileDirectoryProvider((
+      deviceId: device.id,
+      path: path.value,
+    ));
+    final query = ref.watch(provider);
+    Future<void> refresh() => ref.read(provider.notifier).refresh();
     return PageFrame(
       title: '选择目标目录',
       child: Builder(
@@ -61,18 +68,15 @@ class ShareDirectoryPickerPage extends HookWidget {
           ],
           body: PageChromePadding.removeTop(
             context: context,
-            child: CommandView(
-              controller: controller,
-              command: 'files.list',
-              params: {'deviceId': device['id'], 'path': path.value},
+            child: AsyncContent(
+              loading: query.loading,
+              data: query.data,
+              error: query.error,
+              onRefresh: refresh,
               emptyTitle: '无法读取这个目录',
-              builder: (context, data, refresh) {
-                final directories = objects(data['entries'] ?? data['files'])
-                    .where(
-                      (entry) =>
-                          entry['isDirectory'] == true ||
-                          entry['type'] == 'directory',
-                    )
+              builder: (context, data) {
+                final directories = data.entries
+                    .where((entry) => entry.isDirectory)
                     .toList();
                 return GroupedListView.builder(
                   padding: const EdgeInsets.fromLTRB(
@@ -86,14 +90,15 @@ class ShareDirectoryPickerPage extends HookWidget {
                     if (index < directories.length) {
                       final directory = directories[index];
                       return ActionRow(
-                        key: ValueKey(directory['path']),
+                        key: ValueKey(directory.path),
                         icon: LucideIcons.folder,
-                        title: value(directory, 'name'),
+                        title: directory.name,
                         onTap:
-                            directory['path'] is! String ||
-                                directory['canOpen'] == false
+                            directory.path?.isNotEmpty != true ||
+                                !directory.canOpen ||
+                                !query.verified
                             ? null
-                            : () => path.value = value(directory, 'path'),
+                            : () => path.value = directory.path!,
                       );
                     }
                     return Column(
@@ -106,8 +111,9 @@ class ShareDirectoryPickerPage extends HookWidget {
                           ),
                         const SizedBox(height: DesignTokens.spacingLg),
                         FilledButton(
-                          onPressed: () =>
-                              closePage<String>(context, path.value),
+                          onPressed: query.verified
+                              ? () => closePage<String>(context, path.value)
+                              : null,
                           child: const Text('使用这个目录'),
                         ),
                       ],

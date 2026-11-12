@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/core/control/remote_control.dart';
+
 typedef RemoteData = Map<String, dynamic>;
 typedef RemoteBinding = (String, int);
 
@@ -745,15 +747,11 @@ class RemotePresentation {
   /// 队列用捕获的绑定判断准入，包含未知应用打开将存活会话替换成记录后仍需排空的清理。
   bool admitsQueuedInput(
     RemoteBinding captured,
-    String command,
-    RemoteData params, {
+    ControlAction action, {
     required bool foreground,
     required bool ownerCurrent,
   }) {
-    final cleanup =
-        (command == 'session.key' && params['action'] == 'up') ||
-        (command == 'session.touch' &&
-            const ['up', 'cancel'].contains(params['action']));
+    final cleanup = action.isRelease;
     final detached = cleanup && _detachedCleanupBindings.contains(captured);
     if ((!cleanup &&
             (!_controlAvailable || _qualityRebuilding || _qualityFailed)) ||
@@ -762,12 +760,7 @@ class RemotePresentation {
         (!cleanup && captured.$2 != _bindingGeneration)) {
       return false;
     }
-    final newInput =
-        command == 'session.text' ||
-        command == 'session.scroll' ||
-        (command == 'session.key' && params['action'] == 'down') ||
-        (command == 'session.touch' &&
-            const ['down', 'move', 'hover'].contains(params['action']));
+    final newInput = action.isInput && !action.isRelease;
     return !newInput ||
         canSendInput(foreground: foreground, ownerCurrent: ownerCurrent);
   }

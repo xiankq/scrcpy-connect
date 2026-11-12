@@ -1,5 +1,4 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/files/file_transfer_snapshot.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 import 'package:flutter/material.dart';
@@ -15,13 +14,13 @@ class TransferResultRow extends StatelessWidget {
     this.onOpen,
   });
 
-  final Json transfer;
+  final FileTransferSnapshot transfer;
   final String deviceName;
   final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
-    final issue = transferStatusHasIssue(value(transfer, 'status'));
+    final issue = transferStatusHasIssue(transfer.status);
     final content = Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: DesignTokens.spacingMd,
@@ -37,7 +36,7 @@ class TransferResultRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  value(transfer, 'name', '文件'),
+                  transfer.name,
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: DesignTokens.spacingXxs),

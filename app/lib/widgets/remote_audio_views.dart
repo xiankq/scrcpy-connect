@@ -1,6 +1,10 @@
+import 'package:scrcpy_connect/core/media/audio_sources.dart';
+
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+
 import 'dart:async';
 
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 
 class _AudioStopFailure {
@@ -16,28 +20,25 @@ class DeviceAudioViewSnapshot {
     required this.reconciliationPending,
   });
 
-  final List<Json> devices;
+  final List<DeviceSnapshot> devices;
   final bool reconciliationPending;
 }
 
 /// 按设备共享声音；页面租约、启动取消、停止去重与迟到回执由同一所有者协调。
 class DeviceAudioViewCoordinator {
   DeviceAudioViewCoordinator({
-    required this._request,
+    required this._audio,
     required this._readSnapshot,
     required this._onError,
   });
 
-  final ApplicationRequest _request;
+  final RemoteAudio _audio;
   final DeviceAudioViewSnapshot Function() _readSnapshot;
   final void Function(String?) _onError;
   bool _disposed = false;
   int _generation = 0;
 
   bool _current(int generation) => !_disposed && _generation == generation;
-  Future<Json> _execute(ApplicationCommand command, [Json params = const {}]) =>
-      _request(command.wire, params);
-
   final _remoteDeviceViews = <Object, String>{};
   final _managedAudioSources = <String, String>{};
   final _audioDeviceWork = <String, Future<void>>{};
@@ -58,21 +59,14 @@ class DeviceAudioViewCoordinator {
     _resumeRequired[device] = ++_resumeRevision;
   }
 
-  int playbackRequestRevision(String command, Json params) =>
-      _resumeRequired[value(params, 'deviceId')] ?? 0;
+  int playbackRequestRevision(String deviceId) =>
+      _resumeRequired[deviceId] ?? 0;
 
-  void playbackSucceeded(
-    String command,
-    Json params,
-    Json result,
-    int revision,
-  ) {
-    if (_disposed || !const ['audio.start', 'audio.resume'].contains(command)) {
-      return;
-    }
-    final device = value(result, 'deviceId', value(params, 'deviceId'));
+  void playbackSucceeded(DeviceAudioPlayback playback, int revision) {
+    if (_disposed) return;
+    final device = playback.source.deviceId;
     if ((_resumeRequired[device] ?? 0) != revision ||
-        result['requiresUserResume'] == true) {
+        playback.output.requiresUserResume) {
       return;
     }
     _resumeRequired.remove(device);
@@ -132,7 +126,9 @@ class DeviceAudioViewCoordinator {
       (epoch == null || (_audioDeviceEpochs[device] ?? 0) == epoch) &&
       _remoteDeviceViews.containsValue(device) &&
       _readSnapshot().devices.any(
-        (record) => record['id'] == device && record['status'] == 'connected',
+        (record) =>
+            record.id == device &&
+            record.status == DeviceConnectionStatus.connected,
       );
 
   /// 首次按设备停止以撤销在途启动，后续优先绑定精确音源；最多三次，不依赖外部事件。
@@ -157,10 +153,12 @@ class DeviceAudioViewCoordinator {
               break;
             }
             try {
-              await _request('audio.stop', {
-                'deviceId': device,
-                'sourceId': ?(attempt == 0 ? sourceId : exactSource),
-              });
+              await _audio.stopAudio(
+                DeviceAudioTarget(
+                  deviceId: device,
+                  sourceId: attempt == 0 ? sourceId : exactSource,
+                ),
+              );
               stopped = true;
               _audioStopFailures.remove(key);
               if (_current(generation)) {
@@ -212,25 +210,24 @@ class DeviceAudioViewCoordinator {
     final starting = _audioDeviceWork.keys.toSet();
     final observedStopFailures = Map.of(_audioStopFailures);
     try {
-      final sources = objects(
-        (await _execute(ApplicationCommand.audioSources))['sources'],
-      );
+      final sources = await _audio.readAudioSources();
       if (!_current(generation) || _readSnapshot().reconciliationPending) {
         return;
       }
       for (final source in sources) {
-        final device = value(source, 'deviceId');
-        if (device.isNotEmpty && source['requiresUserResume'] == true) {
+        final device = source.deviceId;
+        if (device.isNotEmpty && source.requiresUserResume == true) {
           _resumeRequired.putIfAbsent(device, () => ++_resumeRevision);
         }
       }
       final liveSources = {
         for (final source in sources)
-          if (['playing', 'starting', 'paused'].contains(source['status']))
-            (
-              value(source, 'deviceId'),
-              value(source, 'sourceId', value(source, 'id')),
-            ),
+          if (<DeviceAudioStatus>[
+            .playing,
+            .starting,
+            .paused,
+          ].contains(source.status))
+            (source.deviceId, source.sourceId),
       };
       _managedAudioSources.removeWhere(
         (device, source) =>
@@ -245,11 +242,9 @@ class DeviceAudioViewCoordinator {
                 ? !liveSources.any((live) => live.$1 == key.$1)
                 : !liveSources.contains(key)),
       );
-      final sessions = _remoteDeviceViews.isEmpty
-          ? <Json>[]
-          : objects(
-              (await _execute(ApplicationCommand.sessionList))['sessions'],
-            );
+      final eligible = _remoteDeviceViews.isEmpty
+          ? <String>{}
+          : await _audio.readAudioEligibleDevices();
       if (!_current(generation) || _readSnapshot().reconciliationPending) {
         return;
       }
@@ -257,26 +252,20 @@ class DeviceAudioViewCoordinator {
           .where(
             (device) =>
                 _wantsDeviceAudio(device, generation) &&
-                sessions.any(
-                  (session) =>
-                      session['deviceId'] == device &&
-                      [
-                        'streaming',
-                        'active',
-                        'ready',
-                        'paused',
-                        'starting',
-                      ].contains(session['status']),
-                ),
+                eligible.contains(device),
           )
           .toSet();
       final active = <String>{};
       for (final source in sources) {
-        if (!['playing', 'starting', 'paused'].contains(source['status'])) {
+        if (!<DeviceAudioStatus>[
+          .playing,
+          .starting,
+          .paused,
+        ].contains(source.status)) {
           continue;
         }
-        final device = value(source, 'deviceId');
-        final sourceId = value(source, 'sourceId', value(source, 'id'));
+        final device = source.deviceId;
+        final sourceId = source.sourceId;
         if (wanted.contains(device)) {
           active.add(device);
           _managedAudioSources[device] = sourceId;
@@ -321,17 +310,16 @@ class DeviceAudioViewCoordinator {
           if (entry.key.$1 == device) entry.value,
       ]);
       if (!_wantsDeviceAudio(device, generation, epoch)) return;
-      final source = await _execute(ApplicationCommand.audioStart, {
-        'deviceId': device,
-      });
-      final sourceId = value(source, 'sourceId', value(source, 'id'));
+      final playback = await _audio.startAudio(device);
+      final source = playback.source;
+      final sourceId = source.sourceId;
       if (!_wantsDeviceAudio(device, generation, epoch)) {
         await _stopDeviceAudio(device, sourceId: sourceId);
         return;
       }
       _managedAudioSources[device] = sourceId;
-      if (!['playing', 'paused'].contains(source['status'])) {
-        throw StateError(value(source, 'reason', '尚未确认设备声音开始播放。'));
+      if (!<DeviceAudioStatus>[.playing, .paused].contains(source.status)) {
+        throw StateError(source.reason ?? '尚未确认设备声音开始播放。');
       }
       _audioFailures.remove(device);
     } catch (error) {

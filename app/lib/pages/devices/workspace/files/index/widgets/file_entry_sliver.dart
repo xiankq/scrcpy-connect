@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/files/file_catalog_entry.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
@@ -11,9 +11,9 @@ class FileEntrySliver extends StatelessWidget {
     required this.builder,
   });
 
-  final List<Json> entries;
+  final List<FileCatalogEntry> entries;
   final FileViewMode viewMode;
-  final Widget Function(Json entry, bool grid) builder;
+  final Widget Function(FileCatalogEntry entry, bool grid) builder;
 
   @override
   Widget build(BuildContext context) {

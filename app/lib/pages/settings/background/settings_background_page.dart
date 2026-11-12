@@ -1,15 +1,14 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
-
-import 'dart:async';
+import 'package:scrcpy_connect/core/settings/preferences.dart';
+import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
+import 'package:scrcpy_connect/core/application/app_dependencies_provider.dart';
+import 'package:scrcpy_connect/core/platform/background_status_provider.dart';
 
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/system_notifications.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
-import 'package:scrcpy_connect/widgets/command_view.dart';
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
@@ -22,42 +21,28 @@ import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class BackgroundPage extends HookConsumerWidget {
-  const BackgroundPage({super.key, required this.controller});
-  final AppStore controller;
+  const BackgroundPage({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appSettings = ref.watch(
-      appStoreProvider.select((state) => state.settings),
+      preferencesProvider.select((state) => state.values),
     );
     final changing = useState(false);
-    final revision = useState(0);
+    final background = ref.watch(backgroundStatusProvider);
     useEffect(() {
-      var active = true;
-      void refresh() {
-        if (active) revision.value++;
-      }
-
-      final subscription = controller.eventStream().listen((event) {
-        if (event['type'] == 'background.changed' ||
-            event['type'] == 'background.failed') {
-          refresh();
-        }
-      });
-      final lifecycle = AppLifecycleListener(onResume: refresh);
-      return () {
-        active = false;
-        lifecycle.dispose();
-        unawaited(subscription.cancel());
-      };
-    }, [controller]);
+      final lifecycle = AppLifecycleListener(
+        onResume: () => ref.invalidate(backgroundStatusProvider),
+      );
+      return lifecycle.dispose;
+    }, const []);
     final alerts = useSystemNotifications(context, ref);
     useListenable(alerts.changes);
     final alertStatus = alerts.status;
-    Future<void> updateAlert(String key, bool value) async {
+    Future<void> updateAlert(PreferenceChanges changes) async {
       if (changing.value) return;
       changing.value = true;
       try {
-        await controller.updateSetting(key, value);
+        await ref.read(preferencesProvider.notifier).update(changes);
       } catch (error) {
         if (context.mounted) feedback(context, '$error');
       } finally {
@@ -67,19 +52,26 @@ class BackgroundPage extends HookConsumerWidget {
 
     Future<void> updateBackground(bool enabled) async {
       if (changing.value) return;
+      final dependencies = ref.read(appDependenciesProvider);
       changing.value = true;
       try {
-        await controller.updateSetting('backgroundKeepAlive', enabled);
-        await controller.execute(ApplicationCommand.backgroundRequest, {
-          'enabled': enabled,
-          'askNotificationPermission': enabled,
-        });
+        await ref
+            .read(preferencesProvider.notifier)
+            .update(PreferenceChanges(backgroundKeepAlive: enabled));
+        if (!context.mounted ||
+            !identical(ref.read(appDependenciesProvider), dependencies)) {
+          return;
+        }
+        await dependencies.background.requestBackground(
+          enabled: enabled,
+          askNotificationPermission: enabled,
+        );
       } catch (error) {
         if (context.mounted) feedback(context, '$error');
       } finally {
         if (context.mounted) {
           changing.value = false;
-          revision.value++;
+          ref.invalidate(backgroundStatusProvider);
         }
       }
     }
@@ -93,57 +85,63 @@ class BackgroundPage extends HookConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                CommandView(
-                  controller: controller,
-                  command: 'background.status',
-                  refreshKey: revision.value,
-                  emptyTitle: '尚未获得后台运行资格',
-                  builder: (context, data, refresh) => Column(
+                background.when(
+                  data: (data) => Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (data['supported'] == true)
+                      if (data.supported)
                         ConnectSwitchRow(
                           contentPadding: EdgeInsets.zero,
                           title: const Text('允许后台保持'),
-                          value: appSettings['backgroundKeepAlive'] == true,
+                          value: appSettings.backgroundKeepAlive,
                           onChanged:
                               changing.value ||
-                                  (data['canRequest'] != true &&
-                                      appSettings['backgroundKeepAlive'] !=
-                                          true)
+                                  (!data.canRequest &&
+                                      !appSettings.backgroundKeepAlive)
                               ? null
                               : updateBackground,
                         ),
-                      if (data['supported'] == true) ...[
+                      if (data.supported) ...[
                         const Divider(height: DesignTokens.spacingHairline),
                         const SizedBox(height: DesignTokens.spacingMd),
                       ],
                       Text(
-                        value(data, 'title', '系统后台条件'),
+                        data.title,
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: DesignTokens.spacingSm),
-                      Text(
-                        value(
-                          data,
-                          'reason',
-                          '尚未确认本机后台能力。请保持 App 在前台，并核对活动的实际状态。',
-                        ),
-                      ),
-                      if (data['supported'] == true &&
-                          data['canRequest'] == true)
+                      Text(data.reason),
+                      if (data.supported && data.canRequest)
                         TextButton(
                           onPressed: changing.value
                               ? null
                               : () => updateBackground(true),
                           child: Text(
-                            appSettings['backgroundKeepAlive'] == true &&
-                                    data['running'] == true
+                            appSettings.backgroundKeepAlive && data.running
                                 ? '允许连接通知'
                                 : '重新启用后台保持',
                           ),
                         ),
                     ],
+                  ),
+                  loading: () => const PageChromeBody(
+                    child: Center(child: CircularProgressIndicator.adaptive()),
+                  ),
+                  error: (error, _) => PageChromeBody(
+                    child: EmptyContent(
+                      icon: LucideIcons.circleAlert,
+                      title: '尚未获得后台运行资格',
+                      message: '$error',
+                      action: OutlinedButton.icon(
+                        onPressed: () =>
+                            ref.invalidate(backgroundStatusProvider),
+                        icon: const Icon(
+                          LucideIcons.refreshCw,
+                          size: DesignTokens.componentIconActionSize,
+                        ),
+                        label: const Text('重新检查'),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -153,18 +151,19 @@ class BackgroundPage extends HookConsumerWidget {
           ConnectSwitchRow(
             title: const Text('远端通知提醒'),
 
-            value: appSettings['notificationAlerts'] == true,
+            value: appSettings.notificationAlerts,
             onChanged: changing.value
                 ? null
-                : (value) => updateAlert('notificationAlerts', value),
+                : (value) =>
+                      updateAlert(PreferenceChanges(notificationAlerts: value)),
           ),
           ConnectSwitchRow(
             title: const Text('远端来电提醒'),
 
-            value: appSettings['callAlerts'] == true,
+            value: appSettings.callAlerts,
             onChanged: changing.value
                 ? null
-                : (value) => updateAlert('callAlerts', value),
+                : (value) => updateAlert(PreferenceChanges(callAlerts: value)),
           ),
           StateNote(
             alertStatus.reason.isEmpty ? '正在检查系统通知条件。' : alertStatus.reason,

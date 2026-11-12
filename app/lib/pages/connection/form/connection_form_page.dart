@@ -1,5 +1,9 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/core/application/app_dependencies_provider.dart';
+import 'package:scrcpy_connect/core/devices/device_setup.dart';
+import 'package:scrcpy_connect/core/devices/device_connection_control.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
 import 'package:scrcpy_connect/pages/connection/form/widgets/connection_attempt_status.dart';
 
 import 'widgets/connection_mode_selector.dart';
@@ -11,8 +15,8 @@ import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/pages/connection/usb/connection_usb_page.dart';
 import 'package:scrcpy_connect/pages/connection/wireless/qr/connection_wireless_qr_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/models/connection_validation.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
+import 'package:scrcpy_connect/core/devices/connection_validation.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
@@ -28,7 +32,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 export 'widgets/connection_mode_selector.dart' show AddDeviceMode;
 export 'widgets/connection_failure_note.dart' show ConnectionFailureNote;
 
-class ConnectionFormPage extends HookWidget {
+class ConnectionFormPage extends HookConsumerWidget {
   const ConnectionFormPage({
     super.key,
     required this.controller,
@@ -42,7 +46,7 @@ class ConnectionFormPage extends HookWidget {
     this.configuring = false,
     this.additionalContent,
   });
-  final AppStore controller;
+  final AppNotifier controller;
   final bool pairing;
   final String address;
   final String port;
@@ -53,7 +57,16 @@ class ConnectionFormPage extends HookWidget {
   final bool configuring;
   final Widget? additionalContent;
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final deviceManagement = ref.watch(
+      appDependenciesProvider.select((source) => source.devices),
+    );
+    final setup = ref.watch(
+      appDependenciesProvider.select((source) => source.setup),
+    );
+    final connections = ref.watch(
+      appDependenciesProvider.select((source) => source.connections),
+    );
     final mode = useState(
       initialMode ?? (this.pairing ? AddDeviceMode.pairing : AddDeviceMode.ip),
     );
@@ -78,7 +91,7 @@ class ConnectionFormPage extends HookWidget {
     final checking = useState(false);
     final form = useMemoized(() => GlobalKey<FormState>());
     final busy = useState(false);
-    final result = useState<Json?>(null);
+    final result = useState<PairingReceipt?>(null);
     final error = useState<Object?>(null);
     final cancellation = useState<String?>(null);
     final activeAttempt = useRef<String?>(null);
@@ -93,19 +106,33 @@ class ConnectionFormPage extends HookWidget {
         mode.value == AddDeviceMode.pairing && !completingPairing.value;
     final activePort = pairing ? pairingPort : portField;
     final legacyTcp = effectiveTransport == ConnectionTransport.tcp;
-    useEffect(
-      () => () {
+    bool ownsScope() =>
+        identical(setup, controller.setup) &&
+        identical(connections, controller.connections) &&
+        identical(deviceManagement, controller.deviceManagement);
+    useEffect(() {
+      final epoch = uiEpoch.value;
+      Future.microtask(() {
+        if (!context.mounted || !ownsScope() || uiEpoch.value != epoch) return;
+        busy.value = false;
+        cancelling.value = false;
+        checking.value = false;
+        result.value = null;
+        error.value = null;
+        cancellation.value = null;
+      });
+      return () {
+        uiEpoch.value++;
         final attempt = activeAttempt.value ?? pendingCancellation.value;
+        activeAttempt.value = null;
+        pendingCancellation.value = null;
         if (attempt != null) {
-          controller.execute(ApplicationCommand.devicesCancel, {
-            'attemptId': attempt,
-          }).ignore();
+          deviceManagement.cancelConnectionAttempt(attempt).ignore();
         }
-      },
-      const [],
-    );
+      };
+    }, [setup, connections, deviceManagement]);
     Future<bool> cancel() async {
-      uiEpoch.value++;
+      final epoch = ++uiEpoch.value;
       checking.value = false;
       final attempt = activeAttempt.value ?? pendingCancellation.value;
       activeAttempt.value = null;
@@ -113,18 +140,20 @@ class ConnectionFormPage extends HookWidget {
       pendingCancellation.value = attempt;
       cancelling.value = true;
       try {
-        await controller.request('devices.cancel', {'attemptId': attempt});
-        if (!context.mounted) return false;
+        await deviceManagement.cancelConnectionAttempt(attempt);
+        if (!context.mounted || !ownsScope() || uiEpoch.value != epoch) {
+          return false;
+        }
         pendingCancellation.value = null;
         busy.value = false;
         error.value = null;
-        cancellation.value = result.value?['paired'] == true
+        cancellation.value = result.value?.recorded == true
             ? '已取消连接，手机上的配对授权已保留。'
             : '已取消本次尝试。';
-        await controller.refreshDevices();
+        await controller.deviceList.refresh();
         return context.mounted;
       } catch (failure) {
-        if (context.mounted) {
+        if (context.mounted && ownsScope() && uiEpoch.value == epoch) {
           busy.value = false;
           error.value = RequestFailure(
             'result_unknown',
@@ -133,7 +162,9 @@ class ConnectionFormPage extends HookWidget {
         }
         return false;
       } finally {
-        if (context.mounted) cancelling.value = false;
+        if (context.mounted && ownsScope() && uiEpoch.value == epoch) {
+          cancelling.value = false;
+        }
       }
     }
 
@@ -141,9 +172,9 @@ class ConnectionFormPage extends HookWidget {
         ? currentDeviceId.value
         : deviceId;
 
-    Future<Json?> prepareConnection() async {
+    Future<bool> prepareConnection() async {
       if (!(form.currentState?.validate() ?? false)) {
-        return null;
+        return false;
       }
       if ((configuring || reauthorizing) &&
           !await confirmConnectionChange(
@@ -152,18 +183,24 @@ class ConnectionFormPage extends HookWidget {
             '将沿用此设备的授权身份并核验目标。当前连接及活动可能中断；验证成功后才更新原设备记录。',
             action: '应用并连接',
           )) {
-        return null;
+        return false;
       }
-      if (!context.mounted) return null;
-      return <String, dynamic>{};
+      if (!context.mounted) return false;
+      return true;
     }
 
     Future<void> submit() async {
       if (busy.value || cancelling.value || pendingCancellation.value != null) {
         return;
       }
-      final identity = await prepareConnection();
-      if (identity == null || !context.mounted || busy.value) return;
+      if (!await prepareConnection() ||
+          !context.mounted ||
+          !identical(setup, controller.setup) ||
+          !identical(connections, controller.connections) ||
+          !identical(deviceManagement, controller.deviceManagement) ||
+          busy.value) {
+        return;
+      }
       final attempt =
           '${DateTime.now().microsecondsSinceEpoch}-${identityHashCode(form)}';
       uiEpoch.value++;
@@ -177,87 +214,112 @@ class ConnectionFormPage extends HookWidget {
         final targetId = targetDeviceId();
         final pairingCode = code.text.trim();
         if (pairing) code.clear();
-        final response = await controller.request(
-          pairing
-              ? 'devices.pair'
-              : configuring || reauthorizing
-              ? 'devices.configure'
-              : 'devices.add',
-          {
-            ...identity,
-            'address': host.text.trim(),
-            'attemptId': attempt,
-            'deviceId': ?targetId,
-            'port': int.parse(activePort.text.trim()),
-            if (pairing) 'code': pairingCode,
-            if (!pairing) 'transport': effectiveTransport.name,
-          },
-        );
-        if (!context.mounted || activeAttempt.value != attempt) return;
-        result.value = response;
-        if (configuring || reauthorizing) {
-          if (responseDeviceId(response) != targetId ||
-              (!pairing && response['connected'] != true)) {
+        PairingReceipt? response;
+        String? connectedId;
+        DeviceSnapshot? saved;
+        if (!pairing && (configuring || reauthorizing)) {
+          final receipt = await connections.configureDevice(
+            targetId!,
+            DeviceEndpoint(
+              address: host.text.trim(),
+              port: int.parse(activePort.text.trim()),
+              transport: effectiveTransport == ConnectionTransport.tls
+                  ? .tls
+                  : .tcp,
+            ),
+            attemptId: attempt,
+          );
+          if (receipt.deviceId != targetId ||
+              receipt.device.status != .connected) {
             throw const RequestFailure(
               'configuration_unverified',
               '尚未核验原设备的连接配置，请重新检查。',
             );
           }
+          connectedId = receipt.deviceId;
+        } else if (pairing) {
+          response = await setup.pairDevice(
+            host.text.trim(),
+            int.parse(activePort.text.trim()),
+            pairingCode,
+            deviceId: targetId,
+            attemptId: attempt,
+          );
+          if (pairing &&
+              (configuring || reauthorizing) &&
+              response.deviceId != targetId) {
+            throw const RequestFailure(
+              'configuration_unverified',
+              '尚未核验原设备的连接配置，请重新检查。',
+            );
+          }
+        } else {
+          final endpoint = DeviceEndpoint(
+            address: host.text.trim(),
+            port: int.parse(activePort.text.trim()),
+            transport: effectiveTransport == ConnectionTransport.tls
+                ? .tls
+                : .tcp,
+          );
+          saved = targetId == null
+              ? await deviceManagement.addDevice(endpoint)
+              : await deviceManagement.updateDeviceEndpoint(targetId, endpoint);
         }
-        final connectionFailure = response['connectionFailure'];
-        if (connectionFailure is Map<Object?, Object?>) {
-          final failure = jsonObject(connectionFailure);
-          final failureCode = value(failure, 'code', 'connection_failed');
+        if (!context.mounted ||
+            activeAttempt.value != attempt ||
+            !identical(setup, controller.setup) ||
+            !identical(connections, controller.connections) ||
+            !identical(deviceManagement, controller.deviceManagement)) {
+          return;
+        }
+        result.value = response;
+        final connectionFailure = response?.connectionFailure;
+        if (connectionFailure != null) {
+          final failureCode = connectionFailure.code;
           if (failureCode.contains('unknown') ||
               failureCode.contains('unconfirmed') ||
               failureCode == 'configuration_unverified') {
             pendingCancellation.value = attempt;
           }
-          error.value = RequestFailure(
-            failureCode,
-            value(failure, 'message', '配对已完成，连接尚未建立。'),
-          );
+          error.value = RequestFailure(failureCode, connectionFailure.message);
         }
-        currentDeviceId.value = responseDeviceId(response, targetId);
+        currentDeviceId.value =
+            connectedId ?? saved?.id ?? (response?.deviceId ?? targetId);
         identityAddress.value = host.text.trim();
         if (pairing) {
           tlsLocked.value = true;
           selectedTransport.value = ConnectionTransport.tls;
           portField.clear();
         }
-        if (!pairing && !configuring && !reauthorizing) {
-          final device = response['device'] is Map<Object?, Object?>
-              ? jsonObject(response['device'])
-              : response;
-          final id = device['id'] ?? response['deviceId'];
-          if (id != null && device['status'] != 'connected') {
-            await controller.execute(ApplicationCommand.devicesConnect, {
-              'deviceId': id,
-              'attemptId': attempt,
-            });
-          }
+        if (saved case final device?
+            when device.id.isNotEmpty && device.status != .connected) {
+          await connections.connectDevice(device.id, attemptId: attempt);
         }
-        await controller.refreshDevices();
+        if (!identical(setup, controller.setup) ||
+            !identical(connections, controller.connections) ||
+            !identical(deviceManagement, controller.deviceManagement)) {
+          return;
+        }
+        await controller.deviceList.refresh();
         if (!context.mounted ||
+            !identical(setup, controller.setup) ||
+            !identical(connections, controller.connections) ||
             activeAttempt.value != attempt ||
             ModalRoute.of(context)?.isCurrent == false) {
           return;
         }
-        final id =
-            response['deviceId'] ??
-            response['id'] ??
-            (response['device'] is Map<Object?, Object?>
-                ? response['device']['id']
-                : null);
-        final matches = controller.snapshot().devices.where(
-          (d) => d['id'] == id,
-        );
-        if (matches.isNotEmpty && matches.first['status'] == 'connected') {
-          WorkspaceRoute(deviceId: value(matches.first, 'id'))
-              .pushReplacement(context);
+        final id = connectedId ?? saved?.id ?? (response?.deviceId ?? targetId);
+        final matches = controller.snapshot().devices.where((d) => d.id == id);
+        if (matches.isNotEmpty &&
+            matches.first.status == DeviceConnectionStatus.connected) {
+          WorkspaceRoute(deviceId: matches.first.id).pushReplacement(context);
         }
       } catch (e) {
-        if (context.mounted && activeAttempt.value == attempt) {
+        if (context.mounted &&
+            activeAttempt.value == attempt &&
+            identical(setup, controller.setup) &&
+            identical(connections, controller.connections) &&
+            identical(deviceManagement, controller.deviceManagement)) {
           error.value = e;
           if (e is RequestFailure &&
               (e.code.contains('unknown') ||
@@ -265,15 +327,9 @@ class ConnectionFormPage extends HookWidget {
                   e.code == 'configuration_unverified')) {
             pendingCancellation.value = attempt;
           }
-          if (e is RequestFailure && e.details is Map) {
-            final known = (e.details as Map)['result'];
-            if (known is Map<Object?, Object?>) {
-              result.value = jsonObject(known);
-              currentDeviceId.value = responseDeviceId(
-                result.value,
-                currentDeviceId.value,
-              );
-            }
+          if (e case DeviceSetupFailure(receipt: PairingReceipt known)) {
+            result.value = known;
+            currentDeviceId.value = known.deviceId ?? currentDeviceId.value;
           }
         }
       } finally {
@@ -290,9 +346,7 @@ class ConnectionFormPage extends HookWidget {
       final attempt = activeAttempt.value;
       activeAttempt.value = null;
       if (attempt != null) {
-        controller.execute(ApplicationCommand.devicesCancel, {
-          'attemptId': attempt,
-        }).ignore();
+        deviceManagement.cancelConnectionAttempt(attempt).ignore();
       }
       busy.value = false;
       cancelling.value = false;
@@ -325,7 +379,7 @@ class ConnectionFormPage extends HookWidget {
       if (pairing && result.value != null) {
         completePairing(
           host.text,
-          responseDeviceId(result.value, currentDeviceId.value),
+          (result.value?.deviceId ?? currentDeviceId.value),
         );
       } else {
         attemptPage.value = false;
@@ -337,21 +391,21 @@ class ConnectionFormPage extends HookWidget {
       checking.value = true;
       final epoch = uiEpoch.value;
       try {
-        await controller.request('state.reconcile');
-        await controller.refreshDevices();
+        await controller.reconcileState();
+        await controller.deviceList.refresh();
         if (!context.mounted ||
             epoch != uiEpoch.value ||
             !attemptPage.value ||
             ModalRoute.of(context)?.isCurrent == false) {
           return;
         }
-        final id = responseDeviceId(result.value, currentDeviceId.value);
+        final id = (result.value?.deviceId ?? currentDeviceId.value);
         final matches = controller.snapshot().devices.where(
-          (device) => device['id'] == id,
+          (device) => device.id == id,
         );
         if (id != null &&
             matches.isNotEmpty &&
-            matches.first['status'] == 'connected') {
+            matches.first.status == DeviceConnectionStatus.connected) {
           WorkspaceRoute(deviceId: id).pushReplacement(context);
         }
       } catch (failure) {
@@ -412,64 +466,41 @@ class ConnectionFormPage extends HookWidget {
                                                 final selection =
                                                     await const DiscoveryRoute(
                                                       selection: true,
-                                                    ).push<Json>(context);
+                                                    ).push<DiscoveredDevice>(
+                                                      context,
+                                                    );
                                                 if (!context.mounted) return;
                                                 if (selection == null) {
                                                   selectMode(previousMode);
                                                   return;
                                                 }
-                                                final service =
-                                                    selection['service'];
-                                                if (service
-                                                    is! Map<Object?, Object?>) {
-                                                  selectMode(
-                                                    switch (selection['mode']) {
-                                                      'usb' =>
-                                                        AddDeviceMode.usb,
-                                                      'pairing' =>
-                                                        AddDeviceMode.pairing,
-                                                      _ => AddDeviceMode.ip,
-                                                    },
-                                                  );
-                                                  return;
-                                                }
                                                 result.value = null;
                                                 error.value = null;
-                                                final device = jsonObject(
-                                                  service,
-                                                );
-                                                final endpoints = objects(
-                                                  device['endpoints'],
-                                                );
-                                                final endpoint =
-                                                    endpoints.isEmpty
-                                                    ? device
-                                                    : endpoints.first;
+                                                final device = selection;
+                                                final endpoint = device
+                                                    .endpoints
+                                                    .firstOrNull;
                                                 final isPairing =
-                                                    device['kind'] == 'pairing';
+                                                    device.kind == .pairing;
                                                 selectMode(
                                                   isPairing
                                                       ? AddDeviceMode.pairing
                                                       : AddDeviceMode.ip,
                                                 );
                                                 completingPairing.value = false;
-                                                host.text = value(
-                                                  endpoint,
-                                                  'address',
-                                                );
+                                                host.text =
+                                                    endpoint?.address ?? '';
                                                 if (isPairing) {
                                                   portField.clear();
                                                 }
                                                 (isPairing
-                                                        ? pairingPort
-                                                        : portField)
-                                                    .text = value(
-                                                  endpoint,
-                                                  'port',
-                                                );
+                                                            ? pairingPort
+                                                            : portField)
+                                                        .text =
+                                                    endpoint?.port.toString() ??
+                                                    '';
                                                 currentDeviceId.value =
-                                                    deviceId ??
-                                                    responseDeviceId(device);
+                                                    deviceId ?? device.deviceId;
                                                 identityAddress.value = host
                                                     .text
                                                     .trim();
@@ -477,9 +508,9 @@ class ConnectionFormPage extends HookWidget {
                                                     transport ==
                                                         ConnectionTransport
                                                             .tls ||
-                                                    device['kind'] != 'tcp';
+                                                    device.kind != .tcp;
                                                 selectedTransport.value =
-                                                    device['kind'] == 'tcp'
+                                                    device.kind == .tcp
                                                     ? ConnectionTransport.tcp
                                                     : ConnectionTransport.tls;
                                               },
@@ -510,23 +541,12 @@ class ConnectionFormPage extends HookWidget {
                                           selectMode(AddDeviceMode.pairing),
                                       onConnectionPort: completePairing,
                                       onPaired: (paired) {
-                                        final device = paired['device'];
-                                        final record =
-                                            device is Map<Object?, Object?>
-                                            ? jsonObject(device)
-                                            : <String, dynamic>{};
-                                        host.text = value(
-                                          paired,
-                                          'address',
-                                          value(record, 'address', host.text),
-                                        );
+                                        host.text = paired.address;
                                         identityAddress.value = host.text
                                             .trim();
                                         currentDeviceId.value =
-                                            responseDeviceId(
-                                              paired,
-                                              currentDeviceId.value,
-                                            );
+                                            paired.deviceId ??
+                                            currentDeviceId.value;
                                         tlsLocked.value = true;
                                         selectedTransport.value =
                                             ConnectionTransport.tls;
@@ -636,7 +656,7 @@ class ConnectionFormPage extends HookWidget {
                 cancelling: cancelling.value,
                 failure: error.value,
                 paired:
-                    result.value?['paired'] == true ||
+                    result.value?.recorded == true ||
                     (pairing && result.value != null),
                 deviceName: host.text.trim(),
                 onCancel: closeAttempt,
@@ -652,7 +672,7 @@ class ConnectionFormPage extends HookWidget {
                 onRecheck: recheck,
                 onConnectionPort: () => completePairing(
                   host.text,
-                  responseDeviceId(result.value, currentDeviceId.value),
+                  (result.value?.deviceId ?? currentDeviceId.value),
                 ),
               ),
             ),

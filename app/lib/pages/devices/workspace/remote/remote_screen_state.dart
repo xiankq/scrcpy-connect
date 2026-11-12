@@ -48,16 +48,19 @@ class RemoteScreenState {
     final connection = window.controller
         .snapshot()
         .devices
-        .where((device) => device['id'] == window.deviceId)
-        .firstOrNull?['connectionId'];
+        .where((device) => device.id == window.deviceId)
+        .firstOrNull
+        ?.connectionId;
+    final inspection = window.controller.inspection;
     try {
-      final result = await window.controller.request('device.screen.state', {
-        'deviceId': window.deviceId,
-        'connectionId': ?connection,
-      });
+      final result = await inspection.readScreenState(
+        window.deviceId,
+        connectionId: connection,
+      );
       if (_disposed ||
           presentation.exiting ||
           generation != _generation ||
+          !identical(inspection, window.controller.inspection) ||
           !foreground() ||
           presentation.covered) {
         return;
@@ -65,22 +68,21 @@ class RemoteScreenState {
       final currentConnection = window.controller
           .snapshot()
           .devices
-          .where((device) => device['id'] == window.deviceId)
-          .firstOrNull?['connectionId'];
+          .where((device) => device.id == window.deviceId)
+          .firstOrNull
+          ?.connectionId;
       if (connection != currentConnection ||
-          result['deviceId'] != window.deviceId ||
-          (connection != null && result['connectionId'] != connection)) {
+          result.deviceId != window.deviceId ||
+          (connection != null && result.connectionId != connection)) {
         return;
       }
-      _screenOn = result['screenOn'] is bool
-          ? result['screenOn'] as bool
-          : null;
-      _screenLocked = result['locked'] is bool
-          ? result['locked'] as bool
-          : null;
+      _screenOn = result.value.screenOn;
+      _screenLocked = result.value.locked;
       onChanged();
     } catch (_) {
-      if (!_disposed && generation == _generation) {
+      if (!_disposed &&
+          generation == _generation &&
+          identical(inspection, window.controller.inspection)) {
         _screenOn = null;
         _screenLocked = null;
         onChanged();

@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/core/files/share_inbox_notifier.dart';
 import 'package:scrcpy_connect/widgets/clipboard_visibility.dart';
 
 import 'dart:async';
@@ -11,9 +12,9 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/stores/clipboard_sync_store.dart';
+import 'package:scrcpy_connect/core/clipboard/clipboard_sync_notifier.dart';
 import 'package:scrcpy_connect/widgets/system_notifications.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
@@ -32,11 +33,11 @@ class AppPresentationHost extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(appStoreProvider.notifier);
+    final controller = ref.watch(appProvider.notifier);
     final appPendingShares = ref.watch(
-      appStoreProvider.select((state) => state.pendingShares),
+      shareInboxProvider.select((state) => state.shares),
     );
-    final clipboard = ref.watch(clipboardSyncProvider);
+    final clipboard = ref.watch(clipboardSyncProvider.notifier);
     useClipboardVisibility(clipboard);
     final sharing = useRef<Object?>(null);
     final shareCycle = useState(0);
@@ -57,7 +58,7 @@ class AppPresentationHost extends HookConsumerWidget {
       return null;
     }, [systemNotifications, lifecycle]);
     final appLoading = ref.watch(
-      appStoreProvider.select(
+      appProvider.select(
         (state) => state.loading || state.reconciliationPending,
       ),
     );
@@ -118,7 +119,7 @@ class AppPresentationHost extends HookConsumerWidget {
         return null;
       }
       final share = appPendingShares.first;
-      final shareId = value(share, 'shareId');
+      final shareId = share.shareId;
       final reservation = Object();
       sharing.value = reservation;
       var active = true;
@@ -174,7 +175,7 @@ class AppPresentationHost extends HookConsumerWidget {
         final key = '${event['deviceId']}:$id';
         if (id.isEmpty || presentedCall.value == key) return;
         final matches = controller.snapshot().devices.where(
-          (d) => d['id'] == event['deviceId'],
+          (d) => d.id == event['deviceId'],
         );
         if (matches.isEmpty) return;
         presentedCall.value = key;
@@ -192,7 +193,7 @@ class AppPresentationHost extends HookConsumerWidget {
           }
           final device = matches.first;
           if (router.routeInformationProvider.value.uri.path ==
-              CallsRoute(deviceId: value(device, 'id')).location) {
+              CallsRoute(deviceId: device.id).location) {
             return;
           }
           ScaffoldMessenger.of(context).showSnackBar(
@@ -220,8 +221,7 @@ class AppPresentationHost extends HookConsumerWidget {
                     TextButton(
                       onPressed: () {
                         ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                        CallsRoute(deviceId: value(device, 'id'))
-                            .push<void>(context);
+                        CallsRoute(deviceId: device.id).push<void>(context);
                       },
                       child: const Text('查看电话'),
                     ),

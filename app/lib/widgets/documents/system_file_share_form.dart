@@ -1,12 +1,12 @@
 import 'package:share_plus/share_plus.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:scrcpy_connect/hooks/use_transfer_cache_lease.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/documents/original_file_header.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
@@ -21,7 +21,7 @@ class SystemFileShareForm extends HookWidget {
     this.transferId,
     this.sourceLabel = '被控设备',
   });
-  final AppStore controller;
+  final AppNotifier controller;
   final String localPath, name, kind, sourceLabel;
   final String? transferId;
 
@@ -105,7 +105,7 @@ bool get supportsSystemDocumentSave => const {
 /// 完整原件在系统接收应用读取期间继续受到暂存保护。
 Future<String> sharePreparedFile(
   BuildContext context,
-  AppStore controller,
+  AppNotifier controller,
   String localPath,
 ) async {
   if (!supportsSystemFileShare) {
@@ -114,10 +114,7 @@ Future<String> sharePreparedFile(
       '此系统不支持文件分享，请选择保存到系统位置。',
     );
   }
-  await controller.execute(ApplicationCommand.mediaCacheRetain, {
-    'localPath': localPath,
-    'ifManaged': true,
-  });
+  await controller.cache.retain(localPath, ifManaged: true);
   if (!context.mounted) return '原文件已保留，请返回传输详情继续分享。';
   final render = context.findRenderObject();
   final origin = render is RenderBox && render.hasSize

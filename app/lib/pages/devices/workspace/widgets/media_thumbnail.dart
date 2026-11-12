@@ -1,7 +1,6 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/widgets/thumbnail_queue.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+import 'package:scrcpy_connect/core/content/thumbnail_queue_provider.dart';
+import 'package:scrcpy_connect/core/content/cached_content.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/cached_file_image.dart';
 
 import 'dart:io';
@@ -17,39 +16,33 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 class MediaThumbnail extends HookConsumerWidget {
   const MediaThumbnail({
     super.key,
-    required this.file,
-    required this.controller,
+    required this.path,
+    required this.name,
+    this.providedPath = '',
     required this.device,
     this.compact = false,
   });
-  final Json file;
-  final AppStore controller;
-  final Json device;
+  final String path, name, providedPath;
+  final DeviceSnapshot device;
   final bool compact;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final provided = value(file, 'thumbnail', value(file, 'localPath'));
+    final provided = providedPath;
     final retry = useState(0);
-    final queue = ref.watch(
-      thumbnailQueueProvider(controller, value(device, 'id')),
-    );
+    final queue = ref.watch(thumbnailQueueProvider(device.id));
     final lease = useMemoized(
-      () => provided.isEmpty ? queue.acquire(value(file, 'path')) : null,
-      [queue, provided, file['path'], retry.value],
+      () => provided.isEmpty ? queue.acquire(path) : null,
+      [queue, provided, path, retry.value],
     );
     useEffect(() => lease?.release, [lease]);
     final future = useMemoized(
       () => provided.isNotEmpty
-          ? Future<Json>.value({'localPath': provided})
+          ? Future<CachedContent>.value(CachedContent(path: provided))
           : lease!.result,
       [provided, lease, retry.value],
     );
     final result = useFuture(future, preserveState: false);
-    final source = value(
-      result.data ?? {},
-      'localPath',
-      value(result.data ?? {}, 'url'),
-    );
+    final source = result.data?.path ?? '';
     Widget placeholder([String? imageFailure]) => Container(
       color: compact
           ? Theme.of(context).colorScheme.surfaceContainerLow
@@ -82,7 +75,7 @@ class MediaThumbnail extends HookConsumerWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      value(file, 'name'),
+                      name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall,

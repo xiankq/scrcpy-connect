@@ -1,49 +1,50 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/core/devices/device_discovery_provider.dart';
+import 'package:scrcpy_connect/core/devices/device_setup.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/models/connection_validation.dart';
-import 'package:scrcpy_connect/widgets/command_view.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
+import 'package:scrcpy_connect/core/devices/connection_validation.dart';
+import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-class DiscoveryPage extends HookWidget {
+class DiscoveryPage extends ConsumerWidget {
   const DiscoveryPage({
     super.key,
     required this.controller,
     this.returnSelection = false,
   });
-  final AppStore controller;
+  final AppNotifier controller;
   final bool returnSelection;
 
   @override
-  Widget build(BuildContext context) {
-    final revision = useState(0);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(deviceDiscoveryProvider);
+    void refresh() => ref.invalidate(deviceDiscoveryProvider);
     return PageFrame(
       title: '发现设备',
       actions: [
         GlassActionIcon(
-          onPressed: () => revision.value++,
+          onPressed: refresh,
           tooltip: '刷新',
           icon: const Icon(LucideIcons.refreshCw),
         ),
       ],
       child: ConnectionContent(
-        child: CommandView(
-          controller: controller,
-          command: 'devices.discover',
-          refreshKey: revision.value,
+        child: AsyncContent<List<DiscoveredDevice>>(
+          loading: state.isLoading,
+          data: state.value,
+          error: state.error,
+          onRefresh: refresh,
           emptyTitle: '暂时无法发现设备',
-          builder: (context, data, refresh) {
-            final list = objects(data['devices']);
+          builder: (context, list) {
             if (list.isEmpty) {
               return GroupedListView(
                 padding: const EdgeInsets.all(DesignTokens.spacingMd),
@@ -65,13 +66,12 @@ class DiscoveryPage extends HookWidget {
               itemCount: list.length,
               itemBuilder: (context, index) {
                 final d = list[index];
-                final endpoints = objects(d['endpoints']);
-                final endpoint = endpoints.isEmpty ? d : endpoints.first;
-                final pairingService = d['kind'] == 'pairing';
+                final endpoint = d.endpoints.firstOrNull;
+                final pairingService = d.kind == .pairing;
                 return ListTile(
                   leading: const Icon(LucideIcons.smartphone),
                   title: Text(
-                    value(d, 'name', value(d, 'instance', '附近 Android 设备')),
+                    d.instance.isEmpty ? '附近 Android 设备' : d.instance,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   subtitle: Column(
@@ -84,7 +84,7 @@ class DiscoveryPage extends HookWidget {
                       Text(
                         pairingService
                             ? '等待配对'
-                            : d['trusted'] == true
+                            : d.trusted
                             ? '已有配对信任'
                             : '需确认授权',
                         style: Theme.of(context).textTheme.bodySmall,
@@ -93,20 +93,19 @@ class DiscoveryPage extends HookWidget {
                   ),
                   onTap: () {
                     if (returnSelection) {
-                      Navigator.of(context)
-                          .pop(<String, dynamic>{'service': d});
+                      Navigator.of(context).pop(d);
                       return;
                     }
                     ConnectionFormRoute(
                       pairing: pairingService,
                       transport: pairingService
                           ? null
-                          : d['kind'] == 'tcp'
+                          : d.kind == .tcp
                           ? ConnectionTransport.tcp
                           : ConnectionTransport.tls,
-                      address: value(endpoint, 'address'),
-                      port: value(endpoint, 'port'),
-                      deviceId: responseDeviceId(d),
+                      address: endpoint?.address ?? '',
+                      port: endpoint?.port.toString() ?? '',
+                      deviceId: d.deviceId,
                     ).push<void>(context);
                   },
                 );
@@ -119,10 +118,9 @@ class DiscoveryPage extends HookWidget {
   }
 }
 
-String _endpointLabel(Json endpoint) {
-  final address = value(endpoint, 'address');
-  final port = value(endpoint, 'port');
-  if (address.isEmpty || port.isEmpty) return '端点未获取';
+String _endpointLabel(DiscoveredEndpoint? endpoint) {
+  if (endpoint == null) return '端点未获取';
+  final (:address, :port) = endpoint;
   final host = address.contains(':') && !address.startsWith('[')
       ? '[$address]'
       : address;

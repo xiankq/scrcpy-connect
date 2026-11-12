@@ -1,55 +1,37 @@
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/widgets/command_query.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
+import 'package:scrcpy_connect/core/devices/device_query_provider.dart';
 
-class WorkspaceCallCard extends HookWidget {
+class WorkspaceCallCard extends ConsumerWidget {
   const WorkspaceCallCard({
     super.key,
     required this.controller,
     required this.device,
   });
-  final AppStore controller;
-  final Json device;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
 
   @override
-  Widget build(BuildContext context) {
-    final id = value(device, 'id');
-    final online = device['status'] == 'connected';
-    final query = useMemoized(
-      () => online
-          ? CommandQuery(
-              request: controller.request,
-              events: controller.eventStream(),
-              command: 'calls.list',
-              params: {'deviceId': id},
-            )
-          : null,
-      [controller, id, online],
-    );
-    useListenable(query);
-    useEffect(() => query?.dispose, [query]);
-    final data = query?.data;
-    final call =
-        data?['live'] == true &&
-            query?.error == null &&
-            ['available', 'limited'].contains(data?['status'])
-        ? objects(data?['calls'])
+  Widget build(BuildContext context, WidgetRef ref) {
+    final id = device.id;
+    final online = device.status == DeviceConnectionStatus.connected;
+    final query = online ? ref.watch(deviceCallsProvider(id)) : null;
+    final data = query?.asData?.value;
+    final call = data?.verified == true && query?.hasError != true
+        ? data!.calls
               .where(
-                (call) => [
-                  'ringing',
-                  'active',
-                  'dialing',
-                  'connecting',
-                ].contains(call['state']),
+                (call) => switch (call.state) {
+                  .ringing || .active || .dialing || .connecting => true,
+                  .unknown => false,
+                },
               )
               .firstOrNull
         : null;
@@ -64,12 +46,10 @@ class WorkspaceCallCard extends HookWidget {
             backgroundColor: DesignTokens.colorListIconMint,
           ),
           title: Text(
-            call['aggregate'] == true
-                ? '来电者未知'
-                : value(call, 'name', value(call, 'number', '来电者未知')),
+            call.aggregate ? '来电者未知' : call.name ?? call.number ?? '来电者未知',
           ),
           subtitle: Text(
-            '${deviceName(device)} · ${statusText(value(call, 'state'))}\n声音仍在手机',
+            '${deviceName(device)} · ${statusText(call.state.name)}\n声音仍在手机',
           ),
           trailing: const Icon(LucideIcons.chevronRight),
           onTap: () => CallsRoute(deviceId: id).push<void>(context),

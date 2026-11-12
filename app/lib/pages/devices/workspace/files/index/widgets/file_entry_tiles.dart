@@ -1,13 +1,13 @@
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/files/file_catalog_entry.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/widgets/file_kind_style.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/media_thumbnail.dart';
 
 class FolderListTile extends StatelessWidget {
@@ -20,7 +20,7 @@ class FolderListTile extends StatelessWidget {
     required this.onLongPress,
   });
 
-  final Json folder;
+  final FileCatalogEntry folder;
   final bool selected;
   final bool selectionActive;
   final VoidCallback onTap;
@@ -40,7 +40,7 @@ class FolderListTile extends StatelessWidget {
         backgroundColor: DesignTokens.colorListIconAmber,
       ),
       title: Text(
-        value(folder, 'name'),
+        folder.name,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.bodyMedium,
@@ -82,7 +82,7 @@ class FolderGridTile extends StatelessWidget {
     required this.onLongPress,
   });
 
-  final Json folder;
+  final FileCatalogEntry folder;
   final bool selected;
   final bool selectionActive;
   final VoidCallback onTap;
@@ -95,7 +95,7 @@ class FolderGridTile extends StatelessWidget {
     final manageable = fileCanManage(folder);
     final date = fileModifiedLabel(folder);
     return Semantics(
-      label: '${value(folder, 'name')}\n${value(folder, 'path')}',
+      label: '${folder.name}\n${(folder.path ?? '')}',
       button: openable || manageable,
       selected: selected,
       child: InkWell(
@@ -132,11 +132,11 @@ class FolderGridTile extends StatelessWidget {
             const SizedBox(height: DesignTokens.spacingXs),
             GlassTooltip(
               triggerMode: TooltipTriggerMode.manual,
-              message: value(folder, 'path'),
+              message: (folder.path ?? ''),
               child: SizedBox(
                 width: double.infinity,
                 child: Text(
-                  value(folder, 'name'),
+                  folder.name,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
@@ -173,9 +173,9 @@ class FileGridTile extends StatelessWidget {
     required this.onLongPress,
   });
 
-  final AppStore controller;
-  final Json device;
-  final Json file;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
+  final FileCatalogEntry file;
   final bool selected;
   final bool selectionActive;
   final VoidCallback onTap;
@@ -191,7 +191,7 @@ class FileGridTile extends StatelessWidget {
     final unavailableReason = openable ? null : fileUnavailableReason(file);
     final color = fileKindColor(kind);
     return Semantics(
-      label: '${value(file, 'name')}\n${value(file, 'path')}',
+      label: '${file.name}\n${(file.path ?? '')}',
       button: openable || manageable,
       selected: selected,
       child: InkWell(
@@ -214,8 +214,8 @@ class FileGridTile extends StatelessWidget {
                     if ((kind == FileKind.images || kind == FileKind.videos) &&
                         openable)
                       MediaThumbnail(
-                        file: file,
-                        controller: controller,
+                        name: file.name,
+                        path: (file.path ?? ''),
                         device: device,
                         compact: true,
                       )
@@ -261,11 +261,11 @@ class FileGridTile extends StatelessWidget {
             const SizedBox(height: DesignTokens.spacingXs),
             GlassTooltip(
               triggerMode: TooltipTriggerMode.manual,
-              message: value(file, 'path', fileUnavailableReason(file)),
+              message: file.path ?? fileUnavailableReason(file),
               child: SizedBox(
                 width: double.infinity,
                 child: Text(
-                  value(file, 'name', '未命名文件'),
+                  (file.name.isEmpty ? '未命名文件' : file.name),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
@@ -289,7 +289,7 @@ class FileGridTile extends StatelessWidget {
             ],
             if (openable)
               Text(
-                fileSizeLabel(file['size']),
+                fileSizeLabel(file.size),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
@@ -374,7 +374,7 @@ class FileListTile extends StatelessWidget {
     required this.onLongPress,
   });
 
-  final Json file;
+  final FileCatalogEntry file;
   final bool selected;
   final bool selectionActive;
   final VoidCallback onTap;
@@ -386,7 +386,7 @@ class FileListTile extends StatelessWidget {
     final openable = fileCanOpen(file);
     final manageable = fileCanManage(file);
     final date = fileRecentModifiedLabel(file);
-    final numericSize = num.tryParse('${file['size']}') ?? 0;
+    final numericSize = file.size ?? 0;
     final detail = [
       if (date.isNotEmpty) date,
       if (numericSize > 0) fileSizeLabel(numericSize),
@@ -403,9 +403,9 @@ class FileListTile extends StatelessWidget {
       ),
       title: GlassTooltip(
         triggerMode: TooltipTriggerMode.manual,
-        message: value(file, 'path'),
+        message: (file.path ?? ''),
         child: Text(
-          value(file, 'name'),
+          file.name,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.bodyMedium,

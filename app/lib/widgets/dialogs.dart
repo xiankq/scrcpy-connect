@@ -1,5 +1,3 @@
-import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
@@ -26,15 +24,13 @@ SnackBar glassSnackBar(String message) => SnackBar(
     ),
   ),
 );
-Future<Json?> perform(
+Future<T?> performAction<T>(
   BuildContext context,
-  AppStore controller,
-  String command, [
-  Json params = const {},
+  Future<T> Function() action, {
   String? success,
-]) async {
+}) async {
   try {
-    final result = await controller.request(command, params);
+    final result = await action();
     if (context.mounted && success != null) feedback(context, success);
     return result;
   } catch (error) {

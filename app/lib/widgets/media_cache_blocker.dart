@@ -1,17 +1,19 @@
-import 'package:scrcpy_connect/models/media_cache_failure.dart';
+import 'package:scrcpy_connect/core/content/cache_status_provider.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/core/content/content_cache_failure.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 bool isMediaCacheAdmissionFailure(Object? error) {
   final code = switch (error) {
     RequestFailure() => error.code,
-    MediaCacheFailure() => error.code,
+    ContentCacheFailure() => error.code,
     _ => '$error'.split(':').first,
   };
   return const {
@@ -22,36 +24,29 @@ bool isMediaCacheAdmissionFailure(Object? error) {
 }
 
 /// 阻断处重新读取真实可回收量；清理仍由缓存所有者核验保护，页面不选择删除路径。
-class MediaCacheBlocker extends HookWidget {
+class MediaCacheBlocker extends HookConsumerWidget {
   const MediaCacheBlocker({
     super.key,
     required this.controller,
     this.onReduceSelection,
   });
-  final AppStore controller;
+  final AppNotifier controller;
   final VoidCallback? onReduceSelection;
 
   @override
-  Widget build(BuildContext context) {
-    final revision = useState(0);
+  Widget build(BuildContext context, WidgetRef ref) {
     final busy = useState(false);
     final outcome = useState<String?>(null);
-    final request = useMemoized(
-      () => controller.execute(ApplicationCommand.mediaCacheStatus),
-      [controller, revision.value],
-    );
-    final status = useFuture(request, preserveState: false);
-    final reclaimable =
-        (status.data?['reclaimableBytes'] as num?)?.toInt() ?? 0;
+    final status = ref.watch(cacheStatusProvider);
+    final reclaimable = status.value?.reclaimableBytes ?? 0;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (status.connectionState != ConnectionState.done)
-          const ContentLoadingIndicator(),
+        if (status.isLoading) const ContentLoadingIndicator(),
         if (status.hasError)
           const StateNote('暂时无法核验可回收项，未执行清理。可检查存储后重试，或在原手机处理。'),
-        if (status.hasData && reclaimable == 0)
+        if (status.hasValue && reclaimable == 0)
           const StateNote('当前没有可清理项目。使用中和外部读取结果未知的原件继续保留。'),
         if (reclaimable > 0)
           OutlinedButton(
@@ -69,15 +64,11 @@ class MediaCacheBlocker extends HookWidget {
                     }
                     busy.value = true;
                     try {
-                      final result = await controller.execute(
-                        ApplicationCommand.mediaCacheClear,
-                      );
+                      final deleted = await controller.cache.clear();
                       if (!context.mounted) return;
-                      final deleted =
-                          (result['deletedBytes'] as num?)?.toInt() ?? 0;
                       outcome.value =
                           '实际回收 $deleted 字节，受保护原件已保留。请重新尝试准备；仍不足时减少选择或在手机处理。';
-                      revision.value++;
+                      ref.invalidate(cacheStatusProvider);
                     } catch (error) {
                       if (context.mounted) outcome.value = '清理未完成：$error';
                     } finally {
@@ -99,7 +90,7 @@ class MediaCacheBlocker extends HookWidget {
 
 Future<void> showMediaCacheAdmissionFailure(
   BuildContext context,
-  AppStore controller,
+  AppNotifier controller,
   Object error, {
   bool canReduceSelection = false,
   VoidCallback? onOpenPhone,

@@ -1,8 +1,9 @@
+import 'package:scrcpy_connect/core/control/remote_control.dart';
+
 import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_presentation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/ambient_loading_field.dart';
@@ -37,13 +38,13 @@ class RemoteSurface extends StatelessWidget {
         onPointerHover: (event) => inputs.hover(event, viewport, sourceSize),
         onPointerSignal: (event) => inputs.scroll(event, viewport, sourceSize),
         onPointerDown: (event) =>
-            inputs.pointer(event, 'down', viewport, sourceSize),
+            inputs.pointer(event, .down, viewport, sourceSize),
         onPointerMove: (event) =>
-            inputs.pointer(event, 'move', viewport, sourceSize),
+            inputs.pointer(event, .move, viewport, sourceSize),
         onPointerUp: (event) =>
-            inputs.pointer(event, 'up', viewport, sourceSize),
+            inputs.pointer(event, .up, viewport, sourceSize),
         onPointerCancel: (event) =>
-            inputs.pointer(event, 'cancel', viewport, sourceSize),
+            inputs.pointer(event, .cancel, viewport, sourceSize),
         child: texture != null && sourceSize.width > 0 && sourceSize.height > 0
             ? MediaCodecView(
                 textureId: texture,
@@ -157,13 +158,11 @@ class RemoteStage extends StatelessWidget {
               enableInteractiveSelection: !sensitive,
               onSubmitted: (_) {
                 if (!inputs.canSendInput) return;
-                for (final action in ['down', 'up']) {
-                  unawaited(
-                    inputs.send(ApplicationCommand.sessionKey, {
-                      'keyCode': 66,
-                      'action': action,
-                    }),
-                  );
+                for (final action in [
+                  ControlKeyAction.down,
+                  ControlKeyAction.up,
+                ]) {
+                  unawaited(inputs.send(ControlAction.key(66, action: action)));
                 }
               },
             ),

@@ -3,9 +3,9 @@ import 'dart:ui' show ViewFocusEvent, ViewFocusState;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:scrcpy_connect/services/clipboard_sync.dart';
+import 'package:scrcpy_connect/core/clipboard/clipboard_sync_notifier.dart';
 
-void useClipboardVisibility(ClipboardSync sync) {
+void useClipboardVisibility(ClipboardSyncNotifier sync) {
   useEffect(() {
     final observer = _ClipboardVisibility(sync);
     WidgetsBinding.instance.addObserver(observer);
@@ -16,7 +16,7 @@ void useClipboardVisibility(ClipboardSync sync) {
 
 final class _ClipboardVisibility with WidgetsBindingObserver {
   _ClipboardVisibility(this.sync);
-  final ClipboardSync sync;
+  final ClipboardSyncNotifier sync;
   bool _disposed = false;
 
   void initialize() {

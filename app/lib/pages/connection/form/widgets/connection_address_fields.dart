@@ -1,6 +1,6 @@
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:flutter/material.dart';
-import 'package:scrcpy_connect/models/connection_validation.dart';
+import 'package:scrcpy_connect/core/devices/connection_validation.dart';
 
 class ConnectionAddressFields extends StatelessWidget {
   const ConnectionAddressFields({

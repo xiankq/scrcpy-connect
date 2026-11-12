@@ -8,9 +8,7 @@ import 'package:yaml/yaml.dart';
 // 只有可独立复用的能力拥有包；产品规则在应用的职责模块内组合。
 const applicationLayers = {
   'bootstrap',
-  'models',
-  'stores',
-  'services',
+  'core',
   'utils',
   'pages',
   'widgets',
@@ -106,18 +104,61 @@ List<String> checkArchitecture(
         final segments = p.split(p.relative(file.path, from: package.lib));
         if (segments.length > 1 &&
             !applicationLayers.contains(segments.first)) {
-          problems.add('${relative(file.path)}: 应用顶层目录须按类型组织');
+          problems.add('${relative(file.path)}: 应用顶层目录须使用约定的职责目录');
         }
       }
       final parsed = parseString(content: content, path: file.path);
       if (package.name == 'scrcpy_connect') {
+        final path = p.relative(file.path, from: package.lib);
+        if ({
+          'application_command',
+          'application_request',
+          'application_command_dispatcher',
+          'command_contract',
+        }.contains(p.basenameWithoutExtension(path))) {
+          problems.add('${relative(file.path)}: 应用内部使用所属能力的命名操作，不建立全局命令或集中契约');
+        }
+        final legacy = RegExp(
+          r'\b(ApplicationCommand|ApplicationRequest|ApplicationCommandExecutor)\b',
+        );
+        if (legacy.hasMatch(content)) {
+          problems.add('${relative(file.path)}: 全局命令和全应用请求回调已移除，使用领域参数与命名能力');
+        }
+        // 生命周期与状态组合层没有通用操作端口；真实平台/伴生协议适配在所属能力目录。
+        final parts = p.split(path);
+        if (parts.first == 'bootstrap' ||
+            parts.length > 1 &&
+                parts[0] == 'core' &&
+                parts[1] == 'application') {
+          final genericNames = {'request', 'execute', 'dispatch', 'command'};
+          final methods = parsed.unit.declarations
+              .whereType<ClassDeclaration>()
+              .expand((declaration) => declaration.body.members)
+              .whereType<MethodDeclaration>();
+          if (methods.any(
+            (method) => genericNames.contains(method.name.lexeme),
+          )) {
+            problems.add('${relative(file.path)}: 应用装配与状态组合层不提供通用业务分发端口');
+          }
+          final fields = parsed.unit.declarations
+              .whereType<ClassDeclaration>()
+              .expand((declaration) => declaration.body.members)
+              .whereType<FieldDeclaration>();
+          if (fields.any(
+            (field) => field.fields.variables.any(
+              (variable) => genericNames.contains(variable.name.lexeme),
+            ),
+          )) {
+            problems.add('${relative(file.path)}: 应用依赖按能力注入，不提供通用请求回调');
+          }
+        }
+      }
+
+      if (package.name == 'scrcpy_connect') {
         final segments = p.split(p.relative(file.path, from: package.lib));
-        if (segments.length > 1 &&
-            {'stores', 'services'}.contains(segments.first)) {
-          if (segments.length != 2) {
-            problems.add(
-              '${relative(file.path)}: store/service 使用扁平目录与业务文件名前缀',
-            );
+        if (segments.first == 'core') {
+          if (segments.length < 3) {
+            problems.add('${relative(file.path)}: core 文件须归入所属能力目录');
           }
           final declarations = parsed.unit.declarations;
           final classes = declarations
@@ -127,23 +168,18 @@ List<String> checkArchitecture(
                     !declaration.namePart.typeName.lexeme.startsWith('_'),
               )
               .toList();
-          // 能力接口和配套执行句柄共同描述同一个契约；实现仍只有一个公开主类。
-          if (classes
-                  .where(
-                    (declaration) =>
-                        declaration.abstractKeyword == null ||
-                        declaration.interfaceKeyword == null,
-                  )
-                  .length >
-              1) {
-            problems.add(
-              '${relative(file.path)}: 每个 store/service 文件只保留一个公开主类',
-            );
-          }
-          if (classes.isNotEmpty) {
-            final names = classes.map(
-              (declaration) => declaration.namePart.typeName.lexeme,
-            );
+          final basename = p.basenameWithoutExtension(file.path);
+          final providerFile = basename.endsWith('_provider');
+          final notifierFile = basename.endsWith('_notifier');
+          if (classes.isNotEmpty && !providerFile) {
+            final names = [
+              ...classes.map(
+                (declaration) => declaration.namePart.typeName.lexeme,
+              ),
+              ...declarations.whereType<TypeAlias>().map(
+                (declaration) => declaration.name.lexeme,
+              ),
+            ];
             final expected = names.map(
               (name) => name
                   .replaceAllMapped(
@@ -152,7 +188,10 @@ List<String> checkArchitecture(
                   )
                   .toLowerCase(),
             );
-            if (!expected.contains(p.basenameWithoutExtension(file.path))) {
+            // 同一契约的参数、状态、句柄可以就近维护，文件名保留共同语义。
+            if (!expected.any(
+              (name) => name == basename || name.startsWith('${basename}_'),
+            )) {
               problems.add(
                 '${relative(file.path)}: 文件名应与主类 ${names.join(' / ')} 一致',
               );
@@ -175,16 +214,29 @@ List<String> checkArchitecture(
                       (variable) => variable.name.lexeme.endsWith('Provider'),
                     ),
                   ));
-          if (segments.first == 'stores' &&
-              declarations.any(
-                (declaration) =>
-                    declaration is ClassDeclaration ||
-                    declaration is FunctionDeclaration ||
-                    declaration is TopLevelVariableDeclaration,
-              ) &&
-              !hasProvider) {
+          if (hasProvider && !providerFile && !notifierFile) {
             problems.add(
-              '${relative(file.path)}: store 必须提供 Riverpod provider/notifier',
+              '${relative(file.path)}: Riverpod 定义文件须以 _provider 或 _notifier 命名',
+            );
+          } else if ((providerFile || notifierFile) && !hasProvider) {
+            problems.add(
+              '${relative(file.path)}: provider/notifier 文件必须提供 Riverpod 定义',
+            );
+          }
+          final notifiers = classes.where(
+            (declaration) => declaration.metadata.any(
+              (annotation) =>
+                  {'riverpod', 'Riverpod'}.contains(annotation.name.name),
+            ),
+          );
+          if (notifiers.any(
+                (declaration) =>
+                    !declaration.namePart.typeName.lexeme.endsWith('Notifier'),
+              ) ||
+              (notifierFile && notifiers.length != 1) ||
+              (providerFile && notifiers.isNotEmpty)) {
+            problems.add(
+              '${relative(file.path)}: 状态所有者须使用单个 *Notifier 类及 *_notifier.dart 文件',
             );
           }
         }
@@ -211,20 +263,21 @@ List<String> checkArchitecture(
             final layer = p
                 .split(p.relative(file.path, from: package.lib))
                 .first;
-            if ({'stores', 'services'}.contains(layer) &&
+            if (layer == 'core' &&
                 RegExp(
-                  r'^package:flutter/(widgets|material|cupertino|rendering|gestures|painting)\.dart$',
+                  r'^package:(flutter/(widgets|material|cupertino|rendering|gestures|painting)\.dart|flutter_hooks/|go_router/)',
                 ).hasMatch(literal)) {
               problems.add(
-                '${relative(file.path)}: store/service 不得持有 Flutter 视图依赖 $literal',
+                '${relative(file.path)}: core 不得持有 Flutter 视图依赖 $literal',
               );
             }
-            if (layer == 'services' &&
+            if (layer == 'core' &&
+                !RegExp(r'_(provider|notifier)\.dart$').hasMatch(file.path) &&
                 RegExp(
                   r'^package:(hooks_riverpod|flutter_riverpod|riverpod|riverpod_annotation)/',
                 ).hasMatch(literal)) {
               problems.add(
-                '${relative(file.path)}: Riverpod provider 归 stores，service 不依赖 Riverpod',
+                '${relative(file.path)}: 普通 Dart 实现不依赖 Riverpod，注入与状态归 provider/notifier',
               );
             }
           }
@@ -265,22 +318,46 @@ List<String> checkArchitecture(
               final toLayer = p
                   .split(p.relative(normalized, from: appLib))
                   .first;
-              if ({
-                    'bootstrap',
-                    'stores',
-                    'services',
-                    'models',
-                    'utils',
-                  }.contains(fromLayer) &&
-                  {'pages', 'router', 'widgets', 'hooks'}.contains(toLayer)) {
+              if ({'bootstrap', 'core', 'utils'}.contains(fromLayer) &&
+                  {
+                    'pages',
+                    'router',
+                    'widgets',
+                    'hooks',
+                    'styles',
+                  }.contains(toLayer)) {
                 problems.add(
                   '${relative(source)}: 应用业务模块不得依赖界面或路由 ${relative(normalized)}',
                 );
-              } else if ((fromLayer == 'utils' && toLayer != 'utils') ||
-                  (fromLayer == 'models' &&
-                      !{'models', 'utils'}.contains(toLayer))) {
+              } else if (fromLayer == 'utils' && toLayer != 'utils') {
                 problems.add(
-                  '${relative(source)}: 工具与模型不得依赖业务实现 ${relative(normalized)}',
+                  '${relative(source)}: 通用工具不得依赖业务实现 ${relative(normalized)}',
+                );
+              } else if (fromLayer == 'core' && toLayer == 'bootstrap') {
+                problems.add(
+                  '${relative(source)}: core 不得反向依赖应用启动装配 ${relative(normalized)}',
+                );
+              } else if (fromLayer == 'core' &&
+                  !p.isWithin(p.join(appLib, 'core', 'application'), source) &&
+                  !RegExp(r'_(provider|notifier)\.dart$').hasMatch(source) &&
+                  p.isWithin(
+                    p.join(appLib, 'core', 'application'),
+                    normalized,
+                  ) &&
+                  {
+                    'app_dependencies.dart',
+                    'app_notifier.dart',
+                    'application_session.dart',
+                    'application_command_dispatcher.dart',
+                  }.contains(p.basename(normalized))) {
+                problems.add(
+                  '${relative(source)}: 能力实现不得依赖应用分发或会话装配 ${relative(normalized)}',
+                );
+              } else if (fromLayer == 'core' &&
+                  !RegExp(r'_(provider|notifier)\.dart$').hasMatch(source) &&
+                  RegExp(r'_(provider|notifier)\.dart$').hasMatch(normalized)) {
+                problems.add(
+                  '${relative(source)}: 普通 Dart 实现通过参数接收依赖，不导入 provider/notifier ${relative(normalized)}',
                 );
               }
             }

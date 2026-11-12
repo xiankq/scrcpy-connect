@@ -1,6 +1,9 @@
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+import 'package:scrcpy_connect/core/settings/preferences.dart';
+import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
+import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
+import 'package:scrcpy_connect/core/application/application_status_notifier.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -12,7 +15,7 @@ import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/running_app
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/workspace_call_card.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
@@ -27,27 +30,27 @@ class DeviceWorkspacePage extends ConsumerWidget {
     required this.controller,
     required this.device,
   });
-  final AppStore controller;
-  final Json device;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.watch(appStoreProvider.select((state) => state.devices));
+    ref.watch(deviceListProvider.select((state) => state.devices));
     final settings = ref.watch(
-      appStoreProvider.select((state) => state.settings),
+      preferencesProvider.select((state) => state.values),
     );
     final audioError = ref.watch(
-      appStoreProvider.select((state) => state.audioError),
+      applicationStatusProvider.select((state) => state.audioError),
     );
-    final current = {...device, ...controller.currentDevice(device)};
-    final id = value(current, 'id');
-    final online = current['status'] == 'connected';
+    final current = controller.deviceList.current(device);
+    final id = current.id;
+    final online = current.status == DeviceConnectionStatus.connected;
     final canStop = hasDeviceConnectionIntent(current);
-    final preferences = jsonObject(jsonObject(settings['deviceSettings'])[id]);
-    Future<void> save(String key, bool next) async {
+    final preferences =
+        settings.deviceSettings[id] ?? const DevicePreferences();
+    Future<void> saveClipboard(bool next) async {
       try {
-        if (key == 'clipboardSync' &&
-            next &&
+        if (next &&
             !await confirm(
               context,
               '开启自动剪贴板同步？',
@@ -57,23 +60,15 @@ class DeviceWorkspacePage extends ConsumerWidget {
           return;
         }
         if (!context.mounted) return;
-        await controller.updateDeviceSetting(id, key, next);
+        await controller.preferences.updateDevice(
+          id,
+          DevicePreferences(clipboardSync: next),
+        );
       } catch (error) {
         if (context.mounted) feedback(context, '$error');
       }
     }
 
-    Widget toggle(
-      String title,
-      IconData icon,
-      String key, {
-      bool defaultValue = false,
-    }) => ConnectSwitchRow(
-      title: Text(title),
-      icon: icon,
-      value: preferences[key] as bool? ?? defaultValue,
-      onChanged: (next) => save(key, next),
-    );
     return PageFrame(
       title: deviceName(current),
       child: CustomScrollView(
@@ -128,20 +123,29 @@ class DeviceWorkspacePage extends ConsumerWidget {
                         icon: LucideIcons.pencil,
                         title: '设备名称',
                         onTap: () async {
+                          final devices = controller.deviceManagement;
                           final name = await askText(
                             context,
                             title: '设备名称',
                             initial: deviceName(current),
                             label: '仅更改本机列表名称',
                           );
-                          if (name != null && context.mounted) {
-                            await perform(
-                              context,
-                              controller,
-                              'devices.rename',
-                              {'deviceId': id, 'name': name},
-                            );
-                            await controller.refreshDevices();
+                          if (name == null ||
+                              !context.mounted ||
+                              !identical(
+                                devices,
+                                controller.deviceManagement,
+                              )) {
+                            return;
+                          }
+                          try {
+                            await devices.renameDevice(id, name);
+                          } catch (error) {
+                            if (context.mounted) feedback(context, '$error');
+                          }
+                          if (context.mounted &&
+                              identical(devices, controller.deviceManagement)) {
+                            await controller.deviceList.refresh();
                           }
                         },
                       ),
@@ -158,7 +162,12 @@ class DeviceWorkspacePage extends ConsumerWidget {
                         onTap: () =>
                             QualityRoute(deviceId: id).push<void>(context),
                       ),
-                      toggle('自动同步剪贴板', LucideIcons.clipboard, 'clipboardSync'),
+                      ConnectSwitchRow(
+                        title: const Text('自动同步剪贴板'),
+                        icon: LucideIcons.clipboard,
+                        value: preferences.clipboardSync ?? false,
+                        onChanged: saveClipboard,
+                      ),
                       ActionRow(
                         icon: LucideIcons.stethoscope,
                         title: '连接诊断',

@@ -292,3 +292,22 @@ class LocalNotificationSink implements SystemNotificationSink {
     await _plugin.cancel(id: id);
   }
 }
+
+class NoopSystemNotificationSink implements SystemNotificationSink {
+  const NoopSystemNotificationSink();
+  @override
+  Stream<String> get activations => const Stream.empty();
+  @override
+  Future<void> initialize() async {}
+  @override
+  Future<SystemNotificationStatus> status() async =>
+      const SystemNotificationStatus();
+  @override
+  Future<SystemNotificationStatus> requestPermission() => status();
+  @override
+  Future<bool> openSettings() async => false;
+  @override
+  Future<void> show(SystemNotice notice) async {}
+  @override
+  Future<void> cancel(int id) async {}
+}

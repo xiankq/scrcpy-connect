@@ -1316,7 +1316,7 @@ RouteBase get $screenshotRoute => GoRouteData.$route(
 mixin $ScreenshotRoute on GoRouteData {
   static ScreenshotRoute _fromState(GoRouterState state) => ScreenshotRoute(
     deviceId: state.pathParameters['deviceId']!,
-    $extra: state.extra as Map<String, dynamic>?,
+    $extra: state.extra as VideoScreenshot?,
   );
 
   ScreenshotRoute get _self => this as ScreenshotRoute;

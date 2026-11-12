@@ -1,43 +1,34 @@
-import 'package:scrcpy_connect/models/application_request.dart';
-export 'package:scrcpy_connect/services/file_type_policy.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/services/file_type_policy.dart';
-
-enum FileViewMode { grid, list }
-
-enum FileSortKey { name, size, modified, type }
+import 'package:scrcpy_connect/core/settings/preferences.dart' show FileSortKey;
+export 'package:scrcpy_connect/core/settings/preferences.dart'
+    show FileViewMode, FileSortKey;
+import 'package:scrcpy_connect/core/files/file_catalog_entry.dart';
+export 'package:scrcpy_connect/core/files/file_kind.dart';
+import 'package:scrcpy_connect/core/files/file_kind.dart';
 
 enum FileTypeFilter { all, documents, images, videos, audio }
 
-class FileBreadcrumb {
-  const FileBreadcrumb({required this.label, required this.path});
-
-  final String label;
-  final String path;
-}
+typedef FileBreadcrumb = ({String label, String path});
 
 class DirectoryListing {
   DirectoryListing({required this.folders, required this.files})
-    : entries = List<Json>.unmodifiable([...folders, ...files]);
+    : entries = List<FileCatalogEntry>.unmodifiable([...folders, ...files]);
 
-  final List<Json> folders;
-  final List<Json> files;
-  final List<Json> entries;
+  final List<FileCatalogEntry> folders;
+  final List<FileCatalogEntry> files;
+  final List<FileCatalogEntry> entries;
 
   bool get isEmpty => folders.isEmpty && files.isEmpty;
 }
 
 DirectoryListing buildDirectoryListing({
-  required List<Json> entries,
+  required List<FileCatalogEntry> entries,
   required FileTypeFilter typeFilter,
   required FileSortKey sortKey,
   required bool ascending,
 }) {
-  final folders = entries
-      .where((entry) => entry['isDirectory'] == true)
-      .toList();
+  final folders = entries.where((entry) => entry.isDirectory).toList();
   final files = entries
-      .where((entry) => entry['isDirectory'] != true)
+      .where((entry) => !entry.isDirectory)
       .where((entry) => fileMatchesType(entry, typeFilter))
       .toList();
   final folderSortKey = sortKey == FileSortKey.type
@@ -48,18 +39,24 @@ DirectoryListing buildDirectoryListing({
   return DirectoryListing(folders: folders, files: files);
 }
 
-bool fileMatchesType(Json entry, FileTypeFilter filter) => switch (filter) {
-  FileTypeFilter.all => true,
-  FileTypeFilter.documents => fileKindOf(entry) == FileKind.documents,
-  FileTypeFilter.images => fileKindOf(entry) == FileKind.images,
-  FileTypeFilter.videos => fileKindOf(entry) == FileKind.videos,
-  FileTypeFilter.audio => fileKindOf(entry) == FileKind.audio,
-};
+bool fileMatchesType(FileCatalogEntry entry, FileTypeFilter filter) =>
+    switch (filter) {
+      FileTypeFilter.all => true,
+      FileTypeFilter.documents => fileKindOf(entry) == FileKind.documents,
+      FileTypeFilter.images => fileKindOf(entry) == FileKind.images,
+      FileTypeFilter.videos => fileKindOf(entry) == FileKind.videos,
+      FileTypeFilter.audio => fileKindOf(entry) == FileKind.audio,
+    };
 
-FileKind fileKindOf(Json entry) =>
-    FileTypePolicy.kind(name: value(entry, 'name'), mime: value(entry, 'mime'));
+FileKind fileKindOf(FileCatalogEntry entry) =>
+    FileKind.classify(name: entry.name, mime: entry.mime);
 
-int compareFileEntries(Json a, Json b, FileSortKey sortKey, bool ascending) {
+int compareFileEntries(
+  FileCatalogEntry a,
+  FileCatalogEntry b,
+  FileSortKey sortKey,
+  bool ascending,
+) {
   final aValue = _sortValue(a, sortKey);
   final bValue = _sortValue(b, sortKey);
   // 缺失元数据无法比较，无论升降序均排在有值项目后面。
@@ -71,10 +68,10 @@ int compareFileEntries(Json a, Json b, FileSortKey sortKey, bool ascending) {
   return _stableNamePath(a, b);
 }
 
-Object? _sortValue(Json entry, FileSortKey key) => switch (key) {
-  FileSortKey.name => value(entry, 'name').toLowerCase(),
-  FileSortKey.size => num.tryParse('${entry['size']}'),
-  FileSortKey.modified => num.tryParse('${entry['modified']}'),
+Object? _sortValue(FileCatalogEntry entry, FileSortKey key) => switch (key) {
+  FileSortKey.name => entry.name.toLowerCase(),
+  FileSortKey.size => entry.size,
+  FileSortKey.modified => entry.modified,
   FileSortKey.type =>
     fileKindOf(entry) == FileKind.other ? null : fileKindOf(entry).index,
 };
@@ -85,44 +82,37 @@ int _comparePresentValues(Object left, Object right) => switch ((left, right)) {
   _ => 0,
 };
 
-int _stableNamePath(Json a, Json b) {
-  final nameComparison = value(
-    a,
-    'name',
-  ).toLowerCase().compareTo(value(b, 'name').toLowerCase());
+int _stableNamePath(FileCatalogEntry a, FileCatalogEntry b) {
+  final nameComparison = a.name.toLowerCase().compareTo(b.name.toLowerCase());
   return nameComparison != 0
       ? nameComparison
-      : value(a, 'path').compareTo(value(b, 'path'));
+      : (a.path ?? '').compareTo(b.path ?? '');
 }
 
 List<FileBreadcrumb> fileBreadcrumbs(String path) {
   final normalized = path == '/' ? path : path.replaceFirst(RegExp(r'/$'), '');
   if (normalized == '/sdcard' || normalized.startsWith('/sdcard/')) {
-    final crumbs = [const FileBreadcrumb(label: '内部存储', path: '/sdcard')];
+    final crumbs = [(label: '内部存储', path: '/sdcard')];
     for (final segment
         in normalized
             .substring('/sdcard'.length)
             .split('/')
             .where((part) => part.isNotEmpty)) {
       final previous = crumbs.last.path;
-      crumbs.add(FileBreadcrumb(label: segment, path: '$previous/$segment'));
+      crumbs.add((label: segment, path: '$previous/$segment'));
     }
     return crumbs;
   }
   if (normalized == '/') {
-    return const [FileBreadcrumb(label: '设备根目录', path: '/')];
+    return const [(label: '设备根目录', path: '/')];
   }
-  final crumbs = <FileBreadcrumb>[
-    const FileBreadcrumb(label: '设备文件', path: '/'),
-  ];
+  final crumbs = <FileBreadcrumb>[(label: '设备文件', path: '/')];
   for (final segment
       in normalized.split('/').where((part) => part.isNotEmpty)) {
-    crumbs.add(
-      FileBreadcrumb(
-        label: segment,
-        path: '${crumbs.last.path}/$segment'.replaceFirst('//', '/'),
-      ),
-    );
+    crumbs.add((
+      label: segment,
+      path: '${crumbs.last.path}/$segment'.replaceFirst('//', '/'),
+    ));
   }
   return crumbs;
 }
@@ -134,8 +124,8 @@ String? fileParentPath(String path) {
   return separator <= 0 ? '/' : normalized.substring(0, separator);
 }
 
-String fileModifiedLabel(Json entry) {
-  final seconds = num.tryParse('${entry['modified']}');
+String fileModifiedLabel(FileCatalogEntry entry) {
+  final seconds = entry.modified;
   if (seconds == null || seconds <= 0) return '';
   final date = DateTime.fromMillisecondsSinceEpoch(
     (seconds * 1000).round(),
@@ -145,8 +135,8 @@ String fileModifiedLabel(Json entry) {
       '${date.day.toString().padLeft(2, '0')}';
 }
 
-String fileRecentModifiedLabel(Json entry) {
-  final seconds = num.tryParse('${entry['modified']}');
+String fileRecentModifiedLabel(FileCatalogEntry entry) {
+  final seconds = entry.modified;
   if (seconds == null || seconds <= 0) return '';
   final date = DateTime.fromMillisecondsSinceEpoch(
     (seconds * 1000).round(),
@@ -175,13 +165,9 @@ String fileDirectoryLabel(String path) {
   return crumbs.isEmpty ? path : crumbs.last.label;
 }
 
-bool fileCanOpen(Json file) =>
-    file['path'] is String &&
-    value(file, 'path').isNotEmpty &&
-    file['canOpen'] != false;
-bool fileCanManage(Json file) =>
-    file['path'] is String &&
-    value(file, 'path').isNotEmpty &&
-    file['canManage'] != false;
-String fileUnavailableReason(Json file) =>
-    value(file, 'reason', '文件名无法解析为有效路径，暂时无法操作。');
+bool fileCanOpen(FileCatalogEntry file) =>
+    file.path?.isNotEmpty == true && file.canOpen;
+bool fileCanManage(FileCatalogEntry file) =>
+    file.path?.isNotEmpty == true && file.canManage;
+String fileUnavailableReason(FileCatalogEntry file) =>
+    file.reason ?? '文件名无法解析为有效路径，暂时无法操作。';

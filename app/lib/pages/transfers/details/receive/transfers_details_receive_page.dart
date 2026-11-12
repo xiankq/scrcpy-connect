@@ -1,8 +1,11 @@
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/core/files/transfer_details_notifier.dart';
+import 'package:scrcpy_connect/core/application/app_dependencies_provider.dart';
+import 'package:scrcpy_connect/widgets/async_content.dart';
+import 'package:scrcpy_connect/core/files/file_transfers.dart';
 import 'package:scrcpy_connect/hooks/use_transfer_cache_lease.dart';
 import 'package:scrcpy_connect/utils/formatters.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
@@ -14,9 +17,8 @@ import 'package:scrcpy_connect/widgets/documents/document_export_form.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/conflict_panel.dart';
 import 'package:scrcpy_connect/widgets/documents/file_delivery_path.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/file_transfer_labels.dart';
-import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/documents/original_file_header.dart';
@@ -29,56 +31,67 @@ import 'dart:io';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 
 /// 准备原件时任务身份保持不变，缓存下载完成后才作为明确系统交付的来源。
-class ReceiveContentPage extends HookWidget {
+class ReceiveContentPage extends HookConsumerWidget {
   const ReceiveContentPage({
     super.key,
     required this.controller,
     required this.task,
     this.share = false,
   });
-  final AppStore controller;
-  final Json task;
+  final AppNotifier controller;
+  final FileTransferSnapshot task;
   final bool share;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final provider = transferDetailsProvider(task.id);
+    final query = ref.watch(provider);
+    final source = ref.watch(
+      appDependenciesProvider.select((value) => value.fileTransfers),
+    );
+    Future<void> refresh() => ref.read(provider.notifier).refresh();
+    final owner = useMemoized(Object.new, [controller, source, task.id]);
+    final currentOwner = useRef(owner)..value = owner;
+    final pageContext = context;
+    bool ownsView() =>
+        pageContext.mounted && identical(currentOwner.value, owner);
     final busy = useState(false);
     final shareResult = useState<String?>(null);
     final shareReviewed = useState(false);
-    final taskId = value(task, 'id', value(task, 'transferId'));
-    final autoShareAttempted = useMemoized(() => <String>{}, [taskId]);
+    final taskId = task.id;
+    final autoShareAttempted = useMemoized(() => <String>{}, [source, taskId]);
+    useEffect(() {
+      busy.value = false;
+      shareResult.value = null;
+      shareReviewed.value = false;
+      return null;
+    }, [owner]);
     return PageFrame(
       title: share && supportsSystemFileShare ? '分享原文件' : '保存原文件',
-      child: CommandView(
-        controller: controller,
-        command: 'transfers.get',
-        params: {'transferId': taskId},
+      child: AsyncContent<FileTransferSnapshot>(
+        loading: query.loading,
+        data: query.data,
+        error: query.error,
+        onRefresh: refresh,
         emptyTitle: '暂时无法核验原文件',
-        builder: (context, data, refresh) {
+        builder: (context, data) {
           final current = transferView(controller.snapshot().devices, data);
           return HookBuilder(
+            key: ValueKey((source, task.id)),
             builder: (context) {
               final cacheLease = useTransferCacheLease(
                 controller,
-                current['canExport'] == true ||
-                        [
-                          'queued',
-                          'running',
-                          'finalizing',
-                          'cancelling',
-                          'conflict',
-                        ].contains(current['status'])
-                    ? taskId
-                    : null,
+                current.canExport || current.status.isActive ? taskId : null,
               );
               final ready =
-                  current['canExport'] == true &&
+                  query.verified &&
+                  current.canExport &&
                   cacheLease.hasData &&
                   !cacheLease.hasError &&
-                  value(current, 'localPath').isNotEmpty;
-              final localPath = value(current, 'localPath');
+                  (current.localPath ?? '').isNotEmpty;
+              final localPath = (current.localPath ?? '');
               Future<void> deliverShare() async {
-                if (busy.value || !ready || current['kind'] == 'directory') {
+                if (busy.value || !ready || current.kind == .directory) {
                   return;
                 }
                 busy.value = true;
@@ -89,25 +102,25 @@ class ReceiveContentPage extends HookWidget {
                     controller,
                     localPath,
                   );
-                  if (context.mounted) shareResult.value = result;
+                  if (ownsView()) shareResult.value = result;
                 } catch (error) {
-                  if (context.mounted) shareResult.value = '系统分享未确认完成：$error';
+                  if (ownsView()) shareResult.value = '系统分享未确认完成：$error';
                 } finally {
-                  if (context.mounted) busy.value = false;
+                  if (ownsView()) busy.value = false;
                 }
               }
 
               final route = ModalRoute.of(context);
               final owned =
-                  value(data, 'id', value(data, 'transferId')) == taskId &&
-                  data['deviceId'] == task['deviceId'] &&
-                  data['direction'] == 'pull' &&
-                  data['destinationScope'] == 'privateCache';
+                  data.id == taskId &&
+                  data.deviceId == task.deviceId &&
+                  data.direction == .pull &&
+                  data.destinationScope == .privateCache;
               useEffect(() {
                 if (!owned ||
                     !ready ||
                     (!share || !supportsSystemFileShare) ||
-                    current['kind'] == 'directory' ||
+                    current.kind == .directory ||
                     route?.isCurrent == false ||
                     autoShareAttempted.contains(taskId)) {
                   return null;
@@ -124,10 +137,10 @@ class ReceiveContentPage extends HookWidget {
                 });
                 return () => active = false;
               }, [owned, ready, share, taskId, route?.isCurrent]);
-              if (value(data, 'id', value(data, 'transferId')) != taskId ||
-                  data['deviceId'] != task['deviceId'] ||
-                  data['direction'] != 'pull' ||
-                  data['destinationScope'] != 'privateCache') {
+              if (data.id != taskId ||
+                  data.deviceId != task.deviceId ||
+                  data.direction != .pull ||
+                  data.destinationScope != .privateCache) {
                 return const EmptyContent(
                   icon: LucideIcons.fileWarning,
                   title: '原文件归属需要核对',
@@ -142,27 +155,26 @@ class ReceiveContentPage extends HookWidget {
                   controller: controller,
                   localPath: localPath,
                   transferId: taskId,
-                  name: value(current, 'name', '原文件'),
-                  kind: current['kind'] == 'directory' ? 'directory' : 'file',
-                  sourceLabel: value(current, 'sourceLabel', '被控设备'),
+                  name: current.name,
+                  kind: current.kind == .directory ? 'directory' : 'file',
+                  sourceLabel: (current.sourceLabel ?? '被控设备'),
                 );
               }
-              final status = value(current, 'status');
-              final completed =
-                  num.tryParse('${current['completedBytes']}') ?? 0;
-              final total = num.tryParse('${current['totalBytes']}') ?? 0;
-              final pending = [
-                'queued',
-                'running',
-                'finalizing',
-                'cancelling',
+              final status = current.status;
+              final completed = current.completedBytes ?? current.transferred;
+              final total = current.totalBytes ?? current.total ?? 0;
+              final pending = <FileTransferStatus>[
+                .queued,
+                .running,
+                .finalizing,
+                .cancelling,
               ].contains(status);
               return GroupedListView(
                 padding: const EdgeInsets.all(DesignTokens.spacingMd),
                 children: [
                   OriginalFileHeader(
-                    name: value(current, 'name', '原文件'),
-                    kind: value(current, 'kind', 'file'),
+                    name: current.name,
+                    kind: current.kind.name,
                   ),
                   const SizedBox(height: DesignTokens.spacingLg),
                   ContentPanel(
@@ -182,12 +194,12 @@ class ReceiveContentPage extends HookWidget {
                               ? '正在准备原文件'
                               : ready
                               ? '原文件已准备好'
-                              : statusText(status),
+                              : statusText(status.name),
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                         const SizedBox(height: DesignTokens.spacingSm),
                         FileDeliveryPath(
-                          sourceLabel: value(current, 'sourceLabel', '被控设备'),
+                          sourceLabel: (current.sourceLabel ?? '被控设备'),
                           systemLabel:
                               share && supportsSystemFileShare ||
                                   !supportsSystemDocumentSave
@@ -195,10 +207,10 @@ class ReceiveContentPage extends HookWidget {
                               : '系统副本',
                           staged: ready,
                           systemState: switch (status) {
-                            'failed' ||
-                            'interrupted' ||
-                            'cancelled' => FileDeliveryMilestone.attention,
-                            'completed' when ready =>
+                            .failed ||
+                            .interrupted ||
+                            .cancelled => FileDeliveryMilestone.attention,
+                            .completed when ready =>
                               FileDeliveryMilestone.pending,
                             _ => FileDeliveryMilestone.pending,
                           },
@@ -224,27 +236,26 @@ class ReceiveContentPage extends HookWidget {
                     ),
                     const StateNote('离开本页后传输可继续，在传输中心查看。'),
                   ],
-                  if (status == 'conflict')
+                  if (status == .conflict)
                     ConflictPanel(
+                      enabled: query.verified,
                       transfer: transferView(
                         controller.snapshot().devices,
                         current,
                       ),
                       onResolve: (policy, all) async {
-                        await perform(
+                        await performAction(
                           context,
-                          controller,
-                          'transfers.resolve',
-                          {
-                            'transferId': taskId,
-                            'policy': policy,
-                            'applyToAll': all,
-                          },
+                          () => source.resolveConflict(
+                            taskId,
+                            policy,
+                            applyToAll: all,
+                          ),
                         );
                         refresh();
                       },
                     ),
-                  if (current['canCancel'] == true)
+                  if (current.canCancel)
                     OutlinedButton(
                       onPressed: busy.value
                           ? null
@@ -259,11 +270,11 @@ class ReceiveContentPage extends HookWidget {
                                 return;
                               }
                               busy.value = true;
-                              await perform(
+                              await performAction(
                                 context,
-                                controller,
-                                'transfers.cancel',
-                                {'transferId': taskId},
+                                () => source.cancelTransfer(
+                                  FileTransferTarget.task(taskId),
+                                ),
                               );
                               if (context.mounted) {
                                 busy.value = false;
@@ -272,30 +283,24 @@ class ReceiveContentPage extends HookWidget {
                             },
                       child: const Text('取消本次传输'),
                     ),
-                  if (!pending && !ready && status != 'conflict')
+                  if (!pending && !ready && status != .conflict)
                     StateNote(
                       cacheLease.hasError
                           ? '无法保留这份暂存：${cacheLease.error}'
-                          : value(
-                              current,
-                              'error',
-                              value(
-                                current,
-                                'exportReason',
+                          : current.error ??
+                                current.exportReason ??
                                 '原文件尚未完整取回。请在传输详情核对结果；不会自动重新传输。',
-                              ),
-                            ),
                     ),
                   if (!pending &&
                       !ready &&
-                      isMediaCacheAdmissionFailure(value(current, 'errorCode')))
+                      isMediaCacheAdmissionFailure((current.errorCode ?? '')))
                     MediaCacheBlocker(controller: controller),
                   if (ready && !share && !supportsSystemDocumentSave)
                     const StateNote('原文件已取回本机暂存；此主控当前通过系统分享交给其他应用保存。'),
                   if (ready &&
                       supportsSystemFileShare &&
                       (share || !supportsSystemDocumentSave) &&
-                      current['kind'] != 'directory') ...[
+                      current.kind != .directory) ...[
                     const StateNote('将原文件副本交给系统选择的应用。分享面板返回不代表接收应用已经发送或保存。'),
                     if (shareResult.value != null)
                       StateNote(shareResult.value!),
@@ -322,7 +327,7 @@ class ReceiveContentPage extends HookWidget {
                   if (ready &&
                       supportsSystemFileShare &&
                       (share || !supportsSystemDocumentSave) &&
-                      current['kind'] == 'directory')
+                      current.kind == .directory)
                     StateNote(
                       Platform.isAndroid
                           ? '文件夹请先保存到系统位置，再从文件应用中选择需要分享的内容。'

@@ -1,11 +1,11 @@
+import 'package:scrcpy_connect/core/files/file_transfer_snapshot.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -18,19 +18,16 @@ class TransferExportActions extends StatelessWidget {
     required this.taskId,
     required this.cacheReady,
   });
-  final AppStore controller;
-  final Json current;
+  final AppNotifier controller;
+  final FileTransferSnapshot current;
   final String taskId;
   final bool cacheReady;
 
   Future<void> _open(BuildContext context) async {
     try {
-      final path = value(current, 'localPath');
+      final path = (current.localPath ?? '');
       if (path.isEmpty) throw const RequestFailure('invalid_path', '缺少本机文件位置。');
-      await controller.execute(ApplicationCommand.mediaCacheRetain, {
-        'localPath': path,
-        'ifManaged': true,
-      });
+      await controller.cache.retain(path, ifManaged: true);
       if (!context.mounted) return;
       final opened = await OpenFilex.open(path);
       if (opened.type != ResultType.done) {
@@ -45,16 +42,16 @@ class TransferExportActions extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      if (current['canExport'] == true &&
-          (current['destinationScope'] != 'privateCache' || cacheReady) &&
-          value(current, 'localPath').isNotEmpty) ...[
+      if (current.canExport &&
+          (current.destinationScope != .privateCache || cacheReady) &&
+          (current.localPath ?? '').isNotEmpty) ...[
         StateNote(
-          current['destinationScope'] == 'privateCache'
+          current.destinationScope == .privateCache
               ? '已取回本机暂存，尚未保存到系统位置。系统可能清理暂存内容。'
-              : '已保存至 ${value(current, 'localPath')}',
+              : '已保存至 ${(current.localPath ?? '')}',
         ),
         if (supportsSystemDocumentSave &&
-            current['destinationScope'] == 'privateCache')
+            current.destinationScope == .privateCache)
           FilledButton.icon(
             onPressed: () => DocumentExportRoute(
               taskId: taskId,
@@ -63,13 +60,13 @@ class TransferExportActions extends StatelessWidget {
             icon: const Icon(LucideIcons.folderOutput),
             label: const Text('保存到系统位置'),
           ),
-        if (current['kind'] == 'directory')
+        if (current.kind == .directory)
           StateNote(
-            current['destinationScope'] == 'privateCache'
+            current.destinationScope == .privateCache
                 ? '文件夹结构已取回。保存到系统位置后，可在文件应用中查看。'
                 : '文件夹结构已取回，请在保存位置查看。',
           ),
-        if (current['kind'] != 'directory') ...[
+        if (current.kind != .directory) ...[
           FilledButton.icon(
             onPressed: () => _open(context),
             icon: const Icon(
@@ -86,7 +83,7 @@ class TransferExportActions extends StatelessWidget {
                   final result = await sharePreparedFile(
                     context,
                     controller,
-                    value(current, 'localPath'),
+                    (current.localPath ?? ''),
                   );
                   if (context.mounted) feedback(context, result);
                 } catch (error) {
@@ -103,8 +100,8 @@ class TransferExportActions extends StatelessWidget {
             ),
         ],
       ],
-      if (current['canExportPartial'] == true &&
-          (current['destinationScope'] != 'privateCache' || cacheReady) &&
+      if (current.canExportPartial &&
+          (current.destinationScope != .privateCache || cacheReady) &&
           supportsSystemDocumentSave) ...[
         StateNote(
           '这是已核验但不完整的本机暂存。系统保存不会补齐失败、变化或跳过的项目。',

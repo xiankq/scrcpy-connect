@@ -1,10 +1,15 @@
+import 'package:scrcpy_connect/core/control/video_session.dart';
+import 'package:scrcpy_connect/core/control/remote_control.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+import 'package:scrcpy_connect/core/settings/preferences.dart';
+import 'package:scrcpy_connect/core/application/application_status_notifier.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/remote_notices.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/remote_surface.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/remote_recovery_panel.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/remote_navigation_bar.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
 import 'package:scrcpy_connect/router/remote_launch_intent.dart';
 import 'package:scrcpy_connect/router/route_observers.dart';
@@ -15,9 +20,9 @@ import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/exit_handle.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/remote_audio_control.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/remote_failure.dart';
-import 'package:scrcpy_connect/models/remote_display_settings.dart';
+import 'package:scrcpy_connect/core/control/remote_display_settings.dart';
 
 import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_connection_recovery.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_input_owner.dart';
@@ -43,8 +48,8 @@ class RemotePage extends StatefulWidget {
     this.requestKeyboard = false,
     this.initialAction,
   });
-  final AppStore controller;
-  final Json device;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
   final String? packageName;
   final Json? existingSession;
   final bool requestKeyboard;
@@ -82,20 +87,20 @@ class _RemotePageState extends State<RemotePage>
   Future<void>? newWindowWake;
 
   Future<void> requestWake() async {
-    Object? currentConnection() =>
+    String? currentConnection() =>
         controller
             .snapshot()
             .devices
-            .where((device) => device['id'] == widget.device['id'])
-            .firstOrNull?['connectionId'] ??
-        widget.device['connectionId'];
+            .where((device) => device.id == widget.device.id)
+            .firstOrNull
+            ?.connectionId ??
+        widget.device.connectionId;
     final connection = currentConnection();
-    await controller.execute(ApplicationCommand.devicesWake, {
-      'deviceId': widget.device['id'],
-      'connectionId': ?connection,
-    });
+    final wake = controller.deviceWake;
+    await wake.wakeDevice(widget.device.id, connectionId: connection);
     if (!mounted || presentation.exiting) return;
-    if (connection != currentConnection()) {
+    if (connection != currentConnection() ||
+        !identical(wake, controller.deviceWake)) {
       throw const RequestFailure('stale_connection', '点亮请求所属连接已变化，请核对当前画面。');
     }
   }
@@ -124,18 +129,11 @@ class _RemotePageState extends State<RemotePage>
     final id = sessionId;
     if (owned?.isCurrent != true || id.isEmpty) return;
     try {
-      final result = await controller.execute(
-        ApplicationCommand.sessionScreenshot,
-        {'sessionId': id},
-      );
+      final result = await controller.screenshots.captureScreenshot(id);
       if (!mounted || view != owned || sessionId != id) return;
-      final path = value(result, 'localPath');
-      if (path.isEmpty) {
-        throw const RequestFailure('capture_failed', '没有收到截图保存位置。');
-      }
       await ScreenshotRoute(
-        deviceId: value(widget.device, 'id'),
-        $extra: {...result, 'paused': presentation.paused},
+        deviceId: widget.device.id,
+        $extra: result,
       ).push<void>(context);
     } catch (failure) {
       if (mounted) {
@@ -155,7 +153,7 @@ class _RemotePageState extends State<RemotePage>
       );
       if (!mounted || package == null) return;
       RemoteAppRoute(
-        deviceId: value(widget.device, 'id'),
+        deviceId: widget.device.id,
         packageName: package,
         $extra: const RemoteLaunchIntent(),
       ).pushReplacement(context);
@@ -191,7 +189,7 @@ class _RemotePageState extends State<RemotePage>
   TextEditingController get text => inputs.text;
   Future<void> get inputQueue => inputs.idle;
   StreamSubscription<Json>? eventSubscription;
-  AppStore get controller => widget.controller;
+  AppNotifier get controller => widget.controller;
   String get sessionId => presentation.sessionId;
   @override
   void initState() {
@@ -199,7 +197,7 @@ class _RemotePageState extends State<RemotePage>
     window = RemoteWindow(
       controller: controller,
       views: RemoteViewsScope.of(context),
-      deviceId: value(widget.device, 'id'),
+      deviceId: widget.device.id,
     );
     inputs = RemoteInputOwner(
       window: window,
@@ -228,12 +226,8 @@ class _RemotePageState extends State<RemotePage>
       },
     )..start();
     displaySettings = RemoteDisplaySettings(
-      jsonObject(
-        jsonObject(controller.snapshot().settings['deviceSettings'])[value(
-          widget.device,
-          'id',
-        )],
-      ),
+      controller.snapshot().settings.deviceSettings[widget.device.id] ??
+          const DevicePreferences(),
     );
     inputFocus.addListener(inputFocusChanged);
     WidgetsBinding.instance.addObserver(this);
@@ -272,14 +266,12 @@ class _RemotePageState extends State<RemotePage>
       presentation.replaceBinding();
       Json? retained = recoveringConnection ? null : widget.existingSession;
       if (retained == null) {
-        final listed = objects(
-          (await controller.execute(ApplicationCommand.sessionList, {
-            'deviceId': widget.device['id'],
-          }))['sessions'],
-        );
+        final listed = (await controller.videos.readVideoSessions(
+          deviceId: widget.device.id,
+        )).map((view) => view.toSnapshot()).toList();
         final matches = listed.where(
           (item) =>
-              item['deviceId'] == widget.device['id'] &&
+              item['deviceId'] == widget.device.id &&
               item['packageName'] == widget.packageName &&
               (item['launchOutcome'] == 'unknown' ||
                   !['stopped', 'failed', 'error'].contains(item['status'])),
@@ -301,7 +293,7 @@ class _RemotePageState extends State<RemotePage>
       final dimensions = displaySettings.dimensions(viewport);
       if (retained == null &&
           !recoveringConnection &&
-          displaySettings.values['wakeOnConnect'] != false) {
+          displaySettings.values.wakeOnConnect != false) {
         // 请求前先消耗新窗口唤醒意图，失败或缺少回执时不能随重建和通用重试重放。
         await (newWindowWake ??= requestWake());
         if (!mounted || !presentation.acceptsStart(attempt)) return;
@@ -309,16 +301,16 @@ class _RemotePageState extends State<RemotePage>
       submittedAppStart = retained == null && widget.packageName != null;
       final result =
           retained ??
-          await controller.execute(ApplicationCommand.sessionStart, {
-            'deviceId': widget.device['id'],
-            if (widget.packageName != null) 'packageName': widget.packageName,
-            'keepActive': displaySettings.values['stayAwake'] == true,
-            if (dimensions != null) ...{
-              'displayWidth': dimensions.width,
-              'displayHeight': dimensions.height,
-              'displayAuto': displaySettings.mode == 'auto',
-            },
-          });
+          (await controller.videos.startVideo(
+            VideoSessionPlan(
+              deviceId: widget.device.id,
+              packageName: widget.packageName,
+              displaySize: dimensions == null
+                  ? null
+                  : (width: dimensions.width, height: dimensions.height),
+              displayAuto: dimensions != null && displaySettings.mode == 'auto',
+            ),
+          )).toSnapshot();
       if (!mounted || !presentation.acceptsStart(attempt)) {
         if (mounted && presentation.requiresVerification(attempt)) {
           // 打开请求已提交；迟到结果仅用于核验身份，不能触发再次打开或停止真实任务。
@@ -331,11 +323,10 @@ class _RemotePageState extends State<RemotePage>
           final staleId = value(result, 'sessionId', value(result, 'id'));
           if (staleId.isNotEmpty && staleId != sessionId) {
             try {
-              await controller.execute(ApplicationCommand.sessionStop, {
-                'sessionId': staleId,
-                'keepTask': true,
-                if (widget.packageName != null) 'keepLaunchRecord': true,
-              });
+              await controller.videos.stopVideo(
+                ControlTarget(sessionId: staleId),
+                keepLaunchRecord: widget.packageName != null,
+              );
             } catch (_) {
               // 迟到回执不能重新创建已释放视图。
             }
@@ -428,16 +419,13 @@ class _RemotePageState extends State<RemotePage>
     // 副作用提交前先消耗意图，缺少回执意味着结果未知，恢复画面不能自动重放。
     switch (action.tool) {
       case RemoteTool.rotate:
-        await send(ApplicationCommand.sessionRotate, {});
+        await send(const ControlAction.rotate());
       case RemoteTool.screen:
-        await send(ApplicationCommand.sessionScreen, {'mode': action.value});
+        await send(ControlAction.screenPower(on: action.value == 'on'));
       case RemoteTool.text:
-        await send(ApplicationCommand.sessionText, {'text': action.value});
+        await send(ControlAction.text(action.value as String));
       case RemoteTool.launchApp:
-        await send(ApplicationCommand.sessionLaunch, {
-          'deviceId': widget.device['id'],
-          'packageName': action.value,
-        });
+        await send(ControlAction.launchApplication(action.value as String));
       case RemoteTool.key:
         final code = action.value! as int;
         await inputs.tapKey(code);
@@ -455,17 +443,15 @@ class _RemotePageState extends State<RemotePage>
   Future<void> checkAppLaunch() async {
     setState(() => presentation.checking());
     try {
-      final listed = objects(
-        (await controller.execute(ApplicationCommand.sessionList, {
-          'deviceId': widget.device['id'],
-        }))['sessions'],
-      );
+      final listed = (await controller.videos.readVideoSessions(
+        deviceId: widget.device.id,
+      )).map((view) => view.toSnapshot()).toList();
       if (!mounted || presentation.exiting) return;
       final record = listed
           .where(
             (item) => sessionId.isNotEmpty
                 ? value(item, 'sessionId', value(item, 'id')) == sessionId
-                : item['deviceId'] == widget.device['id'] &&
+                : item['deviceId'] == widget.device.id &&
                       item['packageName'] == widget.packageName,
           )
           .firstOrNull;
@@ -492,10 +478,7 @@ class _RemotePageState extends State<RemotePage>
     setState(() => presentation.checking());
     try {
       if (sessionId.isNotEmpty) {
-        await controller.execute(ApplicationCommand.sessionStop, {
-          'sessionId': sessionId,
-          'keepTask': true,
-        });
+        await controller.videos.stopVideo(ControlTarget(sessionId: sessionId));
       }
       if (!mounted || presentation.exiting) return;
       newWindowWake = null;
@@ -526,7 +509,7 @@ class _RemotePageState extends State<RemotePage>
       return;
     }
     RemoteRoute(
-      deviceId: value(widget.device, 'id'),
+      deviceId: widget.device.id,
       $extra: RemoteLaunchIntent(
         action: RemoteControlIntent.launchApp(package),
       ),
@@ -546,10 +529,10 @@ class _RemotePageState extends State<RemotePage>
       final updated = event['type'] == 'device.changed'
           ? data
           : objects(data['devices'])
-                .where((d) => d['id'] == widget.device['id'])
+                .where((d) => d['id'] == widget.device.id)
                 .firstOrNull;
       if (updated != null &&
-          updated['id'] == widget.device['id'] &&
+          updated['id'] == widget.device.id &&
           updated['status'] != 'connected') {
         screenState.invalidate();
       }
@@ -557,7 +540,7 @@ class _RemotePageState extends State<RemotePage>
     if ((event['type'] == 'session.stop.requested' &&
             data['sessionId'] == sessionId) ||
         (event['type'] == 'device.disconnect.requested' &&
-            event['deviceId'] == widget.device['id'])) {
+            event['deviceId'] == widget.device.id)) {
       connectionRecovery.stop();
       if (restoringConnection) {
         // 替换会话取得新身份前接受的停止，不能被迟到列表或启动回执撤销。
@@ -569,7 +552,7 @@ class _RemotePageState extends State<RemotePage>
     }
     if (event['type'] == 'devices.changed' && widget.packageName == null) {
       final device = objects(data['devices'])
-          .where((d) => d['id'] == widget.device['id'])
+          .where((d) => d['id'] == widget.device.id)
           .firstOrNull;
       if (device != null) {
         connectionRecovery.observe(
@@ -598,11 +581,11 @@ class _RemotePageState extends State<RemotePage>
     }
     if (value(event, 'type').startsWith('session.')) {
       trace(
-        'event type=${event['type']} status=${value(data, 'status')} bound=${sessionId.isNotEmpty} sessionMatches=${data['sessionId'] == null || data['sessionId'] == sessionId} deviceMatches=${event['deviceId'] == null || event['deviceId'] == widget.device['id']} hasTexture=${data['textureId'] != null} pausedBefore=${presentation.paused}',
+        'event type=${event['type']} status=${value(data, 'status')} bound=${sessionId.isNotEmpty} sessionMatches=${data['sessionId'] == null || data['sessionId'] == sessionId} deviceMatches=${event['deviceId'] == null || event['deviceId'] == widget.device.id} hasTexture=${data['textureId'] != null} pausedBefore=${presentation.paused}',
       );
     }
     if (data['sessionId'] != null && data['sessionId'] != sessionId) return;
-    if (event['deviceId'] != null && event['deviceId'] != widget.device['id']) {
+    if (event['deviceId'] != null && event['deviceId'] != widget.device.id) {
       return;
     }
     switch (event['type']) {
@@ -630,9 +613,9 @@ class _RemotePageState extends State<RemotePage>
         final current = presentation.session ?? {};
         final noticeIsCurrent =
             view?.isCurrent == true &&
-            event['deviceId'] == widget.device['id'] &&
+            event['deviceId'] == widget.device.id &&
             (data['deviceId'] == null ||
-                data['deviceId'] == widget.device['id']) &&
+                data['deviceId'] == widget.device.id) &&
             data['sessionId'] == sessionId &&
             (current['captureGeneration'] == null ||
                 data['captureGeneration'] != null) &&
@@ -676,11 +659,7 @@ class _RemotePageState extends State<RemotePage>
     trace(
       'reconcile.unknown reason=$reason session=$sessionId visibility=${presentation.visibilityEpoch}',
     );
-    controller.focusClipboardSession(
-      value(widget.device, 'id'),
-      sessionId,
-      false,
-    );
+    controller.focusClipboardSession(widget.device.id, sessionId, false);
     final epoch = presentation.beginReconciliation(
       initialSession: initialSession,
       reason: reason,
@@ -695,7 +674,7 @@ class _RemotePageState extends State<RemotePage>
     final changed = presentation.reconcile(
       snapshot,
       packageName: widget.packageName,
-      deviceId: widget.device['id'],
+      deviceId: widget.device.id,
     );
     if (!changed) return;
     setState(() {});
@@ -713,7 +692,7 @@ class _RemotePageState extends State<RemotePage>
     final epoch = markStateUnknown();
     try {
       // 桥接只在完整读取栅栏通过后发布 state.resynced，命令回执本身不能解除画面门禁。
-      await controller.execute(ApplicationCommand.stateReconcile);
+      await controller.reconcileState();
     } catch (failure) {
       if (mounted && presentation.acceptsReconciliation(epoch)) {
         setState(() => presentation.reportError(remoteFailure(failure)));
@@ -776,11 +755,7 @@ class _RemotePageState extends State<RemotePage>
   }
 
   Future<void> pauseView() async {
-    controller.focusClipboardSession(
-      value(widget.device, 'id'),
-      sessionId,
-      false,
-    );
+    controller.focusClipboardSession(widget.device.id, sessionId, false);
     final operation = window.pause(releaseInputs);
     if (mounted) setState(() {});
     await operation;
@@ -797,14 +772,10 @@ class _RemotePageState extends State<RemotePage>
         presentation.sessionEnded ||
         view?.isCurrent != true ||
         ModalRoute.of(context)?.isCurrent == false) {
-      controller.focusClipboardSession(
-        value(widget.device, 'id'),
-        sessionId,
-        false,
-      );
+      controller.focusClipboardSession(widget.device.id, sessionId, false);
       return;
     }
-    final deviceId = value(widget.device, 'id');
+    final deviceId = widget.device.id;
     controller.focusClipboardSession(
       deviceId,
       sessionId,
@@ -866,21 +837,14 @@ class _RemotePageState extends State<RemotePage>
 
   Future<void> releaseInputs({RemoteBinding? binding}) =>
       inputs.releaseInputs(binding: binding);
-  Future<void> send(
-    ApplicationCommand command,
-    Json params, {
-    RemoteBinding? binding,
-  }) => inputs.send(command, params, binding: binding);
+  Future<void> send(ControlAction action, {RemoteBinding? binding}) =>
+      inputs.send(action, binding: binding);
   KeyEventResult key(FocusNode node, KeyEvent event) =>
       inputs.key(event, ime: ime);
   void pressNavigationKey(int code) {
     if (!canSendInput) return;
-    unawaited(
-      send(ApplicationCommand.sessionKey, {'keyCode': code, 'action': 'down'}),
-    );
-    unawaited(
-      send(ApplicationCommand.sessionKey, {'keyCode': code, 'action': 'up'}),
-    );
+    unawaited(send(ControlAction.key(code, action: .down)));
+    unawaited(send(ControlAction.key(code, action: .up)));
   }
 
   Future<void> leave() async {
@@ -906,16 +870,11 @@ class _RemotePageState extends State<RemotePage>
           );
         }
         final receipt = result.receipt;
-        final keepActive = jsonObject(receipt['keepActiveCleanup']);
-        if (receipt['sessionId'] == id &&
-            receipt['status'] == 'stopped' &&
-            (keepActive['cleanupConfirmed'] == false ||
-                keepActive['status'] == 'cleanup_unconfirmed')) {
-          final reason = value(
-            jsonObject(keepActive['error']),
-            'reason',
-            '请稍后重新检查。',
-          );
+        final keepActive = receipt?.wakeCleanup;
+        if (receipt?.sessionId == id &&
+            keepActive != null &&
+            !keepActive.cleanupConfirmed) {
+          final reason = keepActive.keepActiveError?.reason ?? '请稍后重新检查。';
           feedback!.showSnackBar(glassSnackBar('窗口已关闭，保持唤醒服务释放尚未确认：$reason'));
         }
       }),
@@ -929,11 +888,7 @@ class _RemotePageState extends State<RemotePage>
   @override
   void dispose() {
     notices.dispose();
-    controller.focusClipboardSession(
-      value(widget.device, 'id'),
-      sessionId,
-      false,
-    );
+    controller.focusClipboardSession(widget.device.id, sessionId, false);
     displaySizing.dispose();
     screenState.dispose();
     final release = window.dispose(releaseInputs);
@@ -967,14 +922,11 @@ class _RemotePageState extends State<RemotePage>
       waitingForFirstFrame: presentation.awaitingFirstFrame,
       onReturn: () => unawaited(leave()),
       onManageActivities: () =>
-          DeviceActivitiesRoute(deviceId: value(widget.device, 'id'))
-              .push<void>(context),
+          DeviceActivitiesRoute(deviceId: widget.device.id).push<void>(context),
       onContinueOnPhoneScreen: continueOnPhoneScreen,
       onCloseUnknownAppLaunch: closeUnknownAppLaunch,
       onRetry: presentation.qualityRetryable
-          ? () =>
-                QualityRoute(deviceId: value(widget.device, 'id'))
-                    .push<void>(context)
+          ? () => QualityRoute(deviceId: widget.device.id).push<void>(context)
           : presentation.appLaunchUnknown
           ? checkAppLaunch
           : presentation.reconcileOnly
@@ -985,24 +937,24 @@ class _RemotePageState extends State<RemotePage>
     return Consumer(
       builder: (context, ref, _) {
         final currentDevice = ref.watch(
-          appStoreProvider.select(
+          appProvider.select(
             (state) => state.devices
-                .where((device) => device['id'] == widget.device['id'])
+                .where((device) => device.id == widget.device.id)
                 .firstOrNull,
           ),
         );
         final unverified = ref.watch(
-          appStoreProvider.select((state) => state.reconciliationPending),
+          applicationStatusProvider.select(
+            (state) => state.reconciliationPending,
+          ),
         );
         final showNavigationBar = ref.watch(
-          appStoreProvider.select(
+          appProvider.select(
             (state) =>
-                jsonObject(
-                  jsonObject(state.settings['deviceSettings'])[value(
-                    widget.device,
-                    'id',
-                  )],
-                )['showNavigationBar'] !=
+                state
+                    .settings
+                    .deviceSettings[widget.device.id]
+                    ?.showNavigationBar !=
                 false,
           ),
         );
@@ -1024,7 +976,7 @@ class _RemotePageState extends State<RemotePage>
               onKeyEvent: key,
               onFocusChange: (focused) {
                 controller.focusClipboardSession(
-                  value(widget.device, 'id'),
+                  widget.device.id,
                   sessionId,
                   focused && canSendInput && !presentation.covered,
                 );
@@ -1070,7 +1022,10 @@ class _RemotePageState extends State<RemotePage>
                     onConvert:
                         canSendInput &&
                             !converting &&
-                            (int.tryParse(value(widget.device, 'apiLevel')) ??
+                            (int.tryParse(
+                                      (widget.device.apiLevel?.toString() ??
+                                          ''),
+                                    ) ??
                                     29) >=
                                 29
                         ? convertToIndependent
@@ -1080,9 +1035,7 @@ class _RemotePageState extends State<RemotePage>
                         : null,
                     onKeyboard: canSendInput ? showKeyboard : null,
                     onRotate: canSendInput
-                        ? () => unawaited(
-                            send(ApplicationCommand.sessionRotate, {}),
-                          )
+                        ? () => unawaited(send(const ControlAction.rotate()))
                         : null,
                     deviceLabel: deviceName(currentDevice ?? widget.device),
                     connectionLabel: unverified || currentDevice == null
@@ -1090,7 +1043,7 @@ class _RemotePageState extends State<RemotePage>
                         : deviceStatusText(currentDevice),
                     soundControl: RemoteAudioControl(
                       controller: controller,
-                      deviceId: value(widget.device, 'id'),
+                      deviceId: widget.device.id,
                     ),
                   ),
                 ),

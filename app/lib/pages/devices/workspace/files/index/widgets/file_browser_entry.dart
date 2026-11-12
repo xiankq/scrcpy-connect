@@ -1,10 +1,10 @@
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/files/file_catalog_entry.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
 
 import 'file_entry_tiles.dart';
 
@@ -24,20 +24,20 @@ class FileBrowserEntry extends StatelessWidget {
     this.enabled = true,
   });
 
-  final AppStore controller;
-  final Json device;
-  final Json entry;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
+  final FileCatalogEntry entry;
   final bool grid, selected, selectionActive;
   final bool enabled;
-  final ValueChanged<Json> onSelect, onBeginSelect;
+  final ValueChanged<FileCatalogEntry> onSelect, onBeginSelect;
   final ValueChanged<String> onOpenDirectory;
 
   @override
   Widget build(BuildContext context) {
-    final folder = entry['isDirectory'] == true;
+    final folder = entry.isDirectory;
     final manageable = fileCanManage(entry);
     final openable = fileCanOpen(entry);
-    final path = value(entry, 'path');
+    final path = (entry.path ?? '');
     void select() {
       if (manageable) onSelect(entry);
     }
@@ -49,10 +49,7 @@ class FileBrowserEntry extends StatelessWidget {
         if (folder) {
           onOpenDirectory(path);
         } else {
-          FileDetailsRoute(
-            deviceId: value(device, 'id'),
-            path: path,
-          ).push<void>(context);
+          FileDetailsRoute(deviceId: device.id, path: path).push<void>(context);
         }
       }
     }

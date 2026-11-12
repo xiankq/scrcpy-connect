@@ -1,10 +1,12 @@
+import 'package:scrcpy_connect/core/control/remote_control.dart';
+import 'package:scrcpy_connect/core/control/app_launch_record.dart';
+
 import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
 import 'package:scrcpy_connect/widgets/remote_failure.dart';
 import 'package:scrcpy_connect/utils/source_coordinates.dart';
 
@@ -27,12 +29,13 @@ class RemoteInputOwner {
     required this._enabled,
     required this._onChanged,
     required this._onUnknownLaunch,
-  }) {
+  }) : _control = window.control {
     // 输入法可能只结束组合而不改文字，因此不能仅依赖控件的 onChanged。
     text.addListener(_textChanged);
   }
 
   final RemoteWindow window;
+  final RemoteControl _control;
   final bool Function() _foreground;
   final bool Function() _enabled;
   final void Function() _onChanged;
@@ -41,7 +44,7 @@ class RemoteInputOwner {
   static const inputSentinel = '\u200B';
   final text = TextEditingController(text: inputSentinel);
   final _activePointers = <int>{};
-  final _pointerPositions = <int, Json>{};
+  final _pointerPositions = <int, ControlTouch>{};
   final _heldKeys = <int, _HeldKey>{};
   final _keyRepeats = <int, int>{};
   final _bindingCaptures = <RemoteBinding, int>{};
@@ -76,11 +79,10 @@ class RemoteInputOwner {
       if (entry.value.binding != outgoing) {
         continue;
       }
-      completion = send(ApplicationCommand.sessionKey, {
-        'sessionId': entry.value.binding.$1,
-        'keyCode': entry.key,
-        'action': 'up',
-      }, binding: outgoing);
+      completion = send(
+        ControlAction.key(entry.key, action: .up),
+        binding: outgoing,
+      );
     }
     return completion;
   }
@@ -95,28 +97,16 @@ class RemoteInputOwner {
     // 物理按键松开可能已入队但持有记录已移除，停止或替换会话前仍需排空输入。
     Future<void> completion = idle;
     for (final params in releases) {
-      completion = send(ApplicationCommand.sessionTouch, {
-        ...params,
-        'action': 'cancel',
-        'pressure': 0,
-      }, binding: binding);
+      completion = send(
+        params.copyWith(action: .cancel, pressure: 0),
+        binding: binding,
+      );
     }
     return completion;
   }
 
-  Future<void> send(
-    ApplicationCommand command,
-    Json params, {
-    RemoteBinding? binding,
-  }) {
-    // 队列项持有准入时的绑定，迟到请求或释放不能继承替换会话的身份。
+  Future<void> send(ControlAction action, {RemoteBinding? binding}) {
     final outgoing = binding ?? presentation.binding;
-    final input = const {
-      'session.touch',
-      'session.key',
-      'session.text',
-      'session.scroll',
-    }.contains(command.wire);
     final currentCapture = presentation.session?['captureGeneration'];
     if (outgoing == presentation.binding && currentCapture is int) {
       _bindingCaptures[outgoing] = currentCapture;
@@ -124,13 +114,12 @@ class RemoteInputOwner {
         _bindingCaptures.remove(_bindingCaptures.keys.first);
       }
     }
-    final captured = {
-      'sessionId': outgoing.$1,
-      if (input && _bindingCaptures[outgoing] != null)
-        'captureGeneration': _bindingCaptures[outgoing],
-      ...params,
-    };
-    return _inputQueue.enqueue(command.wire, captured, outgoing).catchError((
+    final target = ControlTarget(
+      sessionId: outgoing.$1,
+      captureGeneration: action.isInput ? _bindingCaptures[outgoing] : null,
+      deviceId: action is ControlLaunchApplication ? window.deviceId : null,
+    );
+    return _inputQueue.enqueue(action, target, outgoing).catchError((
       Object error,
     ) {
       if (!_disposed && outgoing == presentation.binding) {
@@ -141,50 +130,45 @@ class RemoteInputOwner {
     });
   }
 
-  bool _admitsInput(String command, Json params, RemoteBinding binding) =>
+  bool _admitsInput(
+    ControlAction action,
+    ControlTarget target,
+    RemoteBinding binding,
+  ) =>
+      (action.isRelease || identical(_control, window.controller.control)) &&
       presentation.admitsQueuedInput(
         binding,
-        command,
-        params,
+        action,
         foreground: _foreground(),
         ownerCurrent: window.view?.isCurrent == true,
       );
 
   Future<void> _dispatchInput(
-    String command,
-    Json params,
-    RemoteBinding binding,
-  ) => _sendNow(command, params, binding);
-
-  Future<void> _sendNow(
-    String command,
-    Json params,
+    ControlAction action,
+    ControlTarget target,
     RemoteBinding binding,
   ) async {
-    _trace('request.begin command=$command');
+    _trace('request.begin action=${action.runtimeType}');
     try {
-      await window.controller.request(command, params);
-      _trace('request.complete command=$command');
-    } catch (e) {
-      _trace('request.failed command=$command kind=${e.runtimeType}');
+      await _control.sendControl(target, action);
+      _trace('request.complete action=${action.runtimeType}');
+    } catch (error) {
+      _trace(
+        'request.failed action=${action.runtimeType} kind=${error.runtimeType}',
+      );
       if (!_disposed &&
           !presentation.exiting &&
-          params['sessionId'] == sessionId) {
-        final details = e is RequestFailure
-            ? jsonObject(e.details)
-            : <String, dynamic>{};
-        if (command == 'session.launch' &&
-            remoteFailureCode(e) == 'app_launch_unknown' &&
-            details['launchOutcome'] == 'unknown' &&
-            details['recordOnly'] == true &&
-            value(details, 'sessionId').isNotEmpty &&
-            details['sessionId'] == details['launchOperationId'] &&
-            details['sessionId'] != params['sessionId'] &&
-            details['deviceId'] == window.deviceId &&
-            details['packageName'] == params['packageName'] &&
-            details['linkedSessionId'] == params['sessionId']) {
-          _onUnknownLaunch(details);
-          return;
+          target.sessionId == sessionId) {
+        if (action is ControlLaunchApplication && error is AppLaunchUncertain) {
+          final record = error.record;
+          if (record.unresolved &&
+              record.operationId != target.sessionId &&
+              record.sessionId == target.sessionId &&
+              record.deviceId == window.deviceId &&
+              record.packageName == action.packageName) {
+            _onUnknownLaunch(Json.from(record.projection));
+            return;
+          }
         }
         if (binding != presentation.binding) return;
         if ([
@@ -192,22 +176,27 @@ class RemoteInputOwner {
           'disconnected',
           'not_connected',
           'session_required',
-        ].contains(remoteFailureCode(e))) {
+        ].contains(remoteFailureCode(error))) {
           presentation.revokeControl();
         }
         unawaited(releaseInputs());
-        presentation.failInput(remoteFailure(e), remoteFailureCode(e));
+        presentation.failInput(remoteFailure(error), remoteFailureCode(error));
         _onChanged();
       }
     }
   }
 
-  void pointer(PointerEvent event, String action, Size viewport, Size source) {
+  void pointer(
+    PointerEvent event,
+    ControlTouchAction action,
+    Size viewport,
+    Size source,
+  ) {
     if (!canSendInput) {
       return;
     }
     final point = sourcePoint(event.localPosition, viewport, source);
-    if (action == 'down') {
+    if (action == .down) {
       if (point == null) return;
       _activePointers.add(event.pointer);
     }
@@ -217,48 +206,45 @@ class RemoteInputOwner {
       final previous = _pointerPositions.remove(event.pointer);
       _activePointers.remove(event.pointer);
       if (previous != null) {
-        unawaited(
-          send(ApplicationCommand.sessionTouch, {
-            ...previous,
-            'action': 'cancel',
-            'pressure': 0,
-          }),
-        );
+        unawaited(send(previous.copyWith(action: .cancel, pressure: 0)));
       }
       return;
     }
-    final previousButtons =
-        _pointerPositions[event.pointer]?['buttons'] as int? ?? 0;
+    final previousButtons = _pointerPositions[event.pointer]?.buttons ?? 0;
     final changedButtons = (previousButtons ^ event.buttons) & 31;
     final wireAction =
         event.kind == PointerDeviceKind.mouse &&
-            action == 'move' &&
+            action == .move &&
             changedButtons != 0
-        ? (event.buttons & changedButtons != 0 ? 'down' : 'up')
+        ? (event.buttons & changedButtons != 0
+              ? ControlTouchAction.down
+              : ControlTouchAction.up)
         : action;
-    final params = <String, dynamic>{
-      'action': wireAction,
-      'pointerId': event.pointer,
-      'x': point.dx.round().clamp(0, source.width.round() - 1),
-      'y': point.dy.round().clamp(0, source.height.round() - 1),
-      'pressure': wireAction == 'up' || wireAction == 'cancel'
+    final params = ControlTouch(
+      (
+        x: point.dx.round().clamp(0, source.width.round() - 1),
+        y: point.dy.round().clamp(0, source.height.round() - 1),
+        width: source.width.round(),
+        height: source.height.round(),
+      ),
+      action: wireAction,
+      pointerId: event.pointer,
+      pressure: wireAction == .up || wireAction == .cancel
           ? 0
           : _normalizedPressure(event),
-      if (event.kind == PointerDeviceKind.mouse) ...{
-        'mouse': true,
-        'buttons': event.buttons & 31,
-        'actionButton': (wireAction == 'down' || wireAction == 'up')
-            ? changedButtons
-            : 0,
-      },
-      'screenWidth': source.width.round(),
-      'screenHeight': source.height.round(),
-    };
-    if (action == 'down' || action == 'move') {
+      mouse: event.kind == PointerDeviceKind.mouse,
+      buttons: event.kind == PointerDeviceKind.mouse ? event.buttons & 31 : 0,
+      actionButton:
+          event.kind == PointerDeviceKind.mouse &&
+              (wireAction == .down || wireAction == .up)
+          ? changedButtons
+          : 0,
+    );
+    if (action == .down || action == .move) {
       _pointerPositions[event.pointer] = params;
     }
-    unawaited(send(ApplicationCommand.sessionTouch, params));
-    if (action == 'up' || action == 'cancel') {
+    unawaited(send(params));
+    if (action == .up || action == .cancel) {
       _activePointers.remove(event.pointer);
       _pointerPositions.remove(event.pointer);
     }
@@ -275,17 +261,21 @@ class RemoteInputOwner {
     final point = sourcePoint(event.localPosition, viewport, source);
     if (point == null) return;
     unawaited(
-      send(ApplicationCommand.sessionTouch, {
-        'action': 'hover',
-        'mouse': true,
-        'pointerId': 0,
-        'x': point.dx.round().clamp(0, source.width.round() - 1),
-        'y': point.dy.round().clamp(0, source.height.round() - 1),
-        'screenWidth': source.width.round(),
-        'screenHeight': source.height.round(),
-        'pressure': 0,
-        'buttons': event.buttons & 31,
-      }),
+      send(
+        ControlAction.touch(
+          (
+            x: point.dx.round().clamp(0, source.width.round() - 1),
+            y: point.dy.round().clamp(0, source.height.round() - 1),
+            width: source.width.round(),
+            height: source.height.round(),
+          ),
+          action: .hover,
+          mouse: true,
+          pointerId: 0,
+          pressure: 0,
+          buttons: event.buttons & 31,
+        ),
+      ),
     );
   }
 
@@ -295,16 +285,20 @@ class RemoteInputOwner {
     if (point == null) return;
     GestureBinding.instance.pointerSignalResolver.register(event, (_) {
       unawaited(
-        send(ApplicationCommand.sessionScroll, {
-          'x': point.dx.round().clamp(0, source.width.round() - 1),
-          'y': point.dy.round().clamp(0, source.height.round() - 1),
-          'screenWidth': source.width.round(),
-          'screenHeight': source.height.round(),
-          // Flutter 使用逻辑像素，普通滚轮一格对应 20 像素。
-          'hscroll': -event.scrollDelta.dx / 20,
-          'vscroll': -event.scrollDelta.dy / 20,
-          'buttons': event.buttons & 31,
-        }),
+        send(
+          ControlAction.scroll(
+            (
+              x: point.dx.round().clamp(0, source.width.round() - 1),
+              y: point.dy.round().clamp(0, source.height.round() - 1),
+              width: source.width.round(),
+              height: source.height.round(),
+            ),
+            // Flutter 普通滚轮一格对应 20 逻辑像素。
+            horizontal: -event.scrollDelta.dx / 20,
+            vertical: -event.scrollDelta.dy / 20,
+            buttons: event.buttons & 31,
+          ),
+        ),
       );
     });
   }
@@ -339,16 +333,12 @@ class RemoteInputOwner {
       common++;
     }
     for (var i = common; i < before.length; i++) {
-      unawaited(
-        send(ApplicationCommand.sessionKey, {'keyCode': 67, 'action': 'down'}),
-      );
-      unawaited(
-        send(ApplicationCommand.sessionKey, {'keyCode': 67, 'action': 'up'}),
-      );
+      unawaited(send(const ControlAction.key(67, action: .down)));
+      unawaited(send(const ControlAction.key(67, action: .up)));
     }
     final added = after.skip(common).join().replaceAll(inputSentinel, '');
     if (added.isNotEmpty) {
-      unawaited(send(ApplicationCommand.sessionText, {'text': added}));
+      unawaited(send(ControlAction.text(added)));
     }
     _previousText = next;
     if (after.length > 128) {
@@ -435,12 +425,7 @@ class RemoteInputOwner {
       if (held.binding == presentation.binding &&
           presentation.controlAvailable) {
         unawaited(
-          send(ApplicationCommand.sessionKey, {
-            'sessionId': held.binding.$1,
-            'keyCode': code,
-            if (metaState != 0) 'metaState': metaState,
-            'action': 'up',
-          }),
+          send(ControlAction.key(code, action: .up, metaState: metaState)),
         );
       }
       return KeyEventResult.handled;
@@ -452,9 +437,7 @@ class RemoteInputOwner {
         !keyboard.isControlPressed &&
         !keyboard.isAltPressed &&
         !keyboard.isMetaPressed) {
-      unawaited(
-        send(ApplicationCommand.sessionText, {'text': event.character}),
-      );
+      unawaited(send(ControlAction.text(event.character!)));
       return KeyEventResult.handled;
     }
     if (code != null) {
@@ -465,19 +448,19 @@ class RemoteInputOwner {
       final repeat = event is KeyRepeatEvent ? (_keyRepeats[code] ?? 0) + 1 : 0;
       _keyRepeats[code] = repeat;
       unawaited(
-        send(ApplicationCommand.sessionKey, {
-          'keyCode': code,
-          if (metaState != 0) 'metaState': metaState,
-          if (repeat != 0) 'repeat': repeat,
-          'action': event is KeyUpEvent ? 'up' : 'down',
-        }),
+        send(
+          ControlAction.key(
+            code,
+            action: event is KeyUpEvent ? .up : .down,
+            repeat: repeat,
+            metaState: metaState,
+          ),
+        ),
       );
       return KeyEventResult.handled;
     }
     if (event is KeyDownEvent && event.character?.isNotEmpty == true) {
-      unawaited(
-        send(ApplicationCommand.sessionText, {'text': event.character}),
-      );
+      unawaited(send(ControlAction.text(event.character!)));
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -487,18 +470,12 @@ class RemoteInputOwner {
     final held = _HeldKey(presentation.binding);
     _heldKeys[code] = held;
     try {
-      await send(ApplicationCommand.sessionKey, {
-        'keyCode': code,
-        'action': 'down',
-      }, binding: held.binding);
+      await send(ControlAction.key(code, action: .down), binding: held.binding);
     } finally {
       // 生命周期已排队释放或新按键接管后，旧工具动作不能再次释放，更不能继承新捕获。
       if (identical(_heldKeys[code], held)) {
         _heldKeys.remove(code);
-        await send(ApplicationCommand.sessionKey, {
-          'keyCode': code,
-          'action': 'up',
-        }, binding: held.binding);
+        await send(ControlAction.key(code, action: .up), binding: held.binding);
       }
     }
   }

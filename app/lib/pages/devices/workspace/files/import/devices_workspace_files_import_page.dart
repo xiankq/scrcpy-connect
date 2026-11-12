@@ -1,11 +1,12 @@
+import 'package:scrcpy_connect/core/files/system_documents.dart';
+import 'package:scrcpy_connect/core/files/file_transfers.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
 import 'package:scrcpy_connect/widgets/documents/document_operation.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
 import 'package:scrcpy_connect/utils/formatters.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -25,8 +26,8 @@ class DocumentImportPage extends HookWidget {
     required this.destination,
     required this.onSubmitted,
   });
-  final AppStore controller;
-  final Json device;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
   final String destination;
   final VoidCallback onSubmitted;
   @override
@@ -35,9 +36,12 @@ class DocumentImportPage extends HookWidget {
     final reviewed = useState(false);
     final sending = useState(false);
     final result = operation.result;
-    final partial = result?['status'] == 'partial';
-    final imported = ['imported', 'partial'].contains(result?['status']);
-    final name = value(result ?? {}, 'name');
+    final partial = result?.status == DocumentOutcomeStatus.partial;
+    final imported = [
+      DocumentOutcomeStatus.imported,
+      DocumentOutcomeStatus.partial,
+    ].contains(result?.status);
+    final name = result?.name ?? '';
     final safeName =
         name.isNotEmpty &&
         !name.contains('/') &&
@@ -47,13 +51,11 @@ class DocumentImportPage extends HookWidget {
     final usable =
         imported &&
         safeName &&
-        value(result ?? {}, 'localPath').isNotEmpty &&
-        ((num.tryParse('${result?['files']}') ?? 0) +
-                (num.tryParse('${result?['directories']}') ?? 0) >
-            0);
+        (result?.localPath ?? '').isNotEmpty &&
+        ((result?.files ?? 0) + (result?.directories ?? 0) > 0);
     final target =
         '${destination.endsWith('/') ? destination.substring(0, destination.length - 1) : destination}/$name';
-    final errors = objects(result?['errors']);
+    final errors = result?.errors ?? <DocumentIssue>[];
     final destinationLabel = fileDirectoryLabel(destination);
     final destinationScope =
         destination == '/sdcard' || destination.startsWith('/sdcard/')
@@ -127,7 +129,7 @@ class DocumentImportPage extends HookWidget {
                   ? null
                   : () {
                       reviewed.value = false;
-                      operation.run('documents.importDirectory', {});
+                      operation.importDirectory();
                     },
               icon: const Icon(LucideIcons.folderOpen),
               label: Text(result == null ? '选择文件夹' : '重新选择文件夹'),
@@ -204,20 +206,19 @@ class DocumentImportPage extends HookWidget {
               Text(
                 partial
                     ? '部分内容已取回，请先核对'
-                    : result['status'] == 'imported'
+                    : result.status == DocumentOutcomeStatus.imported
                     ? '已取回本机暂存，尚未发送'
-                    : result['status'] == 'cancelled'
+                    : result.status == DocumentOutcomeStatus.cancelled
                     ? '本次选择已取消'
                     : '尚未取得可发送内容',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               if (name.isNotEmpty) Text(name),
-              if (result['files'] is num && result['directories'] is num)
+              if (result.files != null && result.directories != null)
                 Text(
-                  '${result['files']} 个文件 · ${result['directories']} 个文件夹 · ${bytes(result['bytes'])}',
+                  '${result.files} 个文件 · ${result.directories} 个文件夹 · ${bytes(result.bytes)}',
                 ),
-              if (result['skipped'] is num && (result['skipped'] as num) > 0)
-                Text('跳过 ${result['skipped']} 项'),
+              if ((result.skipped ?? 0) > 0) Text('跳过 ${result.skipped} 项'),
               if (usable) Text('发送位置：$target'),
               if (imported && !usable)
                 const StateNote('系统未提供有效的文件夹名称、路径或可发送内容，请重新选择。'),
@@ -247,19 +248,21 @@ class DocumentImportPage extends HookWidget {
                     return;
                   }
                   sending.value = true;
-                  final response = await perform(
+                  final response = await performAction(
                     context,
-                    controller,
-                    'files.push',
-                    {
-                      'deviceId': device['id'],
-                      if (result?['managedSourceId'] is String)
-                        'shareId': result!['managedSourceId'],
-                      'items': [
-                        {'source': result!['localPath'], 'destination': target},
-                      ],
-                      'conflict': 'ask',
-                    },
+                    () => controller.fileTransfers.startTransfer(
+                      FileTransferPlan(
+                        deviceId: device.id,
+                        direction: .push,
+                        items: [
+                          FileTransferSelection(
+                            source: result!.localPath!,
+                            destination: target,
+                          ),
+                        ],
+                      ),
+                      shareId: result.managedSourceId,
+                    ),
                   );
                   if (context.mounted) {
                     sending.value = false;
@@ -286,7 +289,7 @@ class DocumentImportPage extends HookWidget {
           if (errorIndex < errors.length) {
             final error = errors[errorIndex];
             return StateNote(
-              '${value(error, 'path')}：${value(error, 'message', '系统无法读取此项')}',
+              '${error.path}：${error.message.isEmpty ? '系统无法读取此项' : error.message}',
               icon: LucideIcons.circleAlert,
             );
           }

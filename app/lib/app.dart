@@ -1,14 +1,17 @@
+import 'package:scrcpy_connect/core/settings/preferences.dart';
+import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
+
 import 'dart:async';
 
 import 'package:scrcpy_connect/widgets/application_lifecycle.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
-import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
+import 'package:scrcpy_connect/core/application/app_dependencies_provider.dart';
 import 'package:scrcpy_connect/widgets/app_presentation_host.dart';
 import 'package:scrcpy_connect/styles/system_visual_preferences.dart';
 import 'package:scrcpy_connect/styles/system_typography.dart';
 
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -21,7 +24,7 @@ class ConnectApp extends HookConsumerWidget {
   const ConnectApp({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(appStoreProvider.notifier);
+    final controller = ref.watch(appProvider.notifier);
     final dependencies = ref.watch(appDependenciesProvider);
     useEffect(() {
       final lifecycle = ApplicationLifecycle(
@@ -38,11 +41,11 @@ class ConnectApp extends HookConsumerWidget {
     ]);
     useEffect(() => views.dispose, [views]);
     ref.listen(
-      appStoreProvider.select((s) => (s.devices, s.reconciliationPending)),
+      appProvider.select((s) => (s.devices, s.reconciliationPending)),
       (_, _) => views.reconcile(),
     );
     final appSettings = ref.watch(
-      appStoreProvider.select((state) => state.settings),
+      preferencesProvider.select((state) => state.values),
     );
     final navigator = useMemoized(() => GlobalKey<NavigatorState>());
     final router = useMemoized(() => createAppRouter(navigatorKey: navigator), [
@@ -61,10 +64,10 @@ class ConnectApp extends HookConsumerWidget {
       systemTypography.start();
       return systemTypography.dispose;
     }, [systemTypography]);
-    final mode = switch (appSettings['appearance']) {
-      'dark' => ThemeMode.dark,
-      'system' => ThemeMode.system,
-      _ => ThemeMode.light,
+    final mode = switch (appSettings.appearance) {
+      Appearance.dark => ThemeMode.dark,
+      Appearance.system => ThemeMode.system,
+      Appearance.light => ThemeMode.light,
     };
     final fontFamily = systemTypography.fontFamily;
     final lightTheme = useMemoized(

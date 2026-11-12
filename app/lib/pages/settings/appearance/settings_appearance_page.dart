@@ -1,7 +1,8 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/core/settings/preferences.dart';
+import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/choice_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -13,15 +14,17 @@ import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 
 class AppearancePage extends HookConsumerWidget {
   const AppearancePage({super.key, required this.controller});
-  final AppStore controller;
+  final AppNotifier controller;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appSettings = ref.watch(
-      appStoreProvider.select((state) => state.settings),
+      preferencesProvider.select((state) => state.values),
     );
-    Future<void> save(String key, dynamic setting) async {
+    Future<void> save(Appearance setting) async {
       try {
-        await controller.updateSetting(key, setting);
+        await controller.preferences.update(
+          PreferenceChanges(appearance: setting),
+        );
       } catch (e) {
         if (context.mounted) feedback(context, '$e');
       }
@@ -36,33 +39,35 @@ class AppearancePage extends HookConsumerWidget {
             children: [
               for (final option in const [
                 (
-                  'light',
+                  Appearance.light,
                   '浅色',
                   LucideIcons.sun,
                   DesignTokens.colorListIconAmber,
                 ),
                 (
-                  'dark',
+                  Appearance.dark,
                   '深色',
                   LucideIcons.moon,
                   DesignTokens.colorListIconPurple,
                 ),
                 (
-                  'system',
+                  Appearance.system,
                   '跟随系统',
                   LucideIcons.monitor,
                   DesignTokens.colorListIconSlate,
                 ),
               ])
-                ChoiceRow<String>(
+                ChoiceRow<Appearance>(
                   leading: ListIconBadge(
                     icon: option.$3,
                     backgroundColor: option.$4,
                   ),
                   title: Text(option.$2),
                   value: option.$1,
-                  groupValue: value(appSettings, 'appearance', 'light'),
-                  onChanged: (v) => save('appearance', v),
+                  groupValue: appSettings.appearance,
+                  onChanged: (v) {
+                    if (v != null) save(v);
+                  },
                 ),
             ],
           ),

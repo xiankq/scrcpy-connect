@@ -1,8 +1,8 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/device_summary.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:flutter/material.dart';
@@ -13,18 +13,16 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class DeviceHero extends HookWidget {
   const DeviceHero({super.key, required this.controller, required this.device});
-  final AppStore controller;
-  final Json device;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
 
   @override
   Widget build(BuildContext context) {
     final busy = useState(false);
-    final online = device['status'] == 'connected';
-    final unauthorized = device['status'] == 'unauthorized';
-    final connecting =
-        busy.value ||
-        ['checking', 'connecting', 'reconnecting'].contains(device['status']);
-    final id = value(device, 'id');
+    final online = device.status == DeviceConnectionStatus.connected;
+    final unauthorized = device.status == DeviceConnectionStatus.unauthorized;
+    final connecting = busy.value || deviceConnectionInProgress(device);
+    final id = device.id;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -52,16 +50,18 @@ class DeviceHero extends HookWidget {
               : () async {
                   if (online) {
                     await openRemoteRoute(context, deviceId: id);
-                  } else if (device['transport'] == 'usb') {
+                  } else if (device.transport == DeviceTransport.usb) {
                     await UsbGuideRoute(deviceId: id).push<void>(context);
                   } else if (unauthorized) {
                     await AddDeviceRoute(deviceId: id).push<void>(context);
                   } else {
                     busy.value = true;
-                    await perform(context, controller, 'devices.connect', {
-                      'deviceId': id,
-                    });
-                    await controller.refreshDevices();
+                    try {
+                      await controller.connections.connectDevice(id);
+                    } catch (error) {
+                      if (context.mounted) feedback(context, '$error');
+                    }
+                    await controller.deviceList.refresh();
                     if (context.mounted) busy.value = false;
                   }
                 },

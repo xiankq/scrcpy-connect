@@ -1,71 +1,83 @@
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 
 /// 远端操作不可用时提供连接入口，连接后不自动重放该动作。
 Future<void> offerDeviceConnection(
   BuildContext context,
-  AppStore controller,
-  Json device,
+  AppNotifier controller,
+  DeviceSnapshot device,
 ) async {
   if (deviceConnectionInProgress(device)) {
     feedback(context, '设备正在连接，请稍后重试。');
     return;
   }
-  final unauthorized = device['status'] == 'unauthorized';
+  final connections = controller.connections;
+  final unauthorized = device.status == DeviceConnectionStatus.unauthorized;
   if (!await confirmConnectionChange(
         context,
         unauthorized ? '手机尚未授权' : '设备尚未连接',
         '连接设备后再使用此功能。本机信息与连接偏好仍可查看。',
         action: unauthorized ? '重新授权' : '连接设备',
       ) ||
-      !context.mounted) {
+      !context.mounted ||
+      !identical(connections, controller.connections)) {
     return;
   }
-  if (device['transport'] == 'usb') {
-    await UsbGuideRoute(deviceId: value(device, 'id')).push<void>(context);
+  if (device.transport == DeviceTransport.usb) {
+    await UsbGuideRoute(deviceId: device.id).push<void>(context);
   } else if (unauthorized) {
-    await AddDeviceRoute(deviceId: value(device, 'id')).push<void>(context);
+    await AddDeviceRoute(deviceId: device.id).push<void>(context);
   } else {
-    await perform(context, controller, 'devices.connect', {
-      'deviceId': device['id'],
-    });
-    await controller.refreshDevices();
+    try {
+      await connections.connectDevice(device.id);
+    } catch (error) {
+      if (context.mounted && identical(connections, controller.connections)) {
+        feedback(context, '$error');
+      }
+    }
+    if (identical(connections, controller.connections)) {
+      await controller.deviceList.refresh();
+    }
   }
 }
 
 Future<void> stopDeviceConnection(
   BuildContext context,
-  AppStore controller,
-  Json device,
+  AppNotifier controller,
+  DeviceSnapshot device,
 ) async {
-  final current = controller.currentDevice(device);
-  final online = current['status'] == 'connected';
+  final management = controller.deviceManagement;
+  final current = controller.deviceList.current(device);
+  final online = current.status == DeviceConnectionStatus.connected;
   if (!await confirmConnectionChange(
         context,
         '${online ? '断开' : '停止'}与 ${deviceName(current)} 的连接？',
         '将停止连接和自动重连，关闭此设备的控制画面；进行中的传输和其他活动可能中断。设备记录与已保存文件保留，可稍后手动连接。',
         action: online ? '断开连接' : '停止连接',
       ) ||
-      !context.mounted) {
+      !context.mounted ||
+      !identical(management, controller.deviceManagement)) {
     return;
   }
-  await perform(context, controller, 'devices.disconnect', {
-    'deviceId': current['id'],
-  });
-  await controller.refreshDevices();
+  try {
+    await management.disconnectDevice(current.id);
+  } catch (error) {
+    if (context.mounted) feedback(context, '$error');
+  }
+  await controller.deviceList.refresh();
 }
 
 Future<bool> removeSavedDevice(
   BuildContext context,
-  AppStore controller,
-  Json device,
+  AppNotifier controller,
+  DeviceSnapshot device,
 ) async {
+  final management = controller.deviceManagement;
   if (!await confirmConnectionChange(
         context,
         '移除 ${deviceName(device)}？',
@@ -73,12 +85,17 @@ Future<bool> removeSavedDevice(
         action: '移除设备',
         danger: true,
       ) ||
-      !context.mounted) {
+      !context.mounted ||
+      !identical(management, controller.deviceManagement)) {
     return false;
   }
-  final result = await perform(context, controller, 'devices.forget', {
-    'deviceId': device['id'],
-  });
-  await controller.refreshDevices();
-  return result != null;
+  var removed = false;
+  try {
+    await management.forgetDevice(device.id);
+    removed = true;
+  } catch (error) {
+    if (context.mounted) feedback(context, '$error');
+  }
+  await controller.deviceList.refresh();
+  return removed;
 }

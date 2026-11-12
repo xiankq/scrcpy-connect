@@ -1,11 +1,10 @@
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:flutter/material.dart';
 
 class DeviceStatus extends StatelessWidget {
   const DeviceStatus({super.key, required this.device, this.compact = false});
-  final Json device;
+  final DeviceSnapshot device;
   final bool compact;
 
   @override
@@ -19,10 +18,10 @@ class DeviceStatus extends StatelessWidget {
   }
 }
 
-String deviceTransportLabel(Json device) =>
-    switch (value(device, 'transport')) {
-      'usb' => 'USB',
-      'tls' => '无线调试',
-      'tcp' || 'wireless' => 'IP 连接',
-      _ => '连接方式未获取',
+String deviceTransportLabel(DeviceSnapshot device) =>
+    switch (device.transport) {
+      .usb => 'USB',
+      .tls => '无线调试',
+      .tcp || .wireless => 'IP 连接',
+      null => '连接方式未获取',
     };

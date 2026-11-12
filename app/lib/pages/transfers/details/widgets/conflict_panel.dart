@@ -1,5 +1,4 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/files/file_transfers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
@@ -10,21 +9,23 @@ class ConflictPanel extends HookWidget {
     super.key,
     required this.transfer,
     required this.onResolve,
+    this.enabled = true,
   });
-  final Json transfer;
-  final Future<void> Function(String policy, bool all) onResolve;
+  final FileTransferSnapshot transfer;
+  final bool enabled;
+  final Future<void> Function(FileTransferConflict policy, bool all) onResolve;
 
   @override
   Widget build(BuildContext context) {
     final all = useState(false);
     final busy = useState(false);
     final theme = Theme.of(context);
-    final name = value(transfer, 'name', '同名文件');
-    final sourceLabel = value(transfer, 'sourceLabel', '来源');
-    final destinationLabel = value(transfer, 'destinationLabel', '目标');
-    final source = value(transfer, 'source');
-    final destination = value(transfer, 'destination');
-    Future<void> resolve(String policy) async {
+    final name = transfer.name;
+    final sourceLabel = (transfer.sourceLabel ?? '来源');
+    final destinationLabel = (transfer.destinationLabel ?? '目标');
+    final source = transfer.source;
+    final destination = transfer.destination;
+    Future<void> resolve(FileTransferConflict policy) async {
       if (busy.value) return;
       busy.value = true;
       try {
@@ -67,7 +68,9 @@ class ConflictPanel extends HookWidget {
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: busy.value ? null : () => resolve('keepBoth'),
+              onPressed: busy.value || !enabled
+                  ? null
+                  : () => resolve(.keepBoth),
               child: const Text('保留两份'),
             ),
           ),
@@ -81,7 +84,9 @@ class ConflictPanel extends HookWidget {
                   color: theme.colorScheme.error.withValues(alpha: 0.45),
                 ),
               ),
-              onPressed: busy.value ? null : () => resolve('replace'),
+              onPressed: busy.value || !enabled
+                  ? null
+                  : () => resolve(.replace),
               child: const Text('替换目标文件'),
             ),
           ),
@@ -93,7 +98,7 @@ class ConflictPanel extends HookWidget {
                 backgroundColor: theme.colorScheme.surfaceContainerHigh,
                 side: BorderSide.none,
               ),
-              onPressed: busy.value ? null : () => resolve('skip'),
+              onPressed: busy.value || !enabled ? null : () => resolve(.skip),
               child: const Text('跳过此项'),
             ),
           ),

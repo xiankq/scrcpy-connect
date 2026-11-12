@@ -1,5 +1,8 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/core/application/app_dependencies_provider.dart';
+import 'package:scrcpy_connect/core/devices/device_inspection.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
 
 import 'dart:async';
 import 'dart:io';
@@ -10,26 +13,35 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_access.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/models/connection_validation.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
+import 'package:scrcpy_connect/core/devices/connection_validation.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
-class DeviceConvertIpPage extends HookWidget {
+class DeviceConvertIpPage extends HookConsumerWidget {
   const DeviceConvertIpPage({
     super.key,
     required this.controller,
     required this.device,
   });
-  final AppStore controller;
-  final Json device;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final inspection = ref.watch(
+      appDependenciesProvider.select((source) => source.inspection),
+    );
+    final deviceManagement = ref.watch(
+      appDependenciesProvider.select((source) => source.devices),
+    );
+    final setup = ref.watch(
+      appDependenciesProvider.select((source) => source.setup),
+    );
     final form = useMemoized(GlobalKey<FormState>.new);
     final port = useTextEditingController(text: '5555');
-    final addresses = useState<List<Json>>([]);
+    final addresses = useState<List<DeviceNetworkAddress>>([]);
     final selected = useState<String?>(null);
     final loading = useState(false);
     final busy = useState(false);
@@ -39,32 +51,34 @@ class DeviceConvertIpPage extends HookWidget {
     final done = useState(false);
     final generation = useRef(0);
     final attempt = useRef<String?>(null);
-    final deviceId = value(device, 'id');
+    final deviceId = device.id;
 
-    Future<Json?> readAddresses() async {
+    Future<DeviceReading<DeviceNetworkInfo>?> readAddresses() async {
       final revision = ++generation.value;
       loading.value = true;
       error.value = null;
       try {
-        final current = controller.currentDevice(device);
-        if (current['status'] != 'connected') {
+        final current = controller.deviceList.current(device);
+        if (current.status != DeviceConnectionStatus.connected) {
           throw const RequestFailure('disconnected', '请先连接此设备，再读取网络地址。');
         }
-        final result = await controller.request('device.network.get', {
-          'deviceId': deviceId,
-        });
-        if (!context.mounted || generation.value != revision) return null;
-        final latest = controller.currentDevice(device);
-        if (result['deviceId'] != deviceId ||
-            value(result, 'connectionId').isEmpty ||
-            latest['status'] != 'connected' ||
-            (value(latest, 'connectionId').isNotEmpty &&
-                result['connectionId'] != latest['connectionId'])) {
+        final result = await inspection.readNetwork(deviceId);
+        if (!context.mounted ||
+            generation.value != revision ||
+            !identical(inspection, controller.inspection)) {
+          return null;
+        }
+        final latest = controller.deviceList.current(device);
+        if (result.deviceId != deviceId ||
+            (result.connectionId ?? '').isEmpty ||
+            latest.status != DeviceConnectionStatus.connected ||
+            ((latest.connectionId ?? '').isNotEmpty &&
+                result.connectionId != latest.connectionId)) {
           throw const RequestFailure('connection_changed', '设备连接已变化，请重新获取地址。');
         }
-        final candidates = <String, Json>{};
-        for (final item in objects(result['addresses'])) {
-          final address = value(item, 'address');
+        final candidates = <String, DeviceNetworkAddress>{};
+        for (final item in result.value.addresses) {
+          final address = item.address;
           if (address.isNotEmpty &&
               validateAddress(address) == null &&
               InternetAddress.tryParse(address.split('%').first) != null) {
@@ -81,39 +95,51 @@ class DeviceConvertIpPage extends HookWidget {
         }
         return result;
       } catch (failure) {
-        if (context.mounted && generation.value == revision) {
+        if (context.mounted &&
+            generation.value == revision &&
+            identical(inspection, controller.inspection)) {
           addresses.value = [];
           selected.value = null;
           error.value = '$failure';
         }
         return null;
       } finally {
-        if (context.mounted && generation.value == revision) {
+        if (context.mounted &&
+            generation.value == revision &&
+            identical(inspection, controller.inspection)) {
           loading.value = false;
         }
       }
     }
 
     useEffect(() {
-      Future.microtask(readAddresses);
+      Future.microtask(() async {
+        if (!context.mounted || !identical(inspection, controller.inspection)) {
+          return;
+        }
+        attempt.value = null;
+        addresses.value = [];
+        selected.value = null;
+        busy.value = false;
+        requestStarted.value = false;
+        notice.value = null;
+        done.value = false;
+        await readAddresses();
+      });
       return () {
         generation.value++;
         final id = attempt.value;
         if (id != null) {
-          controller.execute(ApplicationCommand.devicesCancel, {
-            'attemptId': id,
-          }).ignore();
+          deviceManagement.cancelConnectionAttempt(id).ignore();
         }
       };
-    }, [deviceId]);
+    }, [deviceId, inspection, deviceManagement, setup]);
 
     Future<void> cancel() async {
       final id = attempt.value;
       if (id == null) return;
       try {
-        await controller.execute(ApplicationCommand.devicesCancel, {
-          'attemptId': id,
-        });
+        await deviceManagement.cancelConnectionAttempt(id);
         if (!context.mounted || attempt.value != id) return;
         attempt.value = null;
         generation.value++;
@@ -121,7 +147,7 @@ class DeviceConvertIpPage extends HookWidget {
         busy.value = false;
         requestStarted.value = false;
         notice.value = '已取消切换。调试服务可能已重启，请核对当前连接状态。';
-        await controller.refreshDevices();
+        await controller.deviceList.refresh();
       } catch (failure) {
         if (context.mounted) error.value = '$failure';
       }
@@ -129,8 +155,8 @@ class DeviceConvertIpPage extends HookWidget {
 
     Future<void> submit() async {
       if (busy.value || loading.value || !form.currentState!.validate()) return;
-      final current = controller.currentDevice(device);
-      if (current['status'] != 'connected') {
+      final current = controller.deviceList.current(device);
+      if (current.status != DeviceConnectionStatus.connected) {
         await offerDeviceConnection(context, controller, current);
         return;
       }
@@ -145,7 +171,7 @@ class DeviceConvertIpPage extends HookWidget {
         final network = await readAddresses();
         if (!context.mounted || network == null || attempt.value != id) return;
         if (selected.value != address ||
-            !addresses.value.any((item) => item['address'] == address)) {
+            !addresses.value.any((item) => item.address == address)) {
           notice.value = '目标设备的网络地址已变化，请重新选择。';
           return;
         }
@@ -160,25 +186,27 @@ class DeviceConvertIpPage extends HookWidget {
         }
         if (attempt.value != id) return;
         requestStarted.value = true;
-        final result = await controller.request('devices.wireless', {
-          'deviceId': deviceId,
-          'address': address,
-          'port': parsedPort,
-          'attemptId': id,
-        });
-        if (!context.mounted || attempt.value != id) return;
-        if (result['enabled'] != true ||
-            result['connected'] != true ||
-            result['deviceId'] != deviceId) {
+        final result = await setup.enableWireless(
+          deviceId,
+          address!,
+          port: parsedPort,
+          attemptId: id,
+        );
+        if (!context.mounted ||
+            attempt.value != id ||
+            !identical(setup, controller.setup)) {
+          return;
+        }
+        if (!result.connected || result.deviceId != deviceId) {
           throw const RequestFailure(
             'ip_switch_unverified',
             '尚未验证 IP 连接，请检查设备连接状态。',
           );
         }
-        await controller.refreshDevices();
+        await controller.deviceList.refresh();
         if (context.mounted && attempt.value == id) done.value = true;
       } catch (failure) {
-        await controller.refreshDevices();
+        await controller.deviceList.refresh();
         if (context.mounted && attempt.value == id) {
           error.value = '$failure';
           notice.value = '设备记录未确认更新，调试服务可能已重启，请核对连接状态。';
@@ -212,7 +240,7 @@ class DeviceConvertIpPage extends HookWidget {
                     if (loading.value) const ContentLoadingIndicator(),
                     DropdownButtonFormField<String>(
                       key: ValueKey(
-                        '${addresses.value.map((a) => a['address']).join(',')}:${selected.value}',
+                        '${addresses.value.map((a) => a.address).join(',')}:${selected.value}',
                       ),
                       initialValue: selected.value,
                       isExpanded: true,
@@ -223,9 +251,9 @@ class DeviceConvertIpPage extends HookWidget {
                       items: [
                         for (final candidate in addresses.value)
                           DropdownMenuItem(
-                            value: value(candidate, 'address'),
+                            value: candidate.address,
                             child: Text(
-                              '${value(candidate, 'address')}${value(candidate, 'interface').isEmpty ? '' : ' · ${value(candidate, 'interface')}'}',
+                              '${candidate.address}${candidate.interface.isEmpty ? '' : ' · ${candidate.interface}'}',
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),

@@ -1,10 +1,11 @@
+import 'package:scrcpy_connect/core/files/system_documents.dart';
 import 'package:scrcpy_connect/widgets/documents/document_picker.dart';
 
 import 'dart:async';
 
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 
 import 'dart:math';
@@ -12,22 +13,21 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 DocumentOperationController useDocumentOperationController(
-  AppStore controller, {
-  Json? exportSource,
+  AppNotifier controller, {
+  DocumentSource? exportSource,
 }) {
   final operation = useMemoized(
     () => DocumentOperationController(
-      request: controller.request,
+      documents: controller.documents,
       completeSelection: controller.completeDocumentSelection,
-      execute: controller.execute,
       events: controller.eventStream(),
       exportSource: exportSource,
     ),
     [
       controller,
-      exportSource?['sourceId'],
-      exportSource?['localPath'],
-      exportSource?['kind'],
+      exportSource?.sourceId,
+      exportSource?.localPath,
+      exportSource?.kind,
     ],
   );
   useListenable(operation);
@@ -42,8 +42,7 @@ DocumentOperationController useDocumentOperationController(
 /// 实际系统文档操作及资源回收由应用文档所有者执行。
 class DocumentOperationController extends ChangeNotifier {
   DocumentOperationController({
-    required this.request,
-    required this.execute,
+    required this.documents,
     this.completeSelection,
     required Stream<Json> events,
     this.exportSource,
@@ -57,11 +56,9 @@ class DocumentOperationController extends ChangeNotifier {
       }
       if (exportSource != null &&
           event['type'] == 'delivery.changed' &&
-          [
-            'sourceId',
-            'localPath',
-            'kind',
-          ].every((field) => data[field] == exportSource![field]) &&
+          data['sourceId'] == exportSource!.sourceId &&
+          data['localPath'] == exportSource!.localPath &&
+          data['kind'] == exportSource!.kind.name &&
           !busy) {
         unawaited(refresh());
       }
@@ -88,28 +85,25 @@ class DocumentOperationController extends ChangeNotifier {
   }
 
   final bool Function(String, Json)? completeSelection;
-  final ApplicationRequest request;
-  final ApplicationCommandExecutor execute;
-  final Json? exportSource;
+  final SystemDocuments documents;
+  final DocumentSource? exportSource;
   StreamSubscription<Json>? _events;
   int _readGeneration = 0;
   String? recordOperationId;
   bool loaded;
   bool refreshing = false;
   String? operationId;
-  Json? result;
+  DocumentOutcome? result;
   String? error;
   bool busy = false;
   bool cancelling = false;
   bool disposed = false;
 
-  Future<void> _release(Json? data) async {
-    final source = data?['managedSourceId'];
+  Future<void> _release(DocumentOutcome? data) async {
+    final source = data?.managedSourceId;
     if (source is! String) return;
     try {
-      await execute(ApplicationCommand.documentsCancel, {
-        'managedSourceId': source,
-      });
+      await documents.releaseDocumentSource(source);
     } catch (failure) {
       // 退出不代表归还成功。来源账本继续保护未确认内容，保留错误供核对。
       error = '$failure';
@@ -123,25 +117,16 @@ class DocumentOperationController extends ChangeNotifier {
     refreshing = true;
     notifyListeners();
     try {
-      final response = await execute(
-        ApplicationCommand.deliveryGet,
-        exportSource!,
-      );
+      final record = await documents.readDelivery(exportSource!);
       if (disposed || generation != _readGeneration) return;
-      final record = response['record'];
-      if (record is Map<Object?, Object?>) {
-        final current = jsonObject(record);
-        recordOperationId = value(current, 'operationId');
-        result = current['result'] is Map<Object?, Object?>
-            ? jsonObject(current['result'])
-            : {'status': current['status'], 'name': current['name']};
-      } else {
-        recordOperationId = null;
-        result = null;
-      }
+      recordOperationId = record?.operationId;
+      result = record == null
+          ? null
+          : record.result ??
+                DocumentOutcome(status: record.status, name: record.name);
       error = null;
       loaded = true;
-      if (result?['status'] != 'pending') cancelling = false;
+      if (result?.status != DocumentOutcomeStatus.pending) cancelling = false;
     } catch (failure) {
       if (!disposed && generation == _readGeneration) {
         loaded = false;
@@ -155,13 +140,44 @@ class DocumentOperationController extends ChangeNotifier {
     }
   }
 
-  Future<void> run(
-    String command,
-    Json params, {
+  Future<void> importDirectory() =>
+      _run((id, _) => documents.importDocuments(id, .directory));
+
+  Future<void> export(
+    String name, {
     bool reviewed = false,
     bool additionalCopy = false,
   }) async {
-    if (busy || refreshing || !loaded || result?['status'] == 'pending') return;
+    final source = exportSource;
+    if (source == null) return;
+    await _run(
+      (id, previousOperation) => documents.exportDocument(
+        DocumentExportPlan(
+          operationId: id,
+          source: source,
+          name: name,
+          reviewedOperationId: reviewed ? previousOperation : null,
+          additionalCopyOfOperationId: additionalCopy
+              ? previousOperation
+              : null,
+        ),
+      ),
+      exporting: true,
+      name: name,
+    );
+  }
+
+  Future<void> _run(
+    Future<DocumentOutcome> Function(String, String?) action, {
+    bool exporting = false,
+    String? name,
+  }) async {
+    if (busy ||
+        refreshing ||
+        !loaded ||
+        result?.status == DocumentOutcomeStatus.pending) {
+      return;
+    }
     final previousOperation = recordOperationId;
     final previousResult = result;
     final random = Random.secure();
@@ -180,15 +196,7 @@ class DocumentOperationController extends ChangeNotifier {
       await _release(previousResult);
       previousReleased = true;
       if (disposed || operationId != id) return;
-      final data = await request(command, {
-        ...params,
-        ...?exportSource,
-        if (reviewed && previousOperation != null)
-          'reviewedOperationId': previousOperation,
-        if (additionalCopy && previousOperation != null)
-          'additionalCopyOfOperationId': previousOperation,
-        'operationId': id,
-      });
+      final data = await action(id, previousOperation);
       if (!disposed && operationId == id) {
         result = data;
       } else {
@@ -202,13 +210,13 @@ class DocumentOperationController extends ChangeNotifier {
         reread = exportSource != null;
         error = '$failure';
         // 没有回执不能证明系统未写入，再次导出前必须核对。
-        if (command == 'documents.export') {
-          result = {
-            'status': 'result_unknown',
-            'name': params['name'],
-            'cacheRetained': true,
-            'partialDestinationPossible': true,
-          };
+        if (exporting) {
+          result = DocumentOutcome(
+            status: .resultUnknown,
+            name: name,
+            cacheRetained: true,
+            partialDestinationPossible: true,
+          );
         }
       }
     } finally {
@@ -225,12 +233,14 @@ class DocumentOperationController extends ChangeNotifier {
   Future<void> cancel() async {
     final id =
         operationId ??
-        (result?['status'] == 'pending' ? recordOperationId : null);
+        (result?.status == DocumentOutcomeStatus.pending
+            ? recordOperationId
+            : null);
     if (id == null || cancelling) return;
     cancelling = true;
     notifyListeners();
     try {
-      await execute(ApplicationCommand.documentsCancel, {'operationId': id});
+      await documents.cancelDocument(id);
     } catch (failure) {
       if (!disposed) {
         error = '$failure';
@@ -248,7 +258,7 @@ class DocumentOperationController extends ChangeNotifier {
     final id = operationId;
     operationId = null;
     if (id != null) {
-      execute(ApplicationCommand.documentsCancel, {'operationId': id}).ignore();
+      documents.cancelDocument(id).ignore();
     }
     super.dispose();
   }

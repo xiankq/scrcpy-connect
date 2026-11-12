@@ -1,5 +1,5 @@
-import 'package:scrcpy_connect/models/diagnostic_record.dart';
-import 'package:scrcpy_connect/services/diagnostic_log.dart';
+import 'package:scrcpy_connect/core/diagnostics/diagnostic_record.dart';
+import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 
 import 'dart:async';
 import 'dart:io';

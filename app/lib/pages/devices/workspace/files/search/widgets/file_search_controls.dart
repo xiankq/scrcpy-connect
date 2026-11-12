@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/core/files/file_search.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:flutter/material.dart';
@@ -5,13 +6,13 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 const fileSearchFilters = {
-  'all': '全部',
-  'images': '图片',
-  'videos': '视频',
-  'audio': '音频',
-  'documents': '文档',
-  'archives': '压缩包',
-  'folders': '文件夹',
+  FileCatalogFilter.all: '全部',
+  FileCatalogFilter.images: '图片',
+  FileCatalogFilter.videos: '视频',
+  FileCatalogFilter.audio: '音频',
+  FileCatalogFilter.documents: '文档',
+  FileCatalogFilter.archives: '压缩包',
+  FileCatalogFilter.folders: '文件夹',
 };
 
 class FileSearchScopeSelector extends StatelessWidget {
@@ -90,8 +91,8 @@ class FileSearchTypeField extends StatelessWidget {
     required this.onChanged,
   });
 
-  final String value;
-  final ValueChanged<String> onChanged;
+  final FileCatalogFilter value;
+  final ValueChanged<FileCatalogFilter> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -141,7 +142,8 @@ class FileSearchTypeField extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          fileSearchFilters[value] ?? fileSearchFilters['all']!,
+                          fileSearchFilters[value] ??
+                              fileSearchFilters[FileCatalogFilter.all]!,
                           style: theme.textTheme.bodyMedium,
                         ),
                       ),

@@ -1,0 +1,698 @@
+import 'video_sessions.dart';
+import 'video_output.dart';
+import '../control/video_session.dart';
+
+import 'video_screenshot.dart';
+
+import 'package:scrcpy_connect/core/control/video_quality.dart';
+
+import 'package:scrcpy_connect/core/control/session_activity.dart';
+
+import 'audio_sources.dart';
+
+import 'package:scrcpy_connect/core/control/remote_control.dart';
+
+import 'package:scrcpy_connect/core/settings/preferences.dart';
+import 'package:scrcpy_connect/core/media/media_intent.dart';
+
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/control/media_capture.dart';
+import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
+import 'package:scrcpy_connect/core/media/audio_player.dart';
+import 'package:scrcpy_connect/core/media/video_quality_service.dart';
+import 'package:scrcpy_connect/core/control/scrcpy_capture_adapter.dart';
+import 'package:scrcpy_connect/core/media/audio_output_service.dart';
+import 'package:scrcpy_connect/core/media/video_output_service.dart';
+import 'package:scrcpy_connect/core/media/video_recovery.dart';
+import 'package:scrcpy_connect/core/media/video_playback_service.dart';
+import 'package:scrcpy_connect/core/control/video_quality_policy.dart';
+
+import 'package:scrcpy_connect/core/media/media_output_reconciliation.dart';
+import 'package:scrcpy_connect/utils/ordered_disposal.dart';
+
+/// 拥有当前 Dart 附着的媒体输出、启动意图与释放回执。
+/// 设备连接和原生捕获仍由执行层持有。
+final class MediaPlayback {
+  MediaPlayback({
+    required this.captures,
+    required this.readSnapshot,
+    required this.readSettings,
+    required this.platform,
+    required this.emit,
+    required this.isDisposed,
+    required this.requireVerifiedState,
+    required this.dataDirectory,
+    required this.capture,
+    this.diagnostics,
+  });
+
+  final MediaCapture captures;
+  final Future<Map<String, dynamic>> Function() readSnapshot;
+  final Future<Preferences> Function() readSettings;
+
+  final AudioPlatformRequest platform;
+  final void Function(Map<String, dynamic>) emit;
+  final bool Function() isDisposed;
+  final void Function() requireVerifiedState;
+  final String dataDirectory;
+  final ScrcpyCaptureAdapter capture;
+  final DiagnosticLog? diagnostics;
+  bool _closing = false;
+  bool get _disposed => _closing || isDisposed();
+  final _textures = <String, VideoOutputReceipt>{};
+  final _audioSources = <String, DeviceAudioSnapshot>{};
+  final _audioClosings = <String, Future<void>>{};
+  final _mediaIntents = _MediaIntentRegistry();
+  late final _audioOutputs = AudioOutputService(
+    openSource: captures.openAudioSource,
+    sourceStatus: captures.sourceStatus,
+    diagnostics: diagnostics,
+    platform: platform,
+    emit: _handleAudioOutput,
+    isDisposed: () => _disposed,
+  );
+  late final _deviceQuality = VideoQualityService(
+    saveQuality: captures.saveQuality,
+    listSessions: captures.activitySessions,
+    reconfigure: captures.reconfigure,
+    applyOutput: (stream) async {
+      final id = stream.sessionId;
+      VideoOutputReceipt output;
+      try {
+        output = await _videoOutputs.reconfigure(stream);
+      } catch (error) {
+        _videoLifecycle.retainFailedOutput(id);
+        captures.videoOutputFailed(stream, error);
+        rethrow;
+      }
+      if (_textures.containsKey(id)) _textures[id] = output;
+      await captures.readyVideo(output.rendererReceipt);
+    },
+    beginReconfigure: (id) => _videoLifecycle.beginReconfigure(id),
+    endReconfigure: (id) => _videoLifecycle.endReconfigure(id),
+  );
+  late final _videoOutputs = VideoOutputService(
+    openSource: capture.openSource,
+    emit: (event) => _videoLifecycle.handle(event),
+    diagnostics: diagnostics,
+    isDisposed: () => _disposed,
+  );
+  late final _videoPresentation = VideoPlaybackService(
+    pauseCapture: captures.pauseVideo,
+    resumeCapture: captures.resumeVideo,
+    sessionsForDevice: captures.sessionsForDevice,
+    pauseOutput: _videoOutputs.pause,
+    resumeOutput: _videoOutputs.resume,
+  );
+  late final VideoRecovery _videoLifecycle = VideoRecovery(
+    outputs: _textures,
+    sourceStatus: captures.sourceStatus,
+    stopCapture: (id) async {
+      await captures.stopVideo(ControlTarget(sessionId: id));
+    },
+    readyCapture: captures.readyVideo,
+    recordFrame: captures.frameVideo,
+    closeOutput: (id, {failure}) async {
+      await _videoOutputs.stop(id, failure: failure);
+    },
+    emit: emit,
+    isDisposed: () => _disposed,
+  );
+  Future<void> _closeAudio(String id) {
+    if (_audioClosings[id] case final pending?) return pending;
+    final closing = _releaseAudio(id);
+    _audioClosings[id] = closing;
+    void finished() {
+      if (identical(_audioClosings[id], closing)) _audioClosings.remove(id);
+    }
+
+    unawaited(
+      closing.then<void>(
+        (_) => finished(),
+        onError: (Object _, StackTrace _) => finished(),
+      ),
+    );
+    return closing;
+  }
+
+  Future<void> _releaseAudio(String id) async {
+    _audioSources.remove(id);
+    await _audioOutputs.stop(id);
+  }
+
+  void _handleAudioOutput(Map<String, dynamic> event) {
+    if (_disposed) return;
+    emit(event);
+    final data = Map<String, dynamic>.from(event['data'] as Map);
+    final id = data['sourceId'];
+    final source = _audioSources[id];
+    if (id is! String ||
+        source == null ||
+        data['deviceId'] != source.deviceId) {
+      return;
+    }
+    if (event['type'] == 'audio.output.failed') {
+      // 等待前先认领精确所有者，防止重复或迟到的焦点事件二次停止或影响其他设备的替换源。
+      _audioSources.remove(id);
+      _mediaIntents.stop(id, audio: true);
+      unawaited(() async {
+        try {
+          await captures.stopAudio(id, source.deviceId);
+        } catch (_) {
+          /* 精确源可能已经结束，不能仅按设备停止。 */
+        } finally {
+          await _closeAudio(id);
+        }
+      }());
+    } else if (event['type'] == 'audio.presentation') {
+      unawaited(
+        captures
+            .presentAudio(AudioOutputReceipt.fromJson(data))
+            .then<void>((_) {})
+            .catchError((Object _) {}),
+      );
+    }
+  }
+
+  List<VideoDecoderCapability> _decoderCapabilities() =>
+      _videoOutputs.capabilities();
+
+  Future<void> retireUnownedAudio() async {
+    for (final source in await captures.audioSources()) {
+      if (source.status != DeviceAudioStatus.stopped &&
+          source.status != DeviceAudioStatus.error) {
+        await captures.stopAudio(source.sourceId, source.deviceId);
+      }
+    }
+  }
+
+  Future<void> _ensureVideoDecoder(
+    String deviceId, [
+    VideoQualityPatch patch = const VideoQualityPatch(),
+  ]) async {
+    final quality = VideoQualityPolicy.resolveQuality(
+      await readSettings(),
+      deviceId,
+      patch,
+    );
+    if (!_decoderCapabilities().any(
+      (item) =>
+          item.codec == quality.codec &&
+          (item.evidence == VideoDecoderEvidence.verified || item.canAttempt),
+    )) {
+      throw RequestFailure(
+        'decoder_unavailable',
+        '本机尚未提供 ${quality.codec.name} 解码器，请选择其他视频编码。',
+      );
+    }
+  }
+
+  Future<VideoQualityOptions> readVideoQualityOptions(String deviceId) async {
+    final result = await captures.readVideoQualityOptions(deviceId);
+    final decoders = _decoderCapabilities();
+    return result.copyWith(
+      codecs: [
+        for (final option in result.codecs)
+          option.copyWith(
+            decoder: decoders.firstWhere((item) => item.codec == option.codec),
+          ),
+      ],
+    );
+  }
+
+  Future<VideoQualityApplication> changeVideoQuality(
+    String deviceId,
+    VideoQualityPatch patch,
+  ) async {
+    await _ensureVideoDecoder(deviceId, patch);
+    return _deviceQuality.change(deviceId, patch);
+  }
+
+  Future<VideoScreenshot> captureScreenshot(String sessionId) async {
+    if (_disposed) throw const RequestFailure('disposed', '媒体所有者已关闭。');
+    final directory = await Directory('$dataDirectory/screenshots')
+        .create(recursive: true);
+    return _videoOutputs.screenshot(sessionId, directory: directory.path);
+  }
+
+  Future<Map<String, dynamic>> snapshot(bool Function() current) =>
+      readAndReconcileMediaSnapshot(
+        read: readSnapshot,
+        videos: _textures,
+        audios: _audioSources,
+        closeVideo: _videoLifecycle.close,
+        closeAudio: _closeAudio,
+        current: current,
+      );
+
+  void handleApplicationEvent(Map<String, dynamic> event) {
+    final data = event['data'] is Map
+        ? Map<String, dynamic>.from(event['data'] as Map)
+        : const <String, dynamic>{};
+    if (event['type'] == 'device.changed' &&
+        data['status'] != 'connected' &&
+        event['deviceId'] is String) {
+      _mediaIntents.stopDevice(event['deviceId'] as String);
+    }
+    if (event['type'] == 'session.disconnected') {
+      final id = data['sessionId'];
+      if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
+        debugPrint(
+          '[connect.video] capture ended session=$id reason=${data['reason']}',
+        );
+      }
+      if (id is String) {
+        unawaited(
+          _videoLifecycle.close(
+            id,
+            failure: data['status'] == 'failed'
+                ? RequestFailure(
+                    data['failureCode'] is String
+                        ? data['failureCode'] as String
+                        : 'session_failed',
+                    data['reason'] is String
+                        ? data['reason'] as String
+                        : '被控端的画面连接意外结束，请重新打开。',
+                  )
+                : null,
+          ),
+        );
+      }
+    } else if (event['type'] == 'audio.updated' &&
+        const [
+          'stopped',
+          'failed',
+          'error',
+          'closed',
+        ].contains(data['status'])) {
+      final id = data['sourceId'];
+      if (id is String) unawaited(_closeAudio(id));
+    }
+  }
+
+  Future<void> setVisible(bool visible) => _audioOutputs.setVisible(visible);
+  Future<void> policy(bool enabled) => _audioOutputs.policy(enabled);
+  Future<void> handlePlatformEvent(Map<String, dynamic> event) async {
+    if (event['type'] == 'connections.stopped') {
+      _mediaIntents.cancelAll();
+      await Future.wait(_textures.keys.toList().map(_videoLifecycle.close));
+      await Future.wait(_audioSources.keys.toList().map(_closeAudio));
+    } else {
+      await _audioOutputs.handlePlatformEvent(event);
+    }
+  }
+
+  Future<List<VideoSessionView>> readVideoSessions({String? deviceId}) async {
+    _checkVideoOpen();
+    return List.unmodifiable([
+      for (final session in await captures.readVideoSessions(
+        deviceId: deviceId,
+      ))
+        VideoSessionView(
+          session: session,
+          output: _textures[session.sessionId],
+          wake: captures.readWake(session.deviceId),
+        ),
+    ]);
+  }
+
+  Future<VideoSessionView> startVideo(VideoSessionPlan plan) async {
+    _checkVideoOpen(verified: true);
+    final intent = _mediaIntents.begin(plan.deviceId, audio: false);
+    try {
+      return await _deviceQuality.open(plan.deviceId, () async {
+        _checkVideoOpen(verified: true, intent: intent);
+        await _ensureVideoDecoder(plan.deviceId);
+        _checkVideoOpen(intent: intent);
+        final capture = await captures.startVideo(plan);
+        final playback = await _startVideoOutput(capture, intent);
+        return VideoSessionView(
+          session: playback.session,
+          output: playback.output,
+          wake: captures.readWake(plan.deviceId),
+        );
+      });
+    } finally {
+      _mediaIntents.finish(intent);
+    }
+  }
+
+  Future<VideoPlaybackReceipt> pauseVideo(ControlTarget target) =>
+      _presentVideo(target, true);
+  Future<VideoPlaybackReceipt> resumeVideo(ControlTarget target) =>
+      _presentVideo(target, false);
+  Future<VideoPlaybackReceipt> _presentVideo(
+    ControlTarget target,
+    bool paused,
+  ) async {
+    _checkVideoOpen(verified: true);
+    final receipt = await _videoPresentation.setPaused(target, paused: paused);
+    final id = receipt.session.sessionId;
+    if (!paused && !_disposed && _textures.containsKey(id)) {
+      _textures[id] = _mergeOutput(_textures[id], receipt.output);
+      emit({
+        'type': 'session.output.resumed',
+        'deviceId': receipt.session.deviceId,
+        'data': receipt.toSnapshot(),
+      });
+    }
+    return receipt;
+  }
+
+  Future<VideoStopReceipt> stopVideo(
+    ControlTarget target, {
+    bool keepLaunchRecord = false,
+  }) async {
+    _checkVideoOpen();
+    // 只有精确窗口身份才能同步撤销它的启动与质量意图。
+    final id = target.sessionId;
+    if (id != null) {
+      _deviceQuality.stopSession(id);
+      _videoLifecycle.forget(id);
+      _mediaIntents.stop(id, audio: false);
+    }
+    final receipt = await captures.stopVideo(
+      target,
+      keepLaunchRecord: keepLaunchRecord,
+    );
+    _mediaIntents.stop(receipt.sessionId, audio: false);
+    await _videoLifecycle.close(receipt.sessionId);
+    return receipt;
+  }
+
+  void _checkVideoOpen({bool verified = false, MediaIntent? intent}) {
+    if (_disposed || intent?.cancelled == true) {
+      throw const RequestFailure('cancelled', '已停止本次打开，不会重新启动画面。');
+    }
+    if (verified) requireVerifiedState();
+  }
+
+  /// 撤销本设备已有质量与媒体启动意图，不停止其他设备或取得连接关闭权。
+  void stopDeviceIntent(String deviceId) {
+    _deviceQuality.stopDevice(deviceId);
+    _mediaIntents.stopDevice(deviceId);
+  }
+
+  /// 连接所有者确认停止后，等待本设备现存及待重试的本机输出真正退出。
+  Future<void> finishDeviceStop(String deviceId) async {
+    for (final id
+        in _textures.keys
+            .where((id) => _textures[id]?.deviceId == deviceId)
+            .toList()) {
+      await _videoLifecycle.close(id);
+    }
+    for (final id
+        in _audioSources.keys
+            .where((id) => _audioSources[id]?.deviceId == deviceId)
+            .toList()) {
+      await _closeAudio(id);
+    }
+    // 页面快照已撤销也可能还有失败或超时的旧输出，仍按设备核对真实释放。
+    await Future.wait([
+      _videoOutputs.stopDevice(deviceId),
+      _audioOutputs.stopDevice(deviceId),
+    ]);
+  }
+
+  Future<DeviceAudioPlayback> _startAudioOutput(
+    DeviceAudioSnapshot result,
+    MediaIntent? intent,
+  ) async {
+    intent?.bind(result.sourceId);
+    if (_disposed || intent?.cancelled == true) {
+      await captures.stopAudio(result.sourceId, result.deviceId);
+      throw const RequestFailure('cancelled', '已停止本次声音，不会重新启动。');
+    }
+    final id = result.sourceId;
+    _audioSources[id] = result;
+    try {
+      final playback = await _audioOutputs.start(
+        result,
+        cancelled: () => _disposed || intent?.cancelled == true,
+      );
+      if (_disposed || intent?.cancelled == true) {
+        throw const RequestFailure('cancelled', '已停止本次声音，不会重新启动。');
+      }
+      final ready = await captures.readyAudio(playback);
+      if (_disposed || intent?.cancelled == true) {
+        throw const RequestFailure('cancelled', '已停止本次声音，不会重新启动。');
+      }
+      return (source: ready, output: playback);
+    } catch (_) {
+      try {
+        await captures.stopAudio(id, result.deviceId);
+      } finally {
+        await _closeAudio(id);
+      }
+      rethrow;
+    }
+  }
+
+  Future<VideoPlaybackReceipt> _startVideoOutput(
+    VideoSessionSnapshot result,
+    MediaIntent? intent,
+  ) async {
+    final id = result.sessionId;
+    intent?.bind(id);
+    if (_disposed || intent?.cancelled == true) {
+      await captures.stopVideo(
+        ControlTarget(sessionId: id),
+        keepLaunchRecord: result.packageName != null,
+      );
+      throw const RequestFailure('cancelled', '已停止本次画面，不会重新启动。');
+    }
+    try {
+      final texture = await _videoOutputs.start(
+        result.capture,
+        cancelled: () => _disposed || intent?.cancelled == true,
+      );
+      if (_disposed || intent?.cancelled == true) {
+        throw const RequestFailure('cancelled', '已停止本次画面，不会重新启动。');
+      }
+      _textures[id] = texture;
+      await captures.readyVideo(texture.rendererReceipt);
+      if (_disposed || intent?.cancelled == true) {
+        throw const RequestFailure('cancelled', '已停止本次画面，不会重新启动。');
+      }
+      _videoLifecycle.monitor(id);
+      return VideoPlaybackReceipt(
+        session: captures.session(id),
+        output: texture,
+      );
+    } catch (error) {
+      final appLaunch = result.packageName != null;
+      try {
+        await captures.stopVideo(
+          ControlTarget(sessionId: id),
+          keepLaunchRecord: appLaunch,
+        );
+      } catch (_) {
+        /* 保留原始输出错误。 */
+      }
+      await _videoLifecycle.close(id);
+      if (appLaunch) {
+        throw RequestFailure('app_launch_unknown', '应用可能已在手机上打开，请先核对本次记录。', {
+          'sessionId': id,
+          'deviceId': result.deviceId,
+          'packageName': result.packageName,
+          'launchOutcome': 'unknown',
+          'failureCode': error is RequestFailure
+              ? error.code
+              : 'video_output_failed',
+        });
+      }
+      rethrow;
+    }
+  }
+
+  Future<List<DeviceAudioSnapshot>> readAudioSources({
+    String? deviceId,
+  }) async => List.unmodifiable([
+    for (final source in await captures.audioSources())
+      if (deviceId == null || source.deviceId == deviceId) source,
+  ]);
+  Future<Set<String>> readAudioEligibleDevices() async =>
+      captures.audioEligibleDevices;
+
+  Future<DeviceAudioPlayback> startAudio(String deviceId) async {
+    _checkAudioOpen();
+    final intent = _mediaIntents.begin(deviceId, audio: true);
+    try {
+      return await _startAudioOutput(
+        await captures.startAudio(deviceId),
+        intent,
+      );
+    } finally {
+      _mediaIntents.finish(intent);
+    }
+  }
+
+  Future<void> stopAudio(DeviceAudioTarget target) async {
+    _checkAudioOpen();
+    final source = target.sourceId;
+    if (source != null) {
+      _mediaIntents.stop(source, audio: true);
+    } else {
+      _mediaIntents.stopAudioDevice(target.deviceId);
+    }
+    final ids = [
+      for (final entry in _audioSources.entries)
+        if (source != null
+            ? entry.key == source
+            : entry.value.deviceId == target.deviceId)
+          entry.key,
+    ];
+    await captures.stopDeviceAudio(target);
+    for (final id in ids) {
+      await _closeAudio(id);
+    }
+    if (source != null && !ids.contains(source)) {
+      await _closeAudio(source);
+    } else if (source == null) {
+      await _audioOutputs.stopDevice(target.deviceId);
+    }
+  }
+
+  Future<DeviceAudioPlayback> pauseAudio(DeviceAudioTarget target) =>
+      _setAudioPaused(target, true);
+  Future<DeviceAudioPlayback> resumeAudio(DeviceAudioTarget target) =>
+      _setAudioPaused(target, false);
+  Future<DeviceAudioPlayback> _setAudioPaused(
+    DeviceAudioTarget target,
+    bool paused,
+  ) async {
+    _checkAudioOpen();
+    final source = captures.prepareAudioPresentation(target);
+    final applied = paused
+        ? await _audioOutputs.pause(source.sourceId)
+        : await _audioOutputs.resume(source.sourceId);
+    final updated = await captures.presentAudio(applied);
+    return (source: updated, output: applied);
+  }
+
+  Future<DeviceAudioPlayback> changeAudioVolume(
+    DeviceAudioTarget target, {
+    double? volume,
+    bool? muted,
+  }) async {
+    _checkAudioOpen();
+    final proposed = captures.prepareAudioVolume(
+      target,
+      volume: volume,
+      muted: muted,
+    );
+    final applied = await _audioOutputs.volume(
+      proposed.target.sourceId!,
+      volume: proposed.volume,
+      muted: proposed.muted,
+    );
+    final updated = await captures.applyAudioVolume(applied);
+    return (source: updated, output: applied);
+  }
+
+  void _checkAudioOpen() {
+    if (_disposed) throw const RequestFailure('cancelled', '媒体所有者已关闭。');
+  }
+
+  OrderedDisposal? _disposal;
+  void stopAdmission() {
+    _closing = true;
+    _deviceQuality.dispose();
+    _mediaIntents.cancelAll();
+  }
+
+  Future<void> dispose() {
+    stopAdmission();
+    _disposal ??= _prepareDisposal();
+    return _disposal!.run();
+  }
+
+  OrderedDisposal _prepareDisposal() {
+    final pending = _mediaIntents.active.toList();
+    final videoIds = {
+      ..._textures.keys,
+      ...pending.where((i) => !i.audio).expand((i) => i.ids),
+    };
+    final audioIds = {
+      ..._audioSources.keys,
+      ...pending.where((i) => i.audio).expand((i) => i.ids),
+    };
+    return OrderedDisposal([
+      for (final id in videoIds) () => _videoLifecycle.close(id),
+      _videoOutputs.dispose,
+      for (final id in audioIds)
+        () async {
+          final device = _audioSources[id]?.deviceId;
+          if (device is String) {
+            try {
+              await captures.stopAudio(id, device);
+            } catch (_) {
+              /* 原生源可能已结束，本地输出仍需释放。 */
+            }
+          }
+          await _closeAudio(id);
+        },
+      _audioOutputs.dispose,
+      () async {
+        _textures.clear();
+        _audioSources.clear();
+        try {
+          await Future.wait(pending.map((i) => i.done))
+              .timeout(const Duration(seconds: 45));
+        } on TimeoutException {
+          // 迟到的原生启动继续由原所有者完成有界取消清理。
+        }
+      },
+    ]);
+  }
+}
+
+/// 登记在途启动意图，按设备或实际源撤销，并等待原启动完成。
+class _MediaIntentRegistry {
+  final active = <MediaIntent>{};
+  MediaIntent begin(String deviceId, {required bool audio}) {
+    final intent = MediaIntent(deviceId, audio);
+    active.add(intent);
+    return intent;
+  }
+
+  void finish(MediaIntent intent) {
+    active.remove(intent);
+    intent.complete();
+  }
+
+  void stop(String id, {required bool audio}) {
+    for (final intent in active.where((i) => i.audio == audio)) {
+      intent.stop(id);
+    }
+  }
+
+  void stopDevice(String device) {
+    for (final intent in active.where((i) => i.deviceId == device)) {
+      intent.cancelled = true;
+    }
+  }
+
+  void stopAudioDevice(String device) {
+    for (final intent in active.where((i) => i.deviceId == device && i.audio)) {
+      intent.cancelled = true;
+    }
+  }
+
+  void cancelAll() {
+    for (final intent in active) {
+      intent.cancelled = true;
+    }
+  }
+}
+
+VideoOutputReceipt _mergeOutput(
+  VideoOutputReceipt? current,
+  VideoOutputReceipt receipt,
+) => current != null && current.generation > receipt.generation
+    ? current
+    : receipt;

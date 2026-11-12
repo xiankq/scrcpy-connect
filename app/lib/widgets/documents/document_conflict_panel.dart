@@ -1,12 +1,13 @@
+import 'package:scrcpy_connect/core/files/system_documents.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
 
 import 'dart:async';
 
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:flutter/material.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 /// 跟踪精确的系统保存操作，包含从持久账本恢复的操作。
@@ -17,7 +18,7 @@ class DocumentConflictPanel extends StatefulWidget {
     required this.operationId,
   });
 
-  final AppStore controller;
+  final AppNotifier controller;
   final String operationId;
 
   @override
@@ -26,7 +27,7 @@ class DocumentConflictPanel extends StatefulWidget {
 
 class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
   StreamSubscription<Json>? _events;
-  Json? _pending;
+  DocumentConflict? _pending;
   String? _error, _resolving;
   bool _applyToRemaining = false;
   int _revision = 0;
@@ -58,7 +59,11 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
       final data = jsonObject(event['data']);
       if (data['operationId'] != widget.operationId) return;
       _revision++;
-      _accept(data['pending']);
+      _accept(
+        data['pending'] is Map
+            ? DocumentConflict.fromJson(jsonObject(data['pending']))
+            : null,
+      );
     });
     unawaited(_read());
   }
@@ -67,14 +72,13 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
     final revision = ++_revision;
     final owner = widget.operationId;
     try {
-      final response = await widget.controller.execute(
-        ApplicationCommand.documentsConflictGet,
-        {'operationId': owner},
+      final response = await widget.controller.documents.readDocumentConflict(
+        owner,
       );
       if (!mounted || revision != _revision || owner != widget.operationId) {
         return;
       }
-      _accept(response['pending']);
+      _accept(response);
     } catch (error) {
       if (!mounted || revision != _revision || owner != widget.operationId) {
         return;
@@ -83,15 +87,14 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
     }
   }
 
-  void _accept(Object? raw) {
-    final candidate = raw is Map<Object?, Object?> ? jsonObject(raw) : null;
+  void _accept(DocumentConflict? candidate) {
     final pending =
-        candidate?['operationId'] == widget.operationId &&
-            value(candidate ?? {}, 'conflictId').isNotEmpty
+        candidate?.operationId == widget.operationId &&
+            candidate?.conflictId.isNotEmpty == true
         ? candidate
         : null;
     setState(() {
-      if (_pending?['conflictId'] != pending?['conflictId']) {
+      if (_pending?.conflictId != pending?.conflictId) {
         _applyToRemaining = false;
       }
       _pending = pending;
@@ -99,28 +102,26 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
     });
   }
 
-  Future<void> _resolve(String choice) async {
+  Future<void> _resolve(DocumentConflictDecision choice) async {
     final pending = _pending;
     if (pending == null || _resolving != null) return;
     final owner = widget.operationId;
-    final conflictId = value(pending, 'conflictId');
+    final conflictId = pending.conflictId;
     setState(() => _resolving = conflictId);
     try {
-      final response = await widget.controller.execute(
-        ApplicationCommand.documentsConflictResolve,
-        {
-          'operationId': owner,
-          'conflictId': conflictId,
-          'choice': choice,
-          'applyToRemaining': choice != 'cancel' && _applyToRemaining,
-        },
-      );
+      final response = await widget.controller.documents
+          .resolveDocumentConflict(
+            owner,
+            conflictId,
+            choice,
+            applyToRemaining: choice != .cancel && _applyToRemaining,
+          );
       if (!mounted ||
           owner != widget.operationId ||
-          _pending?['conflictId'] != conflictId) {
+          _pending?.conflictId != conflictId) {
         return;
       }
-      if (response['resolved'] == true) {
+      if (response) {
         _revision++;
         _accept(null);
       } else {
@@ -129,7 +130,7 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
     } catch (error) {
       if (mounted &&
           owner == widget.operationId &&
-          _pending?['conflictId'] == conflictId) {
+          _pending?.conflictId == conflictId) {
         setState(() => _error = '同名处理未确认：$error');
       }
     } finally {
@@ -144,9 +145,7 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
     unawaited(_events?.cancel());
     _events = null;
     // 恢复的待保存操作也需要离页取消所有者；幂等命令不会取消替换后的新操作。
-    owner.controller.execute(ApplicationCommand.documentsCancel, {
-      'operationId': owner.operationId,
-    }).ignore();
+    owner.controller.documents.cancelDocument(owner.operationId).ignore();
   }
 
   @override
@@ -168,7 +167,7 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
         children: [
           Text('存在同名项目', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: DesignTokens.spacingXs),
-          Text(value(pending, 'name')),
+          Text(pending.name),
           const SizedBox(height: DesignTokens.spacingXs),
           const Text('此位置暂不支持替换同名内容；已有文件会保留。'),
           const Text('保留两份会使用新名称。本机暂存会保留；取消不会删除已保存的项目。'),
@@ -186,15 +185,15 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
             runSpacing: DesignTokens.spacingXs,
             children: [
               FilledButton(
-                onPressed: busy ? null : () => _resolve('keepBoth'),
+                onPressed: busy ? null : () => _resolve(.keepBoth),
                 child: const Text('保留两份'),
               ),
               OutlinedButton(
-                onPressed: busy ? null : () => _resolve('skip'),
+                onPressed: busy ? null : () => _resolve(.skip),
                 child: const Text('跳过此项'),
               ),
               TextButton(
-                onPressed: busy ? null : () => _resolve('cancel'),
+                onPressed: busy ? null : () => _resolve(.cancel),
                 child: const Text('取消本次保存'),
               ),
             ],

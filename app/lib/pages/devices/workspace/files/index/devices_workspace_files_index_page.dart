@@ -1,7 +1,13 @@
+import 'package:scrcpy_connect/core/files/file_transfers.dart';
+import 'package:scrcpy_connect/core/files/file_mutations.dart';
+import 'package:scrcpy_connect/core/application/app_dependencies_provider.dart';
+import 'package:scrcpy_connect/core/files/file_catalog_entry.dart';
+import 'package:scrcpy_connect/core/files/file_directory_notifier.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+import 'package:scrcpy_connect/core/settings/preferences.dart';
+import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
 import 'dart:io';
@@ -26,9 +32,8 @@ import 'package:scrcpy_connect/pages/devices/workspace/files/index/widgets/file_
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/widgets/file_view_menu.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/device_source_row.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/file_actions.dart';
-import 'package:scrcpy_connect/widgets/command_query.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -42,76 +47,63 @@ class FilesPage extends HookConsumerWidget {
     this.initialPath = '/sdcard',
   });
 
-  final AppStore controller;
-  final Json device;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
   final String initialPath;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(
-      appStoreProvider.select((state) => state.settings),
+      preferencesProvider.select((state) => state.values),
     );
-    final viewMode = _fileViewModeFromSettings(settings);
-    final sortKey = _fileSortKeyFromSettings(settings);
-    final ascending = _fileSortAscendingFromSettings(settings);
+    final viewMode = settings.fileViewMode;
+    final sortKey = settings.fileSortKey;
+    final ascending = settings.fileSortAscending;
     final path = useState(initialPath);
-    final revision = useState(0);
-    final selected = useState<Map<String, Json>>({});
+    final selected = useState<Map<String, FileCatalogEntry>>({});
     final selecting = useState(false);
     final selectionMenu = useMemoized(MenuController.new);
-    final sourceId = value(device, 'id');
-    final live = ref.watch(
-      appStoreProvider.select(
-        (state) => (state.devices, state.reconciliationPending),
+    final sourceId = device.id;
+    final directorySource = ref.watch(
+      appDependenciesProvider.select((source) => source.directories),
+    );
+    final mutations = ref.watch(
+      appDependenciesProvider.select((source) => source.fileMutations),
+    );
+    final owner = useMemoized(Object.new, [
+      controller,
+      directorySource,
+      mutations,
+      device.id,
+      device.guid,
+      device.serial,
+      path.value,
+    ]);
+    final currentOwner = useRef(owner)..value = owner;
+    bool ownsView() => context.mounted && identical(currentOwner.value, owner);
+    final (device: currentDevice, :reconciliationPending) = ref.watch(
+      appProvider.select(
+        (state) => (
+          device: state.devices
+              .where((item) => item.id == sourceId)
+              .firstOrNull,
+          reconciliationPending: state.reconciliationPending,
+        ),
       ),
     );
-    final currentDevice = live.$1
-        .where((item) => item['id'] == sourceId)
-        .firstOrNull;
-    final connected = currentDevice?['status'] == 'connected' && !live.$2;
-    final connectionRevision = useRef(0);
-    final checkedRevision = useRef(-1);
-    final query = useMemoized(
-      () => CommandQuery(
-        request: (command, [params = const {}]) async {
-          final revision = connectionRevision.value;
-          final result = await controller.request(command, params);
-          final state = controller.snapshot();
-          if (!state.reconciliationPending &&
-              state.devices.any(
-                (item) =>
-                    item['id'] == sourceId && item['status'] == 'connected',
-              )) {
-            checkedRevision.value = revision;
-          }
-          return result;
-        },
-        events: controller.eventStream(),
-        command: 'files.list',
-        params: {'deviceId': sourceId, 'path': path.value},
-      ),
-      [controller, sourceId, path.value, revision.value],
-    );
-    useListenable(query);
-    useEffect(() => query.dispose, [query]);
-    final previousConnection = useRef(connected);
-    useEffect(() {
-      if (previousConnection.value != connected) {
-        previousConnection.value = connected;
-        connectionRevision.value++;
-        unawaited(query.refresh());
-      }
-      return null;
-    }, [query, connected]);
-    final verified =
-        connected &&
-        checkedRevision.value == connectionRevision.value &&
-        !query.loading &&
-        query.error == null;
+    final connected =
+        currentDevice?.status == .connected && !reconciliationPending;
+    final queryProvider = fileDirectoryProvider((
+      deviceId: sourceId,
+      path: path.value,
+    ));
+    final query = ref.watch(queryProvider);
+    Future<void> refresh() => ref.read(queryProvider.notifier).refresh();
+    final verified = connected && query.verified;
     bool selectionVerified() {
       final observed = {
-        for (final entry in objects(query.data?['entries']))
-          value(entry, 'path'): entry,
+        for (final entry in query.data?.entries ?? const <FileCatalogEntry>[])
+          (entry.path ?? ''): entry,
       };
       return selected.value.keys.every((path) {
         final current = observed[path];
@@ -124,16 +116,18 @@ class FilesPage extends HookConsumerWidget {
     }
 
     bool canSubmit() {
+      if (!ownsView() ||
+          !identical(controller.directories, directorySource) ||
+          !identical(controller.fileMutations, mutations)) {
+        return false;
+      }
       final state = controller.snapshot();
       final current = state.devices
-          .where((item) => item['id'] == sourceId)
+          .where((item) => item.id == sourceId)
           .firstOrNull;
-      return current?['status'] == 'connected' &&
+      return current?.status == DeviceConnectionStatus.connected &&
           !state.reconciliationPending &&
-          checkedRevision.value == connectionRevision.value &&
-          !query.loading &&
-          query.error == null &&
-          query.data != null &&
+          ref.read(queryProvider).verified &&
           (!selecting.value || selectionVerified());
     }
 
@@ -141,28 +135,31 @@ class FilesPage extends HookConsumerWidget {
       selected.value = {};
       selecting.value = false;
       return null;
-    }, [sourceId]);
-    final busy = useState(false);
+    }, [owner]);
+    final busyOwner = useState<Object?>(null);
+    final busy = identical(busyOwner.value, owner);
     final typeFilter = useState(FileTypeFilter.all);
 
-    Future<bool> mutate(String command, Json params) async {
+    Future<bool> mutate(Future<void> Function() action) async {
+      if (!ownsView()) return false;
       if (!canSubmit()) {
         feedback(context, '设备已断开或目录尚未重新核验，请重连后再试。');
         return false;
       }
-      busy.value = true;
+      busyOwner.value = owner;
       try {
-        final result = await perform(context, controller, command, {
-          'deviceId': device['id'],
-          ...params,
-        });
-        if (context.mounted) {
-          revision.value++;
-          selected.value = {};
-        }
-        return result != null;
+        await action();
+        if (!ownsView()) return false;
+        unawaited(refresh());
+        selected.value = {};
+        return true;
+      } catch (error) {
+        if (context.mounted && ownsView()) feedback(context, '$error');
+        return false;
       } finally {
-        if (context.mounted) busy.value = false;
+        if (context.mounted && identical(busyOwner.value, owner)) {
+          busyOwner.value = null;
+        }
       }
     }
 
@@ -173,9 +170,9 @@ class FilesPage extends HookConsumerWidget {
       selected.value = {};
     }
 
-    Future<void> updateBrowserPreferences(Json patch) async {
+    Future<void> updateBrowserPreferences(PreferenceChanges patch) async {
       try {
-        await controller.updateSettings(patch);
+        await controller.preferences.update(patch);
       } catch (error) {
         if (context.mounted) feedback(context, '$error');
       }
@@ -188,15 +185,19 @@ class FilesPage extends HookConsumerWidget {
       final items = [
         for (final file in picked)
           if (file.path != null)
-            {'source': file.path, 'destination': '${path.value}/${file.name}'},
+            FileTransferSelection(
+              source: file.path!,
+              destination: '${path.value}/${file.name}',
+            ),
       ];
       if (items.isEmpty) {
         feedback(context, '所选文件没有可读取的本机路径，请从系统文件位置重新选择。');
         return;
       }
-      final submitted = await mutate('files.push', {
-        'items': items,
-        'conflict': 'ask',
+      final submitted = await mutate(() async {
+        await controller.fileTransfers.startTransfer(
+          FileTransferPlan(deviceId: sourceId, direction: .push, items: items),
+        );
       });
       if (submitted && context.mounted) {
         TransferCenterRoute().push<void>(context);
@@ -217,11 +218,19 @@ class FilesPage extends HookConsumerWidget {
           feedback(context, '请选择有明确名称的文件夹');
           return;
         }
-        final submitted = await mutate('files.push', {
-          'items': [
-            {'source': source, 'destination': p.posix.join(path.value, name)},
-          ],
-          'conflict': 'ask',
+        final submitted = await mutate(() async {
+          await controller.fileTransfers.startTransfer(
+            FileTransferPlan(
+              deviceId: sourceId,
+              direction: .push,
+              items: [
+                FileTransferSelection(
+                  source: source,
+                  destination: p.posix.join(path.value, name),
+                ),
+              ],
+            ),
+          );
         });
         if (submitted && context.mounted) {
           TransferCenterRoute().push<void>(context);
@@ -229,41 +238,45 @@ class FilesPage extends HookConsumerWidget {
         return;
       }
       final submitted = await DocumentImportRoute(
-        deviceId: value(device, 'id'),
+        deviceId: device.id,
         destination: path.value,
       ).push<bool>(context);
-      if (submitted == true && context.mounted) revision.value++;
+      if (submitted == true && context.mounted) unawaited(refresh());
     }
 
-    void toggleEntry(Json entry) {
+    void toggleEntry(FileCatalogEntry entry) {
       if (!fileCanManage(entry)) return;
-      final entryPath = value(entry, 'path');
+      final entryPath = (entry.path ?? '');
       selecting.value = true;
       final next = Map.of(selected.value);
       if (next.containsKey(entryPath)) {
         next.remove(entryPath);
       } else {
-        next[entryPath] = Map.of(entry);
+        next[entryPath] = entry;
       }
       selected.value = next;
     }
 
-    Future<void> renameEntry(Json entry) async {
-      final name = await askText(
-        context,
-        title: '重命名',
-        initial: value(entry, 'name'),
-      );
+    Future<void> renameEntry(FileCatalogEntry entry) async {
+      final name = await askText(context, title: '重命名', initial: entry.name);
       if (name == null || !context.mounted) return;
-      if (name.contains('/') || name == '.' || name == '..') {
+      if (name.isEmpty || name.contains('/') || name == '.' || name == '..') {
         feedback(context, '名称不能包含路径分隔符');
         return;
       }
-      await mutate('files.rename', {
-        'path': value(entry, 'path'),
-        'name': name,
-        'expectedStamp': entry['sourceStamp'],
-      });
+      if (entry case FileCatalogEntry(
+        path: final path?,
+        sourceStamp: final expected?,
+      )) {
+        await mutate(
+          () => mutations.rename(sourceId, (
+            path: path,
+            expected: expected,
+          ), destination: p.posix.join(p.posix.dirname(path), name)),
+        );
+      } else if (ownsView()) {
+        feedback(context, '缺少所选文件身份，请重新选择。');
+      }
     }
 
     void exitSelection() {
@@ -277,12 +290,11 @@ class FilesPage extends HookConsumerWidget {
 
     final data = query.data;
 
-    void refresh() => unawaited(query.refresh());
-    final all = useMemoized(() => objects(data?['entries']), [data]);
+    final all = data?.entries ?? const <FileCatalogEntry>[];
     useEffect(() {
       if (!verified || data == null) return null;
-      final observed = {for (final entry in all) value(entry, 'path'): entry};
-      final complete = data['hasMore'] != true && data['truncated'] != true;
+      final observed = {for (final entry in all) (entry.path ?? ''): entry};
+      final complete = !data.hasMore && !data.truncated;
       final invalid = selected.value.keys.where((path) {
         final entry = observed[path];
         if (entry == null) return complete;
@@ -319,12 +331,12 @@ class FilesPage extends HookConsumerWidget {
     final allSelected =
         visible.isNotEmpty &&
         visible.every(
-          (entry) => selected.value.containsKey(value(entry, 'path')),
+          (entry) => selected.value.containsKey((entry.path ?? '')),
         );
     final retrievable =
         verified &&
         selectionVerified() &&
-        !busy.value &&
+        !busy &&
         chosen.isNotEmpty &&
         chosen.every(fileCanOpen);
     final parentPath = fileParentPath(path.value);
@@ -370,7 +382,7 @@ class FilesPage extends HookConsumerWidget {
                             ? {}
                             : {
                                 for (final entry in visible)
-                                  value(entry, 'path'): Map.of(entry),
+                                  (entry.path ?? ''): entry,
                               };
                       },
                       icon: Icon(
@@ -396,13 +408,19 @@ class FilesPage extends HookConsumerWidget {
                       sortKey: sortKey,
                       ascending: ascending,
                       onViewModeChanged: (next) => unawaited(
-                        updateBrowserPreferences({'fileViewMode': next.name}),
+                        updateBrowserPreferences(
+                          PreferenceChanges(fileViewMode: next),
+                        ),
                       ),
                       onSortKeyChanged: (next) => unawaited(
-                        updateBrowserPreferences({'fileSortKey': next.name}),
+                        updateBrowserPreferences(
+                          PreferenceChanges(fileSortKey: next),
+                        ),
                       ),
                       onAscendingChanged: (next) => unawaited(
-                        updateBrowserPreferences({'fileSortAscending': next}),
+                        updateBrowserPreferences(
+                          PreferenceChanges(fileSortAscending: next),
+                        ),
                       ),
                     ),
                     GlassMenuButton(
@@ -417,7 +435,7 @@ class FilesPage extends HookConsumerWidget {
                         GlassMenuAction(
                           label: '新建文件夹',
                           icon: const Icon(LucideIcons.folderPlus),
-                          onPressed: busy.value || !verified
+                          onPressed: busy || !verified
                               ? null
                               : () async {
                                   final name = await askText(
@@ -434,21 +452,24 @@ class FilesPage extends HookConsumerWidget {
                                     feedback(context, '文件夹名称不能包含路径分隔符');
                                     return;
                                   }
-                                  await mutate('files.mkdir', {
-                                    'path': '${path.value}/$name',
-                                  });
+                                  await mutate(
+                                    () => mutations.createDirectory(
+                                      sourceId,
+                                      p.posix.join(path.value, name),
+                                    ),
+                                  );
                                 },
                         ),
                         GlassMenuAction(
                           label: '发送本机文件',
                           icon: const Icon(LucideIcons.upload),
-                          onPressed: busy.value || !verified ? null : upload,
+                          onPressed: busy || !verified ? null : upload,
                         ),
                         if (Platform.isAndroid || Platform.isLinux)
                           GlassMenuAction(
                             label: '发送本机文件夹',
                             icon: const Icon(LucideIcons.folderUp),
-                            onPressed: busy.value || !verified
+                            onPressed: busy || !verified
                                 ? null
                                 : uploadDirectory,
                           ),
@@ -464,7 +485,15 @@ class FilesPage extends HookConsumerWidget {
                             context,
                             controller,
                             device,
-                            chosen,
+                            chosen
+                                .map(
+                                  (file) => (
+                                    path: file.path,
+                                    name: file.name,
+                                    canOpen: fileCanOpen(file),
+                                  ),
+                                )
+                                .toList(),
                             canSubmit: canSubmit,
                             canReduceSelection: true,
                           )
@@ -481,7 +510,7 @@ class FilesPage extends HookConsumerWidget {
                     onDelete:
                         !verified ||
                             !selectionVerified() ||
-                            busy.value ||
+                            busy ||
                             chosen.isEmpty
                         ? null
                         : () async {
@@ -493,15 +522,23 @@ class FilesPage extends HookConsumerWidget {
                                   danger: true,
                                 ) &&
                                 context.mounted) {
-                              await mutate('files.delete', {
-                                'paths': chosen
-                                    .map((entry) => entry['path'])
-                                    .toList(),
-                                'expectedStamps': {
-                                  for (final entry in chosen)
-                                    value(entry, 'path'): entry['sourceStamp'],
-                                },
-                              });
+                              final sources = <FileMutationSelection>[
+                                for (final entry in chosen)
+                                  if (entry case FileCatalogEntry(
+                                    path: final path?,
+                                    sourceStamp: final expected?,
+                                  ))
+                                    (path: path, expected: expected),
+                              ];
+                              if (sources.length != chosen.length) {
+                                if (ownsView()) {
+                                  feedback(context, '缺少所选文件身份，请重新选择。');
+                                }
+                                return;
+                              }
+                              await mutate(
+                                () => mutations.delete(sourceId, sources),
+                              );
                             }
                           },
                     deleteReason: !connected
@@ -512,17 +549,19 @@ class FilesPage extends HookConsumerWidget {
                     onRename:
                         verified &&
                             selectionVerified() &&
-                            !busy.value &&
+                            !busy &&
                             chosen.length == 1
                         ? () => renameEntry(chosen.single)
                         : null,
                     viewMode: viewMode,
                     onToggleView: () => unawaited(
-                      updateBrowserPreferences({
-                        'fileViewMode': viewMode == FileViewMode.grid
-                            ? 'list'
-                            : 'grid',
-                      }),
+                      updateBrowserPreferences(
+                        PreferenceChanges(
+                          fileViewMode: viewMode == FileViewMode.grid
+                              ? FileViewMode.list
+                              : FileViewMode.grid,
+                        ),
+                      ),
                     ),
                   )
                 : null,
@@ -537,14 +576,14 @@ class FilesPage extends HookConsumerWidget {
                             title: '无法读取这个目录',
                             message: '${query.error}',
                             action: TextButton(
-                              onPressed: () => unawaited(query.refresh()),
+                              onPressed: () => unawaited(refresh()),
                               child: const Text('重新检查'),
                             ),
                           ),
                   )
                 : RefreshIndicator(
                     onRefresh: () async {
-                      if (!selecting.value) refresh();
+                      if (!selecting.value) await refresh();
                     },
                     child: CustomScrollView(
                       physics: const AlwaysScrollableScrollPhysics(),
@@ -594,7 +633,7 @@ class FilesPage extends HookConsumerWidget {
                                     ),
                                     GlassActionIcon(
                                       tooltip: '刷新目录',
-                                      onPressed: busy.value || selecting.value
+                                      onPressed: busy || selecting.value
                                           ? null
                                           : () {
                                               selected.value = {};
@@ -629,12 +668,11 @@ class FilesPage extends HookConsumerWidget {
                                         : (next) => typeFilter.value = next,
                                   ),
                                 ],
-                                if (data['hasMore'] == true ||
-                                    data['truncated'] == true)
+                                if (data.hasMore || data.truncated)
                                   StateNote(
-                                    '当前已加载 ${all.length} 项${data['total'] is num ? '，已知共 ${data['total']} 项' : ''}；仅操作已加载范围，未检查内容不纳入全选。',
+                                    '当前已加载 ${all.length} 项${data.total == null ? '' : '，已知共 ${data.total} 项'}；仅操作已加载范围，未检查内容不纳入全选。',
                                   ),
-                                if (busy.value) ...[
+                                if (busy) ...[
                                   const SizedBox(
                                     height: DesignTokens.spacingSm,
                                   ),
@@ -679,24 +717,23 @@ class FilesPage extends HookConsumerWidget {
                               entries: listing.entries,
                               viewMode: viewMode,
                               builder: (entry, grid) => FileBrowserEntry(
-                                key: ValueKey(value(entry, 'path')),
+                                key: ValueKey((entry.path ?? '')),
                                 controller: controller,
                                 device: device,
                                 entry: entry,
                                 grid: grid,
                                 selected: selected.value.containsKey(
-                                  value(entry, 'path'),
+                                  (entry.path ?? ''),
                                 ),
                                 selectionActive: selecting.value,
                                 enabled: verified,
                                 onBeginSelect: (entry) {
                                   selecting.value = true;
-                                  final entryPath = value(entry, 'path');
+                                  final entryPath = (entry.path ?? '');
                                   selected.value = {
                                     ...selected.value,
                                     entryPath:
-                                        selected.value[entryPath] ??
-                                        Map.of(entry),
+                                        selected.value[entryPath] ?? entry,
                                   };
                                 },
                                 onSelect: toggleEntry,
@@ -751,28 +788,15 @@ String _typeFilterLabel(FileTypeFilter filter) => switch (filter) {
   FileTypeFilter.audio => '音频',
 };
 
-FileViewMode _fileViewModeFromSettings(Json settings) =>
-    value(settings, 'fileViewMode') == 'list'
-    ? FileViewMode.list
-    : FileViewMode.grid;
-
-FileSortKey _fileSortKeyFromSettings(Json settings) =>
-    switch (value(settings, 'fileSortKey')) {
-      'size' => FileSortKey.size,
-      'modified' => FileSortKey.modified,
-      'type' => FileSortKey.type,
-      _ => FileSortKey.name,
-    };
-
-bool _fileSortAscendingFromSettings(Json settings) =>
-    settings['fileSortAscending'] != false;
-
-bool _sameObservedFile(Json previous, Json current) => const [
-  'sourceIdentity',
-  'mode',
-  'size',
-  'modifiedSeconds',
-  'modified',
-  'kind',
-  'isDirectory',
-].every((key) => previous[key] == current[key]);
+bool _sameObservedFile(FileCatalogEntry previous, FileCatalogEntry current) {
+  Object observed(FileCatalogEntry entry) => (
+    identity: entry.sourceIdentity,
+    mode: entry.mode,
+    size: entry.size,
+    modifiedSeconds: entry.modifiedSeconds,
+    modified: entry.modified,
+    kind: entry.kind,
+    directory: entry.isDirectory,
+  );
+  return observed(previous) == observed(current);
+}

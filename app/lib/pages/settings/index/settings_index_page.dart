@@ -1,9 +1,8 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
+import 'package:scrcpy_connect/core/application/app_dependencies_provider.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -15,17 +14,12 @@ import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class SettingsPage extends HookConsumerWidget {
-  const SettingsPage({
-    super.key,
-    required this.controller,
-    this.embedded = false,
-  });
-  final AppStore controller;
+  const SettingsPage({super.key, this.embedded = false});
   final bool embedded;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appSettingsError = ref.watch(
-      appStoreProvider.select((state) => state.settingsError),
+      preferencesProvider.select((state) => state.error),
     );
     final body = GroupedListView(
       padding: EdgeInsets.fromLTRB(
@@ -73,9 +67,9 @@ class SettingsPage extends HookConsumerWidget {
               title: '关于邻接',
               onTap: () async {
                 try {
-                  final info = await controller.execute(
-                    ApplicationCommand.systemInfo,
-                  );
+                  final info = await ref
+                      .read(appDependenciesProvider)
+                      .applicationInfo();
                   if (context.mounted) {
                     showGlassDialog<void>(
                       context: context,
@@ -85,9 +79,9 @@ class SettingsPage extends HookConsumerWidget {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(value(info, 'version', '开发版本')),
+                            Text(info.version),
                             const SizedBox(height: DesignTokens.spacingMd),
-                            Text(value(info, 'description', '基于设备授权的跨设备互联')),
+                            const Text('基于设备授权的跨设备互联'),
                           ],
                         ),
                         actions: [
@@ -95,11 +89,7 @@ class SettingsPage extends HookConsumerWidget {
                             onPressed: () => showLicensePage(
                               context: dialogContext,
                               applicationName: '邻接 Interconnect',
-                              applicationVersion: value(
-                                info,
-                                'version',
-                                '开发版本',
-                              ),
+                              applicationVersion: info.version,
                             ),
                             child: Text(
                               MaterialLocalizations.of(dialogContext)

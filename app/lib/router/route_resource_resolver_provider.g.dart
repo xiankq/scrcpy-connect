@@ -1,0 +1,60 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND
+
+// ignore_for_file: unnecessary_cast
+
+part of 'route_resource_resolver_provider.dart';
+
+// **************************************************************************
+// RiverpodGenerator
+// **************************************************************************
+
+// GENERATED CODE - DO NOT MODIFY BY HAND
+// ignore_for_file: type=lint, type=warning
+
+@ProviderFor(routeResourceResolver)
+final routeResourceResolverProvider = RouteResourceResolverProvider._();
+
+final class RouteResourceResolverProvider
+    extends
+        $FunctionalProvider<
+          RouteResourceResolver,
+          RouteResourceResolver,
+          RouteResourceResolver
+        >
+    with $Provider<RouteResourceResolver> {
+  RouteResourceResolverProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'routeResourceResolverProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$routeResourceResolverHash();
+
+  @$internal
+  @override
+  $ProviderElement<RouteResourceResolver> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  RouteResourceResolver create(Ref ref) {
+    return routeResourceResolver(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(RouteResourceResolver value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<RouteResourceResolver>(value),
+    );
+  }
+}
+
+String _$routeResourceResolverHash() =>
+    r'1510721e07bb79071e33cc75f3e1b00b199589fb';

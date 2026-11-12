@@ -1,3 +1,7 @@
+import 'package:scrcpy_connect/core/application/app_dependencies_provider.dart';
+import 'package:scrcpy_connect/core/gallery/gallery_scan_notifier.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+
 import 'dart:async';
 
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
@@ -5,49 +9,55 @@ import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/core/gallery/gallery_history_notifier.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/gallery/index/gallery_scan_controller.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/file_actions.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 
 import 'widgets/gallery_media_tile.dart';
 import 'widgets/gallery_scan_summary.dart';
 
-class GalleryPage extends HookWidget {
+class GalleryPage extends HookConsumerWidget {
   const GalleryPage({
     super.key,
     required this.controller,
     required this.device,
   });
-  final AppStore controller;
-  final Json device;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final history = ref.watch(galleryHistoryProvider.notifier);
+    final source = ref.watch(
+      appDependenciesProvider.select((dependencies) => dependencies.gallery),
+    );
+    final identity = (id: device.id, guid: device.guid, serial: device.serial);
     final selected = useMemoized(() => ValueNotifier<Set<String>>({}), [
+      source,
       controller,
-      device['id'],
+      identity,
     ]);
     useEffect(() => selected.dispose, [selected]);
     useListenable(selected);
-    final previous = useMemoized(() => controller.galleryHistory.read(device), [
+    final previous = useMemoized(() => history.read(device), [
+      source,
       controller,
-      device['id'],
+      identity,
     ]);
     final scroll = useScrollController(
       initialScrollOffset: previous?.scrollOffset ?? 0,
-      keys: [controller, device['id']],
+      keys: [source, controller, identity],
       keepScrollOffset: false,
     );
     final lastScrollOffset = useMemoized(
       () => ObjectRef(previous?.scrollOffset ?? 0.0),
-      [controller, device['id']],
+      [source, controller, identity],
     );
     useEffect(() {
       void rememberOffset() {
@@ -57,35 +67,34 @@ class GalleryPage extends HookWidget {
       scroll.addListener(rememberOffset);
       return () => scroll.removeListener(rememberOffset);
     }, [scroll]);
-    final scan = useMemoized(
-      () => GalleryScanController(
-        controller.execute,
-        value(device, 'id'),
-        previous: previous,
-      ),
-      [controller, device['id']],
-    );
-    useListenable(scan);
+    final scope = useMemoized(Object.new, [source, controller, identity]);
+    final provider = galleryScanProvider(device, scope: scope);
+    final scan = ref.watch(provider);
+    final actions = ref.read(provider.notifier);
+    final visible = useMemoized(() => ObjectRef(scan), [scope])..value = scan;
     useEffect(() {
-      scheduleMicrotask(scan.start);
+      scheduleMicrotask(actions.start);
       return () {
-        if (scan.result != null) {
-          controller.galleryHistory.save(
-            device,
-            scan.result!,
-            scan.items,
-            lastScrollOffset.value,
+        final saved = visible.value;
+        if (saved.result case final result?) {
+          final offset = lastScrollOffset.value;
+          scheduleMicrotask(
+            () => history.save(
+              device,
+              result,
+              saved.items,
+              offset,
+              source: source,
+            ),
           );
         }
-        scan.dispose();
       };
-    }, [scan]);
-    final data = scan.result ?? <String, dynamic>{};
-    final status = value(data, 'status');
+    }, [actions, history, source]);
+    final status = scan.result?.status;
     final media = scan.items;
     Future<void> reload() async {
       if (selected.value.isNotEmpty || scan.scanning) return;
-      await scan.start();
+      await actions.start();
     }
 
     return PageFrame(
@@ -112,7 +121,7 @@ class GalleryPage extends HookWidget {
       child: RefreshIndicator(
         onRefresh: reload,
         child: CustomScrollView(
-          key: ValueKey((controller, device['id'])),
+          key: ValueKey((controller, device.id)),
           controller: scroll,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
@@ -130,12 +139,14 @@ class GalleryPage extends HookWidget {
                   children: [
                     GalleryScanSummary(
                       scan: scan,
+                      onCancel: actions.cancel,
+                      onRefresh: actions.refresh,
                       device: device,
                       onRestart: reload,
                       onUpdate: selected.value.isNotEmpty
                           ? null
                           : () {
-                              scan.applyUpdate();
+                              actions.applyUpdate();
                               lastScrollOffset.value = 0;
                               if (scroll.hasClients) scroll.jumpTo(0);
                             },
@@ -160,7 +171,14 @@ class GalleryPage extends HookWidget {
                                     media
                                         .where(
                                           (file) => selected.value.contains(
-                                            value(file, 'path'),
+                                            file.path,
+                                          ),
+                                        )
+                                        .map(
+                                          (file) => (
+                                            path: file.path,
+                                            name: file.name,
+                                            canOpen: file.canOpen,
                                           ),
                                         )
                                         .toList(),
@@ -184,12 +202,12 @@ class GalleryPage extends HookWidget {
                 child: EmptyContent(
                   icon: LucideIcons.images,
                   title: scan.result == null ? '相册检查未完成' : '已检查范围内没有可显示的内容',
-                  message: status == 'completed'
+                  message: status == .completed
                       ? '此范围没有识别到照片或视频；应用私有内容请在手机原应用中查看。'
                       : '未读目录仍可能包含照片或视频，可重新检查或在手机上继续。',
                   action: TextButton(
                     onPressed: () =>
-                        openRemoteRoute(context, deviceId: value(device, 'id')),
+                        openRemoteRoute(context, deviceId: device.id),
                     child: const Text('在手机上继续处理'),
                   ),
                 ),
@@ -207,13 +225,14 @@ class GalleryPage extends HookWidget {
                 itemCount: media.length,
                 itemBuilder: (context, i) {
                   final file = media[i];
-                  final path = value(file, 'path');
+                  final path = file.path;
                   return GalleryMediaTile(
                     file: file,
                     controller: controller,
                     device: device,
                     selected: selected.value.contains(path),
                     onTap: () {
+                      if (path == null || path.isEmpty) return;
                       if (selected.value.isNotEmpty) {
                         final next = {...selected.value};
                         next.contains(path)
@@ -222,7 +241,7 @@ class GalleryPage extends HookWidget {
                         selected.value = next;
                       } else {
                         MediaPreviewRoute(
-                          deviceId: value(device, 'id'),
+                          deviceId: device.id,
                           path: path,
                         ).push<void>(context);
                       }
@@ -236,7 +255,7 @@ class GalleryPage extends HookWidget {
                 child: Padding(
                   padding: const EdgeInsets.all(DesignTokens.spacingMd),
                   child: OutlinedButton(
-                    onPressed: scan.paging ? null : scan.loadMore,
+                    onPressed: scan.paging ? null : actions.loadMore,
                     child: Text(scan.paging ? '正在加载' : '加载更多'),
                   ),
                 ),

@@ -37,17 +37,6 @@ class MediaCodecSource {
     }
   }
 
-  factory MediaCodecSource.fromMap(Map<String, dynamic> value) =>
-      MediaCodecSource(
-        sourceId: value['sourceId'] as String,
-        generation: value['generation'] as int,
-        codec: value['codec'] as String,
-        attachAddress: value['attachAddress'] as int,
-        detachAddress: value['detachAddress'] as int,
-        width: value['width'] as int? ?? 0,
-        height: value['height'] as int? ?? 0,
-      );
-
   final String sourceId, codec;
   final int generation, attachAddress, detachAddress, width, height;
   Map<String, Object> toMap() => {

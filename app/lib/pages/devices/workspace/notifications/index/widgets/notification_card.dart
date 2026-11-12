@@ -1,5 +1,8 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/device_notifications.dart';
+import 'package:scrcpy_connect/core/application/app_dependencies_provider.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
@@ -8,11 +11,11 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_icon.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
-class NotificationCard extends HookWidget {
+class NotificationCard extends HookConsumerWidget {
   const NotificationCard({
     super.key,
     required this.controller,
@@ -22,44 +25,65 @@ class NotificationCard extends HookWidget {
     required this.onClear,
   });
 
-  final AppStore controller;
-  final Json device;
-  final Json notification;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
+  final DeviceNotification notification;
   final bool clearing;
   final VoidCallback onClear;
 
-  Future<void> _open(BuildContext context) async {
-    try {
-      final result = await controller.request('notifications.open', {
-        'deviceId': device['id'],
-        'notificationId': notification['id'],
-      });
-      if (!context.mounted) return;
-      if (result['located'] != true) {
-        feedback(context, value(result, 'message', '未能定位原内容，将打开手机界面'));
-      }
-    } catch (error) {
-      if (!context.mounted) return;
-      feedback(context, '$error');
-      if (error is! RequestFailure || error.code != 'authentication_required') {
-        return;
-      }
-    }
-    if (context.mounted) {
-      await openRemoteRoute(context, deviceId: value(device, 'id'));
-    }
-  }
-
   @override
-  Widget build(BuildContext context) {
-    final opening = useState(false);
-    final appName = value(notification, 'appName').trim();
-    final packageName = value(notification, 'packageName');
-    final timestamp = notification['postedAt'];
-    final posted =
-        timestamp is int && timestamp > 0 && timestamp <= 8640000000000000
-        ? DateTime.fromMillisecondsSinceEpoch(timestamp)
-        : null;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifications = ref.watch(
+      appDependenciesProvider.select((source) => source.notifications),
+    );
+    final opening = useValueNotifier(false, [
+      notifications,
+      device.id,
+      notification.id,
+    ]);
+    useListenable(opening);
+    final currentOpening = useRef(opening);
+    currentOpening.value = opening;
+    bool isCurrent() =>
+        context.mounted &&
+        identical(currentOpening.value, opening) &&
+        identical(notifications, controller.notifications);
+    Future<void> open() async {
+      if (opening.value || !isCurrent()) return;
+      opening.value = true;
+      try {
+        try {
+          final result = await notifications.openNotification(
+            device.id,
+            notification.id,
+          );
+          if (!context.mounted || !isCurrent()) return;
+          if (!result.located) {
+            feedback(context, result.message ?? '未能定位原内容，将打开手机界面');
+          }
+        } catch (error) {
+          if (!context.mounted || !isCurrent()) return;
+          feedback(context, '$error');
+          if (error is! RequestFailure ||
+              error.code != 'authentication_required') {
+            return;
+          }
+        }
+        if (context.mounted && isCurrent()) {
+          await openRemoteRoute(context, deviceId: device.id);
+        }
+      } finally {
+        if (isCurrent()) opening.value = false;
+      }
+    }
+
+    final appName = notification.appName.trim();
+    final packageName = notification.packageName;
+    final posted = switch (notification.postedAt) {
+      final int timestamp when timestamp > 0 && timestamp <= 8640000000000000 =>
+        DateTime.fromMillisecondsSinceEpoch(timestamp),
+      _ => null,
+    };
     final localizations = MaterialLocalizations.of(context);
     final now = DateTime.now();
     final time = posted == null
@@ -84,21 +108,12 @@ class NotificationCard extends HookWidget {
         ? time
         : '${localizations.formatShortMonthDay(posted)} · $time';
     return ContentPanel(
-      key: ValueKey('notification-${value(notification, 'id')}'),
+      key: ValueKey('notification-${notification.id}'),
       padding: EdgeInsets.zero,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: opening.value || notification['canOpen'] == false
-              ? null
-              : () async {
-                  opening.value = true;
-                  try {
-                    await _open(context);
-                  } finally {
-                    if (context.mounted) opening.value = false;
-                  }
-                },
+          onTap: opening.value || notification.canOpen == false ? null : open,
           borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
           child: ConstrainedBox(
             constraints: const BoxConstraints(
@@ -120,12 +135,9 @@ class NotificationCard extends HookWidget {
                             dimension: DesignTokens.componentSmallButtonSize,
                             child: FittedBox(
                               child: PhoneAppIcon(
-                                controller: controller,
-                                deviceId: value(device, 'id'),
+                                deviceId: device.id,
                                 packageName: packageName,
-                                userId: notification['userId'] == null
-                                    ? null
-                                    : value(notification, 'userId'),
+                                userId: notification.userId,
                               ),
                             ),
                           )
@@ -161,32 +173,32 @@ class NotificationCard extends HookWidget {
                       ],
                     ),
                   ),
-                  if (value(notification, 'title').isNotEmpty) ...[
+                  if (notification.title.isNotEmpty) ...[
                     const SizedBox(height: DesignTokens.spacingSm),
                     Text(
-                      value(notification, 'title'),
+                      notification.title,
                       style: Theme.of(context).textTheme.bodyLarge
                           ?.copyWith(fontWeight: FontWeight.w600),
                     ),
                   ],
-                  if (value(notification, 'body').isNotEmpty) ...[
+                  if (notification.body.isNotEmpty) ...[
                     const SizedBox(height: DesignTokens.spacingTight),
                     Text(
-                      value(notification, 'body'),
+                      notification.body,
                       style: Theme.of(context).textTheme.bodyLarge,
                     ),
                   ],
-                  if (value(notification, 'title').isEmpty &&
-                      value(notification, 'body').isEmpty) ...[
+                  if (notification.title.isEmpty &&
+                      notification.body.isEmpty) ...[
                     const SizedBox(height: DesignTokens.spacingTight),
                     Text(
                       '此通知未提供预览内容',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
-                  if (notification['canOpen'] == false)
+                  if (notification.canOpen == false)
                     const StateNote('此通知的原始动作已不可用，请在手机原应用中处理。'),
-                  if (notification['canDismiss'] is bool) ...[
+                  if (notification.canDismiss is bool) ...[
                     const SizedBox(height: DesignTokens.spacingSm),
                     ConstrainedBox(
                       constraints: const BoxConstraints(
@@ -200,7 +212,7 @@ class NotificationCard extends HookWidget {
                           spacing: DesignTokens.spacingSm,
                           runSpacing: DesignTokens.spacingXxs,
                           children: [
-                            if (notification['canDismiss'] == true)
+                            if (notification.canDismiss == true)
                               GlassTooltip(
                                 message: '清除通知',
                                 child: TextButton.icon(
@@ -218,7 +230,7 @@ class NotificationCard extends HookWidget {
                                   label: const Text('清除通知'),
                                 ),
                               )
-                            else if (notification['canDismiss'] == false)
+                            else if (notification.canDismiss == false)
                               Text(
                                 '手机系统将此项标为不可清除，请在原应用中处理。',
                                 style: Theme.of(context).textTheme.bodySmall,

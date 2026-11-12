@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/services/file_type_policy.dart';
+import 'package:scrcpy_connect/core/files/file_kind.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';

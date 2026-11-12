@@ -1,10 +1,11 @@
-import 'package:scrcpy_connect/services/file_local_directories.dart';
+import 'package:scrcpy_connect/core/files/file_transfers.dart';
+import 'package:scrcpy_connect/core/files/file_catalog_entry.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+import 'package:scrcpy_connect/core/files/file_local_directories.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/media_cache_blocker.dart';
 import 'package:path/path.dart' as p;
@@ -17,9 +18,9 @@ import 'package:file_picker/file_picker.dart';
 
 Future<void> retrieveFile(
   BuildContext context,
-  AppStore controller,
-  Json device,
-  Json file, {
+  AppNotifier controller,
+  DeviceSnapshot device,
+  FileCatalogEntry file, {
   bool share = false,
 }) async {
   if (share && !supportsSystemFileShare) {
@@ -43,47 +44,50 @@ Future<void> retrieveFile(
   directory ??= (await receivedDirectory()).path;
   if (!context.mounted) return;
   if (!_connected(controller, device)) return;
-  final result = await _pull(context, controller, {
-    'deviceId': device['id'],
-    'path': file['path'],
-    'destination': p.join(directory, value(file, 'name')),
-    'conflict': 'ask',
-    'destinationScope': privateCache ? 'privateCache' : 'localPath',
-  });
+  final result = await _pull(
+    context,
+    controller,
+    FileTransferPlan(
+      deviceId: device.id,
+      direction: .pull,
+      items: [
+        FileTransferSelection(
+          source: file.path!,
+          destination: p.join(directory, file.name),
+        ),
+      ],
+      destination: privateCache ? .privateCache : .localPath,
+    ),
+  );
   if (result == null || !context.mounted) return;
-  final transferId = value(result, 'transferId');
-  if (privateCache && transferId.isNotEmpty) {
+  final transferId = result.transferId;
+  if (privateCache && transferId != null && transferId.isNotEmpty) {
     ReceiveContentRoute(taskId: transferId, share: share).push<void>(context);
     return;
   }
-  final local = value(result, 'localPath', value(result, 'path'));
-  if (result['status'] == 'completed' && local.isNotEmpty) {
-    feedback(context, privateCache ? '已取回本机暂存，尚未保存到系统位置' : '已保存至 $local');
-  } else {
-    feedback(
-      context,
-      share
-          ? '正在取回原文件，完成后请从传输详情分享'
-          : privateCache
-          ? '正在取回本机暂存，完成后可保存到系统位置'
-          : '已建立传输任务，请在传输中心查看实际结果',
-    );
-    TransferCenterRoute().push<void>(context);
-  }
+  feedback(
+    context,
+    share
+        ? '正在取回原文件，完成后请从传输详情分享'
+        : privateCache
+        ? '正在取回本机暂存，完成后可保存到系统位置'
+        : '已建立传输任务，请在传输中心查看实际结果',
+  );
+  TransferCenterRoute().push<void>(context);
 }
 
 Future<void> retrieveSelection(
   BuildContext context,
-  AppStore controller,
-  Json device,
-  List<Json> files, {
+  AppNotifier controller,
+  DeviceSnapshot device,
+  List<({String? path, String name, bool canOpen})> files, {
   bool Function()? canSubmit,
   bool canReduceSelection = false,
 }) async {
   if (files.isEmpty) return;
   bool ready() => _connected(controller, device) && (canSubmit?.call() ?? true);
   if (!ready()) return;
-  if (files.any((file) => !fileCanOpen(file))) {
+  if (files.any((file) => !file.canOpen || file.path?.isNotEmpty != true)) {
     feedback(context, '所选内容包含无法解析路径的文件，请重新选择可操作的文件。');
     return;
   }
@@ -95,39 +99,45 @@ Future<void> retrieveSelection(
         );
   if (directory == null || !context.mounted) return;
   if (!ready()) return;
-  final result = await _pull(context, controller, {
-    'deviceId': device['id'],
-    'items': [
-      for (final file in files)
-        {
-          'path': file['path'],
-          'destination': p.join(directory, value(file, 'name')),
-        },
-    ],
-    'conflict': 'ask',
-    'destinationScope': privateCache ? 'privateCache' : 'localPath',
-  }, canReduceSelection: canReduceSelection);
+  final result = await _pull(
+    context,
+    controller,
+    FileTransferPlan(
+      deviceId: device.id,
+      direction: .pull,
+      items: [
+        for (final file in files)
+          FileTransferSelection(
+            source: file.path!,
+            destination: p.join(directory, file.name),
+          ),
+      ],
+      destination: privateCache ? .privateCache : .localPath,
+    ),
+    canReduceSelection: canReduceSelection,
+  );
   if (result != null && context.mounted) {
     TransferCenterRoute().push<void>(context);
   }
 }
 
-bool _connected(AppStore controller, Json device) {
+bool _connected(AppNotifier controller, DeviceSnapshot device) {
   final state = controller.snapshot();
   final current = state.devices
-      .where((item) => item['id'] == device['id'])
+      .where((item) => item.id == device.id)
       .firstOrNull;
-  return current?['status'] == 'connected' && !state.reconciliationPending;
+  return current?.status == DeviceConnectionStatus.connected &&
+      !state.reconciliationPending;
 }
 
-Future<Json?> _pull(
+Future<FileTransferSubmission?> _pull(
   BuildContext context,
-  AppStore controller,
-  Json params, {
+  AppNotifier controller,
+  FileTransferPlan plan, {
   bool canReduceSelection = false,
 }) async {
   try {
-    return await controller.request('files.pull', params);
+    return await controller.fileTransfers.startTransfer(plan);
   } catch (error) {
     if (context.mounted) {
       if (isMediaCacheAdmissionFailure(error)) {
@@ -136,8 +146,7 @@ Future<Json?> _pull(
           controller,
           error,
           canReduceSelection: canReduceSelection,
-          onOpenPhone: () =>
-              openRemoteRoute(context, deviceId: value(params, 'deviceId')),
+          onOpenPhone: () => openRemoteRoute(context, deviceId: plan.deviceId),
         );
       } else {
         feedback(context, '$error');

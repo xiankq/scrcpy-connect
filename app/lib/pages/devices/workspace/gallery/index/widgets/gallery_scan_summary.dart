@@ -1,13 +1,13 @@
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
-import '../gallery_scan_controller.dart';
+import 'package:scrcpy_connect/core/gallery/gallery_scan_notifier.dart';
+
 import 'gallery_scope_sheet.dart';
 
 class GalleryScanSummary extends StatelessWidget {
@@ -16,25 +16,29 @@ class GalleryScanSummary extends StatelessWidget {
     required this.scan,
     required this.device,
     required this.onRestart,
+    required this.onCancel,
+    required this.onRefresh,
     this.onUpdate,
   });
 
-  final GalleryScanController scan;
-  final Json device;
+  final GalleryScanState scan;
+  final DeviceSnapshot device;
   final VoidCallback onRestart;
+  final VoidCallback onCancel;
+  final VoidCallback onRefresh;
   final VoidCallback? onUpdate;
 
   @override
   Widget build(BuildContext context) {
-    final data = scan.result ?? <String, dynamic>{};
-    final status = value(data, 'status');
+    final data = scan.result;
+    final status = data?.status;
     final progress = scan.progress;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (scan.showingPrevious)
           Text(
-            '上次检查结果 · ${value(data, 'checkedAt', value(data, 'startedAt', '检查时间未记录'))}',
+            '上次检查结果 · ${data?.checkedAt?.toIso8601String() ?? data?.startedAt?.toIso8601String() ?? '检查时间未记录'}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         if (scan.hasUpdate)
@@ -43,12 +47,12 @@ class GalleryScanSummary extends StatelessWidget {
           scan.scanning
               ? '正在检查手机中的照片与视频'
               : switch (status) {
-                  'partial' => '部分目录未能检查',
-                  'cancelled' => '已停止检查',
-                  'completed' => '已检查共享存储中的照片与视频',
-                  _ => '暂时无法读取相册',
+                  .partial => '部分目录未能检查',
+                  .cancelled => '已停止检查',
+                  .completed => '已检查共享存储中的照片与视频',
+                  .unknown || .scanning || null => '暂时无法读取相册',
                 },
-          style: status == 'completed' && !scan.scanning
+          style: status == .completed && !scan.scanning
               ? Theme.of(context).textTheme.bodySmall
               : Theme.of(context).textTheme.bodyLarge,
         ),
@@ -57,11 +61,11 @@ class GalleryScanSummary extends StatelessWidget {
           builder: (context, constraints) {
             final details = Text(
               scan.scanning
-                  ? '已检查 ${progress['visitedDirectories'] ?? 0} 个文件夹、${progress['visitedEntries'] ?? 0} 项'
-                  : '已显示 ${scan.items.length} / ${data['total'] ?? 0} 项 · 按文件修改时间排列',
+                  ? '已检查 ${progress?.visitedDirectories ?? 0} 个文件夹、${progress?.visitedEntries ?? 0} 项'
+                  : '已显示 ${scan.items.length} / ${data?.total ?? 0} 项 · 按文件修改时间排列',
               style: Theme.of(context).textTheme.bodySmall,
             );
-            if (scan.result == null) return details;
+            if (data == null) return details;
             final scopeAction = TextButton(
               style: TextButton.styleFrom(
                 minimumSize: const Size(
@@ -118,16 +122,14 @@ class GalleryScanSummary extends StatelessWidget {
           const SizedBox(height: DesignTokens.spacingSm),
           const ContentLoadingIndicator(),
           TextButton(
-            onPressed: scan.scanId == null || scan.stopping
-                ? null
-                : scan.cancel,
+            onPressed: scan.scanId == null || scan.stopping ? null : onCancel,
             child: Text(scan.stopping ? '正在停止检查' : '停止检查'),
           ),
         ],
         if (scan.error != null) ...[
           StateNote(scan.error!),
           TextButton(
-            onPressed: scan.scanId == null ? onRestart : scan.refresh,
+            onPressed: scan.scanId == null ? onRestart : onRefresh,
             child: const Text('重新核验本次检查'),
           ),
         ],

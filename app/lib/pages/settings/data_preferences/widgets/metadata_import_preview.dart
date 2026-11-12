@@ -1,19 +1,17 @@
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/core/settings/metadata_management.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 
 class MetadataImportPreview extends HookWidget {
   const MetadataImportPreview({super.key, required this.preview});
-  final Json preview;
+  final SettingsImportPreview preview;
   @override
   Widget build(BuildContext context) {
     final importGlobal = useState(false);
-    final duplicate = preview['alreadyImported'] == true;
-    final receipt = jsonObject(preview['receipt']);
-    final changes = objects(preview['globalChanges']);
+    final duplicate = preview.alreadyImported;
+    final changes = preview.globalChanges;
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(DesignTokens.spacingMd),
@@ -28,16 +26,17 @@ class MetadataImportPreview extends HookWidget {
             const SizedBox(height: DesignTokens.spacingMd),
             Text(
               duplicate
-                  ? '上次已新增 ${receipt['restored'] ?? 0} 条记录，不会重复追加。'
-                  : '将新增 ${preview['newRecords']} 条未授权的设备记录。',
+                  ? '上次已新增 ${preview.receipt!.restored} 条记录，不会重复追加。'
+                  : '将新增 ${preview.newRecords} 条未授权的设备记录。',
             ),
             const SizedBox(height: DesignTokens.spacingMd),
             const Text('不能恢复连接许可，也不会恢复文件中的每设备画质、电源与剪贴板设置。本机已有的设备记录与偏好会保留。'),
             if (duplicate) ...[
               const SizedBox(height: DesignTokens.spacingMd),
-              Text(switch (preview['preferencesStatus']) {
-                'matchesCurrent' => '当前全局偏好与此文件一致。',
-                'needsReview' => '上次选择了导入全局偏好，当前值与文件不一致。请到对应设置中核对；这里不会重新应用旧设置。',
+              Text(switch (preview.preferencesStatus) {
+                ImportPreferencesStatus.matchesCurrent => '当前全局偏好与此文件一致。',
+                ImportPreferencesStatus.needsReview =>
+                  '上次选择了导入全局偏好，当前值与文件不一致。请到对应设置中核对；这里不会重新应用旧设置。',
                 _ => '上次导入保留了本机全局偏好。',
               }),
             ] else if (changes.isNotEmpty) ...[
@@ -56,7 +55,7 @@ class MetadataImportPreview extends HookWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: DesignTokens.spacingSm),
                   child: Text(
-                    '${_preferenceName(value(change, 'key'))}：${_preferenceValue(change['current'])} → ${_preferenceValue(change['imported'])}',
+                    '${_preferenceName(change.key)}：${_preferenceValue(change.current)} → ${_preferenceValue(change.imported)}',
                   ),
                 ),
             ],
@@ -64,7 +63,7 @@ class MetadataImportPreview extends HookWidget {
             FilledButton(
               onPressed: () =>
                   Navigator.pop(context, duplicate ? null : importGlobal.value),
-              child: Text(duplicate ? '完成' : '导入 ${preview['newRecords']} 条记录'),
+              child: Text(duplicate ? '完成' : '导入 ${preview.newRecords} 条记录'),
             ),
             if (!duplicate)
               TextButton(

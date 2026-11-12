@@ -1,9 +1,10 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/core/application/app_dependencies_provider.dart';
+import 'package:scrcpy_connect/core/devices/device_setup.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/models/connection_validation.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
@@ -18,7 +19,7 @@ import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-class UsbGuidePage extends HookWidget {
+class UsbGuidePage extends HookConsumerWidget {
   const UsbGuidePage({
     super.key,
     required this.controller,
@@ -27,57 +28,69 @@ class UsbGuidePage extends HookWidget {
     this.onUseWireless,
     this.prepareConnection,
   });
-  final AppStore controller;
+  final AppNotifier controller;
   final bool embedded;
-  final Future<Json?> Function()? prepareConnection;
+  final Future<bool> Function()? prepareConnection;
   final String? deviceId;
   final VoidCallback? onUseWireless;
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final deviceManagement = ref.watch(
+      appDependenciesProvider.select((source) => source.devices),
+    );
+    final setup = ref.watch(
+      appDependenciesProvider.select((source) => source.setup),
+    );
     final usbSupported = kIsWeb
         ? false
         : defaultTargetPlatform != TargetPlatform.iOS;
-    final state = useState<Json?>(null);
+    final state = useState<UsbSetupResult?>(null);
     final busy = useState(false);
     final cancelling = useState(false);
     final attempt = useRef<String?>(null);
     final message = useState<String?>(null);
-    useEffect(
-      () => () {
+    bool ownsScope() =>
+        identical(setup, controller.setup) &&
+        identical(deviceManagement, controller.deviceManagement);
+    useEffect(() {
+      Future.microtask(() {
+        if (!context.mounted || !ownsScope()) return;
+        state.value = null;
+        busy.value = false;
+        cancelling.value = false;
+        message.value = null;
+      });
+      return () {
         final id = attempt.value;
-        if (id != null) {
-          controller.execute(ApplicationCommand.devicesCancel, {
-            'attemptId': id,
-          }).ignore();
-        }
-      },
-      const [],
-    );
+        attempt.value = null;
+        if (id != null) deviceManagement.cancelConnectionAttempt(id).ignore();
+      };
+    }, [setup, deviceManagement, deviceId]);
     Future<void> cancel() async {
       final id = attempt.value;
       if (id == null || cancelling.value) return;
       cancelling.value = true;
       try {
-        await controller.execute(ApplicationCommand.devicesCancel, {
-          'attemptId': id,
-        });
-        if (!context.mounted || attempt.value != id) return;
+        await deviceManagement.cancelConnectionAttempt(id);
+        if (!context.mounted || !ownsScope() || attempt.value != id) {
+          return;
+        }
         attempt.value = null;
         busy.value = false;
         message.value = '检查已取消。';
       } catch (error) {
-        if (context.mounted) message.value = '$error';
+        if (context.mounted && ownsScope()) message.value = '$error';
       } finally {
-        if (context.mounted) cancelling.value = false;
+        if (context.mounted && ownsScope()) cancelling.value = false;
       }
     }
 
     Future<void> check({String? serial, String? usbDeviceId}) async {
       if (busy.value) return;
-      final params =
-          await prepareConnection?.call() ??
-          (prepareConnection == null ? <String, dynamic>{} : null);
-      if (params == null || !context.mounted || busy.value) return;
+      final allowed = await prepareConnection?.call() ?? true;
+      if (!allowed || !context.mounted || !ownsScope() || busy.value) {
+        return;
+      }
       final id =
           'usb-${DateTime.now().microsecondsSinceEpoch}-${identityHashCode(attempt)}';
       attempt.value = id;
@@ -85,29 +98,32 @@ class UsbGuidePage extends HookWidget {
       state.value = null;
       message.value = null;
       try {
-        final result = await controller.execute(ApplicationCommand.devicesUsb, {
-          ...params,
-          'attemptId': id,
-          'deviceId': ?deviceId,
-          'serial': ?serial,
-          'usbDeviceId': ?usbDeviceId,
-          if (serial != null || usbDeviceId != null) 'connect': true,
-        });
-        if (!context.mounted || attempt.value != id) return;
+        final result = await setup.connectUsb(
+          attemptId: id,
+          deviceId: deviceId,
+          serial: serial,
+          usbDeviceId: usbDeviceId,
+          connect: serial != null || usbDeviceId != null,
+        );
+        if (!context.mounted || !ownsScope() || attempt.value != id) {
+          return;
+        }
         if (deviceId != null &&
-            responseDeviceId(result) != null &&
-            responseDeviceId(result) != deviceId) {
+            result.deviceId != null &&
+            result.deviceId != deviceId) {
           throw const RequestFailure(
             'device_identity_mismatch',
             'USB连接结果不属于原设备，请重新检查。',
           );
         }
         state.value = result;
-        await controller.refreshDevices();
+        await controller.deviceList.refresh();
       } catch (error) {
-        if (context.mounted && attempt.value == id) message.value = '$error';
+        if (context.mounted && ownsScope() && attempt.value == id) {
+          message.value = '$error';
+        }
       } finally {
-        if (context.mounted && attempt.value == id) {
+        if (context.mounted && ownsScope() && attempt.value == id) {
           busy.value = false;
           attempt.value = null;
         }
@@ -160,34 +176,26 @@ class UsbGuidePage extends HookWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                value(
-                  state.value!,
-                  'message',
-                  state.value!['connected'] == true
-                      ? 'USB 连接已建立'
-                      : '选择 USB 设备，并在手机上允许调试。',
-                ),
-              ),
-              if (state.value!['connected'] == true &&
-                  state.value!['device'] is Map<Object?, Object?> &&
-                  responseDeviceId(state.value) != null)
+              Text(switch (state.value!) {
+                UsbSelectionRequired(:final message) =>
+                  message ?? '选择 USB 设备，并在手机上允许调试。',
+                UsbConnected() => 'USB 连接已建立',
+              }),
+              if (state.value case UsbConnected(:final receipt))
                 FilledButton(
-                  onPressed: () => WorkspaceRoute(
-                    deviceId: value(
-                      Map<String, dynamic>.from(
-                        state.value!['device'] as Map<Object?, Object?>,
-                      ),
-                      'id',
-                    ),
-                  ).pushReplacement(context),
+                  onPressed: () =>
+                      WorkspaceRoute(deviceId: receipt.deviceId)
+                          .pushReplacement(context),
                   child: const Text('打开设备工作台'),
                 ),
             ],
           ),
         ),
     ];
-    final devices = objects(state.value?['devices']);
+    final devices = switch (state.value) {
+      UsbSelectionRequired(:final devices) => devices,
+      _ => const <UsbDeviceChoice>[],
+    };
     final trailing = <Widget>[
       if (!embedded)
         TextButton(
@@ -213,9 +221,9 @@ class UsbGuidePage extends HookWidget {
           return trailing[deviceIndex - devices.length];
         }
         final d = devices[deviceIndex];
-        final usbDeviceId = value(d, 'usbDeviceId');
-        final serial = value(d, 'serial');
-        final name = value(d, 'name');
+        final usbDeviceId = d.usbDeviceId ?? '';
+        final serial = d.serial;
+        final name = d.name ?? '';
         final label = serial.isNotEmpty
             ? serial
             : name.isNotEmpty
@@ -225,9 +233,9 @@ class UsbGuidePage extends HookWidget {
           key: ValueKey('usb-${usbDeviceId.isNotEmpty ? usbDeviceId : label}'),
           icon: LucideIcons.smartphone,
           title: label,
-          onTap: d['status'] == 'connected'
+          onTap: d.device?.status == .connected
               ? () =>
-                    WorkspaceRoute(deviceId: value(d, 'id'))
+                    WorkspaceRoute(deviceId: d.device!.id)
                         .pushReplacement(context)
               : (usbDeviceId.isNotEmpty || serial.isNotEmpty) && !busy.value
               ? () => check(

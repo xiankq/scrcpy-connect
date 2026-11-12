@@ -1,6 +1,5 @@
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:flutter/material.dart';
@@ -14,23 +13,19 @@ class DeviceIdentity extends StatelessWidget {
     this.compact = false,
     this.showcase = false,
   });
-  final Json device;
+  final DeviceSnapshot device;
   final bool compact;
   final bool showcase;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final (statusIcon, statusColor) = switch (value(
-      device,
-      'status',
-      'offline',
-    )) {
-      'connected' => (LucideIcons.circleCheck, ConnectTokens.mint),
-      'connecting' ||
-      'reconnecting' ||
-      'checking' => (LucideIcons.loaderCircle, ConnectTokens.blue),
-      'unauthorized' => (LucideIcons.shieldAlert, ConnectTokens.amber),
+    final (statusIcon, statusColor) = switch (device.status) {
+      .connected => (LucideIcons.circleCheck, ConnectTokens.mint),
+      .connecting ||
+      .reconnecting ||
+      .checking => (LucideIcons.loaderCircle, ConnectTokens.blue),
+      .unauthorized => (LucideIcons.shieldAlert, ConnectTokens.amber),
       _ => (LucideIcons.wifiOff, colors.onSurfaceVariant),
     };
     final width = showcase
@@ -97,10 +92,9 @@ class DeviceIdentity extends StatelessWidget {
   }
 }
 
-String deviceConnectionLabel(Json device) {
-  final status = value(device, 'status', 'offline');
-  if (status != 'offline') return statusText(status);
-  final seconds = int.tryParse(value(device, 'lastSeen'));
+String deviceConnectionLabel(DeviceSnapshot device) {
+  if (device.status != .offline) return deviceStatusText(device);
+  final seconds = device.lastSeen;
   if (seconds == null || seconds <= 0) return '离线 · 暂无最近连接时间';
   final time = DateTime.fromMillisecondsSinceEpoch(seconds * 1000).toLocal();
   String two(int number) => number.toString().padLeft(2, '0');

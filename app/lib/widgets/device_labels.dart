@@ -1,23 +1,32 @@
-import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
 
-String deviceName(Json device) =>
-    value(device, 'name', value(device, 'model', 'Android 设备'));
+String deviceName(DeviceSnapshot device) =>
+    device.name ?? device.model ?? 'Android 设备';
 
-bool deviceConnectionInProgress(Json device) =>
-    ['connecting', 'checking', 'reconnecting'].contains(device['status']);
+bool deviceConnectionInProgress(DeviceSnapshot device) =>
+    switch (device.status) {
+      .connecting || .checking || .reconnecting => true,
+      _ => false,
+    };
 
-bool hasDeviceConnectionIntent(Json device) =>
-    device['status'] == 'connected' ||
+bool hasDeviceConnectionIntent(DeviceSnapshot device) =>
+    device.status == DeviceConnectionStatus.connected ||
     deviceConnectionInProgress(device) ||
-    (device['transport'] != 'usb' && device['autoReconnect'] == true);
+    (device.transport != DeviceTransport.usb && device.autoReconnect == true);
 
-String deviceStatusText(Json device) {
-  if (device['status'] == 'offline' && device['transport'] != 'usb') {
-    if (device['autoReconnect'] == true) return '等待重连';
-  }
-  return statusText(value(device, 'status', 'offline'));
-}
+String deviceStatusText(DeviceSnapshot device) => switch (device.status) {
+  .offline when device.transport != .usb && device.autoReconnect => '等待重连',
+  .offline => '离线',
+  .connected => '已连接',
+  .checking => '正在检查',
+  .connecting => '正在连接',
+  .reconnecting => '正在恢复连接',
+  .paired => '已配对，尚未连接',
+  .unauthorized => '需要重新授权',
+  .unknown => '尚未检查',
+  .failed => '失败',
+  .authorizing => '状态待核验',
+};
 
 String statusText(String status) => switch (status) {
   'connected' => '已连接',

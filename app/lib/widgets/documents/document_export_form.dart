@@ -1,9 +1,9 @@
+import 'package:scrcpy_connect/core/files/system_documents.dart';
 import 'package:scrcpy_connect/widgets/documents/document_operation.dart';
 import 'package:scrcpy_connect/hooks/use_transfer_cache_lease.dart';
 import 'package:scrcpy_connect/utils/formatters.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:scrcpy_connect/widgets/documents/original_file_header.dart';
 import 'package:scrcpy_connect/widgets/documents/file_delivery_path.dart';
@@ -28,7 +28,7 @@ class DocumentExportForm extends HookWidget {
     this.partial = false,
     this.sourceLabel = '被控设备',
   });
-  final AppStore controller;
+  final AppNotifier controller;
   final String localPath;
   final String name;
   final String kind;
@@ -54,35 +54,31 @@ class DocumentExportForm extends HookWidget {
     final cacheLease = useTransferCacheLease(controller, transferId);
     final operation = useDocumentOperationController(
       controller,
-      exportSource: {
-        'sourceId': transferId == null ? 'local' : 'transfer:$transferId',
-        'localPath': localPath,
-        'kind': kind,
-      },
+      exportSource: DocumentSource(
+        sourceId: transferId == null ? 'local' : 'transfer:$transferId',
+        localPath: localPath,
+        kind: DocumentKind.values.byName(kind),
+      ),
     );
     final reviewedOperation = useState<String?>(null);
     final acknowledgedUnknown =
         operation.recordOperationId != null &&
         reviewedOperation.value == operation.recordOperationId;
     final result = operation.result;
-    final status = value(result ?? {}, 'status');
-    final savedCounts = [
-      result?['files'],
-      result?['directories'],
-      result?['bytes'],
-    ];
+    final status = result?.status.name ?? '';
+    final savedCounts = [result?.files, result?.directories, result?.bytes];
     final confirmedEmpty =
-        result?['partialDestinationPossible'] == false &&
-        savedCounts.every((count) => count is num && count == 0);
+        result?.partialDestinationPossible == false &&
+        savedCounts.every((count) => count != null && count == 0);
     final hasSavedContent = savedCounts.any(
-      (count) => count is num && count > 0,
+      (count) => count != null && count > 0,
     );
     final waiting = operation.busy || status == 'pending';
     final unknown =
         result != null &&
         status != 'saved' &&
         status != 'pending' &&
-        (result['partialDestinationPossible'] == true ||
+        (result.partialDestinationPossible == true ||
             !['partial', 'cancelled', 'failed'].contains(status));
     final deliveryState = status == 'saved'
         ? FileDeliveryMilestone.complete
@@ -94,7 +90,7 @@ class DocumentExportForm extends HookWidget {
           ? StateNote('无法保留这份暂存：${cacheLease.error}。请返回原设备重新取回。')
           : const Center(child: CircularProgressIndicator.adaptive());
     }
-    final errors = objects(result?['errors']);
+    final errors = result?.errors ?? <DocumentIssue>[];
     final leading = <Widget>[
       OriginalFileHeader(name: name, kind: kind),
       const SizedBox(height: DesignTokens.spacingLg),
@@ -151,17 +147,16 @@ class DocumentExportForm extends HookWidget {
                 _ => '系统保存结果待核对',
               }, style: Theme.of(context).textTheme.titleLarge),
               if (status == 'saved') const Text('如保存到了云盘，云端同步结果请在对应应用核对。'),
-              if (value(result, 'name').isNotEmpty)
-                Text('系统名称：${value(result, 'name')}'),
-              if (result['files'] is num && result['directories'] is num)
+              if ((result.name ?? '').isNotEmpty)
+                Text('系统名称：${(result.name ?? '')}'),
+              if (result.files != null && result.directories != null)
                 Text(
-                  '${result['files']} 个文件 · ${result['directories']} 个文件夹 · ${bytes(result['bytes'])}',
+                  '${result.files} 个文件 · ${result.directories} 个文件夹 · ${bytes(result.bytes)}',
                 ),
-              if (result['skipped'] is num && (result['skipped'] as num) > 0)
-                Text('跳过 ${result['skipped']} 项'),
+              if ((result.skipped ?? 0) > 0) Text('跳过 ${result.skipped} 项'),
               if (status == 'partial' || unknown)
                 const StateNote('请先在系统文件应用核对实际内容，已有结果不会自动重复写入。'),
-              if (result['partialDestinationPossible'] == true &&
+              if (result.partialDestinationPossible == true &&
                   status != 'saved')
                 const StateNote('系统位置可能已留下部分内容。请在系统文件应用核对；本机暂存未被删除。'),
             ],
@@ -187,12 +182,7 @@ class DocumentExportForm extends HookWidget {
               : () {
                   final reviewed = acknowledgedUnknown;
                   reviewedOperation.value = null;
-                  operation.run('documents.export', {
-                    'localPath': localPath,
-                    'name': name,
-                    'kind': kind,
-                    'conflict': 'ask',
-                  }, reviewed: reviewed);
+                  operation.export(name, reviewed: reviewed);
                 },
           child: Text(result == null ? '选择系统位置并保存' : '重新选择系统位置'),
         ),
@@ -210,12 +200,7 @@ class DocumentExportForm extends HookWidget {
                       !context.mounted) {
                     return;
                   }
-                  await operation.run('documents.export', {
-                    'localPath': localPath,
-                    'name': name,
-                    'kind': kind,
-                    'conflict': 'ask',
-                  }, additionalCopy: true);
+                  await operation.export(name, additionalCopy: true);
                 },
           child: const Text('再保存一份'),
         ),
@@ -229,7 +214,7 @@ class DocumentExportForm extends HookWidget {
         if (errorIndex < errors.length) {
           final error = errors[errorIndex];
           return StateNote(
-            '${value(error, 'path')}：${value(error, 'message', '系统尚未确认结果')}',
+            '${error.path}：${error.message.isEmpty ? '系统尚未确认结果' : error.message}',
             icon: LucideIcons.circleAlert,
           );
         }

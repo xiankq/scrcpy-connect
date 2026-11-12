@@ -1,11 +1,10 @@
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/files/file_catalog_entry.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/media_thumbnail.dart';
-import 'package:scrcpy_connect/widgets/file_browser.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 
 class GalleryMediaTile extends StatelessWidget {
   const GalleryMediaTile({
@@ -17,44 +16,44 @@ class GalleryMediaTile extends StatelessWidget {
     required this.onTap,
   });
 
-  final Json file;
-  final AppStore controller;
-  final Json device;
+  final FileCatalogEntry file;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: value(file, 'name'),
+      label: file.name,
       selected: selected,
       button: true,
       child: InkWell(
         borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
-        onTap: fileCanOpen(file) ? onTap : null,
+        onTap: (file.canOpen && file.path?.isNotEmpty == true) ? onTap : null,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (!fileCanOpen(file))
+              if (!(file.canOpen && file.path?.isNotEmpty == true))
                 Container(
                   color: Theme.of(context).colorScheme.surface,
                   padding: const EdgeInsets.all(DesignTokens.spacingSm),
                   child: Center(
                     child: Text(
-                      fileUnavailableReason(file),
+                      file.reason ?? '文件名无法解析为有效路径，暂时无法操作。',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),
                 )
               else
                 MediaThumbnail(
-                  file: file,
-                  controller: controller,
+                  name: file.name,
+                  path: file.path!,
                   device: device,
                 ),
-              if (value(file, 'mime').startsWith('video'))
+              if (file.mime.startsWith('video'))
                 const Positioned(
                   left: 8,
                   bottom: 8,

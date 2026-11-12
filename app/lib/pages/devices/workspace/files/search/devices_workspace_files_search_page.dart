@@ -1,6 +1,6 @@
+import 'package:scrcpy_connect/core/files/file_catalog_entry.dart';
+import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:convert';
 
@@ -12,13 +12,15 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/search/widgets/file_search_controls.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/search/widgets/file_search_result_row.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/files/search/file_search_controller.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
+import 'package:scrcpy_connect/core/files/file_search_notifier.dart';
+import 'package:scrcpy_connect/core/files/file_search.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
-class FileSearchPage extends HookWidget {
+class FileSearchPage extends HookConsumerWidget {
   const FileSearchPage({
     super.key,
     required this.controller,
@@ -26,37 +28,35 @@ class FileSearchPage extends HookWidget {
     this.initialPath = '/sdcard',
     this.initialQuery = '',
   });
-  final AppStore controller;
-  final Json device;
+  final AppNotifier controller;
+  final DeviceSnapshot device;
   final String initialPath;
   final String initialQuery;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final query = useTextEditingController(text: initialQuery);
     useListenable(query);
-    final filter = useState('all');
+    final filter = useState(FileCatalogFilter.all);
     final entireStorage = useState(false);
     final scopePath = entireStorage.value ? '/sdcard' : initialPath;
-    final operation = useMemoized(
-      () => FileSearchController(controller.execute, value(device, 'id')),
-      [controller, device['id']],
-    );
-    useEffect(() => operation.dispose, [operation]);
-    useListenable(operation);
-    final result = operation.result;
-    final entries = objects(result?['entries']);
-    final issues = objects(result?['issues']);
-    final status = value(result ?? {}, 'status');
+    final scope = useMemoized(Object.new, [device.id]);
+    final provider = fileSearchProvider(device.id, scope: scope);
+    final operation = ref.read(provider.notifier);
+    final searchState = ref.watch(provider);
+    final result = searchState.result;
+    final entries = result?.entries ?? const [];
+    final issues = result?.issues ?? const [];
+    final status = result?.status ?? FileSearchStatus.unknown;
     final dirty =
         result != null &&
-        (result['query'] != query.text.trim() ||
-            result['filter'] != filter.value ||
-            result['path'] != scopePath);
+        (result.query != query.text.trim() ||
+            result.filter != filter.value ||
+            result.path != scopePath);
     final tooLong = utf8.encode(query.text.trim()).length > 256;
     final canSearch =
-        !tooLong && (query.text.trim().isNotEmpty || filter.value != 'all');
-    final running = operation.running;
+        !tooLong && (query.text.trim().isNotEmpty || filter.value != .all);
+    final running = searchState.running;
     Future<void> search() async {
       FocusScope.of(context).unfocus();
       await operation.start(query.text.trim(), filter.value, path: scopePath);
@@ -140,13 +140,13 @@ class FileSearchPage extends HookWidget {
 
                     child: running
                         ? FilledButton(
-                            onPressed: operation.stopping
+                            onPressed: searchState.stopping
                                 ? null
                                 : operation.cancel,
                             child: Text(
-                              operation.stopping
+                              searchState.stopping
                                   ? '正在停止…'
-                                  : operation.starting
+                                  : searchState.starting
                                   ? '正在开始搜索…'
                                   : '停止搜索',
                             ),
@@ -185,9 +185,9 @@ class FileSearchPage extends HookWidget {
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
-                  if (operation.error != null) ...[
-                    StateNote(operation.error!),
-                    if (operation.searchId != null)
+                  if (searchState.error != null) ...[
+                    StateNote(searchState.error!),
+                    if (searchState.searchId != null)
                       TextButton(
                         onPressed: operation.refresh,
                         child: const Text('重新核验本次搜索'),
@@ -197,7 +197,9 @@ class FileSearchPage extends HookWidget {
               ),
             ),
           ),
-          if (result == null && operation.error == null && !operation.starting)
+          if (result == null &&
+              searchState.error == null &&
+              !searchState.starting)
             const SliverFillRemaining(
               hasScrollBody: false,
               child: EmptyContent(
@@ -222,45 +224,43 @@ class FileSearchPage extends HookWidget {
                 itemBuilder: (context, index) {
                   if (index < entries.length) {
                     final file = entries[index];
-                    final path = value(file, 'path');
-                    final folder = file['isDirectory'] == true;
+                    final path = file.path ?? '';
+                    final folder = file.isDirectory;
                     return FileSearchResultRow(
                       key: ValueKey(('search-result', path)),
                       file: file,
                       folder: folder,
-                      onTap: !fileCanOpen(file)
+                      onTap: !file.canOpen || path.isEmpty
                           ? null
                           : () {
                               if (folder) {
                                 FilesRoute(
-                                  deviceId: value(device, 'id'),
+                                  deviceId: device.id,
                                   path: path,
                                 ).push<void>(context);
                               } else {
                                 FileDetailsRoute(
-                                  deviceId: value(device, 'id'),
+                                  deviceId: device.id,
                                   path: path,
                                 ).push<void>(context);
                               }
                             },
-                      unavailableReason: fileCanOpen(file)
+                      unavailableReason: file.canOpen && path.isNotEmpty
                           ? null
-                          : fileUnavailableReason(file),
+                          : file.reason ?? '文件名无法解析为有效路径，暂时无法操作。',
                     );
                   }
                   var remainder = index - entries.length;
                   if (remainder < issues.length) {
                     final issue = issues[remainder];
-                    return StateNote(
-                      '${value(issue, 'path')}\n${value(issue, 'reason')}',
-                    );
+                    return StateNote('${issue.path}\n${issue.reason}');
                   }
                   return Padding(
                     padding: const EdgeInsets.symmetric(
                       vertical: DesignTokens.spacingLg,
                     ),
                     child: Text(
-                      result?['complete'] == true ? '没有匹配的文件' : '已检查范围内没有匹配结果',
+                      result?.status == .completed ? '没有匹配的文件' : '已检查范围内没有匹配结果',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   );
@@ -274,46 +274,47 @@ class FileSearchPage extends HookWidget {
   }
 }
 
-String _submittedScopeLabel(Json result) =>
-    value(result, 'path') == '/sdcard' ? '手机内部存储' : '当前目录及子目录';
+String _submittedScopeLabel(FileSearchSnapshot result) =>
+    result.path == '/sdcard' ? '手机内部存储' : '当前目录及子目录';
 
-String _searchStatusTitle(String status, int count) => switch (status) {
-  'completed' => '找到 $count 项',
-  'partial' => '仅完成部分搜索 · 找到 $count 项',
-  'cancelled' => '已停止 · 保留 $count 项',
-  'failed' => '搜索未完成 · 找到 $count 项',
-  _ => '搜索中 · 已找到 $count 项',
-};
+String _searchStatusTitle(FileSearchStatus status, int count) =>
+    switch (status) {
+      .completed => '找到 $count 项',
+      .partial => '仅完成部分搜索 · 找到 $count 项',
+      .cancelled => '已停止 · 保留 $count 项',
+      .failed => '搜索未完成 · 找到 $count 项',
+      .unknown || .running => '搜索中 · 已找到 $count 项',
+    };
 
 String _checkedRangeLine(
-  Json result,
-  String status,
-  List<Json> issues, {
+  FileSearchSnapshot result,
+  FileSearchStatus status,
+  List<FileCatalogIssue> issues, {
   required String scopeLabel,
 }) {
-  final directories = result['visitedDirectories'] ?? 0;
-  final entries = result['visitedEntries'] ?? 0;
+  final directories = result.visitedDirectories;
+  final entries = result.visitedEntries;
   final skipped = issues
-      .where((issue) => value(issue, 'code') == 'permission_denied')
+      .where((issue) => issue.code == 'permission_denied')
       .length;
   final base =
       '$scopeLabel · 已检查 ${_countLabel(directories)} 个文件夹 / '
       '${_countLabel(entries)} 项';
-  final current = value(result, 'currentDirectory');
-  if (status == 'running' && current.isNotEmpty) {
+  final current = result.currentDirectory;
+  if (status == .running && current.isNotEmpty) {
     final checked = _currentDirectoryLabel(current);
     return checked.isEmpty ? base : '$base\n正在检查 $checked';
   }
   if (issues.isEmpty) {
-    return status == 'running' ? '$base\n结果会随检查范围逐步增加。' : base;
+    return status == .running ? '$base\n结果会随检查范围逐步增加。' : base;
   }
-  if (skipped > 0 && (status == 'cancelled' || status == 'partial')) {
+  if (skipped > 0 && (status == .cancelled || status == .partial)) {
     return '$base\n跳过 $skipped 个无权限目录；其余目录未搜索。';
   }
   if (skipped > 0) {
     return '$base\n跳过 $skipped 个无权限目录；结果不完整。';
   }
-  if (status == 'cancelled' || status == 'partial') {
+  if (status == .cancelled || status == .partial) {
     return '$base\n其余目录未搜索。';
   }
   return '$base\n${issues.length} 个目录或项目未能完成；结果不完整。';
@@ -332,8 +333,8 @@ String _countLabel(Object? value) {
   return output.toString();
 }
 
-String _dirtyLine(Json? result) {
-  final previous = value(result ?? {}, 'query').trim();
+String _dirtyLine(FileSearchSnapshot? result) {
+  final previous = result?.query.trim() ?? '';
   return previous.isEmpty
       ? '条件已修改。以下是上次条件的结果，点击搜索更新。'
       : '条件已修改。以下仍为“$previous”的结果，点击搜索更新。';

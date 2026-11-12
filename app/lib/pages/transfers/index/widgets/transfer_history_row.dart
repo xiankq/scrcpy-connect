@@ -1,6 +1,5 @@
+import 'package:scrcpy_connect/core/files/file_transfers.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
@@ -8,19 +7,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/transfers/widgets/transfer_direction_badge.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/file_transfer_labels.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 
-bool transferHistoryActive(Json row) =>
-    row['canCancel'] == true ||
-    [
-      'queued',
-      'running',
-      'finalizing',
-      'cancelling',
-      'conflict',
-    ].contains(row['status']);
+bool transferHistoryActive(FileTransferSnapshot row) =>
+    row.canCancel || row.status.isActive;
+
+typedef TransferHistoryEntry = ({
+  String id,
+  FileTransferSnapshot task,
+  List<FileTransferSnapshot> members,
+  String? batchId,
+});
 
 class TransferHistoryRow extends HookWidget {
   const TransferHistoryRow({
@@ -30,37 +29,42 @@ class TransferHistoryRow extends HookWidget {
     required this.refresh,
     required this.onOpen,
   });
-  final AppStore controller;
-  final Json row;
+  final AppNotifier controller;
+  final TransferHistoryEntry row;
   final VoidCallback refresh;
   final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
+    final task = row.task;
+    final transfers = controller.fileTransfers;
+    final target = switch (row.batchId) {
+      final id? => FileTransferTarget.batch(id),
+      null => FileTransferTarget.task(task.id),
+    };
     final busy = useState(false);
-    final active = transferHistoryActive(row);
-    final total = num.tryParse('${row['totalBytes']}') ?? 0;
-    final completed = num.tryParse('${row['completedBytes']}') ?? 0;
+    final active = transferHistoryActive(task);
+    final total = task.totalBytes ?? task.total ?? 0;
+    final completed = task.completedBytes ?? task.transferred;
     final progress = total > 0
         ? (completed / total).clamp(0, 1).toDouble()
         : null;
     final devices = controller.snapshot().devices.where(
-      (d) => d['id'] == row['deviceId'],
+      (d) => d.id == task.deviceId,
     );
     final name = devices.isEmpty
-        ? value(row, 'deviceName', '设备')
+        ? (task.deviceName ?? '设备')
         : deviceName(devices.first);
-    final direction = transferListDirection(row, name);
+    final direction = transferListDirection(task, name);
     final statusDescription = busy.value
         ? '正在停止…'
-        : transferStatusDescription(row);
-    final issue = transferStatusHasIssue(value(row, 'status'));
+        : transferStatusDescription(task);
+    final issue = transferStatusHasIssue(task.status);
 
     Future<void> remove() async {
       if (busy.value) return;
       final unsaved =
-          row['direction'] == 'pull' &&
-          row['destinationScope'] == 'privateCache';
+          task.direction == .pull && task.destinationScope == .privateCache;
       if (!await confirm(
             context,
             active ? '停止并移除这项传输？' : '移除传输记录？',
@@ -76,17 +80,17 @@ class TransferHistoryRow extends HookWidget {
         return;
       }
       busy.value = true;
-      final params = jsonObject(row['removeParams']);
       try {
         if (active) {
-          await controller.request('transfers.cancel', params);
+          await transfers.cancelTransfer(target);
           var stopped = false;
           for (var check = 0; check < 60 && context.mounted; check++) {
-            final data = await controller.request('transfers.list');
-            final selected = objects(data['transfers']).where(
-              (t) => params['batchId'] != null
-                  ? t['batchId'] == params['batchId']
-                  : t['id'] == params['transferId'],
+            final data = await transfers.readTransfers();
+            final selected = data.transfers.where(
+              (task) => switch (target) {
+                FileTransferBatchTarget(:final id) => task.batchId == id,
+                FileTransferTaskTarget(:final id) => task.id == id,
+              },
             );
             if (selected.every((t) => !transferHistoryActive(t))) {
               stopped = true;
@@ -100,7 +104,7 @@ class TransferHistoryRow extends HookWidget {
             return;
           }
         }
-        await controller.request('transfers.remove', params);
+        await transfers.removeTransfer(target);
         if (context.mounted) refresh();
       } catch (error) {
         if (context.mounted) feedback(context, '$error');
@@ -120,14 +124,14 @@ class TransferHistoryRow extends HookWidget {
         ),
         child: Row(
           children: [
-            TransferDirectionBadge(transfer: row),
+            TransferDirectionBadge(transfer: task),
             const SizedBox(width: DesignTokens.spacingSm),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    value(row, 'name', '文件传输'),
+                    task.name,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: DesignTokens.spacingXxs),

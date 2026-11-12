@@ -1,25 +1,25 @@
-import 'package:scrcpy_connect/models/adb_private_key_file_failure.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/core/identity/adb_private_key_file_failure.dart';
+import 'package:scrcpy_connect/core/identity/authorization_identity.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
 
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:scrcpy_connect/models/adb_identity_validation.dart';
+import 'package:scrcpy_connect/core/identity/adb_identity_validation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 class AdbIdentityPage extends HookWidget {
   const AdbIdentityPage({super.key, required this.controller});
-  final AppStore controller;
+  final AppNotifier controller;
 
   @override
   Widget build(BuildContext context) {
@@ -27,28 +27,26 @@ class AdbIdentityPage extends HookWidget {
     final busy = useState(false);
     final failure = useState<String?>(null);
     final notice = useState<String?>(null);
-    final future = useMemoized(
-      () => controller.request('identity.global.get'),
-      [revision.value],
-    );
+    final future = useMemoized(controller.identity.readGlobal, [
+      controller,
+      revision.value,
+    ]);
     final result = useFuture(future);
     final data = result.data;
     const warning = '生成或导入新全局私钥后，使用全局私钥的连接将断开，需要在手机上重新授权。使用设备专用私钥的设备不受影响。';
-    Future<void> change(String command, [String? pem]) async {
+    Future<void> change(Future<AuthorizationIdentity> Function() update) async {
       busy.value = true;
       failure.value = null;
       notice.value = null;
       try {
-        final response = await controller.request(command, {
-          'privateKeyPem': ?pem,
-        });
-        if (value(response, 'fingerprint').isEmpty) {
+        final response = await update();
+        if (response.fingerprint.isEmpty) {
           throw const RequestFailure(
             'identity_result_invalid',
             '无法核验私钥更新结果，请重新读取。',
           );
         }
-        await controller.refreshDevices();
+        await controller.deviceList.refresh();
         if (!context.mounted) return;
         notice.value = '私钥已更新，请在手机上重新授权。';
         revision.value++;
@@ -72,13 +70,10 @@ class AdbIdentityPage extends HookWidget {
                   Text('全局私钥', style: Theme.of(context).textTheme.bodyMedium),
                   const SizedBox(height: DesignTokens.spacingXs),
                   SelectableText(
-                    value(
-                      data ?? {},
-                      'fingerprint',
-                      result.connectionState == ConnectionState.done
-                          ? '指纹未获取'
-                          : '正在读取…',
-                    ),
+                    data?.fingerprint ??
+                        (result.connectionState == ConnectionState.done
+                            ? '指纹未获取'
+                            : '正在读取…'),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
@@ -114,7 +109,7 @@ class AdbIdentityPage extends HookWidget {
                           !context.mounted) {
                         return;
                       }
-                      await change('identity.global.import', pem);
+                      await change(() => controller.identity.importGlobal(pem));
                     },
               child: Text(busy.value ? '正在更新…' : '导入私钥'),
             ),
@@ -133,7 +128,7 @@ class AdbIdentityPage extends HookWidget {
                           !context.mounted) {
                         return;
                       }
-                      await change('identity.global.reset');
+                      await change(controller.identity.resetGlobal);
                     },
               child: const Text('重置密钥'),
             ),

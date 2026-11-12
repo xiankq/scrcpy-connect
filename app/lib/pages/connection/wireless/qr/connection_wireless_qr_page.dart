@@ -1,22 +1,23 @@
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/core/application/app_dependencies_provider.dart';
+import 'package:scrcpy_connect/core/devices/device_setup.dart';
+import 'package:scrcpy_connect/core/application/request_failure.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_store.dart';
-import 'package:scrcpy_connect/models/connection_validation.dart';
+import 'package:scrcpy_connect/core/application/app_notifier.dart';
+import 'package:scrcpy_connect/core/devices/connection_validation.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 
-class QrPairPage extends HookWidget {
+class QrPairPage extends HookConsumerWidget {
   const QrPairPage({
     super.key,
     required this.controller,
@@ -28,155 +29,141 @@ class QrPairPage extends HookWidget {
     this.prepareConnection,
     this.autoGenerate = true,
   });
-  final AppStore controller;
+  final AppNotifier controller;
   final String? deviceId;
   final bool embedded;
   final bool autoGenerate;
-  final Future<Json?> Function()? prepareConnection;
+  final Future<bool> Function()? prepareConnection;
   final VoidCallback? onUsePairingCode;
-  final ValueChanged<Json>? onPaired;
+  final ValueChanged<PairingReceipt>? onPaired;
   final void Function(String address, String? deviceId)? onConnectionPort;
   @override
-  Widget build(BuildContext context) {
-    final data = useState<Json?>(null);
-    final outcome = useState<Json?>(null);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final deviceManagement = ref.watch(
+      appDependenciesProvider.select((source) => source.devices),
+    );
+    final setup = ref.watch(
+      appDependenciesProvider.select((source) => source.setup),
+    );
+    final data = useState<QrPairingSession?>(null);
+    final outcome = useState<PairingReceipt?>(null);
     final message = useState<String?>(null);
     final busy = useState(false);
     final attempt = useRef<String?>(null);
     final generation = useRef(0);
-    final earlyEvents = useRef(<String, Json>{});
+    bool current(int revision) =>
+        context.mounted &&
+        generation.value == revision &&
+        identical(setup, controller.setup) &&
+        identical(deviceManagement, controller.deviceManagement);
 
-    void accept(Json event) {
-      final payload = event['data'] is Map<Object?, Object?>
-          ? jsonObject(event['data'])
-          : <String, dynamic>{};
-      final id = value(payload, 'attemptId');
-      if (id.isEmpty) return;
-      if (id != attempt.value) {
-        if (busy.value && earlyEvents.value.length < 8) {
-          earlyEvents.value[id] = payload;
+    Future<void> receive(QrPairingSession session, int revision) async {
+      PairingReceipt? receipt;
+      Object? failure;
+      try {
+        receipt = await session.result;
+      } catch (error) {
+        failure = error;
+        if (error case DeviceSetupFailure(receipt: PairingReceipt known)
+            when known.recorded) {
+          receipt = known;
         }
-        return;
       }
-      switch (payload['status']) {
-        case 'paired':
-          outcome.value = payload['result'] is Map<Object?, Object?>
-              ? jsonObject(payload['result'])
-              : {};
-          if (deviceId != null && responseDeviceId(outcome.value) != deviceId) {
-            outcome.value = null;
-            message.value = '配对结果不属于原设备，请重新检查。';
-            attempt.value = null;
-            return;
-          }
-          onPaired?.call(outcome.value!);
-          final failure = outcome.value!['connectionFailure'];
-          final cleanup = outcome.value!['cleanupFailure'];
-          message.value = cleanup is Map<Object?, Object?>
-              ? '配对已完成，资源释放尚未确认。${value(jsonObject(cleanup), 'message')}'
-              : outcome.value!['connected'] == true
-              ? '配对与连接已完成。'
-              : failure is Map<Object?, Object?>
-              ? '已配对，尚未连接。${value(jsonObject(failure), 'message')}'
-              : '已配对，尚未连接';
-          attempt.value = null;
-          controller.refreshDevices();
-        case 'expired':
-          message.value = '二维码已过期，请重新生成。';
-          attempt.value = null;
-        case 'failed':
-        case 'cancelled':
-          message.value = value(payload, 'message', '配对已结束，请重新生成。');
-          attempt.value = null;
+      if (!current(revision) || attempt.value != session.attemptId) return;
+      attempt.value = null;
+      if (receipt case final paired? when paired.recorded) {
+        if (deviceId != null && paired.deviceId != deviceId) {
+          message.value = '配对结果不属于原设备，请重新检查。';
+          return;
+        }
+        outcome.value = paired;
+        onPaired?.call(paired);
+        message.value = switch ((
+          failure,
+          paired.connected,
+          paired.connectionFailure,
+        )) {
+          (final error?, _, _) => '配对已完成，资源释放尚未确认。$error',
+          (_, true, _) => '配对与连接已完成。',
+          (_, _, final issue?) => '已配对，尚未连接。${issue.message}',
+          _ => '已配对，尚未连接',
+        };
+        unawaited(controller.deviceList.refresh());
+      } else {
+        message.value = failure is RequestFailure && failure.code == 'expired'
+            ? '二维码已过期，请重新生成。'
+            : failure?.toString() ?? '配对已结束，请重新生成。';
       }
     }
 
     Future<void> generate() async {
-      final current = ++generation.value;
+      final revision = ++generation.value;
       final old = attempt.value;
       attempt.value = null;
       busy.value = true;
       data.value = null;
       outcome.value = null;
       message.value = null;
-      earlyEvents.value.clear();
       try {
-        if (old != null) {
-          await controller.execute(ApplicationCommand.devicesCancel, {
-            'attemptId': old,
-          });
-        }
-        final params =
-            await prepareConnection?.call() ??
-            (prepareConnection == null ? <String, dynamic>{} : null);
-        if (params == null || !context.mounted || generation.value != current) {
+        if (old != null) await deviceManagement.cancelConnectionAttempt(old);
+        final allowed = await prepareConnection?.call() ?? true;
+        if (!allowed || !current(revision)) return;
+        final session = await setup.beginQrPairing(deviceId: deviceId);
+        if (!current(revision)) {
+          deviceManagement.cancelConnectionAttempt(session.attemptId).ignore();
           return;
         }
-        final result = await controller.execute(
-          ApplicationCommand.devicesPairQr,
-          {...params, 'deviceId': ?deviceId},
-        );
-        final id = value(result, 'attemptId');
-        if (!context.mounted || generation.value != current) {
-          if (id.isNotEmpty) {
-            controller.execute(ApplicationCommand.devicesCancel, {
-              'attemptId': id,
-            }).ignore();
-          }
-          return;
-        }
-        data.value = result;
-        attempt.value = id.isEmpty ? null : id;
-        final early = earlyEvents.value.remove(id);
-        if (early != null) accept({'data': early});
+        data.value = session;
+        attempt.value = session.attemptId;
+        unawaited(receive(session, revision));
       } catch (error) {
-        if (context.mounted && generation.value == current) {
-          message.value = '$error';
-        }
+        if (current(revision)) message.value = '$error';
       } finally {
-        if (context.mounted && generation.value == current) busy.value = false;
+        if (current(revision)) busy.value = false;
       }
     }
 
     useEffect(() {
-      final subscription = controller
-          .eventStream()
-          .where((e) => e['type'] == 'pairing.changed')
-          .listen(accept);
       final timer = Timer.periodic(const Duration(seconds: 1), (_) {
-        final expiry = data.value?['expiresAt'];
+        final expiry = data.value?.expiresAt;
         if (attempt.value != null &&
-            expiry is num &&
-            DateTime.now().millisecondsSinceEpoch >= expiry * 1000) {
+            expiry != null &&
+            !DateTime.now().isBefore(expiry)) {
           final id = attempt.value!;
           attempt.value = null;
           message.value = '二维码已过期，请重新生成。';
-          controller.execute(ApplicationCommand.devicesCancel, {
-            'attemptId': id,
-          }).ignore();
+          deviceManagement.cancelConnectionAttempt(id).ignore();
         }
       });
-      if (autoGenerate) Future.microtask(generate);
+      Future.microtask(() {
+        if (!context.mounted ||
+            !identical(setup, controller.setup) ||
+            !identical(deviceManagement, controller.deviceManagement)) {
+          return;
+        }
+        if (autoGenerate) {
+          unawaited(generate());
+        } else {
+          data.value = null;
+          outcome.value = null;
+          busy.value = false;
+          message.value = null;
+        }
+      });
       return () {
-        subscription.cancel();
         timer.cancel();
         generation.value++;
         final id = attempt.value;
-        if (id != null) {
-          controller.execute(ApplicationCommand.devicesCancel, {
-            'attemptId': id,
-          }).ignore();
-        }
+        attempt.value = null;
+        if (id != null) deviceManagement.cancelConnectionAttempt(id).ignore();
       };
-    }, const []);
+    }, [setup, deviceManagement, deviceId]);
 
     final paired = outcome.value;
-    final pairedDevice = paired?['device'];
     final hasQr =
         !busy.value &&
         attempt.value != null &&
-        (value(data.value ?? {}, 'payload').isNotEmpty ||
-            data.value?['imageBase64'] != null);
+        data.value?.payload.isNotEmpty == true;
     final children = <Widget>[
       if (hasQr) ...[
         Text(
@@ -186,85 +173,51 @@ class QrPairPage extends HookWidget {
         const SizedBox(height: DesignTokens.spacingLg),
       ],
       if (busy.value) const Center(child: CircularProgressIndicator()),
-      if (!busy.value &&
-          attempt.value != null &&
-          value(data.value ?? {}, 'payload').isNotEmpty)
+      if (hasQr)
         Center(
           child: Container(
             color: Colors.white,
             padding: const EdgeInsets.all(DesignTokens.spacingMd),
             child: QrImageView(
-              data: value(data.value!, 'payload'),
+              data: data.value!.payload,
               size: DesignTokens.componentPairingQrSize,
             ),
           ),
         )
-      else if (!busy.value &&
-          attempt.value != null &&
-          data.value?['imageBase64'] != null)
-        Center(
-          child: Image.memory(
-            base64Decode(value(data.value!, 'imageBase64')),
-            width: DesignTokens.componentPairingQrSize,
-            height: DesignTokens.componentPairingQrSize,
-          ),
-        )
       else if (!busy.value && message.value == null)
-        StateNote(value(data.value ?? {}, 'reason', '点击重新生成以获取配对二维码。')),
+        const StateNote('点击重新生成以获取配对二维码。'),
       if (message.value != null) StateNote(message.value!),
-      if (paired != null && responseDeviceId(paired) != null)
+      if (paired != null && paired.deviceId != null)
         FilledButton(
           onPressed: () {
-            if (paired['connected'] == true &&
-                pairedDevice is Map<Object?, Object?>) {
-              WorkspaceRoute(deviceId: value(jsonObject(pairedDevice), 'id'))
+            if (paired.connected) {
+              WorkspaceRoute(deviceId: paired.deviceId!)
                   .pushReplacement(context);
+            } else if (onConnectionPort != null) {
+              onConnectionPort!(paired.address, paired.deviceId);
             } else {
-              final address = value(
-                paired,
-                'address',
-                pairedDevice is Map<Object?, Object?>
-                    ? value(jsonObject(pairedDevice), 'address')
-                    : '',
-              );
-              if (onConnectionPort != null) {
-                onConnectionPort!(address, responseDeviceId(paired));
-                return;
-              }
               ConnectionFormRoute(
                 transport: ConnectionTransport.tls,
-                deviceId: responseDeviceId(paired),
-                address: value(
-                  paired,
-                  'address',
-                  pairedDevice is Map<Object?, Object?>
-                      ? value(jsonObject(pairedDevice), 'address')
-                      : '',
-                ),
+                deviceId: paired.deviceId,
+                address: paired.address,
               ).pushReplacement(context);
             }
           },
-          child: Text(
-            paired['connected'] == true && pairedDevice is Map<Object?, Object?>
-                ? '打开设备工作台'
-                : '填写连接端口',
-          ),
+          child: Text(paired.connected ? '打开设备工作台' : '填写连接端口'),
         ),
       if (!embedded)
         FilledButton(
           onPressed: busy.value
               ? null
               : () async {
+                  final revision = ++generation.value;
                   busy.value = true;
                   final id = attempt.value;
                   try {
                     if (id != null) {
-                      await controller.execute(
-                        ApplicationCommand.devicesCancel,
-                        {'attemptId': id},
-                      );
+                      await deviceManagement.cancelConnectionAttempt(id);
                     }
-                    if (!context.mounted) return;
+                    if (!context.mounted || !current(revision)) return;
                     attempt.value = null;
                     message.value = '扫码已取消，可重新生成。';
                     busy.value = false;
@@ -274,12 +227,12 @@ class QrPairPage extends HookWidget {
                     }
                     ConnectionFormRoute(
                       pairing: true,
-                      deviceId: responseDeviceId(outcome.value),
+                      deviceId: outcome.value?.deviceId,
                     ).pushReplacement(context);
                   } catch (error) {
-                    if (context.mounted) message.value = '$error';
+                    if (current(revision)) message.value = '$error';
                   } finally {
-                    if (context.mounted) busy.value = false;
+                    if (current(revision)) busy.value = false;
                   }
                 },
           child: const Text('使用配对码'),
