@@ -25,8 +25,8 @@ final class DeviceAppsReader implements DeviceApps {
   final DeviceConnection Function(String) _requireConnection;
   final DeviceConnection? Function(String) _currentConnection;
   final String? Function(String) _connectionId;
-  final ScrcpyServerQueries _serverQueries;
-  final CompanionService _companion;
+  final ScrcpyServerQueries Function() _serverQueries;
+  final CompanionService Function() _companion;
   final bool Function() _isDisposed;
   final void Function(
     String label,
@@ -94,7 +94,7 @@ final class DeviceAppsReader implements DeviceApps {
     deviceId,
     cancellation,
     (connection, token) async => List.unmodifiable(
-      await _serverQueries.installedApps(connection, token),
+      await _serverQueries().installedApps(connection, token),
     ),
     validate: () {
       if (!validDeviceId(deviceId)) {
@@ -113,7 +113,7 @@ final class DeviceAppsReader implements DeviceApps {
     token,
   ) async {
     final connectionId = _connectionId(deviceId);
-    final response = await _companion.request(
+    final response = await _companion().request(
       deviceId,
       'apps.list',
       {'filter': 'running'},
@@ -153,7 +153,7 @@ final class DeviceAppsReader implements DeviceApps {
     deviceId,
     cancellation,
     (connection, token) async {
-      final response = await _companion.request(
+      final response = await _companion().request(
         deviceId,
         'apps.icon',
         {'packageName': packageName},

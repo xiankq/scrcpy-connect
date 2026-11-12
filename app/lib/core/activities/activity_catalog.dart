@@ -1,39 +1,42 @@
 import 'package:adb/adb.dart';
 import 'package:scrcpy_connect/core/activities/activity_management.dart';
-import 'package:scrcpy_connect/core/control/capture_resources.dart';
-import 'package:scrcpy_connect/core/devices/device_observation_service.dart';
-import 'package:scrcpy_connect/core/devices/device_service.dart';
+import 'package:scrcpy_connect/core/control/models/session_activity.dart';
+import 'package:scrcpy_connect/core/devices/device_reader.dart';
+import 'package:scrcpy_connect/core/devices/models/observed_device_snapshot.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart'
     show RequestFailure;
-import 'package:scrcpy_connect/core/events/runtime_events.dart';
-import 'package:scrcpy_connect/core/files/file_transfer_service.dart';
 import 'package:scrcpy_connect/core/files/file_transfers.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 
 /// 活动只是资源所有者的只读组合；停止操作交给原能力并等待其实际关闭。
 final class ActivityCatalog implements ActivityManagement {
   ActivityCatalog({
-    required this._events,
+    required this._readRevision,
     required this.diagnostics,
     required this._devices,
-    required this._captures,
-    required this._observations,
+    required this._readSessions,
+    required this._readAudio,
+    required this._readObservations,
     required this._transfers,
     required this._disconnectDevice,
     required this._stopVideo,
     required this._stopAudio,
+    required this._stopObservation,
     required this._isDisposed,
   });
   final DiagnosticReporter diagnostics;
-  final RuntimeEvents _events;
-  final DeviceService _devices;
-  final CaptureResources _captures;
-  final DeviceObservationService _observations;
-  final FileTransferService _transfers;
+  final int Function() _readRevision;
+  final DeviceReader _devices;
+  final Future<List<SessionActivity>> Function({String? deviceId})
+  _readSessions;
+  final List<DeviceAudioSnapshot> Function() _readAudio;
+  final List<ObservedDeviceSnapshot> Function() _readObservations;
+  final FileTransfers _transfers;
   final Future<void> Function(String) _disconnectDevice;
   final Future<void> Function(String) _stopVideo;
   final Future<void> Function(DeviceAudioTarget) _stopAudio;
+  final Future<void> Function(String) _stopObservation;
   final bool Function() _isDisposed;
 
   @override
@@ -71,14 +74,16 @@ final class ActivityCatalog implements ActivityManagement {
     _checkOpen();
     if (deviceId != null) _checkId(deviceId);
     for (var attempt = 0; attempt < 4; attempt++) {
-      final before = _events.cursor;
-      final sessions = await _captures.readActivitySessions(deviceId: deviceId);
+      final before = _readRevision();
+      final sessions = await _readSessions(deviceId: deviceId);
       final transfers = await _transfers.readTransfers();
+      final devices = await _devices.readDevices();
       _checkOpen();
-      final devices = _devices.readDevices();
-      final observations = _observations.currentSnapshots();
-      final sources = _captures.audioSnapshots();
-      if (before.revision != _events.cursor.revision) continue;
+      final observations = _readObservations().map(
+        (value) => value.observation,
+      );
+      final sources = _readAudio();
+      if (before != _readRevision()) continue;
       final names = {for (final device in devices) device.id: device.name};
       ActivitySnapshot activity(
         ActivityTarget target,
@@ -96,7 +101,7 @@ final class ActivityCatalog implements ActivityManagement {
       );
       final result = [
         for (final device in devices)
-          if (_devices.current(device.id) != null)
+          if (device.connectionId != null)
             activity(
               ActivityTarget.connection(device.id),
               device.id,
@@ -179,7 +184,7 @@ final class ActivityCatalog implements ActivityManagement {
         await _stopVideo(sessionId);
       case ObservationActivity(:final deviceId):
         _checkId(deviceId);
-        await _observations.stopObservation(deviceId);
+        await _stopObservation(deviceId);
       case TransferActivity(:final transferId):
         _checkId(transferId);
         await _transfers.cancelTransfer(FileTransferTarget.task(transferId));
@@ -190,8 +195,7 @@ final class ActivityCatalog implements ActivityManagement {
           throw const RequestFailure('invalid_argument', '请指定这一代音源。');
         }
         _checkId(id);
-        final current = _captures
-            .audioSnapshots()
+        final current = _readAudio()
             .where(
               (item) => item.sourceId == id && item.deviceId == source.deviceId,
             )

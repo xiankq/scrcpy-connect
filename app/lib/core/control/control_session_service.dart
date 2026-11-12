@@ -108,8 +108,8 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
   final ScrcpyClient _scrcpy;
   final DeviceConnection Function(String) _requireConnection;
   final AppLaunchJournal _launches;
-  // 借用应用唯一清单查询所有者；窗口关闭不能关闭并行的安装应用查询。
-  final ScrcpyServerQueries _serverQueries;
+  // 借用设备模块的清单查询所有者；窗口关闭只撤销自己的查询令牌。
+  final ScrcpyServerQueries Function() _serverQueries;
   final void Function(String, String, Map<String, Object?>) _emitEvent;
   final Preferences Function() _settings;
   final DateTime Function() _now;
@@ -500,7 +500,7 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
   Future<VideoQualityOptions> readVideoQualityOptions(String deviceId) =>
       _boundary(
         () => _query(deviceId, (connection, stop) async {
-          final encoders = await _serverQueries.encoders(connection, stop);
+          final encoders = await _serverQueries().encoders(connection, stop);
           return VideoQualityOptions(
             current: _quality(deviceId),
             codecs: [
@@ -532,7 +532,7 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
   ) => _boundary(
     () => _query(deviceId, (connection, stop) async {
       final quality = _quality(deviceId, patch);
-      final encoders = await _serverQueries.encoders(connection, stop);
+      final encoders = await _serverQueries().encoders(connection, stop);
       _validateEncoder(quality, encoders);
       return quality;
     }),
@@ -1209,7 +1209,7 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
         quality.encoder != null) {
       _validateEncoder(
         quality,
-        await _serverQueries.encoders(slot.connection, work.stop),
+        await _serverQueries().encoders(slot.connection, work.stop),
       );
       _check(slot, work);
     }
@@ -1503,7 +1503,6 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
     for (final query in queries) {
       query.stop.cancel();
     }
-    _serverQueries.cancelForConnection(connection);
     final selected = _sessions.values
         .where(
           (slot) =>
@@ -1520,12 +1519,6 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
       stack = trace;
     }
     await Future.wait(queries.map((query) => query.settled.future));
-    try {
-      await _serverQueries.stopForConnection(connection);
-    } catch (error, trace) {
-      failure ??= error;
-      stack ??= trace;
-    }
     for (final entry in _clipboardProbes.entries.toList()) {
       if (identical(entry.value, connection)) {
         await _closeClipboardProbe(entry.key);
@@ -1878,7 +1871,7 @@ extension _SessionQuality on ControlSessionService {
         if (slot.rebuilding) _fail('quality_busy', '请先等待上一代画面完成绑定。');
         _validateEncoder(
           quality,
-          await _serverQueries.encoders(slot.connection, work.stop),
+          await _serverQueries().encoders(slot.connection, work.stop),
         );
         _check(slot, work);
         if (_capacityUsed >= 16) {

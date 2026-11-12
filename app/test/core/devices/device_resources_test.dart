@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -101,6 +102,69 @@ void main() {
     expect(sequenceReads, 1);
     expect(settingsReads, 1);
     _expectUnused(resources, devicesUsed: true, reconnectUsed: true);
+  });
+
+  test('离线应用查询不创建清单部署或伴生所有者', () async {
+    final resources = await _resources();
+    final apps = resources.apps;
+    await expectLater(
+      apps.readInstalledApps('00000000-0000-0000-0000-000000000001'),
+      throwsA(
+        isA<RequestFailure>().having((e) => e.code, 'code', 'disconnected'),
+      ),
+    );
+    await resources.close();
+    expect(resources.apps, same(apps));
+    expect(() => resources.serverQueries, throwsA(isA<RequestFailure>()));
+    expect(() => resources.companion, throwsA(isA<RequestFailure>()));
+    expect(() => resources.observations, throwsA(isA<RequestFailure>()));
+    expect(() => resources.setup, throwsA(isA<RequestFailure>()));
+  });
+
+  test('设备模块持有失败的清单部署，关闭重试原上传与清理责任', () async {
+    final resources = await _resources(
+      scrcpyServerBytes: Uint8List.fromList([1]),
+    );
+    final api = _QueryUpload();
+    final client = _QueryClient(api);
+    addTearDown(() async {
+      api.allowClose = true;
+      await resources.close();
+      await client.services.close();
+    });
+    final queries = resources.serverQueries;
+    final connection = DeviceConnection(
+      client: client,
+      device: const AdbDevice(
+        id: 'query-connection',
+        serial: 'phone',
+        state: 'device',
+      ),
+    );
+    final failed = throwsA(
+      isA<RequestFailure>().having(
+        (e) => e.code,
+        'code',
+        'apps_cleanup_unconfirmed',
+      ),
+    );
+    await expectLater(
+      queries.installedApps(connection, AdbCancellation()),
+      failed,
+    );
+    await expectLater(resources.close(), failed);
+    expect(resources.serverQueries, same(queries));
+    expect(client.removed, isEmpty);
+    expect(api.uploads, 1);
+    api.allowClose = true;
+    await resources.close();
+    expect(client.removed, hasLength(1));
+    expect(api.closed.every((id) => id == 'original-upload'), isTrue);
+    expect(api.uploads, 1);
+    final closed = api.closed.length;
+    await resources.close();
+    expect(api.closed, hasLength(closed));
+    expect(() => resources.companion, throwsA(isA<RequestFailure>()));
   });
 
   test('应用退出等待迟到 USB 租约，重试原资源后最后释放宿主', () async {
@@ -305,6 +369,7 @@ void _expectUnused(
   expect(() => resources.setup, disposed);
   if (!reconnectUsed) expect(() => resources.reconnections, disposed);
   expect(() => resources.companion, disposed);
+  expect(() => resources.serverQueries, disposed);
   expect(() => resources.observations, disposed);
   expect(() => resources.apps, disposed);
   expect(() => resources.operations, disposed);
@@ -318,6 +383,7 @@ Future<DeviceResources> _resources({
   Future<void> Function(String, DeviceConnection, bool)? stopWork,
   int Function()? readEventSequence,
   bool Function()? readBackgroundKeepAlive,
+  Uint8List? scrcpyServerBytes,
 }) async {
   final temporary = await Directory.systemTemp.createTemp('device-resources-');
   final directory = Directory(await temporary.resolveSymbolicLinks());
@@ -331,6 +397,7 @@ Future<DeviceResources> _resources({
     releaseIdentityClient: (_) async => throw StateError('没有候选客户端需要释放'),
     displays: DisplayRecovery(timeout: const Duration(seconds: 1)),
     companionBytes: Uint8List(0),
+    scrcpyServerBytes: scrcpyServerBytes ?? Uint8List(0),
     burstMode: () => false,
     policy: const ConnectionPolicy(),
     diagnostics: null,
@@ -342,7 +409,6 @@ Future<DeviceResources> _resources({
         readBackgroundKeepAlive ?? () => throw StateError('不应通过空操作读取重连偏好'),
     readSessions: () => throw StateError('重连不应读取捕获会话'),
     readAudio: () => throw StateError('重连不应读取设备音源'),
-    serverQueries: () => throw StateError('不应创建捕获查询器'),
     authorizeUsb: authorizeUsb,
     cancelUsb: cancelUsb,
     releaseUsb: releaseUsb,
@@ -376,4 +442,66 @@ class _UnusedClient implements AdbClient {
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw StateError('未使用的连接不应查询或执行原生命令：${invocation.memberName}');
+}
+
+final class _QueryUpload implements NativeAdbApi {
+  bool allowClose = false;
+  var uploads = 0;
+  final closed = <String>[];
+  @override
+  Future<String> sync(String id, AdbSyncRequest request, int timeoutMs) async {
+    expect(id, 'query-connection');
+    uploads++;
+    return 'original-upload';
+  }
+
+  @override
+  Future<NativeAdbEvent?> next(String operationId) async => NativeAdbEvent(
+    kind: 'done',
+    bytes: Uint8List(0),
+    done: true,
+    transferred: 1,
+  );
+  @override
+  Future<void> write(String id, AdbServiceInput input) async {}
+  @override
+  Future<void> cancel(String operationId) async {
+    closed.add(operationId);
+    if (!allowClose) throw StateError('upload close unconfirmed');
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw StateError('清单查询不应调用其他 SDK 能力：${invocation.memberName}');
+}
+
+final class _QueryClient implements AdbClient {
+  _QueryClient(_QueryUpload api) {
+    services = AdbServices(() => api, (device) async => device, () {});
+  }
+  @override
+  late final AdbServices services;
+  final removed = <String>[];
+  @override
+  Stream<AdbShellEvent> shell(
+    AdbDevice device,
+    String command, {
+    Duration timeout = const Duration(minutes: 5),
+    AdbCancellation? cancellation,
+  }) async* {
+    expect(device.id, 'query-connection');
+    expect(command, startsWith('rm -f -- '));
+    removed.add(command);
+    final marker = RegExp(r'__INTEROP_QUERY_REMOVE_[0-9a-f-]+__:')
+        .firstMatch(command)![0]!;
+    yield AdbShellEvent(
+      .stdout,
+      Uint8List.fromList(utf8.encode('\n${marker}0\n')),
+    );
+    yield AdbShellEvent(.exit, Uint8List(0), exitCode: 0);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw StateError('清单查询不应创建其他客户端能力：${invocation.memberName}');
 }

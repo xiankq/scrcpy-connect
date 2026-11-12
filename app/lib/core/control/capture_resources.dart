@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/core/control/app_launch_journal.dart';
@@ -25,7 +24,7 @@ import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 final class CaptureResources {
   CaptureResources({
     required this._scrcpy,
-    required this._serverBytes,
+    required this._readServerQueries,
     required this.requireConnection,
     required this.connectionForDevice,
     required this._records,
@@ -39,7 +38,7 @@ final class CaptureResources {
   });
 
   final ScrcpyClient _scrcpy;
-  final Uint8List _serverBytes;
+  final ScrcpyServerQueries Function() _readServerQueries;
   final DeviceConnection Function(String) requireConnection;
   final DeviceConnection? Function(String) connectionForDevice;
   final DeviceRecordStorage _records;
@@ -71,15 +70,6 @@ final class CaptureResources {
     );
   }
 
-  ScrcpyServerQueries? _queries;
-  ScrcpyServerQueries get serverQueries {
-    if (_queries == null) _checkCreation();
-    return _queries ??= ScrcpyServerQueries(
-      serverBytes: _serverBytes,
-      timeout: const Duration(seconds: 15),
-    );
-  }
-
   ControlSessionService? _sessions;
   ControlSessionService get sessions {
     if (_sessions == null) _checkCreation();
@@ -96,7 +86,7 @@ final class CaptureResources {
           throw const RequestFailure('state_unverified', '正在重新核验设备状态，完成后再操作。');
         }
       },
-      serverQueries: serverQueries,
+      serverQueries: _readServerQueries,
       settings: () => _preferences.settings,
       emit: (type, device, data) => publishBusiness(type, device, data),
       onAudioEligibilityChanged: (id) {
@@ -221,7 +211,6 @@ final class CaptureResources {
       if (_audio case final audio?)
         audio.stopForConnection(deviceId, connection),
       if (_wake case final wake?) wake.stopForConnection(deviceId, connection),
-      if (_queries case final queries?) queries.stopForConnection(connection),
     ], eagerError: true);
   }
 
@@ -232,7 +221,6 @@ final class CaptureResources {
       () async => await _sessions?.close(),
       () async => await _audio?.close(),
       () async => await _wake?.close(),
-      () async => await _queries?.close(),
       () async => await Future.wait(_cleanup.toList()),
     ]);
     return _disposal!.run();

@@ -47,6 +47,7 @@ final class DeviceResources {
     required this._releaseIdentityClient,
     required this._displays,
     required this._companionBytes,
+    required this._scrcpyServerBytes,
     required this._burstMode,
     required this._records,
     required ConnectionPolicy policy,
@@ -57,7 +58,6 @@ final class DeviceResources {
     required this.readBackgroundKeepAlive,
     required this.readSessions,
     required this.readAudio,
-    required this.serverQueries,
     required this.authorizeUsb,
     required this.cancelUsb,
     required this.releaseUsb,
@@ -72,6 +72,7 @@ final class DeviceResources {
   final Future<void> Function(IdentitySelection) _releaseIdentityClient;
   final DisplayRecovery _displays;
   final Uint8List _companionBytes;
+  final Uint8List _scrcpyServerBytes;
   final bool Function() _burstMode;
   final DeviceRecordStorage _records;
   DeviceRecordStorage get records => _records;
@@ -94,7 +95,6 @@ final class DeviceResources {
   final bool Function() readBackgroundKeepAlive;
   final List<VideoSessionSnapshot> Function() readSessions;
   final List<DeviceAudioSnapshot> Function() readAudio;
-  final ScrcpyServerQueries Function() serverQueries;
   final Future<Json> Function(Json)? authorizeUsb;
   final Future<void> Function(Json)? cancelUsb, releaseUsb;
   final void Function(Map<String, dynamic>) emit;
@@ -111,6 +111,15 @@ final class DeviceResources {
   DeviceObservationService get observations => _observations;
   List<ObservedDeviceSnapshot> currentObservations() =>
       _observationInstance?.currentObservedDevices() ?? [];
+
+  ScrcpyServerQueries? _queries;
+  ScrcpyServerQueries get serverQueries {
+    if (_queries == null) _checkCreation();
+    return _queries ??= ScrcpyServerQueries(
+      serverBytes: _scrcpyServerBytes,
+      timeout: const Duration(seconds: 15),
+    );
+  }
 
   IdentityManagement? _identityInstance;
   IdentityManagement get identity {
@@ -137,8 +146,8 @@ final class DeviceResources {
       requireConnection: _devices.requireConnection,
       currentConnection: _devices.current,
       connectionId: (id) => _devices.readDevice(id).connectionId,
-      serverQueries: serverQueries(),
-      companion: _companion,
+      serverQueries: () => serverQueries,
+      companion: () => _companion,
       isDisposed: () => _isDisposed,
       onFailure: _diagnostics.appCatalogFailed,
     );
@@ -308,6 +317,7 @@ final class DeviceResources {
     required Future<void> Function(IdentitySelection) releaseIdentityClient,
     required DisplayRecovery displays,
     required Uint8List companionBytes,
+    required Uint8List scrcpyServerBytes,
     required bool Function() burstMode,
     required ConnectionPolicy policy,
     required DiagnosticLog? diagnostics,
@@ -317,7 +327,6 @@ final class DeviceResources {
     required bool Function() readBackgroundKeepAlive,
     required List<VideoSessionSnapshot> Function() readSessions,
     required List<DeviceAudioSnapshot> Function() readAudio,
-    required ScrcpyServerQueries Function() serverQueries,
     required Future<Json> Function(Json)? authorizeUsb,
     required Future<void> Function(Json)? cancelUsb,
     required Future<void> Function(Json)? releaseUsb,
@@ -333,6 +342,7 @@ final class DeviceResources {
       releaseIdentityClient: releaseIdentityClient,
       displays: displays,
       companionBytes: companionBytes,
+      scrcpyServerBytes: scrcpyServerBytes,
       burstMode: burstMode,
       records: records,
       policy: policy,
@@ -343,7 +353,6 @@ final class DeviceResources {
       readBackgroundKeepAlive: readBackgroundKeepAlive,
       readSessions: readSessions,
       readAudio: readAudio,
-      serverQueries: serverQueries,
       authorizeUsb: authorizeUsb,
       cancelUsb: cancelUsb,
       releaseUsb: releaseUsb,
@@ -422,6 +431,7 @@ final class DeviceResources {
       if (_powerInstance case final power?)
         power.stopConnection(id, connection),
       stopWork(id, connection, _deviceTaskConnections.contains(connection)),
+      if (_queries case final queries?) queries.stopForConnection(connection),
     ], eagerError: true);
     await _displays.retireConnection(connection);
     await _observationInstance?.stopForConnection(id, connection);
@@ -448,6 +458,7 @@ final class DeviceResources {
       () async {
         await stopAdmission();
         await _deviceInstance?.close();
+        await _queries?.close();
         await _observationInstance?.close();
         await _companionInstance?.close();
         await _discoveryInstance?.close();

@@ -43,7 +43,7 @@ enum _ServerQuery {
 }
 
 /// 共享固定 scrcpy 清单查询的临时部署、真实执行和未确认清理。
-/// 不拥有设备连接、窗口或画质策略；应用在全部调用者停止后关闭此唯一实例。
+/// 不拥有设备连接、窗口或画质策略；设备模块负责连接退休时排空及退出时关闭。
 final class ScrcpyServerQueries {
   ScrcpyServerQueries({
     required Uint8List serverBytes,

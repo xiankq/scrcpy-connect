@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/bootstrap/app_bootstrap.dart';
+import 'package:scrcpy_connect/core/activities/activity_management_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
@@ -44,6 +45,10 @@ void main() {
     expect(state.reconciledSnapshot, isNotNull);
     expect(state.reconciledSnapshot!.sessions, isEmpty);
     expect(state.reconciledSnapshot!.sources, isEmpty);
+    final activities = await container
+        .read(activityManagementProvider)
+        .readActivities();
+    expect(activities.activities, isEmpty);
     await bootstrap.dispose();
     expect(fixture.api.closed, ['files:files-1', 'admission:scope-1']);
     expect(fixture.api.scope, isNull);

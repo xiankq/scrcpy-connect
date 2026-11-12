@@ -112,7 +112,7 @@ final class AppComposition {
   CaptureResources get _captureResources =>
       _captureInstance ??= CaptureResources(
         scrcpy: _host.scrcpy,
-        serverBytes: _host.scrcpyBytes,
+        readServerQueries: () => _connections.serverQueries,
         requireConnection: _connections.devices.requireConnection,
         connectionForDevice: _connections.devices.current,
         records: _connections.records,
@@ -130,13 +130,16 @@ final class AppComposition {
 
   late final _activities = ActivityCatalog(
     diagnostics: _diagnostics,
-    events: _events,
+    readRevision: () => _events.cursor.revision,
     devices: _connections.devices,
-    captures: _captureResources,
-    observations: _connections.observations,
+    readSessions: ({deviceId}) async =>
+        await _captureInstance?.readActivitySessions(deviceId: deviceId) ?? [],
+    readAudio: () => _captureInstance?.audioSnapshots() ?? [],
+    readObservations: _connections.currentObservations,
     transfers: _files.transfers,
     disconnectDevice: (id) => _deviceActions.disconnectDevice(id),
     stopAudio: (target) => _media.stopAudio(target),
+    stopObservation: (id) => _connections.operations.stopObservation(id),
     stopVideo: (id) async {
       _events.emit({
         'type': 'session.stop.requested',
@@ -304,6 +307,7 @@ final class AppComposition {
       ),
       displays: host.physicalDisplays,
       companionBytes: host.companionBytes,
+      scrcpyServerBytes: host.scrcpyBytes,
       burstMode: () => host.preferences.current.values.adbBurstMode,
       policy: policy,
       diagnostics: diagnostics,
@@ -315,7 +319,6 @@ final class AppComposition {
       readSessions: () => session._captureInstance?.currentSessions() ?? [],
       readAudio: () =>
           session._captureInstance?.audioSnapshots(activeOnly: true) ?? [],
-      serverQueries: () => session._captureResources.serverQueries,
       authorizeUsb: Platform.isAndroid
           ? (params) => session._usbAuthorization.authorize(params)
           : null,
