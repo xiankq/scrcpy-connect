@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:adb/adb.dart' show AdbCancellation;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/control/control_capabilities_provider.dart';

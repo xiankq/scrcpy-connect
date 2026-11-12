@@ -14,9 +14,9 @@ const sourceSha =
     'a0d699fc7388b8252416c49e6293639de39ab76a03e7302ddced56c284d45200';
 const officialSha =
     '764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536';
-const gradleVersion = '9.8.1';
+const gradleVersion = '9.9.1';
 const gradleSha =
-    'dce76f55f8e251a3a1f130eb120f30b3d271de2b76c9b0729d316b5a1b6dc01f';
+    'd8a18a7a841dd5df825d35a685fad6f2d7f12ac0c280e57b67c27b4a520ba228';
 const desugarCommit = '73170c345e6a762fc6a1f0301bb15218850023ef';
 const desugarSourceSha =
     '4cd2faa88ecb2450522fd4f0dcd11d6df878d7197b2276fb35532c50267f7a64';
@@ -110,7 +110,7 @@ dexInfo(List<int> bytes) {
   for (final marker in markers) {
     final metadata = jsonDecode(marker.substring(4)) as Map<String, dynamic>;
     require(metadata['min-api'] == 21, 'DEX was not built with min API 21');
-    require(metadata['version'] == '9.4.24', 'Unexpected D8/L8/R8 version');
+    require(metadata['version'] == '9.5.29', 'Unexpected D8/L8/R8 version');
   }
   return (definitions: definitions, types: types, markers: markers);
 }
@@ -371,7 +371,7 @@ Future<void> build({
     await upstreamBuild.writeAsString(
       upstreamBuildText.replaceAll(
         upstreamAgp,
-        'com.android.tools.build:gradle:9.4.1',
+        'com.android.tools.build:gradle:9.5.1',
       ),
     );
     final buildFile = File(p.join(root.path, 'server', 'build.gradle'));
@@ -467,8 +467,8 @@ Future<void> build({
       'toolchain': {
         'gradle': gradleVersion,
         'gradleDistributionSha256': gradleSha,
-        'agp': '9.4.1',
-        'd8L8R8': '9.4.24',
+        'agp': '9.5.1',
+        'd8L8R8': '9.5.29',
         'jdkMajor': 21,
         'buildJdk': const LineSplitter().convert(javaVersion).first,
         'compileSdk': 36,

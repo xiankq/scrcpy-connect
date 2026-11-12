@@ -49,7 +49,7 @@ pub async fn pair<T: Transport>(
             b"adb pair client\0",
             b"adb pair server\0",
             &secret,
-            &mut rsa::rand_core::OsRng,
+            &mut rand::rng(),
         );
         send(&mut stream, frame::PacketType::Spake2Msg, spake.message()).await?;
         let peer = receive(&mut stream, frame::PacketType::Spake2Msg).await?;
@@ -139,9 +139,9 @@ pub struct QrPairing {
 }
 impl QrPairing {
     pub fn generate() -> Self {
-        use rsa::rand_core::RngCore;
+        use rsa::rand_core::Rng;
         let mut random = Zeroizing::new([0u8; 32]);
-        rsa::rand_core::OsRng.fill_bytes(&mut *random);
+        rand::rng().fill_bytes(&mut *random);
         let service_name = format!(
             "studio-{}",
             random[..8]

@@ -2,7 +2,7 @@
 use crate::{Error, Result};
 use base64::Engine;
 use rsa::{
-    BigUint, Pkcs1v15Sign, RsaPrivateKey,
+    BoxedUint, Pkcs1v15Sign, PrivateKey,
     pkcs1::DecodeRsaPrivateKey,
     pkcs8::{DecodePrivateKey, EncodePrivateKey, LineEnding},
     traits::PublicKeyParts,
@@ -10,7 +10,7 @@ use rsa::{
 
 #[derive(Clone)]
 pub struct Identity {
-    key: RsaPrivateKey,
+    key: PrivateKey,
 }
 
 impl std::fmt::Debug for Identity {
@@ -21,16 +21,16 @@ impl std::fmt::Debug for Identity {
 
 impl Identity {
     pub fn generate() -> Result<Self> {
-        RsaPrivateKey::new(&mut rsa::rand_core::OsRng, 2048)
+        PrivateKey::new(&mut rand::rng(), 2048)
             .map(|key| Self { key })
             .map_err(|e| Error::Identity(e.to_string()))
     }
 
     pub fn from_pem(pem: &str) -> Result<Self> {
-        let key = RsaPrivateKey::from_pkcs8_pem(pem)
-            .or_else(|_| RsaPrivateKey::from_pkcs1_pem(pem))
+        let key = PrivateKey::from_pkcs8_pem(pem)
+            .or_else(|_| PrivateKey::from_pkcs1_pem(pem))
             .map_err(|_| Error::Identity("invalid RSA private key PEM".into()))?;
-        if key.n().bits() != 2048 || key.e() != &BigUint::from(65537u32) {
+        if key.n().bit_width_vartime() != 2048 || key.e_bytes().as_ref() != [1, 0, 1] {
             return Err(Error::Identity(
                 "ADB requires RSA-2048 with exponent 65537".into(),
             ));
@@ -53,11 +53,7 @@ impl Identity {
             return Err(Error::Protocol("AUTH token must contain 20 bytes".into()));
         }
         self.key
-            .sign_with_rng(
-                &mut rsa::rand_core::OsRng,
-                Pkcs1v15Sign::new::<sha1::Sha1>(),
-                token,
-            )
+            .sign_with_rng(&mut rand::rng(), Pkcs1v15Sign::new::<sha1::Sha1>(), token)
             .map_err(|e| Error::Identity(e.to_string()))
     }
 
@@ -67,18 +63,18 @@ impl Identity {
             return Err(Error::InvalidArgument("invalid public key comment"));
         }
         let n = self.key.n();
-        let modulus = n.to_bytes_le();
+        let modulus = n.to_le_bytes();
         let low = u32::from_le_bytes(modulus[..4].try_into().expect("2048-bit modulus"));
         let mut inverse = 1u32;
         for _ in 0..5 {
             inverse = inverse.wrapping_mul(2u32.wrapping_sub(low.wrapping_mul(inverse)));
         }
-        let rr = (BigUint::from(1u32) << 4096usize) % n;
+        let rr = (BoxedUint::one_with_precision(4097) << 4096u32) % n;
         let mut binary = Vec::with_capacity(524);
         binary.extend_from_slice(&64u32.to_le_bytes());
         binary.extend_from_slice(&inverse.wrapping_neg().to_le_bytes());
         binary.extend_from_slice(&modulus);
-        let rr = rr.to_bytes_le();
+        let rr = rr.to_le_bytes();
         binary.extend_from_slice(&rr);
         binary.resize(520, 0);
         binary.extend_from_slice(&65537u32.to_le_bytes());

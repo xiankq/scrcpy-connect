@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/files/models/file_kind.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';

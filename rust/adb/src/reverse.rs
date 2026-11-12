@@ -1,6 +1,6 @@
 //! 设备侧 reverse 监听与受白名单限制的主机 TCP 桥。使用 adbd reverse: 协议，不是 adb server 的 host:forward 协议。
 use crate::{Client, Error, OperationOptions, Result, error::bounded};
-use rsa::rand_core::RngCore;
+use rsa::rand_core::Rng;
 use std::{collections::HashMap, net::SocketAddr, sync::Mutex, time::Duration};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -302,7 +302,7 @@ impl Client {
         })
         .await?;
         let mut random = [0; 16];
-        rsa::rand_core::OsRng.fill_bytes(&mut random);
+        rand::rng().fill_bytes(&mut random);
         let token = if self.uses_server() {
             // 官方 server 仅接受自身回环接口的 tcp:port 目标；拥有的监听保留任意显式主机目标，无需委托 Rust ADB 传输。
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;

@@ -1,14 +1,14 @@
 // Derived from libadb 0.5.0 (MIT), copyright (c) 2026 Igor Tarasov.
 // Source: https://github.com/tarigo/libadb/tree/bc681df985967e083cdd7c02df45f942495393a5
 // Full license: LICENSE-libadb. Adapted to std and the enclosing ADB identity.
-//! ADB 主控在 TLS 中提交的自签名证书。无线调试按客户端证书公钥在与 USB 授权相同的可信密钥库中认证主控；证书本身无额外秘密，只包装参与 TLS 握手的 RsaPrivateKey。结构逐字段对应 AOSP crypto/x509_generator.cpp。设备当前只比较公钥，仍保持 adb 输出形状以兼容后续收紧；常规调用方使用同时保有证书和密钥的 TlsConfig。
+//! ADB 主控在 TLS 中提交的自签名证书。无线调试按客户端证书公钥在与 USB 授权相同的可信密钥库中认证主控；证书本身无额外秘密，只包装参与 TLS 握手的 PrivateKey。结构逐字段对应 AOSP crypto/x509_generator.cpp。设备当前只比较公钥，仍保持 adb 输出形状以兼容后续收紧；常规调用方使用同时保有证书和密钥的 TlsConfig。
 
 use std::time::{Duration, SystemTime};
 use std::vec::Vec;
 
 use rsa::pkcs1v15::Pkcs1v15Sign;
 use rsa::pkcs8::EncodePublicKey;
-use rsa::rand_core::CryptoRngCore;
+use rsa::rand_core::CryptoRng;
 use rsa::sha2::{Digest, Sha256};
 use sha1::Sha1;
 use x509_cert::TbsCertificate;
@@ -22,7 +22,7 @@ use x509_cert::serial_number::SerialNumber;
 use x509_cert::spki::{AlgorithmIdentifierOwned, ObjectIdentifier, SubjectPublicKeyInfoOwned};
 use x509_cert::time::{Time, Validity};
 
-use rsa::RsaPrivateKey;
+use rsa::PrivateKey;
 
 /// adb 签名使用的 sha256WithRSAEncryption 算法。
 const SHA256_WITH_RSA: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.11");
@@ -95,7 +95,7 @@ impl From<x509_cert::builder::Error> for CertError {
     }
 }
 
-/// 分离 x509-cert 当前元数据 trait 与 RSA 0.9 签名 trait；两个版本间只传递公钥 DER，下面的私钥操作仍由 RSA 进行盲化计算。
+/// 将证书元数据与显式盲化签名分开；元数据只持有公钥 DER。
 #[derive(Clone)]
 struct SignerMetadata {
     public_key: SubjectPublicKeyInfoOwned,
@@ -145,13 +145,13 @@ impl BuilderProfile for AdbProfile {
 }
 
 /// 为 key 构建从当前时刻起十年有效的自签名证书，返回 TLS 所需 DER。rng 用于 RSA 签名盲化，不改变签名字节。错误：时钟无法由证书表示时返回 CertError::Clock，编码或签名失败返回对应变体。
-pub fn build<R: CryptoRngCore>(key: &RsaPrivateKey, rng: &mut R) -> Result<Vec<u8>, CertError> {
+pub fn build<R: CryptoRng>(key: &PrivateKey, rng: &mut R) -> Result<Vec<u8>, CertError> {
     build_at(key, rng, SystemTime::now())
 }
 
 /// 与 build 相同，但从 not_before 而非当前时钟起算，用于时钟不可信或需可重现字节的宿主。
-pub fn build_at<R: CryptoRngCore>(
-    key: &RsaPrivateKey,
+pub fn build_at<R: CryptoRng>(
+    key: &PrivateKey,
     rng: &mut R,
     not_before: SystemTime,
 ) -> Result<Vec<u8>, CertError> {

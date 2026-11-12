@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
@@ -36,7 +36,7 @@ void main() {
       const UsbSetupResult.selectionRequired([], message: 'retired'),
     );
     await tester.pump();
-    expect(devices.refreshes, 0);
+    expect(devices._refreshes, 0);
     expect(tester.takeException(), isNull);
   });
 
@@ -72,7 +72,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('retired'), findsNothing);
-    expect(devices.refreshes, 0);
+    expect(devices._refreshes, 0);
     await tester.tap(find.text('检查连接'));
     await tester.pumpAndSettle();
     replacement.attempts.single.result.complete(
@@ -80,7 +80,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('current'), findsOneWidget);
-    expect(devices.refreshes, 1);
+    expect(devices._refreshes, 1);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
@@ -126,9 +126,9 @@ class _Management implements DeviceManagement {
 }
 
 class _Devices extends DeviceListNotifier {
-  int refreshes = 0;
+  int _refreshes = 0;
   @override
   DeviceListState build() => DeviceListState(loading: false);
   @override
-  Future<void> refresh() async => refreshes++;
+  Future<void> refresh() async => _refreshes++;
 }

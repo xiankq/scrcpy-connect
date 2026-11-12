@@ -12,34 +12,32 @@ usb = ["dep:nusb"]
 
 [dependencies]
 base64 = "0.23.1"
-rsa = { version = "0.9.10", features = ["sha1", "sha2", "pem"] }
-# RSA 0.9 使用 digest 0.10 完成 ADB AUTH token 签名。
-sha1 = { version = "0.10.7", features = ["oid"] }
+rand = "0.10.3"
+rsa = { version = "0.10.0", features = ["pkcs1v15"] }
+sha1 = { version = "0.11.0", features = ["oid"] }
 socket2 = { version = "0.6.5", features = ["all"] }
 thiserror = "2.0.21"
-tokio = { version = "1.53.3", features = ["io-util", "net", "rt", "sync", "time", "macros"] }
+tokio = { version = "1.54.1", features = ["io-util", "net", "rt", "sync", "time", "macros"] }
 tokio-util = { version = "0.7.20", features = ["rt"] }
 rustls = { version = "0.23.46", default-features = false, features = ["std"] }
 tokio-rustls = { version = "0.26.6", default-features = false }
-rustls-rustcrypto = { version = "=0.0.2-alpha", default-features = false, features = ["std", "zeroize"] }
+rustls-rustcrypto = { version = "=0.1.0-pre.0", default-features = false, features = ["std", "zeroize"] }
 x509-cert = { version = "0.3.0", default-features = false, features = ["std", "builder"] }
 curve25519-dalek = { version = "5.0.0", default-features = false, features = ["alloc", "precomputed-tables", "zeroize"] }
 subtle = "2.6.1"
 zeroize = { version = "1.9.1", features = ["alloc"] }
 sha2 = { version = "0.11.1", features = ["oid"] }
 aes-gcm = { version = "0.11.1", default-features = false, features = ["aes", "alloc", "zeroize"] }
-aes = { version = "0.9.3", default-features = false, features = ["zeroize"] }
+aes = { version = "0.9.4", default-features = false, features = ["zeroize"] }
 hkdf = "0.13.0"
-# x509-cert 0.3 元数据 trait 衔接稳定 RSA 0.9 签名器。
 signature = "3.0.0"
-mdns-sd = "=0.21.6"
-brotli = { version = "9.0.0", default-features = false, features = ["std"] }
+mdns-sd = "=0.21.7"
+brotli = { version = "9.1.1", default-features = false, features = ["std"] }
 lz4_flex = { version = "0.14.0", default-features = false, features = ["std", "frame", "safe-encode", "safe-decode", "checked-decode"] }
 ruzstd = { version = "0.9.1", default-features = false, features = ["std", "hash"] }
 
 [target.'cfg(any(target_os = "linux", target_os = "android", target_os = "windows", target_os = "macos"))'.dependencies]
-nusb = { version = "0.2.8", default-features = false, features = ["tokio"], optional = true }
+nusb = { version = "0.2.9", default-features = false, features = ["tokio"], optional = true }
 
 [dev-dependencies]
-rand = "0.10.3"
-tokio = { version = "1.53.3", features = ["full"] }
+tokio = { version = "1.54.1", features = ["full"] }

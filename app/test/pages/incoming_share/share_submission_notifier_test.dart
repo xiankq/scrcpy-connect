@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -32,6 +32,7 @@ const _share = IncomingShare(
 );
 
 void main() {
+  final scope = Object();
   late _Shares incoming;
   late _Directories directories;
   late _Transfers transfers;
@@ -40,7 +41,7 @@ void main() {
   late ProviderContainer container;
   late ShareSubmissionNotifier actions;
   late void Function() leave;
-  final provider = shareSubmissionProvider('share', scope: Object());
+  final provider = shareSubmissionProvider('share', scope: scope);
   final dependencies = _Dependencies();
   const events = Stream<Map<String, dynamic>>.empty();
   sourceOverrides() => [

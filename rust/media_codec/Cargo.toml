@@ -14,7 +14,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 flutter_rust_bridge = "=2.13.0"
 
 [build-dependencies]
-bindgen = { version = "0.72.1", default-features = false, features = ["runtime"] }
+bindgen = { version = "0.73.2", default-features = false, features = ["runtime"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

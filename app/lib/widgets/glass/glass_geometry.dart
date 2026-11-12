@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 
 // 先给合成器明确的矩形范围，再执行后端形状及模糊。

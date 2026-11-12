@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_actions_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';

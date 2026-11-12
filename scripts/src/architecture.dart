@@ -283,7 +283,7 @@ List<String> checkArchitecture(
                 .first;
             if (layer == 'core' &&
                 RegExp(
-                  r'^package:(flutter/(widgets|material|cupertino|rendering|gestures|painting)\.dart|flutter_hooks/|go_router/)',
+                  r'^package:(flutter/(widgets|material|cupertino|rendering|gestures|painting)\.dart|material_ui/|cupertino_ui/|flutter_hooks/|go_router/)',
                 ).hasMatch(literal)) {
               problems.add(
                 '${relative(file.path)}: core 不得持有 Flutter 视图依赖 $literal',

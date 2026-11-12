@@ -10,6 +10,7 @@ import 'package:scrcpy_connect/core/gallery/gallery_scanner.dart';
 import 'package:scrcpy_connect/core/gallery/gallery_scanner_provider.dart';
 
 void main() {
+  final scope = Object();
   const device = DeviceSnapshot(id: 'device', guid: 'guid');
   late _Scanner scanner;
   late ProviderContainer container;
@@ -22,7 +23,7 @@ void main() {
   tearDown(() => container.dispose());
 
   test('相册独立装配，离页后的迟到创建只由原扫描能力回收', () async {
-    final provider = galleryScanProvider(device, scope: Object());
+    final provider = galleryScanProvider(device, scope: scope);
     final listener = container.listen(provider, (_, _) {});
     final start = container.read(provider.notifier).start();
     listener.close();
@@ -42,7 +43,7 @@ void main() {
       20,
       source: scanner,
     );
-    final provider = galleryScanProvider(device, scope: Object());
+    final provider = galleryScanProvider(device, scope: scope);
     container.listen(provider, (_, _) {});
     expect(container.read(provider).showingPrevious, isTrue);
     final start = container.read(provider.notifier).start();
@@ -70,7 +71,7 @@ void main() {
   });
 
   test('分页拒绝重复路径，保留已确认集合并允许重新核验', () async {
-    final provider = galleryScanProvider(device, scope: Object());
+    final provider = galleryScanProvider(device, scope: scope);
     container.listen(provider, (_, _) {});
     final actions = container.read(provider.notifier);
     final start = actions.start();
@@ -98,7 +99,7 @@ void main() {
       10,
       source: scanner,
     );
-    final provider = galleryScanProvider(device, scope: Object());
+    final provider = galleryScanProvider(device, scope: scope);
     container.listen(provider, (_, _) {});
     final actions = container.read(provider.notifier);
     final start = actions.start();

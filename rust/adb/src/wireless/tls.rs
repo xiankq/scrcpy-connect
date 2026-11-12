@@ -1,7 +1,7 @@
 //! 用于 ADB 配对与 STLS 的 TLS 1.3，提供者由调用方显式选择。
 use crate::{Error, Identity, Result, Transport};
 use rsa::{
-    RsaPrivateKey,
+    PrivateKey,
     pkcs8::{DecodePrivateKey, EncodePrivateKey},
 };
 use rustls::{
@@ -33,10 +33,9 @@ impl TlsConfig {
     /// 使用所选提供者，不改变进程全局 rustls provider。ADB 接受对端自签名证书，但验证 CertificateVerify 签名；配对通过 SPAKE2 和 TLS exporter 认证通道，后续连接由 adbd 在授权密钥库中验证主控公钥。
     pub fn with_provider(identity: &Identity, provider: Arc<CryptoProvider>) -> Result<Self> {
         let pem = identity.to_pkcs8_pem()?;
-        let key =
-            RsaPrivateKey::from_pkcs8_pem(&pem).map_err(|e| Error::Identity(e.to_string()))?;
+        let key = PrivateKey::from_pkcs8_pem(&pem).map_err(|e| Error::Identity(e.to_string()))?;
         let certificate = CertificateDer::from(
-            super::cert::build(&key, &mut rsa::rand_core::OsRng)
+            super::cert::build(&key, &mut rand::rng())
                 .map_err(|e| Error::Identity(e.to_string()))?,
         );
         let private = key

@@ -1,5 +1,5 @@
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:scrcpy_connect/core/settings/metadata_management.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';

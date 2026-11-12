@@ -1,0 +1,47 @@
+PODS:
+  - file_picker_darwin (1.0.0):
+    - Flutter
+    - FlutterMacOS
+  - flutter_local_notifications (0.0.1):
+    - FlutterMacOS
+  - FlutterMacOS (1.0.0)
+  - media_codec (0.1.0):
+    - FlutterMacOS
+  - package_info_plus (0.0.1):
+    - FlutterMacOS
+  - share_plus (0.0.1):
+    - FlutterMacOS
+
+DEPENDENCIES:
+  - file_picker_darwin (from `Flutter/ephemeral/.symlinks/plugins/file_picker_darwin/darwin`)
+  - flutter_local_notifications (from `Flutter/ephemeral/.symlinks/plugins/flutter_local_notifications/macos`)
+  - FlutterMacOS (from `Flutter/ephemeral`)
+  - media_codec (from `Flutter/ephemeral/.symlinks/plugins/media_codec/macos`)
+  - package_info_plus (from `Flutter/ephemeral/.symlinks/plugins/package_info_plus/macos`)
+  - share_plus (from `Flutter/ephemeral/.symlinks/plugins/share_plus/macos`)
+
+EXTERNAL SOURCES:
+  file_picker_darwin:
+    :path: Flutter/ephemeral/.symlinks/plugins/file_picker_darwin/darwin
+  flutter_local_notifications:
+    :path: Flutter/ephemeral/.symlinks/plugins/flutter_local_notifications/macos
+  FlutterMacOS:
+    :path: Flutter/ephemeral
+  media_codec:
+    :path: Flutter/ephemeral/.symlinks/plugins/media_codec/macos
+  package_info_plus:
+    :path: Flutter/ephemeral/.symlinks/plugins/package_info_plus/macos
+  share_plus:
+    :path: Flutter/ephemeral/.symlinks/plugins/share_plus/macos
+
+SPEC CHECKSUMS:
+  file_picker_darwin: 4c2b9a50ea44cb3b071381ea0cf48591bdd80251
+  flutter_local_notifications: 1fc7ffb10a83d6a2eeeeddb152d43f1944b0aad0
+  FlutterMacOS: c232990155153907050900a2e175c7773903ba4e
+  media_codec: 9013b4db8a3be3f39b2dc17181e3eab97cbe84b5
+  package_info_plus: f0052d280d17aa382b932f399edf32507174e870
+  share_plus: 510bf0af1a42cd602274b4629920c9649c52f4cc
+
+PODFILE CHECKSUM: 1f66992cc330b8569ecd94afd0f45e5ecfe7892c
+
+COCOAPODS: 1.17.0

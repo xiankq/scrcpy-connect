@@ -1,5 +1,5 @@
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/widgets/recovery_status.dart';
 
 /// 边距归滚动内容所有，使视口可以延伸到界面装饰下方。

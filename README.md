@@ -4,7 +4,7 @@
 
 ## 开发
 
-准备Flutter、`rust-toolchain.toml` 指定的Rust、JDK21和Android SDK：
+准备 Flutter 3.50+（Dart 3.14+）、`rust-toolchain.toml` 指定的Rust、JDK21和Android SDK：
 
 ```sh
 flutter pub get --enforce-lockfile

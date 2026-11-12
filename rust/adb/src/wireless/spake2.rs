@@ -8,7 +8,7 @@ use std::vec::Vec;
 use curve25519_dalek::edwards::{CompressedEdwardsY, EdwardsPoint};
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::traits::Identity;
-use rsa::rand_core::CryptoRngCore;
+use rsa::rand_core::CryptoRng;
 use sha2::{Digest, Sha512};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
 use zeroize::Zeroizing;
@@ -130,7 +130,7 @@ pub struct Spake2 {
 
 impl Spake2 {
     /// 开始交换并生成本方消息。password 必须包含完整配对码和 TLS exporter 输出；名称也完整包含 NUL。adbd 主控 Alice 使用 b"adb pair client\0"，设备 Bob 使用 b"adb pair server\0"，每一方均先传自身名称。
-    pub fn new<R: CryptoRngCore>(
+    pub fn new<R: CryptoRng>(
         role: Role,
         my_name: &[u8],
         their_name: &[u8],

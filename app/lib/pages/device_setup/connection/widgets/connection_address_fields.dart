@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/devices/connection_validation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 

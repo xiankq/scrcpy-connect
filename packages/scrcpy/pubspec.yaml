@@ -4,11 +4,11 @@ publish_to: none
 version: 0.1.0
 resolution: workspace
 environment:
-  sdk: ^3.13.5
+  sdk: ^3.14.0
 dependencies:
   flutter_rust_bridge: 2.13.0
   flutter_rust_bridge_hooks: 2.13.0
-  code_assets: ^2.1.0
+  code_assets: ^2.2.0
   adb:
     path: ../adb
 dev_dependencies:

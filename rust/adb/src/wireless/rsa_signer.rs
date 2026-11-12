@@ -1,9 +1,9 @@
-//! 采用随机乘法 RSA 盲化的 RSA-PSS rustls adapter。上游实验提供者使用未盲化的 rsa::pss::SigningKey；所有数学计算仍在固定 RustCrypto RSA 实现内。盲化不能解决该实现尚未关闭的时序安全公告。
+//! 采用随机乘法 RSA 盲化的 RSA-PSS rustls adapter。RSA 0.10 的 PSS SigningKey 默认执行盲化；此处显式传入加密随机源。
 use rsa::sha2::{Sha256, Sha384, Sha512};
 use rsa::{
-    RsaPrivateKey,
+    PrivateKey,
     pkcs8::DecodePrivateKey,
-    pss::BlindedSigningKey,
+    pss::SigningKey as PssSigningKey,
     signature::{RandomizedSigner, SignatureEncoding},
 };
 use rustls::{
@@ -24,12 +24,12 @@ impl KeyProvider for BlindedRsaKeyProvider {
         let PrivateKeyDer::Pkcs8(der) = key_der else {
             return Err(Error::General("ADB requires RSA PKCS8 identity".into()));
         };
-        let key = RsaPrivateKey::from_pkcs8_der(der.secret_pkcs8_der())
+        let key = PrivateKey::from_pkcs8_der(der.secret_pkcs8_der())
             .map_err(|_| Error::General("invalid ADB RSA identity".into()))?;
         Ok(Arc::new(BlindedRsaSigningKey(Arc::new(key))))
     }
 }
-struct BlindedRsaSigningKey(Arc<RsaPrivateKey>);
+struct BlindedRsaSigningKey(Arc<PrivateKey>);
 impl std::fmt::Debug for BlindedRsaSigningKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("BlindedRsaSigningKey([REDACTED])")
@@ -56,7 +56,7 @@ impl SigningKey for BlindedRsaSigningKey {
     }
 }
 struct BlindedRsaSigner {
-    key: Arc<RsaPrivateKey>,
+    key: Arc<PrivateKey>,
     scheme: SignatureScheme,
 }
 impl std::fmt::Debug for BlindedRsaSigner {
@@ -68,20 +68,14 @@ impl std::fmt::Debug for BlindedRsaSigner {
 }
 impl Signer for BlindedRsaSigner {
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, Error> {
-        let mut rng = rsa::rand_core::OsRng;
+        let mut rng = rand::rng();
         let result = match self.scheme {
-            SignatureScheme::RSA_PSS_SHA256 => {
-                BlindedSigningKey::<Sha256>::new((*self.key).clone())
-                    .try_sign_with_rng(&mut rng, message)
-            }
-            SignatureScheme::RSA_PSS_SHA384 => {
-                BlindedSigningKey::<Sha384>::new((*self.key).clone())
-                    .try_sign_with_rng(&mut rng, message)
-            }
-            SignatureScheme::RSA_PSS_SHA512 => {
-                BlindedSigningKey::<Sha512>::new((*self.key).clone())
-                    .try_sign_with_rng(&mut rng, message)
-            }
+            SignatureScheme::RSA_PSS_SHA256 => PssSigningKey::<Sha256>::new((*self.key).clone())
+                .try_sign_with_rng(&mut rng, message),
+            SignatureScheme::RSA_PSS_SHA384 => PssSigningKey::<Sha384>::new((*self.key).clone())
+                .try_sign_with_rng(&mut rng, message),
+            SignatureScheme::RSA_PSS_SHA512 => PssSigningKey::<Sha512>::new((*self.key).clone())
+                .try_sign_with_rng(&mut rng, message),
             _ => return Err(Error::General("ADB TLS requires RSA-PSS".into())),
         };
         result

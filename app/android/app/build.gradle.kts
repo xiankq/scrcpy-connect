@@ -24,7 +24,8 @@ gradle.taskGraph.whenReady {
 
 android {
     namespace = "dev.scrcpyconnect.scrcpy_connect"
-    compileSdk = flutter.compileSdkVersion
+    // flutter_local_notifications 23 要求 Android 37。
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

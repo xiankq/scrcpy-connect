@@ -1,5 +1,5 @@
 import 'package:scrcpy_connect/pages/route_error/route_error_page.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 主题或事件重建时保留同一次查询及其页面。
 class RouteResourceView<T extends Object> extends StatefulWidget {

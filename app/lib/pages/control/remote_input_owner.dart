@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:scrcpy_connect/core/control/models/app_launch_record.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';

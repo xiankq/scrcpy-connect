@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/scheduler.dart';
 
 /// 等待任务的共享背景；异常冻结当前帧，重试从原相位继续。

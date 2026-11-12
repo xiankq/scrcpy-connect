@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';

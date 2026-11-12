@@ -2,24 +2,25 @@ name: connect_workspace
 description: Repository tooling and shared dependency workspace.
 publish_to: none
 environment:
-  sdk: ^3.13.5
+  sdk: ^3.14.0
+  flutter: ">=3.50.0"
 workspace:
   - app
   - packages/adb
   - packages/scrcpy
   - packages/media_codec
 dev_dependencies:
-  analyzer: ^14.6.0
+  analyzer: ^14.7.0
   yaml: 3.1.4
   ffi: 2.2.0
-  archive: 4.5.2
+  archive: ^4.6.0
   args: 2.7.0
-  crypto: 3.0.7
+  crypto: ^3.0.8
   path: 1.9.1
   xml: 7.1.0
   flutter:
     sdk: flutter
   flutter_lints: ^6.0.0
-  riverpod_lint: 3.1.9
-  hooks_riverpod: ^3.4.3
+  riverpod_lint: ^3.2.0
+  hooks_riverpod: ^3.5.0
   path_provider: ^2.1.6
