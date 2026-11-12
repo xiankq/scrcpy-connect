@@ -3,8 +3,10 @@ import 'dart:io';
 
 import 'package:scrcpy_connect/core/control/video_quality_policy.dart'
     show defaultVideoQuality, VideoQualityPolicy;
-import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
+import 'package:scrcpy_connect/core/devices/device_metadata_transfer.dart';
 import 'package:scrcpy_connect/core/devices/models/device_metadata.dart';
+import 'package:scrcpy_connect/core/devices/models/device_record.dart'
+    show DeviceRecordsFailure;
 import 'package:scrcpy_connect/core/devices/models/device_records_import.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart'
     show RequestFailure;
@@ -20,21 +22,15 @@ const _devicePreferences = {'deviceQuality', 'deviceSettings', 'appOpenModes'};
 final class AppSettings implements MetadataManagement, SettingsManagement {
   AppSettings({
     required this.preferences,
-    required this.records,
-    required this.onDevicesImported,
+    required this.metadata,
     required this.onChanged,
     this.applyBackgroundPolicy,
-    this.prepareImport,
-    this.pauseReconnect,
     this.isDisposed,
   }) : _appliedBackground = preferences.current.values.backgroundKeepAlive;
   final SettingsStorage preferences;
-  final DeviceRecordStorage records;
-  final void Function(DeviceRecordsImport) onDevicesImported;
+  final DeviceMetadataTransfer metadata;
   final void Function(Preferences settings) onChanged;
   final Future<void> Function(bool enabled)? applyBackgroundPolicy;
-  final Future<void> Function()? prepareImport;
-  final Future<void> Function() Function()? pauseReconnect;
   final bool Function()? isDisposed;
   bool _appliedBackground;
   Future<void> _tail = Future<void>.value();
@@ -75,6 +71,7 @@ final class AppSettings implements MetadataManagement, SettingsManagement {
     String deviceId,
     VideoQualityPreferences quality,
   ) => _enqueue(() async {
+    _requireActive();
     final devices = {...settings.deviceQuality, deviceId: quality};
     await preferences.update(
       PreferenceCodec.encodeChanges(PreferenceChanges(deviceQuality: devices)),
@@ -84,6 +81,7 @@ final class AppSettings implements MetadataManagement, SettingsManagement {
 
   /// 设备遗忘成功后清理持久偏好；失败时仅重试本方法，不重复遗忘设备。
   Future<void> forgetDevicePreferences(String deviceId) => _enqueue(() async {
+    _requireActive();
     try {
       final current = settings;
       final hasQuality = current.deviceQuality.containsKey(deviceId);
@@ -158,8 +156,7 @@ final class AppSettings implements MetadataManagement, SettingsManagement {
   @override
   Future<DeviceMetadata> exportMetadata() => _enqueue(() async {
     _requireActive();
-    await records.reload();
-    return records.exportMetadata(
+    return metadata.export(
       settings: {
         for (final entry in PreferenceCodec.encode(settings).entries)
           if (!_devicePreferences.contains(entry.key)) entry.key: entry.value,
@@ -173,7 +170,7 @@ final class AppSettings implements MetadataManagement, SettingsManagement {
         _requireActive();
         final imported = _importSettings(metadata);
         await preferences.reload();
-        final receipt = await records.previewMetadata(metadata);
+        final receipt = await this.metadata.preview(metadata);
         final current = PreferenceCodec.encode(settings);
         return SettingsImportPreview(
           metadata: metadata,
@@ -228,25 +225,24 @@ final class AppSettings implements MetadataManagement, SettingsManagement {
       _checkImportRevision(preview, importGlobalPreferences);
       return _importSettings(preview.metadata);
     });
-    await prepareImport?.call();
-    _requireActive();
-    final resume = pauseReconnect?.call();
-    try {
-      return await _enqueue(
+    return metadata.import(
+      preview.metadata,
+      importGlobalPreferences: importGlobalPreferences,
+      apply: (commitRecords) => _enqueue(
         () => _commitImport(
           preview,
           imported,
+          commitRecords,
           importGlobalPreferences: importGlobalPreferences,
         ),
-      );
-    } finally {
-      await resume?.call();
-    }
+      ),
+    );
   }
 
   Future<SettingsImportResult> _commitImport(
     SettingsImportPreview preview,
-    Map<String, Object?> imported, {
+    Map<String, Object?> imported,
+    Future<DeviceRecordsImport> Function() commitRecords, {
     required bool importGlobalPreferences,
   }) async {
     _requireActive();
@@ -257,13 +253,7 @@ final class AppSettings implements MetadataManagement, SettingsManagement {
     _checkImportRevision(preview, importGlobal);
     late final DeviceRecordsImport importedRecords;
     try {
-      importedRecords = await records.importMetadata(
-        metadata,
-        importGlobalPreferences: importGlobal,
-      );
-      if (!importedRecords.alreadyImported) {
-        onDevicesImported(importedRecords);
-      }
+      importedRecords = await commitRecords();
     } catch (error) {
       if (error is DeviceRecordsFailure &&
           (error.code.startsWith('invalid_') ||
@@ -353,9 +343,11 @@ final class AppSettings implements MetadataManagement, SettingsManagement {
   }) async {
     final saved = settings;
     try {
+      _requireActive();
       onChanged(saved);
       final background = saved.backgroundKeepAlive;
       if (forceBackgroundPolicy || background != _appliedBackground) {
+        _requireActive();
         await applyBackgroundPolicy?.call(background);
         _appliedBackground = background;
       }
@@ -371,6 +363,7 @@ final class AppSettings implements MetadataManagement, SettingsManagement {
 
   /// 重新附着或回执不确定后重新应用持久快照；不重试设备恢复，也不改写偏好 revision。
   Future<void> reconcile() => _enqueue(() async {
+    _requireActive();
     await preferences.reload();
     await _publishAndApply(forceBackgroundPolicy: true);
   });

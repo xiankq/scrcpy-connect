@@ -23,10 +23,38 @@ import 'package:scrcpy_connect/core/lifecycle/app_lifetime.dart';
 import 'package:scrcpy_connect/core/media/media_playback.dart';
 import 'package:scrcpy_connect/core/platform/background_policy.dart';
 import 'package:scrcpy_connect/core/devices/models/device_reconnect_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_metadata.dart';
 import 'package:scrcpy_connect/core/recovery/state_recovery.dart';
 import 'package:scrcpy_connect/core/settings/app_settings.dart';
 
 void main() {
+  test('元数据导入不创建配对、发现、重连或原生查询执行者', () async {
+    final changes = <DeviceListChanged>[];
+    final resources = await _resources(onDevicesChanged: changes.add);
+    final metadata = resources.metadata;
+    final document = DeviceMetadata.parse({
+      'format': 'scrcpy-connect-metadata',
+      'version': 1,
+      'devices': [
+        {
+          'name': 'Imported phone',
+          'address': '192.0.2.1',
+          'port': 5555,
+          'transport': 'tcp',
+        },
+      ],
+    });
+    final receipt = await metadata.import(
+      document,
+      importGlobalPreferences: false,
+      apply: (commit) => commit(),
+    );
+    expect(changes.single.devices.single.id, receipt.receipt.deviceIds.single);
+    await resources.close();
+    _expectUnused(resources, devicesUsed: true);
+    expect(resources.metadata, same(metadata));
+  });
+
   test('空记录、无关事件和退出不创建未使用的设备执行所有者', () async {
     final resources = await _resources();
     expect(resources.records.current.devices, isEmpty);
@@ -397,8 +425,7 @@ Future<AppLifecycle> _lifecycle(
   final directory = resources.identities.directory;
   final settings = AppSettings(
     preferences: await AppSettings.prepare(directory),
-    records: resources.records,
-    onDevicesImported: (_) {},
+    metadata: resources.metadata,
     onChanged: (_) {},
   );
   final events = RuntimeEvents(

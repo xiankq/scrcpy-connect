@@ -7,6 +7,7 @@ import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/core/control/app_launch_journal.dart';
 import 'package:scrcpy_connect/core/control/capture_resources.dart';
 import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
+import 'package:scrcpy_connect/core/devices/device_metadata_transfer.dart';
 import 'package:scrcpy_connect/core/devices/device_connection.dart';
 import 'package:scrcpy_connect/core/devices/scrcpy_server_queries.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
@@ -178,8 +179,13 @@ Future<CaptureResources> _resources({
   final records = await DeviceRecordStorage.open(directory: directory);
   final settings = AppSettings(
     preferences: await AppSettings.prepare(directory),
-    records: records,
-    onDevicesImported: (_) {},
+    metadata: DeviceMetadataTransfer(
+      records: records,
+      prepareImport: () async => throw StateError('捕获不应导入设备'),
+      holdReconnect: () => throw StateError('捕获不应冻结设备连接'),
+      onImported: () => throw StateError('捕获不应发布设备导入'),
+      isDisposed: () => false,
+    ),
     onChanged: (_) {},
   );
   return CaptureResources(

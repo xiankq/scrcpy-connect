@@ -16,6 +16,7 @@ import 'package:scrcpy_connect/core/devices/device_connection.dart';
 import 'package:scrcpy_connect/core/devices/device_connection_service.dart';
 import 'package:scrcpy_connect/core/devices/device_discovery.dart';
 import 'package:scrcpy_connect/core/devices/device_health_service.dart';
+import 'package:scrcpy_connect/core/devices/device_metadata_transfer.dart';
 import 'package:scrcpy_connect/core/devices/device_observation_service.dart';
 import 'package:scrcpy_connect/core/devices/device_operations.dart';
 import 'package:scrcpy_connect/core/devices/device_power_service.dart';
@@ -121,6 +122,24 @@ final class DeviceResources {
 
   Future<void> forgetObservation(String id) async =>
       await _observationInstance?.forget(id);
+
+  DeviceMetadataTransfer? _metadataInstance;
+  DeviceMetadataTransfer get metadata {
+    if (_metadataInstance == null) _checkCreation();
+    return _metadataInstance ??= DeviceMetadataTransfer(
+      records: _records,
+      prepareImport: () =>
+          prepareChange(const ConnectionChange(.replaceRecords)),
+      holdReconnect: () =>
+          _reconnectionInstance?.beginChange(
+            const ConnectionChange(.replaceRecords),
+          ) ??
+          () async {},
+      onImported: () =>
+          onDevicesChanged(DeviceListChanged(_devices.readDevices())),
+      isDisposed: () => _isDisposed,
+    );
+  }
 
   /// 宿主停止只撤销已存在的流程和连接；等待回收后仍允许新的手动连接。
   Future<void> stopConnections() {
@@ -463,6 +482,7 @@ final class DeviceResources {
   Future<void> stopAdmission() {
     _closed = true;
     return Future.wait([
+      if (_metadataInstance case final metadata?) metadata.close(),
       if (_reconnectionInstance case final reconnect?) reconnect.dispose(),
       if (_setupInstance case final setup?) setup.dispose(),
     ]);

@@ -16,10 +16,8 @@ import 'package:scrcpy_connect/core/control/scrcpy_capture_adapter.dart';
 import 'package:scrcpy_connect/core/devices/device_actions.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_resources.dart';
-import 'package:scrcpy_connect/core/devices/models/connection_change.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
 import 'package:scrcpy_connect/core/devices/models/device_reconnect_snapshot.dart';
-import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/devices/usb_authorization.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log_provider.dart';
@@ -99,17 +97,7 @@ final class AppComposition {
   late final _preferences = AppSettings(
     preferences: _host.preferences,
     isDisposed: () => _isDisposed,
-    prepareImport: () => _connections.prepareChange(
-      const ConnectionChange(ConnectionChangeKind.replaceRecords),
-    ),
-    pauseReconnect: () => _connections.reconnections.beginChange(
-      const ConnectionChange(ConnectionChangeKind.replaceRecords),
-    ),
-    records: _connections.records,
-    onDevicesImported: (_) => _events.publish({
-      'type': 'devices.changed',
-      'data': DeviceListChanged(_connections.devices.readDevices()),
-    }),
+    metadata: _connections.metadata,
     applyBackgroundPolicy: (enabled) =>
         _background.apply(enabled, automatic: false),
     onChanged: (preferences) => lifecycle.settingsChanged(preferences),

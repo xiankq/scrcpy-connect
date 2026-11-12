@@ -12,6 +12,8 @@ import 'package:scrcpy_connect/core/control/app_launch_journal.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/models/device_endpoint.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
+import 'package:scrcpy_connect/core/devices/models/device_metadata.dart';
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
@@ -21,10 +23,68 @@ import 'package:scrcpy_connect/core/platform/native_host_dependencies.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_actions_provider.dart';
 import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/settings/settings_management.dart';
+import 'package:scrcpy_connect/core/settings/metadata_management.dart';
 import 'package:scrcpy_connect/router/route_resource_resolver_provider.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('实际元数据导入由设备模块交付投影，全局偏好与重复导入保持同一账本', () async {
+    final fixture = await _Assembly.open();
+    final bootstrap = await AppBootstrap.initialize(
+      dataDirectory: fixture.directory.path,
+    );
+    addTearDown(bootstrap.dispose);
+    final container = ProviderContainer(overrides: bootstrap.overrides);
+    addTearDown(container.dispose);
+    container.read(appSnapshotProvider);
+    final source = container.read(metadataManagementProvider);
+    final document = DeviceMetadata.parse({
+      'format': 'scrcpy-connect-metadata',
+      'version': 1,
+      'devices': [
+        {
+          'name': 'Imported phone',
+          'address': '192.0.2.1',
+          'port': 5555,
+          'transport': 'tcp',
+        },
+      ],
+      'settings': {'appearance': 'dark'},
+    });
+    final preview = await source.previewImport(document);
+    final changed = container
+        .read(runtimeEventsProvider)
+        .firstWhere((event) => event['data'] is DeviceListChanged);
+    final imported = await source.importMetadata(
+      preview,
+      importGlobalPreferences: true,
+    );
+    final receipt = imported.records.receipt.deviceIds.single;
+    final projection = (await changed)['data'] as DeviceListChanged;
+    expect(projection.devices.single.id, receipt);
+    expect(
+      projection.devices.single.status,
+      DeviceConnectionStatus.unauthorized,
+    );
+    expect(container.read(appSnapshotProvider).devices.single.id, receipt);
+    expect(
+      container.read(appSnapshotProvider).settings.appearance,
+      Appearance.dark,
+    );
+    final repeated = await source.importMetadata(
+      await source.previewImport(document),
+      importGlobalPreferences: true,
+    );
+    expect(repeated.records.alreadyImported, isTrue);
+    expect(repeated.preferencesStatus, ImportPreferencesStatus.matchesCurrent);
+    expect(
+      (await container.read(deviceReaderProvider).readDevices()).single.id,
+      receipt,
+    );
+    await bootstrap.dispose();
+    expect(fixture.api.closed, ['files:files-1', 'admission:scope-1']);
+  });
 
   test('实际启动未使用控制捕获时，仍恢复持久化待核对记录并能明确关闭', () async {
     final fixture = await _Assembly.open();
