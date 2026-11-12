@@ -9,6 +9,7 @@ import 'package:scrcpy_connect/core/devices/device_inspection.dart';
 import 'package:scrcpy_connect/core/devices/device_notifications.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 
 part 'device_query_provider.g.dart';
 
@@ -150,6 +151,10 @@ AdbCancellation _observeConnection(
 }) {
   final cancellation = AdbCancellation();
   final subscription = events.listen((event) {
+    if (event['data'] is RecoveryEvent) {
+      ref.invalidateSelf();
+      return;
+    }
     final type = event['type'];
     if (type is! String || type == 'session.frame') return;
     final data = event['data'];
@@ -157,7 +162,6 @@ AdbCancellation _observeConnection(
     if (owner != null && owner != deviceId) return;
     if (type == 'devices.changed' ||
         type.startsWith('device.') ||
-        type.startsWith('state.resync') ||
         type == 'connections.stopped' ||
         eventPrefixes.any(type.startsWith)) {
       ref.invalidateSelf();

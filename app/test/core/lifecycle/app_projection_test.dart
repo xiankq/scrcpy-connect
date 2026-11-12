@@ -17,6 +17,7 @@ import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
 import 'package:scrcpy_connect/core/media/audio_error_notifier.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/settings/settings_management.dart';
 
@@ -43,17 +44,19 @@ void main() {
     });
     events.add({
       'type': 'state.resynced',
-      'data': RuntimeSnapshot(
-        sequence: 1,
-        devices: [
-          const DeviceSnapshot(
-            id: 'device',
-            name: 'updated',
-            status: .connected,
-          ),
-        ],
-        settings: Preferences(appearance: .dark),
-        shares: [const IncomingShare(shareId: 'share', status: .ready)],
+      'data': RecoveryCompleted(
+        RuntimeSnapshot(
+          sequence: 1,
+          devices: [
+            const DeviceSnapshot(
+              id: 'device',
+              name: 'updated',
+              status: .connected,
+            ),
+          ],
+          settings: Preferences(appearance: .dark),
+          shares: [const IncomingShare(shareId: 'share', status: .ready)],
+        ),
       ),
     });
     expect(projections, hasLength(1));
@@ -68,7 +71,17 @@ void main() {
     // 相同水位在没有恢复请求时是重复回执，不重复交付状态或事件。
     events.add({
       'type': 'state.resynced',
-      'data': RuntimeSnapshot(sequence: 1, settings: Preferences()),
+      'data': RecoveryCompleted(
+        RuntimeSnapshot(sequence: 1, settings: Preferences()),
+      ),
+    });
+    expect(observed, hasLength(1));
+    expect(projections, hasLength(1));
+    events.add({
+      'type': 'state.resynced',
+      'data': RecoveryCompleted(
+        RuntimeSnapshot(sequence: 0, settings: Preferences()),
+      ),
     });
     expect(observed, hasLength(1));
     expect(projections, hasLength(1));
@@ -115,8 +128,8 @@ void main() {
     expect(snapshot.audioError, 'replacement audio');
     expect(oldEvents.hasListener, isFalse);
     expect(previous.closes, 1);
-    oldEvents.add({'type': 'state.resync'});
-    newEvents.add({'type': 'state.resync'});
+    oldEvents.add({'type': 'state.resync', 'data': const RecoveryStarted()});
+    newEvents.add({'type': 'state.resync', 'data': const RecoveryStarted()});
     snapshot = container.read(appSnapshotProvider);
     expect(snapshot.reconciliationPending, isTrue);
     expect(snapshot.focusedDeviceId, 'replacement');

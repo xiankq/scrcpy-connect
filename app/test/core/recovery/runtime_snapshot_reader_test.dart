@@ -11,7 +11,7 @@ void main() {
   late RuntimeEvents events;
   setUp(() {
     events = RuntimeEvents(
-      acceptState: (_) => true,
+      acceptState: ({required sequence, required telemetry}) => true,
       onState: (_) {},
       beforePublish: (_) {},
       afterState: (_) {},

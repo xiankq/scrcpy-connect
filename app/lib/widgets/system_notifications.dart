@@ -12,7 +12,7 @@ import 'package:scrcpy_connect/core/devices/models/observed_device_snapshot.dart
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
-import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/system_notification_sink.dart';
 import 'package:scrcpy_connect/widgets/system_notification_sink_provider.dart';
@@ -293,16 +293,15 @@ class SystemNotifications {
     if (_disposed || !_current()) return;
     final deviceId = value(event, 'deviceId');
     final data = jsonObject(event['data']);
-    if (event['type'] == 'state.resync' ||
-        event['type'] == 'state.resync.failed') {
+    final payload = event['data'];
+    if (payload is RecoveryStarted || payload is RecoveryFailed) {
       _suspend();
       return;
     }
-    if (event['type'] == 'state.resynced') {
+    if (payload case RecoveryCompleted(:final snapshot)) {
       _clear();
       _reconciling = false;
       _restoring = true;
-      final snapshot = event['data'] as RuntimeSnapshot;
       _connectionLifecycle(snapshot.devices);
       for (final observed in snapshot.observations) {
         _observe(observed);

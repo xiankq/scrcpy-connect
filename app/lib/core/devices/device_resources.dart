@@ -37,6 +37,7 @@ import 'package:scrcpy_connect/core/identity/adb_identity_service.dart';
 import 'package:scrcpy_connect/core/identity/identity_manager.dart';
 import 'package:scrcpy_connect/core/identity/models/identity_selection.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 
@@ -412,14 +413,19 @@ final class DeviceResources {
     return owner;
   }
 
-  void invalidateState() {
+  void handleRecovery(RecoveryEvent event) {
     if (_isDisposed) return;
-    _reconnectionInstance?.handleEvent(const DeviceReconnectInvalidated());
-  }
-
-  void restoreState(DeviceReconnectSnapshot snapshot) {
-    if (_isDisposed) return;
-    _reconnectionInstance?.handleEvent(DeviceReconnectRecovered(snapshot));
+    _reconnectionInstance?.handleEvent(switch (event) {
+      RecoveryCompleted(:final snapshot) => DeviceReconnectRecovered(
+        DeviceReconnectSnapshot(
+          sequence: snapshot.sequence,
+          devices: snapshot.devices,
+          backgroundKeepAlive: snapshot.settings.backgroundKeepAlive,
+        ),
+      ),
+      RecoveryStarted() ||
+      RecoveryFailed() => const DeviceReconnectInvalidated(),
+    });
   }
 
   void handleEvent(Map<String, dynamic> event) {
@@ -540,7 +546,7 @@ final class _DeviceReconnectHost implements DeviceReconnectHost {
 // 应用事件信封在此转换为设备事实；重连规则不解析全应用协议字段。
 DeviceReconnectEvent? _reconnectEvent(Map<String, dynamic> event) {
   final type = event['type'];
-  if (type == 'session.frame' || type == 'runtime.heartbeat') return null;
+  if (type == 'session.frame') return null;
   final raw = event['data'];
   final data = raw is Map
       ? Map<String, dynamic>.from(raw)

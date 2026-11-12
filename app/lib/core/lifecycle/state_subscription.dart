@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session.dart';
-import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 
 /// Scope 的传输与事件所有者。先同步交付状态，再向页面和查询发布事件。
@@ -39,14 +39,18 @@ final class StateSubscription {
     if (disposed) return;
     final frozen = immutableJson(event);
     final type = event['type'];
-    if (type == 'state.resynced') {
-      final snapshot = event['data'] as RuntimeSnapshot;
+    if (event['data'] case RecoveryCompleted(:final snapshot)) {
+      if (_snapshotSequence case final previous?
+          when snapshot.sequence < previous) {
+        return;
+      }
       if (!_reconciling && snapshot.sequence == _snapshotSequence) {
         return;
       }
       _snapshotSequence = snapshot.sequence;
       _reconciling = false;
-    } else if (type == 'state.resync' || type == 'state.resync.failed') {
+    } else if (event['data'] is RecoveryStarted ||
+        event['data'] is RecoveryFailed) {
       _reconciling = true;
     }
     if (type != 'session.frame') {

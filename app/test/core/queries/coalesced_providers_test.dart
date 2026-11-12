@@ -9,6 +9,7 @@ import 'package:scrcpy_connect/core/control/control_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/control/video_quality_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_readiness_provider.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/media/audio_sources_provider.dart';
 import 'package:scrcpy_connect/core/media/media_capabilities_provider.dart';
 
@@ -52,7 +53,11 @@ void main() {
         source.reads[1].complete(latest);
         await _flush(container);
         expect(container.read(provider).requireValue, latest);
-        events.add({'type': 'state.resync', 'deviceId': 'other'});
+        events.add({
+          'type': 'state.resync',
+          'deviceId': 'other',
+          'data': const RecoveryStarted(),
+        });
         expect(container.read(provider).isLoading, isTrue);
         expect(container.read(provider).value, latest);
         await _flush(container);

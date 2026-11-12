@@ -8,7 +8,7 @@ import 'package:scrcpy_connect/core/media/models/recovered_video_session.dart';
 import 'package:scrcpy_connect/core/media/models/video_output.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/core/media/video_sessions.dart';
-import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/remote_audio_views.dart';
 
@@ -47,17 +47,16 @@ class RemoteViews {
 
   void _onEvent(Json event) {
     if (event['type'] == 'session.frame') return;
-    if (event['type'] == 'state.resync' ||
-        event['type'] == 'state.resync.failed') {
+    final payload = event['data'];
+    if (payload is RecoveryStarted || payload is RecoveryFailed) {
       _sessionViewRegistry.markUncertain();
-    } else if (event['type'] == 'state.resynced') {
-      _sessionViewRegistry.reconcile(
-        (event['data'] as RuntimeSnapshot).sessions,
-      );
+    } else if (payload case RecoveryCompleted(:final snapshot)) {
+      _sessionViewRegistry.reconcile(snapshot.sessions);
     }
     _deviceAudio.handleEvent(event);
-    if (value(event, 'type').startsWith('session.') ||
-        ['state.resynced', 'devices.changed'].contains(event['type'])) {
+    if (payload is RecoveryCompleted ||
+        value(event, 'type').startsWith('session.') ||
+        event['type'] == 'devices.changed') {
       reconcile();
     }
   }

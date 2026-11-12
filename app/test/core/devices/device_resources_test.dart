@@ -22,10 +22,12 @@ import 'package:scrcpy_connect/core/lifecycle/app_lifecycle.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_lifetime.dart';
 import 'package:scrcpy_connect/core/media/media_playback.dart';
 import 'package:scrcpy_connect/core/platform/background_policy.dart';
-import 'package:scrcpy_connect/core/devices/models/device_reconnect_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/models/device_metadata.dart';
 import 'package:scrcpy_connect/core/recovery/state_recovery.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/core/settings/app_settings.dart';
+import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 
 void main() {
   test('元数据导入不创建配对、发现、重连或原生查询执行者', () async {
@@ -63,6 +65,11 @@ void main() {
       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     );
     resources.handleEvent({'type': 'settings.changed'});
+    resources.handleRecovery(const RecoveryStarted());
+    resources.handleRecovery(const RecoveryFailed('unverified'));
+    resources.handleRecovery(
+      RecoveryCompleted(RuntimeSnapshot(sequence: 0, settings: Preferences())),
+    );
     resources.handleEvent({
       'type': 'devices.changed',
       'data': DeviceListChanged([]),
@@ -134,12 +141,14 @@ void main() {
       'sequence': 1,
       'data': DeviceListChanged([]),
     });
-    resources.invalidateState();
-    resources.restoreState(
-      DeviceReconnectSnapshot(
-        sequence: 2,
-        devices: [],
-        backgroundKeepAlive: false,
+    resources.handleRecovery(const RecoveryStarted());
+    resources.handleRecovery(
+      RecoveryCompleted(
+        RuntimeSnapshot(
+          sequence: 2,
+          devices: [],
+          settings: Preferences(backgroundKeepAlive: false),
+        ),
       ),
     );
     await resources.close();
@@ -429,7 +438,7 @@ Future<AppLifecycle> _lifecycle(
     onChanged: (_) {},
   );
   final events = RuntimeEvents(
-    acceptState: (_) => true,
+    acceptState: ({required sequence, required telemetry}) => true,
     onState: (_) {},
     beforePublish: (_) {},
     afterState: (_) {},

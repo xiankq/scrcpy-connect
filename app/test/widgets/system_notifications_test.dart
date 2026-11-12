@@ -8,6 +8,7 @@ import 'package:scrcpy_connect/core/devices/models/device_observation_snapshot.d
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/models/observed_device_snapshot.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/widgets/models/system_notification_snapshot.dart';
 import 'package:scrcpy_connect/widgets/system_notifications.dart';
@@ -151,31 +152,33 @@ void main() {
     );
     await notifications.initialize();
     notifications.setForeground(false);
-    events.add({'type': 'state.resync'});
+    events.add({'type': 'state.resync', 'data': const RecoveryStarted()});
     events.add({
       'type': 'state.resynced',
-      'data': RuntimeSnapshot(
-        sequence: 1,
-        settings: settings,
-        devices: devices,
-        observations: [
-          ObservedDeviceSnapshot(
-            observation: const DeviceObservationSnapshot(
-              deviceId: 'device',
-              wanted: true,
-              phase: .observing,
-              generation: 1,
+      'data': RecoveryCompleted(
+        RuntimeSnapshot(
+          sequence: 1,
+          settings: settings,
+          devices: devices,
+          observations: [
+            ObservedDeviceSnapshot(
+              observation: const DeviceObservationSnapshot(
+                deviceId: 'device',
+                wanted: true,
+                phase: .observing,
+                generation: 1,
+              ),
+              notifications: DeviceNotificationsSnapshot.fromJson({
+                ...notificationData('baseline'),
+                'deviceId': 'device',
+              }),
+              calls: DeviceCallsSnapshot.fromJson({
+                ...callData(1),
+                'deviceId': 'device',
+              }),
             ),
-            notifications: DeviceNotificationsSnapshot.fromJson({
-              ...notificationData('baseline'),
-              'deviceId': 'device',
-            }),
-            calls: DeviceCallsSnapshot.fromJson({
-              ...callData(1),
-              'deviceId': 'device',
-            }),
-          ),
-        ],
+          ],
+        ),
       ),
     });
     events.add(notificationsChanged('baseline'));

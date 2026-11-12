@@ -23,6 +23,7 @@ import 'package:scrcpy_connect/core/media/models/video_output.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/core/media/video_sessions.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/settings/settings_management.dart';
 import 'package:scrcpy_connect/pages/control/control_page.dart';
@@ -158,6 +159,18 @@ void main() {
       presentation.canSendInput(foreground: true, ownerCurrent: true),
       isTrue,
     );
+    events.add({
+      'type': 'state.resync.failed',
+      'data': const RecoveryFailed('连接状态核对失败。'),
+    });
+    await tester.pump();
+    expect(presentation.stateUnverified, isTrue);
+    expect(presentation.error, '连接状态核对失败。');
+    expect(presentation.session!.output, replacement);
+    expect(
+      presentation.canSendInput(foreground: true, ownerCurrent: true),
+      isFalse,
+    );
     expect(videos.starts, 1);
     expect(videos.stops, isEmpty);
     await tester.pumpWidget(const SizedBox());
@@ -248,7 +261,9 @@ void main() {
     expect(replacement.stops, isEmpty);
     events.add({
       'type': 'state.resynced',
-      'data': RuntimeSnapshot(sequence: 1, settings: Preferences()),
+      'data': RecoveryCompleted(
+        RuntimeSnapshot(sequence: 1, settings: Preferences()),
+      ),
     });
     await tester.pump();
     expect(replacement.starts, 0);

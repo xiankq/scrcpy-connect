@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/content/models/cache_status.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 
 import 'content_capabilities_provider.dart';
 
@@ -16,7 +17,7 @@ Future<CacheStatus> cacheStatus(Ref ref) {
   final source = ref.watch(contentCacheControlProvider);
   final subscription = ref.watch(runtimeEventsProvider).listen((event) {
     if (event['type'] == 'media.cache.changed' ||
-        event['type'] == 'state.resynced') {
+        event['data'] is RecoveryCompleted) {
       ref.invalidateSelf();
     }
   });

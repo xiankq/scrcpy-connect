@@ -5,7 +5,7 @@ import 'package:scrcpy_connect/core/files/incoming_shares.dart';
 import 'package:scrcpy_connect/core/files/models/share_inbox_state.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
-import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 
 import 'file_capabilities_provider.dart';
@@ -28,12 +28,12 @@ class ShareInboxNotifier extends _$ShareInboxNotifier {
       if (!_current(owner)) return;
       final type = event['type'];
       final data = jsonObject(event['data']);
-      if (type == 'state.resync' || type == 'state.resync.failed') {
+      if (event['data'] is RecoveryStarted || event['data'] is RecoveryFailed) {
         owner.request++;
-      } else if (type == 'state.resynced') {
+      } else if (event['data'] case RecoveryCompleted(:final snapshot)) {
         owner.request++;
         state = ShareInboxState(
-          shares: (event['data'] as RuntimeSnapshot).shares
+          shares: snapshot.shares
               .where((share) => !owner.consumed.contains(share.shareId))
               .toList(),
         );

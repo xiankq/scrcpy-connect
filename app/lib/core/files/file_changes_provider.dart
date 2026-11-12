@@ -1,5 +1,6 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 
 import 'models/file_change.dart';
 
@@ -11,9 +12,10 @@ final fileChangesProvider = Provider<Stream<FileChange>>((ref) {
       .map((event) {
         final type = event['type'];
         if (type is! String) return null;
+        final data = event['data'];
         final kind = type.startsWith('transfers.')
             ? FileChangeKind.transfer
-            : type.startsWith('state.resync')
+            : data is RecoveryEvent
             ? FileChangeKind.recovery
             : type.startsWith('device.') ||
                   type == 'devices.changed' ||
@@ -23,7 +25,6 @@ final fileChangesProvider = Provider<Stream<FileChange>>((ref) {
             ? FileChangeKind.directory
             : null;
         if (kind == null) return null;
-        final data = event['data'];
         final deviceId =
             event['deviceId'] ?? (data is Map ? data['deviceId'] : null);
         final path = data is Map ? data['path'] : null;

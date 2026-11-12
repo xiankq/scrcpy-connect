@@ -21,6 +21,7 @@ import 'package:scrcpy_connect/core/platform/bundled_server_files.dart';
 import 'package:scrcpy_connect/core/platform/native_host.dart';
 import 'package:scrcpy_connect/core/platform/native_host_dependencies.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_actions_provider.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/settings/settings_management.dart';
 import 'package:scrcpy_connect/core/settings/metadata_management.dart';
@@ -28,6 +29,63 @@ import 'package:scrcpy_connect/router/route_resource_resolver_provider.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('实际恢复失败交付类型化原因，保留原可信快照并同步关闭页面准入', () async {
+    final fixture = await _Assembly.open();
+    final bootstrap = await AppBootstrap.initialize(
+      dataDirectory: fixture.directory.path,
+    );
+    addTearDown(bootstrap.dispose);
+    final container = ProviderContainer(overrides: bootstrap.overrides);
+    addTearDown(container.dispose);
+    container.read(appSnapshotProvider);
+    final observed = <RecoveryEvent>[];
+    final failureStates = <({bool pending, String? reason})>[];
+    final subscription = container.read(runtimeEventsProvider).listen((event) {
+      if (event['data'] case final RecoveryEvent recovery) {
+        observed.add(recovery);
+        if (recovery is RecoveryFailed) {
+          final state = container.read(appSnapshotProvider);
+          failureStates.add((
+            pending: state.reconciliationPending,
+            reason: state.reconciliationError,
+          ));
+        }
+      }
+    });
+    addTearDown(subscription.cancel);
+    await container.read(reconcileStateProvider)();
+    final original = container.read(appSnapshotProvider).reconciledSnapshot;
+    expect(original, isNotNull);
+    // 公开持久化入口接管同目录账本，模拟原所有者失效；不替换任何应用能力。
+    await AppLaunchJournal.open(directory: fixture.directory);
+    await expectLater(
+      container.read(reconcileStateProvider)(),
+      throwsA(
+        isA<RequestFailure>().having(
+          (e) => e.code,
+          'code',
+          'app_open_owner_replaced',
+        ),
+      ),
+    );
+    await container.pump();
+    final state = container.read(appSnapshotProvider);
+    expect(state.reconciledSnapshot, same(original));
+    expect(state.reconciliationPending, isTrue);
+    expect(state.reconciliationError, isNotEmpty);
+    expect(observed, [
+      isA<RecoveryStarted>(),
+      isA<RecoveryCompleted>(),
+      isA<RecoveryStarted>(),
+      isA<RecoveryFailed>(),
+    ]);
+    expect(failureStates.single.pending, isTrue);
+    expect(failureStates.single.reason, state.reconciliationError);
+    expect((observed.last as RecoveryFailed).reason, state.reconciliationError);
+    await bootstrap.dispose();
+    expect(fixture.api.closed, ['files:files-1', 'admission:scope-1']);
+  });
 
   test('实际元数据导入由设备模块交付投影，全局偏好与重复导入保持同一账本', () async {
     final fixture = await _Assembly.open();

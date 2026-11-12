@@ -10,6 +10,7 @@ import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 
 void main() {
@@ -74,19 +75,21 @@ void main() {
   test('权威恢复快照作废在途读取，scope 关闭后不再提交或订阅', () async {
     final actions = container.read(deviceListProvider.notifier);
     final loading = actions.refresh();
-    events.add({'type': 'state.resync'});
+    events.add({'type': 'state.resync', 'data': const RecoveryStarted()});
     events.add({
       'type': 'state.resynced',
-      'data': RuntimeSnapshot(
-        sequence: 1,
-        settings: Preferences(),
-        devices: [
-          const DeviceSnapshot(
-            id: 'verified',
-            name: 'Verified',
-            status: .connected,
-          ),
-        ],
+      'data': RecoveryCompleted(
+        RuntimeSnapshot(
+          sequence: 1,
+          settings: Preferences(),
+          devices: [
+            const DeviceSnapshot(
+              id: 'verified',
+              name: 'Verified',
+              status: .connected,
+            ),
+          ],
+        ),
       ),
     });
     source.reads.single.complete([

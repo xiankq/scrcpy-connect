@@ -15,6 +15,7 @@ import 'package:scrcpy_connect/core/clipboard/clipboard_capabilities_provider.da
 import 'package:scrcpy_connect/core/clipboard/clipboard_focus_notifier.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 
@@ -388,12 +389,16 @@ class _ClipboardCoordinator {
       onStatus(ClipboardSyncStatus.waitingDevice, null);
       return;
     }
-    if (event['type'] == 'state.resync' ||
-        event['type'] == 'state.resync.failed') {
-      _suspendForVerification(readContext()?.reconciliationError);
+    final payload = event['data'];
+    if (payload is RecoveryStarted || payload is RecoveryFailed) {
+      _suspendForVerification(
+        payload is RecoveryFailed
+            ? payload.reason
+            : readContext()?.reconciliationError,
+      );
       return;
     }
-    if (event['type'] == 'state.resynced') {
+    if (payload is RecoveryCompleted) {
       if (readContext()?.reconciliationPending == true) return;
       _reconciling = false;
       _configuration = null;

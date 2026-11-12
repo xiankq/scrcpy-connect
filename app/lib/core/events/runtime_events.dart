@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 
 typedef RuntimeEvent = Map<String, dynamic>;
@@ -18,7 +19,8 @@ final class RuntimeEvents {
     this.onLocalStateChanged,
   });
 
-  final bool Function(RuntimeEvent) acceptState;
+  final bool Function({required int sequence, required bool telemetry})
+  acceptState;
   final void Function(RuntimeEvent) onState;
   final void Function(RuntimeEvent) beforePublish;
   final void Function(RuntimeEvent) afterState;
@@ -26,7 +28,8 @@ final class RuntimeEvents {
   final bool Function() isDisposed;
   final void Function()? onLocalStateChanged;
   final _events = StreamController<RuntimeEvent>.broadcast();
-  final _pending = ListQueue<RuntimeEvent>();
+  final _pending =
+      ListQueue<({RuntimeEvent event, int sequence, bool telemetry})>();
   final _files = <StreamSubscription<RuntimeEvent>>[];
   StreamSubscription<RuntimeEvent>? _sharing;
   StreamSubscription<dynamic>? _platform;
@@ -82,9 +85,10 @@ final class RuntimeEvents {
   void publish(RuntimeEvent event) {
     if (!_active) return;
     final telemetry = event['type'] == 'session.frame';
-    final stamped = {...event, 'sequence': ++_sequence};
+    final sequence = ++_sequence;
+    final stamped = {...event, 'sequence': sequence};
     if (!telemetry) _revision++;
-    _pending.add(stamped);
+    _pending.add((event: stamped, sequence: sequence, telemetry: telemetry));
     if (_publishing) return;
     _publishing = true;
     try {
@@ -97,8 +101,9 @@ final class RuntimeEvents {
     }
   }
 
-  void _deliver(RuntimeEvent event) {
-    if (event['type'] != 'session.frame') {
+  void _deliver(({RuntimeEvent event, int sequence, bool telemetry}) delivery) {
+    final (:event, :sequence, :telemetry) = delivery;
+    if (!telemetry) {
       try {
         onLocalStateChanged?.call();
       } catch (error, stack) {
@@ -107,7 +112,9 @@ final class RuntimeEvents {
     }
     try {
       // 验收异常时不转发未经核验的状态，但仍须完成所有者的资源登记。
-      if (acceptState(event) && _active) _events.add(event);
+      if (acceptState(sequence: sequence, telemetry: telemetry) && _active) {
+        _events.add(event);
+      }
     } catch (error, stack) {
       _error(error, stack);
     }
@@ -125,6 +132,15 @@ final class RuntimeEvents {
   void emit(RuntimeEvent event) {
     if (_active) _events.add(event);
   }
+
+  void emitRecovery(RecoveryEvent event) => emit({
+    'type': switch (event) {
+      RecoveryStarted() => 'state.resync',
+      RecoveryCompleted() => 'state.resynced',
+      RecoveryFailed() => 'state.resync.failed',
+    },
+    'data': event,
+  });
 
   void _error(Object error, StackTrace stack) {
     if (_active) _events.addError(error, stack);

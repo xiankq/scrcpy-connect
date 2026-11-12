@@ -1,6 +1,7 @@
 import 'package:scrcpy_connect/core/control/models/app_launch_record.dart';
 import 'package:scrcpy_connect/core/media/models/video_output.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 
 import 'dart:async';
 
@@ -519,16 +520,16 @@ class _ControlPageState extends ConsumerState<ControlPage>
       }
       return;
     }
-    if (event['type'] == 'state.resync') {
+    if (event['data'] is RecoveryStarted) {
       markStateUnknown();
       return;
     }
-    if (event['type'] == 'state.resync.failed') {
-      markStateUnknown(reason: value(data, 'reason', '状态检查未完成，请重试。'));
+    if (event['data'] case RecoveryFailed(:final reason)) {
+      markStateUnknown(reason: reason);
       return;
     }
-    if (event['type'] == 'state.resynced') {
-      applyReconciledState(event['data'] as RuntimeSnapshot);
+    if (event['data'] case RecoveryCompleted(:final snapshot)) {
+      applyReconciledState(snapshot);
       return;
     }
     if (presentation.appLaunchUnknown ||

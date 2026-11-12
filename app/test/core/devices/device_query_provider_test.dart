@@ -9,6 +9,7 @@ import 'package:scrcpy_connect/core/devices/device_inspection.dart';
 import 'package:scrcpy_connect/core/devices/device_query_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_setup.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 
 void main() {
   group('设备查询独立装配', () {
@@ -92,7 +93,7 @@ void main() {
       replacement.reads.single.result.complete(_details('replacement'));
       await _flush(container);
       previous.result.complete(_details('retired'));
-      events.add({'type': 'state.resync'});
+      events.add({'type': 'state.resync', 'data': const RecoveryStarted()});
       await _flush(container);
       expect(container.read(provider).requireValue.connectionId, 'replacement');
       expect(replacement.reads, hasLength(1));

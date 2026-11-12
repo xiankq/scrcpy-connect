@@ -6,7 +6,7 @@ import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
-import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 
 import 'device_capabilities_provider.dart';
 import 'device_reader.dart';
@@ -28,13 +28,13 @@ class DeviceListNotifier extends _$DeviceListNotifier {
     final initial = session.session.initialState;
     final subscription = session.stateEvents.listen((event) {
       if (!_current(owner)) return;
-      final type = event['type'];
-      if (type == 'state.resync' || type == 'state.resync.failed') {
+      final payload = event['data'];
+      if (payload is RecoveryStarted || payload is RecoveryFailed) {
         owner.request++;
-      } else if (type == 'state.resynced') {
+      } else if (payload case RecoveryCompleted(:final snapshot)) {
         owner.request++;
         state = state.copyWith(
-          devices: (event['data'] as RuntimeSnapshot).devices,
+          devices: snapshot.devices,
           loading: false,
           error: null,
         );

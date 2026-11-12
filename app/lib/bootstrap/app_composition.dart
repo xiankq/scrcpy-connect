@@ -17,7 +17,6 @@ import 'package:scrcpy_connect/core/devices/device_actions.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_resources.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
-import 'package:scrcpy_connect/core/devices/models/device_reconnect_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/usb_authorization.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log_provider.dart';
@@ -45,7 +44,6 @@ import 'package:scrcpy_connect/core/platform/platform_capabilities_provider.dart
 import 'package:scrcpy_connect/core/platform/platform_channels.dart';
 import 'package:scrcpy_connect/core/platform/platform_event_handler.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_actions_provider.dart';
-import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/recovery/runtime_snapshot_reader.dart';
 import 'package:scrcpy_connect/core/recovery/state_recovery.dart';
 import 'package:scrcpy_connect/core/settings/app_settings.dart';
@@ -191,19 +189,8 @@ final class AppComposition {
     handleMedia: _media.handlePlatformEvent,
   );
   late final RuntimeEvents _events = RuntimeEvents(
-    acceptState: (event) {
-      final type = event['type'];
-      if (type == 'runtime.heartbeat') return false;
-      if (type == 'state.resync') {
-        _stateRecovery.reportGap();
-        return false;
-      }
-      final sequence = event['sequence'];
-      return _stateRecovery.accept(
-        sequence: sequence is int ? sequence : null,
-        telemetry: type == 'session.frame',
-      );
-    },
+    acceptState: ({required sequence, required telemetry}) =>
+        _stateRecovery.accept(sequence: sequence, telemetry: telemetry),
     onState: (event) => _diagnostics.applicationEvent(event),
     onLocalStateChanged: () => _stateRecovery.noteLocalStateChange(),
     beforePublish: (event) => _connections.handleEvent(event),
@@ -229,32 +216,8 @@ final class AppComposition {
   late final StateRecovery _stateRecovery = StateRecovery(
     read: (current) => _media.snapshot(current),
     emit: (event) {
-      // 恢复回执不是业务变更；直接通知策略，不能重新进入序列核验。
-      if (event case RecoveryCompleted(:final snapshot)) {
-        _connections.restoreState(
-          DeviceReconnectSnapshot(
-            sequence: snapshot.sequence,
-            devices: snapshot.devices,
-            backgroundKeepAlive: snapshot.settings.backgroundKeepAlive,
-          ),
-        );
-      } else {
-        _connections.invalidateState();
-      }
-      _events.emit(switch (event) {
-        RecoveryStarted() => {
-          'type': 'state.resync',
-          'data': <String, dynamic>{},
-        },
-        RecoveryCompleted(:final snapshot) => {
-          'type': 'state.resynced',
-          'data': snapshot,
-        },
-        RecoveryFailed(:final reason) => {
-          'type': 'state.resync.failed',
-          'data': {'reason': reason},
-        },
-      });
+      _connections.handleRecovery(event);
+      _events.emitRecovery(event);
     },
     isDisposed: () => _isDisposed,
   );
