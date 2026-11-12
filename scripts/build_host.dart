@@ -275,7 +275,58 @@ Future<void> verifyApple(Directory bundle, String platform) async {
       await runTool(['xcrun', 'lipo', '-verify_arch', 'arm64', library.path]);
     }
   }
+  if (platform == 'macos') {
+    await _rejectDuplicateObjectiveCClasses(contents, File(binary));
+  }
   verifyMedia(bundle);
+}
+
+/// 同一插件被 CocoaPods 和 SwiftPM 同时链接时，构建成功但运行时存在类冲突。
+Future<void> _rejectDuplicateObjectiveCClasses(
+  Directory contents,
+  File executable,
+) async {
+  final binaries = [executable];
+  for (final framework in Directory(
+    p.join(contents.path, 'Frameworks'),
+  ).listSync().whereType<Directory>()) {
+    if (!framework.path.endsWith('.framework')) continue;
+    final binary = File(
+      p.join(framework.path, p.basenameWithoutExtension(framework.path)),
+    );
+    if (binary.existsSync()) binaries.add(binary);
+  }
+  final architectures = await runTool([
+    'xcrun',
+    'lipo',
+    '-archs',
+    executable.path,
+  ], quiet: true);
+  for (final arch in '${architectures.stdout}'.trim().split(RegExp(r'\s+'))) {
+    final owners = <String, String>{};
+    for (final binary in binaries) {
+      final result = await runTool([
+        'xcrun',
+        'nm',
+        '-arch',
+        arch,
+        '-gU',
+        binary.path,
+      ], quiet: true);
+      for (final line in const LineSplitter().convert('${result.stdout}')) {
+        final symbol = line.trim().split(RegExp(r'\s+')).last;
+        if (!symbol.startsWith('_OBJC_CLASS_\$_')) continue;
+        final previous = owners[symbol];
+        if (previous != null) {
+          throw StateError(
+            'Duplicate Objective-C class $symbol ($arch): '
+            '$previous and ${binary.path}',
+          );
+        }
+        owners[symbol] = binary.path;
+      }
+    }
+  }
 }
 
 Future<void> archiveBundle(
