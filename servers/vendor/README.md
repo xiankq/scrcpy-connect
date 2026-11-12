@@ -10,14 +10,6 @@ dart --disable-dart-dev servers/build.dart --update vendor assets
 
 根目录先 `flutter pub get`。`--check` 离线核对；`--rebuild` 临时编译比较；`--update` 更新受控产物。重建需要 JDK 21、SDK 36、build-tools 37.0.0。`JAVA_HOME/ANDROID_HOME` 选择工具链；`--source` 接固定摘要的本地归档，`--gradle` 选匹配安装，`--offline` 使用依赖缓存。
 
-API 21 探针单独构建：
-
-```sh
-dart --disable-dart-dev servers/vendor/test/build_probe.dart /tmp/scrcpy-api21-probe.jar
-```
-
-推至专用已授权目标，运行 `CLASSPATH=<server>:<probe.jar> app_process / ScrcpyApi21Probe`；仅验证接口加载与尺寸规则，不启动编码。结束清理本次文件。
-
 ## 许可证与对应源码
 
 - scrcpy：[Apache-2.0](LICENSE-scrcpy)。

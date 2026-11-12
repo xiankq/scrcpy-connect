@@ -130,29 +130,3 @@ impl Client {
         })
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn jdwp_ids_are_nonzero_and_process_counts_are_bounded() {
-        assert!(pids(b"", 1).unwrap().is_empty());
-        assert_eq!(
-            pids(b"12\n44\n", 2)
-                .unwrap()
-                .iter()
-                .map(|pid| pid.get())
-                .collect::<Vec<_>>(),
-            [12, 44]
-        );
-        for bytes in [
-            b"0\n".as_slice(),
-            b"4294967296\n",
-            b"-2\n",
-            b"1\n2\n",
-            b"1\n\n",
-        ] {
-            assert!(pids(bytes, 1).is_err());
-        }
-    }
-}

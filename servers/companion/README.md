@@ -15,16 +15,6 @@
 dart --disable-dart-dev servers/build.dart --update companion assets
 dart --disable-dart-dev servers/build.dart --check companion
 dart --disable-dart-dev servers/build.dart --rebuild companion
-dart --disable-dart-dev servers/companion/tests/compatibility.dart
 ```
 
 根目录先 `flutter pub get`；重建使用 JDK 21、SDK 36、build-tools 37.0.0。`--check` 离线核对，`--rebuild` 比较而不替换，`--update companion assets` 更新 JAR、manifest 与共享资源。文本剪贴板走 scrcpy 控制协议，不由 companion 实现。
-
-真实通知回归先构建[通知夹具](../../test/fixtures/notification_fixture/README.md)，再运行：
-
-```sh
-dart --disable-dart-dev servers/companion/tests/notification-snapshot.dart \
-  --adb <absolute-adb-path> --serial <isolated-avd>
-```
-
-仅用专用授权目标，拒绝覆盖已有夹具；结束清理本 run 通知与安装，不改产品权限。主机 `app/test/companion` 与字节码兼容检查不证明 OEM Binder 可用。

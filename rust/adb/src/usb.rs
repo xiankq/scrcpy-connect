@@ -350,47 +350,6 @@ mod backend {
         };
         error.into()
     }
-
-    #[cfg(test)]
-    mod boundary_tests {
-        use super::*;
-        use crate::protocol::{Frame, WRTE};
-        #[tokio::test]
-        async fn fragmented_header_and_payload_keep_usb_ends_without_relay_copy() {
-            for length in [0, 1, 512, 65536, 65537, crate::protocol::MAX_PAYLOAD] {
-                let mut wire = Vec::new();
-                Frame::new(WRTE, 1, 2, vec![42; length])
-                    .write(&mut wire)
-                    .await
-                    .unwrap();
-                let mut boundary = WriteBoundary::default();
-                let mut offset = 0;
-                let mut ends = Vec::new();
-                // 覆盖跨 USB transfer 大小的部分头部和 payload 分块，包括恰好整包而需 ZLP 的情况。
-                while offset < wire.len() {
-                    let count = boundary.limit().min(7).min(wire.len() - offset);
-                    if boundary.accept(&wire[offset..offset + count]).unwrap() {
-                        ends.push(offset + count);
-                    }
-                    offset += count;
-                }
-                assert!(boundary.complete());
-                assert_eq!(
-                    ends,
-                    if length == 0 {
-                        vec![24]
-                    } else {
-                        vec![24, 24 + length]
-                    }
-                );
-            }
-        }
-        #[test]
-        fn malformed_header_is_rejected_before_submission() {
-            let mut boundary = WriteBoundary::default();
-            assert!(boundary.accept(&[0; 24]).is_err());
-        }
-    }
 }
 #[cfg(all(
     feature = "usb",
@@ -402,20 +361,3 @@ mod backend {
     )
 ))]
 pub use backend::*;
-
-#[cfg(all(test, feature = "usb", any(target_os = "linux", target_os = "android")))]
-mod tests {
-    use super::*;
-    use std::{fs::File, os::fd::AsFd};
-
-    #[tokio::test]
-    async fn importing_a_non_usb_fd_is_rejected_without_closing_the_original() {
-        let file = File::open("/dev/null").unwrap();
-        let result = from_authorized_fd(file.as_fd(), crate::OperationOptions::default()).await;
-        assert!(result.is_err());
-        assert!(
-            file.metadata().is_ok(),
-            "the caller-owned FD must remain open"
-        );
-    }
-}

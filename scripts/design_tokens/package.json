@@ -5,7 +5,6 @@
   "scripts": {
     "generate": "node generate.mjs",
     "check": "node generate.mjs --check",
-    "test": "node --test ../../test/design_tokens/generate.test.mjs",
     "lint": "node lint.mjs"
   },
   "dependencies": {

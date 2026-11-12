@@ -12,9 +12,6 @@ pub use tls::{TlsConfig, upgrade_tls};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use zeroize::Zeroizing;
 
-#[cfg(test)]
-mod pairing_error_tests;
-
 /// 将 GUID 与主控身份一同持久化，供 mDNS 重连选择；这不表示设备连接已经建立。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PairingResult {

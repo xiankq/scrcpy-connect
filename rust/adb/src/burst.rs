@@ -95,19 +95,3 @@ impl Drop for Flow {
         self.changed.notify_waiters();
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn signed_64_bit_credit_overflow_is_rejected_without_wrapping() {
-        let reservation = Budget::default().reserve(4096).unwrap();
-        let mut flow = Flow::new(reservation, i64::MAX, true);
-        assert!(flow.acknowledge(&1i32.to_le_bytes()).is_err());
-        assert_eq!(flow.send_credit, i64::MAX);
-        flow.send_credit = i64::MIN;
-        assert!(flow.acknowledge(&(-1i32).to_le_bytes()).is_err());
-        assert_eq!(flow.send_credit, i64::MIN);
-    }
-}

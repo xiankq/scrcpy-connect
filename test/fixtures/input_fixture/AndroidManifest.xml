@@ -1,9 +1,0 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="dev.scrcpyconnect.inputfixture" android:versionCode="1" android:versionName="1">
-    <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="36" />
-    <application android:label="Input test receiver" android:allowBackup="false"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
-        <activity android:name=".InputReceiverActivity" android:exported="true"
-            android:launchMode="singleTop" />
-    </application>
-</manifest>

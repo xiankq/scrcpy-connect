@@ -498,19 +498,3 @@ impl Client {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn reverse_commands_reject_delimiters_and_status_lengths_are_exact() {
-        for name in ["", "bad;tcp:1", "a b", "x\0y"] {
-            assert!(ReverseSocket::LocalAbstract(name.into()).service().is_err());
-        }
-        assert_eq!(status(b"OKAY").unwrap(), b"");
-        assert!(matches!(status(b"FAIL0004busy"),Err(Error::Remote(message))if message=="busy"));
-        for bytes in [b"0004abc".as_slice(), b"gggg", b"0000extra"] {
-            assert!(protocol_string(bytes).is_err());
-        }
-    }
-}

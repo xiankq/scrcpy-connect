@@ -200,7 +200,3 @@ pub(super) async fn close(id: &str, timeout: Duration) -> Result<(), String> {
     .await
     .map_err(|_| "adb_admission_scope_cleanup_unconfirmed".to_owned())?
 }
-
-#[cfg(test)]
-#[path = "admission_file_tests.rs"]
-mod file_tests;

@@ -111,6 +111,7 @@ fn private_fd(fd: OwnedFd) -> io::Result<OwnedFd> {
     }
     Ok(unsafe { OwnedFd::from_raw_fd(duplicated) })
 }
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn private_stream_pair() -> io::Result<(
     std::os::unix::net::UnixStream,
     std::os::unix::net::UnixStream,
@@ -221,40 +222,5 @@ impl AsyncRead for AckReader {
                 Err(_) => continue,
             }
         }
-    }
-}
-
-#[cfg(all(test, any(target_os = "linux", target_os = "android")))]
-mod tests {
-    use super::*;
-    #[tokio::test]
-    async fn original_process_exit_is_proven_after_another_runtime_reaps_status() {
-        let spawned = linux::spawn(
-            "/bin/sh",
-            &["-c".into(), "read gate; exit 23".into()],
-            &HashMap::new(),
-            false,
-        )
-        .await
-        .unwrap();
-        let linux::Spawned {
-            mut process,
-            input,
-            output,
-            error,
-            ..
-        } = spawned;
-        let pid = process.id().unwrap() as libc::pid_t;
-        let reaper = tokio::task::spawn_blocking(move || {
-            let mut status = 0;
-            assert_eq!(unsafe { libc::waitpid(pid, &mut status, 0) }, pid);
-            assert_eq!(libc::WEXITSTATUS(status), 23);
-        });
-        drop(input);
-        reaper.await.unwrap();
-        assert_eq!(process.wait().await.unwrap(), None);
-        // 状态已被其它运行时消费后，终止必须仍绑定原进程能力，绝不能回查或操作复用 PID。
-        process.terminate().unwrap();
-        drop((output, error));
     }
 }

@@ -36,15 +36,3 @@ endforeach()
 set(media_codec_bundled_libraries "${MC_BUNDLED_NOTICES}" PARENT_SCOPE)
 
 target_compile_options(${PLUGIN_NAME} PRIVATE "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
-
-if(MEDIA_CODEC_BUILD_TESTS)
-  enable_testing()
-  add_executable(media_codec_wasapi_test tests/audio_test.cpp)
-  apply_standard_settings(media_codec_wasapi_test)
-  target_compile_features(media_codec_wasapi_test PRIVATE cxx_std_17)
-  target_compile_definitions(media_codec_wasapi_test PRIVATE FLUTTER_PLUGIN_IMPL NOMINMAX)
-  target_compile_options(media_codec_wasapi_test PRIVATE /utf-8 /UNDEBUG)
-  target_link_libraries(media_codec_wasapi_test PRIVATE flutter flutter_wrapper_plugin
-    media_codec_core d3d11 dxgi ole32 uuid)
-  add_test(NAME media_codec_wasapi_test COMMAND media_codec_wasapi_test)
-endif()

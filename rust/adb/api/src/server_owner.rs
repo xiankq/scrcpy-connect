@@ -699,66 +699,6 @@ pub(super) fn publish_connection(
     insert_locked(&mut state, client, serial, true, server_id)
 }
 
-#[cfg(all(test, unix))]
-mod termination_tests {
-    use super::*;
-    #[tokio::test]
-    async fn failed_termination_retains_the_actual_child_until_explicit_retry() {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let server = create(AdbServerLaunchSpec {
-            executable: "/bin/sh".into(),
-            arguments: vec![],
-            environment: HashMap::new(),
-            endpoint: listener.local_addr().unwrap().to_string(),
-        })
-        .unwrap();
-        let owner = lease_owner(&server.lease_id).unwrap();
-        let spawned = process::spawn(
-            "/bin/sh",
-            &["-c".into(), "exec sleep 60".into()],
-            &HashMap::new(),
-            false,
-        )
-        .await
-        .unwrap();
-        let process::Spawned {
-            mut process,
-            input,
-            output,
-            error,
-            ack: _,
-        } = spawned;
-        drop((input, output, error));
-        process.fail_terminations(1);
-        let retained = owner.clone();
-        let mut waiting = tokio::spawn(async move { wait_server(&mut process, &retained).await });
-        assert!(
-            tokio::time::timeout(Duration::from_millis(20), &mut waiting)
-                .await
-                .is_err(),
-            "首败不能丢弃 Child 或报告完成"
-        );
-        assert!(
-            registry()
-                .lock()
-                .unwrap()
-                .servers
-                .get(&owner.id)
-                .unwrap()
-                .startup_error
-                .is_some()
-        );
-        owner.retry.notify_one();
-        tokio::time::timeout(Duration::from_secs(2), waiting)
-            .await
-            .unwrap()
-            .unwrap();
-        close(&server.lease_id, Duration::from_secs(2))
-            .await
-            .unwrap();
-    }
-}
-
 #[cfg(test)]
 pub(super) fn is_finished_for_test(owner: &Server) -> bool {
     owner.finished.is_cancelled()

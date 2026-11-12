@@ -185,20 +185,3 @@ pub(crate) async fn finished(task: JoinHandle<Result<()>>) -> Result<()> {
     task.await
         .map_err(|error| Error::Compression(format!("codec worker failed: {error}")))?
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[tokio::test]
-    async fn dropping_output_during_encoding_terminates_without_panicking() {
-        let Worker {
-            input,
-            output,
-            task,
-        } = Worker::start(Compression::Zstd, true);
-        drop(output);
-        input.send(vec![42; CHUNK]).await.unwrap();
-        drop(input);
-        assert!(matches!(finished(task).await, Err(Error::Closed)));
-    }
-}

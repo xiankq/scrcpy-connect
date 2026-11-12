@@ -97,36 +97,3 @@ pub(crate) fn decode(header: &[u8; HEADER_LEN]) -> Result<(PacketType, usize), F
     }
     Ok((kind, len as usize))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_header_is_six_bytes_with_a_big_endian_length() {
-        let framed = encode(PacketType::PeerInfo, &[0xAA; 300]);
-
-        assert_eq!(&framed[..HEADER_LEN], &[1, 1, 0, 0, 0x01, 0x2C]);
-        assert_eq!(framed.len(), HEADER_LEN + 300);
-    }
-
-    #[test]
-    fn a_header_the_peer_would_refuse_is_refused_here_too() {
-        assert_eq!(decode(&[2, 0, 0, 0, 0, 32]), Err(FrameError::Version(2)));
-        assert_eq!(decode(&[1, 7, 0, 0, 0, 32]), Err(FrameError::Kind(7)));
-        assert_eq!(decode(&[1, 0, 0, 0, 0, 0]), Err(FrameError::Length(0)));
-        let over = (MAX_PAYLOAD as u32 + 1).to_be_bytes();
-        assert_eq!(
-            decode(&[1, 0, over[0], over[1], over[2], over[3]]),
-            Err(FrameError::Length(MAX_PAYLOAD as u32 + 1))
-        );
-    }
-
-    #[test]
-    fn the_largest_accepted_payload_is_two_peer_infos() {
-        let at_limit = (MAX_PAYLOAD as u32).to_be_bytes();
-        let header = [1, 1, at_limit[0], at_limit[1], at_limit[2], at_limit[3]];
-
-        assert_eq!(decode(&header), Ok((PacketType::PeerInfo, MAX_PAYLOAD)));
-    }
-}

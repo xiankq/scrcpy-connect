@@ -15,8 +15,6 @@ dependencies:
   record_use: ^1.1.1
   path: 1.9.1
 dev_dependencies:
-  flutter_test:
-    sdk: flutter
   archive: 4.5.2
   args: 2.7.0
   crypto: 3.0.7

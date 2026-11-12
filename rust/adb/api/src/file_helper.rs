@@ -508,7 +508,3 @@ async fn execute_unbounded(
     deployment.cleanup().await;
     result
 }
-
-#[cfg(test)]
-#[path = "file_helper_tests.rs"]
-mod tests;

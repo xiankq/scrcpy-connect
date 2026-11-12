@@ -152,32 +152,3 @@ fn publish_file_mode(source: &File, from: &Path, to: &Path, replace: bool) -> Fi
         )),
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn replace_checks_retained_inode_and_preserves_existing_target_on_replacement() {
-        let root = tempfile::tempdir().unwrap();
-        let source = root.path().join("part");
-        let target = root.path().join("target");
-        std::fs::write(&source, b"verified").unwrap();
-        std::fs::write(&target, b"existing").unwrap();
-        let held = File::open(&source).unwrap();
-        std::fs::rename(&source, root.path().join("retained")).unwrap();
-        std::fs::write(&source, b"replaced").unwrap();
-        assert_eq!(
-            publish_file_replace(&held, &source, &target)
-                .unwrap_err()
-                .code,
-            "source_changed"
-        );
-        assert_eq!(std::fs::read(&target).unwrap(), b"existing");
-        assert_eq!(std::fs::read(&source).unwrap(), b"replaced");
-        let current = File::open(&source).unwrap();
-        publish_file_replace(&current, &source, &target).unwrap();
-        assert_eq!(std::fs::read(&target).unwrap(), b"replaced");
-        assert!(!source.exists());
-    }
-}

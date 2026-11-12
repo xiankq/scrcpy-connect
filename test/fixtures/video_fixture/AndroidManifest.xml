@@ -1,9 +1,0 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="dev.scrcpyconnect.videofixture" android:versionCode="1" android:versionName="1">
-    <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="36" />
-    <application android:label="Video latency test fixture" android:allowBackup="false"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
-        <activity android:name=".VideoPatternActivity" android:exported="true"
-            android:launchMode="singleTop" />
-    </application>
-</manifest>
