@@ -2,7 +2,8 @@
 # CocoaPods 在静态库和 framework 的编译前均执行此脚本。
 set -eu
 mc_platform="$1"
-mc_package_root="$(cd "$PODS_TARGET_SRCROOT/.." && pwd)"
+# 先解析 Flutter 的插件链接，再相对仓库目录定位 Rust workspace。
+mc_package_root="$(cd "$PODS_TARGET_SRCROOT/.." && pwd -P)"
 mc_sdk_root="$(xcrun --sdk "$PLATFORM_NAME" --show-sdk-path)"
 mc_clang="$(xcrun --sdk "$PLATFORM_NAME" --find clang)"
 mc_cargo="${CARGO_HOME:-$HOME/.cargo}/bin/cargo"

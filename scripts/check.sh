@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 export TMPDIR="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
 flutter pub get --enforce-lockfile
 dart --disable-dart-dev scripts/check_architecture.dart
+python3 -m unittest discover -s packages/media_codec/test -p '*_test.py'
 case "$(uname -s)" in
   Linux*)
     dart --disable-dart-dev packages/adb/tool/prepare_adb.dart --platform linux
