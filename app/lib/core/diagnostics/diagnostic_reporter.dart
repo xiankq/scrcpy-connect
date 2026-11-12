@@ -1,5 +1,6 @@
 import 'package:scrcpy_connect/core/media/models/video_session_view.dart';
 import 'package:scrcpy_connect/core/media/models/video_output.dart';
+import 'package:scrcpy_connect/core/media/models/device_audio_changed.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
@@ -193,6 +194,19 @@ class DiagnosticReporter {
   }
 
   void applicationEvent(Map<String, dynamic> event) {
+    if (event['data'] case DeviceAudioChanged(:final snapshot)) {
+      if (snapshot.status != .stopped && snapshot.status != .error) return;
+      log?.record(
+        DiagnosticArea.runtime,
+        'audio.updated',
+        level: snapshot.status == .error ? LogLevel.error : LogLevel.info,
+        fields: {
+          if (log != null) 'scope': log!.scope(snapshot.deviceId),
+          'status': snapshot.status.name,
+        },
+      );
+      return;
+    }
     if (event['data'] case DeviceListChanged(:final devices)) {
       log?.record(
         DiagnosticArea.connection,
@@ -240,21 +254,12 @@ class DiagnosticReporter {
       );
       return;
     }
-    if (!const {
-      'audio.updated',
-      'platform.failed',
-      'connections.stopped',
-    }.contains(type)) {
+    if (!const {'platform.failed', 'connections.stopped'}.contains(type)) {
       return;
     }
     final data = event['data'] is Map
         ? Map<Object?, Object?>.from(event['data'] as Map)
         : const <Object?, Object?>{};
-    // 只记录生命周期变化，不记录通知、剪贴板或文件内容。
-    if (type == 'audio.updated' &&
-        !const {'failed', 'stopped', 'error'}.contains(data['status'])) {
-      return;
-    }
     log?.record(
       DiagnosticArea.runtime,
       type as String,

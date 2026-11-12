@@ -279,7 +279,6 @@ as String?,
 
 }
 
-
 /// @nodoc
 mixin _$AudioCleanupFailure {
 
@@ -290,8 +289,6 @@ mixin _$AudioCleanupFailure {
 @pragma('vm:prefer-inline')
 $AudioCleanupFailureCopyWith<AudioCleanupFailure> get copyWith => _$AudioCleanupFailureCopyWithImpl<AudioCleanupFailure>(this as AudioCleanupFailure, _$identity);
 
-  /// Serializes this AudioCleanupFailure to a JSON map.
-  Map<String, dynamic> toJson();
 
 
 @override
@@ -300,7 +297,7 @@ bool operator ==(Object other) {
   return identical(this, other) || (other.runtimeType == runtimeType&&other is AudioCleanupFailure&&(identical(other.code, _this.code) || other.code == _this.code)&&(identical(other.reason, _this.reason) || other.reason == _this.reason));
 }
 
-@JsonKey(includeFromJson: false, includeToJson: false)
+
 @override
 int get hashCode {
   final _this = this as AudioCleanupFailure;
@@ -480,11 +477,11 @@ return $default(_that.code,_that.reason);case _:
 }
 
 /// @nodoc
-@JsonSerializable()
+
 
 class _AudioCleanupFailure implements AudioCleanupFailure {
   const _AudioCleanupFailure({required this.code, required this.reason});
-  factory _AudioCleanupFailure.fromJson(Map<String, dynamic> json) => _$AudioCleanupFailureFromJson(json);
+  
 
 @override final  String code;
 @override final  String reason;
@@ -495,17 +492,14 @@ class _AudioCleanupFailure implements AudioCleanupFailure {
 @pragma('vm:prefer-inline')
 _$AudioCleanupFailureCopyWith<_AudioCleanupFailure> get copyWith => __$AudioCleanupFailureCopyWithImpl<_AudioCleanupFailure>(this, _$identity);
 
-@override
-Map<String, dynamic> toJson() {
-  return _$AudioCleanupFailureToJson(this, );
-}
+
 
 @override
 bool operator ==(Object other) {
     return identical(this, other) || (other.runtimeType == runtimeType&&other is _AudioCleanupFailure&&(identical(other.code, code) || other.code == code)&&(identical(other.reason, reason) || other.reason == reason));
 }
 
-@JsonKey(includeFromJson: false, includeToJson: false)
+
 @override
 int get hashCode {
     return Object.hash(runtimeType,code,reason);
@@ -552,7 +546,6 @@ as String,
 
 }
 
-
 /// @nodoc
 mixin _$DeviceAudioSnapshot {
 
@@ -563,8 +556,6 @@ mixin _$DeviceAudioSnapshot {
 @pragma('vm:prefer-inline')
 $DeviceAudioSnapshotCopyWith<DeviceAudioSnapshot> get copyWith => _$DeviceAudioSnapshotCopyWithImpl<DeviceAudioSnapshot>(this as DeviceAudioSnapshot, _$identity);
 
-  /// Serializes this DeviceAudioSnapshot to a JSON map.
-  Map<String, dynamic> toJson();
 
 
 @override
@@ -573,7 +564,7 @@ bool operator ==(Object other) {
   return identical(this, other) || (other.runtimeType == runtimeType&&other is DeviceAudioSnapshot&&(identical(other.sourceId, _this.sourceId) || other.sourceId == _this.sourceId)&&(identical(other.deviceId, _this.deviceId) || other.deviceId == _this.deviceId)&&(identical(other.generation, _this.generation) || other.generation == _this.generation)&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.createdAt, _this.createdAt) || other.createdAt == _this.createdAt)&&(identical(other.codec, _this.codec) || other.codec == _this.codec)&&(identical(other.sampleRate, _this.sampleRate) || other.sampleRate == _this.sampleRate)&&(identical(other.channels, _this.channels) || other.channels == _this.channels)&&(identical(other.bytesPerSample, _this.bytesPerSample) || other.bytesPerSample == _this.bytesPerSample)&&(identical(other.volume, _this.volume) || other.volume == _this.volume)&&(identical(other.muted, _this.muted) || other.muted == _this.muted)&&(identical(other.nativeAttached, _this.nativeAttached) || other.nativeAttached == _this.nativeAttached)&&(identical(other.playbackVerified, _this.playbackVerified) || other.playbackVerified == _this.playbackVerified)&&(identical(other.speakerSamplesVerified, _this.speakerSamplesVerified) || other.speakerSamplesVerified == _this.speakerSamplesVerified)&&(identical(other.audibleContentVerified, _this.audibleContentVerified) || other.audibleContentVerified == _this.audibleContentVerified)&&(identical(other.captureSource, _this.captureSource) || other.captureSource == _this.captureSource)&&(identical(other.callAudioSupported, _this.callAudioSupported) || other.callAudioSupported == _this.callAudioSupported)&&(identical(other.remoteExitVerified, _this.remoteExitVerified) || other.remoteExitVerified == _this.remoteExitVerified)&&(identical(other.captureReady, _this.captureReady) || other.captureReady == _this.captureReady)&&(identical(other.mediaReady, _this.mediaReady) || other.mediaReady == _this.mediaReady)&&(identical(other.localReleased, _this.localReleased) || other.localReleased == _this.localReleased)&&(identical(other.existing, _this.existing) || other.existing == _this.existing)&&(identical(other.audioSourceId, _this.audioSourceId) || other.audioSourceId == _this.audioSourceId)&&(identical(other.captureRef, _this.captureRef) || other.captureRef == _this.captureRef)&&(identical(other.nativeGeneration, _this.nativeGeneration) || other.nativeGeneration == _this.nativeGeneration)&&(identical(other.processId, _this.processId) || other.processId == _this.processId)&&(identical(other.processStarted, _this.processStarted) || other.processStarted == _this.processStarted)&&(identical(other.backend, _this.backend) || other.backend == _this.backend)&&(identical(other.nativeRevision, _this.nativeRevision) || other.nativeRevision == _this.nativeRevision)&&(identical(other.bytesWritten, _this.bytesWritten) || other.bytesWritten == _this.bytesWritten)&&(identical(other.presentationOnly, _this.presentationOnly) || other.presentationOnly == _this.presentationOnly)&&(identical(other.manualPaused, _this.manualPaused) || other.manualPaused == _this.manualPaused)&&(identical(other.focusPaused, _this.focusPaused) || other.focusPaused == _this.focusPaused)&&(identical(other.backgroundPaused, _this.backgroundPaused) || other.backgroundPaused == _this.backgroundPaused)&&(identical(other.requiresUserResume, _this.requiresUserResume) || other.requiresUserResume == _this.requiresUserResume)&&(identical(other.focusSignal, _this.focusSignal) || other.focusSignal == _this.focusSignal)&&(identical(other.reason, _this.reason) || other.reason == _this.reason)&&(identical(other.cleanupError, _this.cleanupError) || other.cleanupError == _this.cleanupError));
 }
 
-@JsonKey(includeFromJson: false, includeToJson: false)
+
 @override
 int get hashCode {
   final _this = this as DeviceAudioSnapshot;
@@ -803,10 +794,10 @@ return $default(_that.sourceId,_that.deviceId,_that.generation,_that.name,_that.
 
 /// @nodoc
 
-@JsonSerializable(explicitToJson: true, includeIfNull: false)
+
 class _DeviceAudioSnapshot implements DeviceAudioSnapshot {
   const _DeviceAudioSnapshot({required this.sourceId, required this.deviceId, required this.generation, required this.name, required this.status, required this.createdAt, this.codec = 'pcm_s16le', this.sampleRate = 48000, this.channels = 2, this.bytesPerSample = 2, this.volume = 1, this.muted = false, this.nativeAttached = false, this.playbackVerified = false, this.speakerSamplesVerified = false, this.audibleContentVerified = false, this.captureSource = 'output', this.callAudioSupported = false, this.remoteExitVerified = false, this.captureReady = false, this.mediaReady = false, this.localReleased = false, this.existing = false, this.audioSourceId, this.captureRef, this.nativeGeneration, this.processId, this.processStarted, this.backend, this.nativeRevision, this.bytesWritten, this.presentationOnly, this.manualPaused, this.focusPaused, this.backgroundPaused, this.requiresUserResume, this.focusSignal, this.reason, this.cleanupError});
-  factory _DeviceAudioSnapshot.fromJson(Map<String, dynamic> json) => _$DeviceAudioSnapshotFromJson(json);
+  
 
 @override final  String sourceId;
 @override final  String deviceId;
@@ -854,17 +845,14 @@ class _DeviceAudioSnapshot implements DeviceAudioSnapshot {
 @pragma('vm:prefer-inline')
 _$DeviceAudioSnapshotCopyWith<_DeviceAudioSnapshot> get copyWith => __$DeviceAudioSnapshotCopyWithImpl<_DeviceAudioSnapshot>(this, _$identity);
 
-@override
-Map<String, dynamic> toJson() {
-  return _$DeviceAudioSnapshotToJson(this, );
-}
+
 
 @override
 bool operator ==(Object other) {
     return identical(this, other) || (other.runtimeType == runtimeType&&other is _DeviceAudioSnapshot&&(identical(other.sourceId, sourceId) || other.sourceId == sourceId)&&(identical(other.deviceId, deviceId) || other.deviceId == deviceId)&&(identical(other.generation, generation) || other.generation == generation)&&(identical(other.name, name) || other.name == name)&&(identical(other.status, status) || other.status == status)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.codec, codec) || other.codec == codec)&&(identical(other.sampleRate, sampleRate) || other.sampleRate == sampleRate)&&(identical(other.channels, channels) || other.channels == channels)&&(identical(other.bytesPerSample, bytesPerSample) || other.bytesPerSample == bytesPerSample)&&(identical(other.volume, volume) || other.volume == volume)&&(identical(other.muted, muted) || other.muted == muted)&&(identical(other.nativeAttached, nativeAttached) || other.nativeAttached == nativeAttached)&&(identical(other.playbackVerified, playbackVerified) || other.playbackVerified == playbackVerified)&&(identical(other.speakerSamplesVerified, speakerSamplesVerified) || other.speakerSamplesVerified == speakerSamplesVerified)&&(identical(other.audibleContentVerified, audibleContentVerified) || other.audibleContentVerified == audibleContentVerified)&&(identical(other.captureSource, captureSource) || other.captureSource == captureSource)&&(identical(other.callAudioSupported, callAudioSupported) || other.callAudioSupported == callAudioSupported)&&(identical(other.remoteExitVerified, remoteExitVerified) || other.remoteExitVerified == remoteExitVerified)&&(identical(other.captureReady, captureReady) || other.captureReady == captureReady)&&(identical(other.mediaReady, mediaReady) || other.mediaReady == mediaReady)&&(identical(other.localReleased, localReleased) || other.localReleased == localReleased)&&(identical(other.existing, existing) || other.existing == existing)&&(identical(other.audioSourceId, audioSourceId) || other.audioSourceId == audioSourceId)&&(identical(other.captureRef, captureRef) || other.captureRef == captureRef)&&(identical(other.nativeGeneration, nativeGeneration) || other.nativeGeneration == nativeGeneration)&&(identical(other.processId, processId) || other.processId == processId)&&(identical(other.processStarted, processStarted) || other.processStarted == processStarted)&&(identical(other.backend, backend) || other.backend == backend)&&(identical(other.nativeRevision, nativeRevision) || other.nativeRevision == nativeRevision)&&(identical(other.bytesWritten, bytesWritten) || other.bytesWritten == bytesWritten)&&(identical(other.presentationOnly, presentationOnly) || other.presentationOnly == presentationOnly)&&(identical(other.manualPaused, manualPaused) || other.manualPaused == manualPaused)&&(identical(other.focusPaused, focusPaused) || other.focusPaused == focusPaused)&&(identical(other.backgroundPaused, backgroundPaused) || other.backgroundPaused == backgroundPaused)&&(identical(other.requiresUserResume, requiresUserResume) || other.requiresUserResume == requiresUserResume)&&(identical(other.focusSignal, focusSignal) || other.focusSignal == focusSignal)&&(identical(other.reason, reason) || other.reason == reason)&&(identical(other.cleanupError, cleanupError) || other.cleanupError == cleanupError));
 }
 
-@JsonKey(includeFromJson: false, includeToJson: false)
+
 @override
 int get hashCode {
     return Object.hashAll([runtimeType,sourceId,deviceId,generation,name,status,createdAt,codec,sampleRate,channels,bytesPerSample,volume,muted,nativeAttached,playbackVerified,speakerSamplesVerified,audibleContentVerified,captureSource,callAudioSupported,remoteExitVerified,captureReady,mediaReady,localReleased,existing,audioSourceId,captureRef,nativeGeneration,processId,processStarted,backend,nativeRevision,bytesWritten,presentationOnly,manualPaused,focusPaused,backgroundPaused,requiresUserResume,focusSignal,reason,cleanupError]);
@@ -1248,7 +1236,6 @@ $DeviceAudioTargetCopyWith<$Res> get target {
 }
 }
 
-
 /// @nodoc
 mixin _$AudioOutputReceipt {
 
@@ -1259,8 +1246,6 @@ mixin _$AudioOutputReceipt {
 @pragma('vm:prefer-inline')
 $AudioOutputReceiptCopyWith<AudioOutputReceipt> get copyWith => _$AudioOutputReceiptCopyWithImpl<AudioOutputReceipt>(this as AudioOutputReceipt, _$identity);
 
-  /// Serializes this AudioOutputReceipt to a JSON map.
-  Map<String, dynamic> toJson();
 
 
 @override
@@ -1269,7 +1254,7 @@ bool operator ==(Object other) {
   return identical(this, other) || (other.runtimeType == runtimeType&&other is AudioOutputReceipt&&(identical(other.sourceId, _this.sourceId) || other.sourceId == _this.sourceId)&&(identical(other.deviceId, _this.deviceId) || other.deviceId == _this.deviceId)&&(identical(other.relayId, _this.relayId) || other.relayId == _this.relayId)&&(identical(other.backend, _this.backend) || other.backend == _this.backend)&&(identical(other.nativeReady, _this.nativeReady) || other.nativeReady == _this.nativeReady)&&(identical(other.bytesWritten, _this.bytesWritten) || other.bytesWritten == _this.bytesWritten)&&(identical(other.revision, _this.revision) || other.revision == _this.revision)&&(identical(other.applied, _this.applied) || other.applied == _this.applied)&&(identical(other.playState, _this.playState) || other.playState == _this.playState)&&(identical(other.manualPaused, _this.manualPaused) || other.manualPaused == _this.manualPaused)&&(identical(other.focusPaused, _this.focusPaused) || other.focusPaused == _this.focusPaused)&&(identical(other.backgroundPaused, _this.backgroundPaused) || other.backgroundPaused == _this.backgroundPaused)&&(identical(other.requiresUserResume, _this.requiresUserResume) || other.requiresUserResume == _this.requiresUserResume)&&(identical(other.reason, _this.reason) || other.reason == _this.reason)&&(identical(other.sampleRate, _this.sampleRate) || other.sampleRate == _this.sampleRate)&&(identical(other.channels, _this.channels) || other.channels == _this.channels)&&(identical(other.mediaInfoReady, _this.mediaInfoReady) || other.mediaInfoReady == _this.mediaInfoReady)&&(identical(other.playingConfirmed, _this.playingConfirmed) || other.playingConfirmed == _this.playingConfirmed)&&(identical(other.sourcePcmReceived, _this.sourcePcmReceived) || other.sourcePcmReceived == _this.sourcePcmReceived)&&(identical(other.sourcePcmPackets, _this.sourcePcmPackets) || other.sourcePcmPackets == _this.sourcePcmPackets)&&(identical(other.playbackClockAdvanced, _this.playbackClockAdvanced) || other.playbackClockAdvanced == _this.playbackClockAdvanced)&&(identical(other.clockStartMs, _this.clockStartMs) || other.clockStartMs == _this.clockStartMs)&&(identical(other.clockEndMs, _this.clockEndMs) || other.clockEndMs == _this.clockEndMs)&&(identical(other.positionMs, _this.positionMs) || other.positionMs == _this.positionMs)&&(identical(other.volume, _this.volume) || other.volume == _this.volume)&&(identical(other.muted, _this.muted) || other.muted == _this.muted)&&(identical(other.focusEpoch, _this.focusEpoch) || other.focusEpoch == _this.focusEpoch)&&(identical(other.focusSignal, _this.focusSignal) || other.focusSignal == _this.focusSignal)&&(identical(other.audibleContentVerified, _this.audibleContentVerified) || other.audibleContentVerified == _this.audibleContentVerified)&&(identical(other.speakerSamplesVerified, _this.speakerSamplesVerified) || other.speakerSamplesVerified == _this.speakerSamplesVerified)&&(identical(other.volumeConfigured, _this.volumeConfigured) || other.volumeConfigured == _this.volumeConfigured)&&(identical(other.volumeOutputVerified, _this.volumeOutputVerified) || other.volumeOutputVerified == _this.volumeOutputVerified));
 }
 
-@JsonKey(includeFromJson: false, includeToJson: false)
+
 @override
 int get hashCode {
   final _this = this as AudioOutputReceipt;
@@ -1480,10 +1465,10 @@ return $default(_that.sourceId,_that.deviceId,_that.relayId,_that.backend,_that.
 
 /// @nodoc
 
-@JsonSerializable(includeIfNull: false)
+
 class _AudioOutputReceipt implements AudioOutputReceipt {
   const _AudioOutputReceipt({required this.sourceId, required this.deviceId, this.relayId, this.backend = 'media_codec', required this.nativeReady, required this.bytesWritten, required this.revision, required this.applied, required this.playState, required this.manualPaused, required this.focusPaused, required this.backgroundPaused, required this.requiresUserResume, required this.reason, this.sampleRate = 48000, this.channels = 2, required this.mediaInfoReady, required this.playingConfirmed, required this.sourcePcmReceived, required this.sourcePcmPackets, required this.playbackClockAdvanced, this.clockStartMs, this.clockEndMs, this.positionMs, required this.volume, required this.muted, this.focusEpoch, required this.focusSignal, this.audibleContentVerified = false, this.speakerSamplesVerified = false, this.volumeConfigured = false, this.volumeOutputVerified = false});
-  factory _AudioOutputReceipt.fromJson(Map<String, dynamic> json) => _$AudioOutputReceiptFromJson(json);
+  
 
 @override final  String sourceId;
 @override final  String deviceId;
@@ -1524,17 +1509,14 @@ class _AudioOutputReceipt implements AudioOutputReceipt {
 @pragma('vm:prefer-inline')
 _$AudioOutputReceiptCopyWith<_AudioOutputReceipt> get copyWith => __$AudioOutputReceiptCopyWithImpl<_AudioOutputReceipt>(this, _$identity);
 
-@override
-Map<String, dynamic> toJson() {
-  return _$AudioOutputReceiptToJson(this, );
-}
+
 
 @override
 bool operator ==(Object other) {
     return identical(this, other) || (other.runtimeType == runtimeType&&other is _AudioOutputReceipt&&(identical(other.sourceId, sourceId) || other.sourceId == sourceId)&&(identical(other.deviceId, deviceId) || other.deviceId == deviceId)&&(identical(other.relayId, relayId) || other.relayId == relayId)&&(identical(other.backend, backend) || other.backend == backend)&&(identical(other.nativeReady, nativeReady) || other.nativeReady == nativeReady)&&(identical(other.bytesWritten, bytesWritten) || other.bytesWritten == bytesWritten)&&(identical(other.revision, revision) || other.revision == revision)&&(identical(other.applied, applied) || other.applied == applied)&&(identical(other.playState, playState) || other.playState == playState)&&(identical(other.manualPaused, manualPaused) || other.manualPaused == manualPaused)&&(identical(other.focusPaused, focusPaused) || other.focusPaused == focusPaused)&&(identical(other.backgroundPaused, backgroundPaused) || other.backgroundPaused == backgroundPaused)&&(identical(other.requiresUserResume, requiresUserResume) || other.requiresUserResume == requiresUserResume)&&(identical(other.reason, reason) || other.reason == reason)&&(identical(other.sampleRate, sampleRate) || other.sampleRate == sampleRate)&&(identical(other.channels, channels) || other.channels == channels)&&(identical(other.mediaInfoReady, mediaInfoReady) || other.mediaInfoReady == mediaInfoReady)&&(identical(other.playingConfirmed, playingConfirmed) || other.playingConfirmed == playingConfirmed)&&(identical(other.sourcePcmReceived, sourcePcmReceived) || other.sourcePcmReceived == sourcePcmReceived)&&(identical(other.sourcePcmPackets, sourcePcmPackets) || other.sourcePcmPackets == sourcePcmPackets)&&(identical(other.playbackClockAdvanced, playbackClockAdvanced) || other.playbackClockAdvanced == playbackClockAdvanced)&&(identical(other.clockStartMs, clockStartMs) || other.clockStartMs == clockStartMs)&&(identical(other.clockEndMs, clockEndMs) || other.clockEndMs == clockEndMs)&&(identical(other.positionMs, positionMs) || other.positionMs == positionMs)&&(identical(other.volume, volume) || other.volume == volume)&&(identical(other.muted, muted) || other.muted == muted)&&(identical(other.focusEpoch, focusEpoch) || other.focusEpoch == focusEpoch)&&(identical(other.focusSignal, focusSignal) || other.focusSignal == focusSignal)&&(identical(other.audibleContentVerified, audibleContentVerified) || other.audibleContentVerified == audibleContentVerified)&&(identical(other.speakerSamplesVerified, speakerSamplesVerified) || other.speakerSamplesVerified == speakerSamplesVerified)&&(identical(other.volumeConfigured, volumeConfigured) || other.volumeConfigured == volumeConfigured)&&(identical(other.volumeOutputVerified, volumeOutputVerified) || other.volumeOutputVerified == volumeOutputVerified));
 }
 
-@JsonKey(includeFromJson: false, includeToJson: false)
+
 @override
 int get hashCode {
     return Object.hashAll([runtimeType,sourceId,deviceId,relayId,backend,nativeReady,bytesWritten,revision,applied,playState,manualPaused,focusPaused,backgroundPaused,requiresUserResume,reason,sampleRate,channels,mediaInfoReady,playingConfirmed,sourcePcmReceived,sourcePcmPackets,playbackClockAdvanced,clockStartMs,clockEndMs,positionMs,volume,muted,focusEpoch,focusSignal,audibleContentVerified,speakerSamplesVerified,volumeConfigured,volumeOutputVerified]);

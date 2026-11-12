@@ -7,6 +7,7 @@ import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/media/audio_player.dart';
+import 'package:scrcpy_connect/core/media/models/audio_output_event.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 
 /// 进程或引擎范围内的输出所有者；捕获协调器持有远端捕获，平台持有系统焦点及前台服务资格。
@@ -33,7 +34,7 @@ class AudioOutputService {
   static int _nextOwner = 0;
   final String _ownerId =
       'audio-${DateTime.now().microsecondsSinceEpoch}-${_nextOwner++}';
-  final void Function(AudioJson) emit;
+  final void Function(AudioOutputEvent) emit;
   final bool Function() isDisposed;
   final DiagnosticReporter _diagnostics;
   final AudioPlayerFactory _factory;
@@ -272,7 +273,7 @@ class AudioOutputService {
       if (!paused) entry.playingConfirmed = true;
       final receipt = _receipt(entry);
       if (entry.evidenceReady) {
-        _emit('audio.presentation', entry, receipt.toJson());
+        _emit(AudioPresentationChanged(receipt));
       }
       return receipt;
     });
@@ -391,12 +392,13 @@ class AudioOutputService {
       for (final entry in _entries.values) {
         entry.requiresUserResume = true;
         // 启动尚未取得播放证据也必须保留用户恢复要求；超时清理不能让页面自动重开。
-        _emit('audio.resume.required', entry, {
-          'sourceId': entry.id,
-          'deviceId': entry.device,
-          'requiresUserResume': true,
-          'focusSignal': signal,
-        });
+        _emit(
+          AudioResumeRequired(
+            sourceId: entry.id,
+            deviceId: entry.device,
+            focusSignal: signal,
+          ),
+        );
       }
       await _reconcile(signal);
       await _releaseEpoch(epoch);
@@ -566,13 +568,14 @@ class AudioOutputService {
     _invalidateEmptyFocus();
     entry.cancel();
     if (!_disposed && !isDisposed()) {
-      _emit('audio.output.failed', entry, {
-        'sourceId': entry.id,
-        'deviceId': entry.device,
-        'code': failure.code,
-        'reason': failure.message,
-        'backend': 'media_codec',
-      });
+      _emit(
+        AudioOutputFailed(
+          sourceId: entry.id,
+          deviceId: entry.device,
+          code: failure.code,
+          reason: failure.message,
+        ),
+      );
     }
     unawaited(_release(entry).then((_) => _retireUnused()));
   }
@@ -772,9 +775,9 @@ class AudioOutputService {
           '声音输出尚未完成确认。',
           {'diagnostics': entry.diagnostics},
         );
-  void _emit(String type, _AudioOutput entry, AudioJson data) {
+  void _emit(AudioOutputEvent event) {
     if (!_disposed && !isDisposed()) {
-      emit({'type': type, 'deviceId': entry.device, 'data': data});
+      emit(event);
     }
   }
 

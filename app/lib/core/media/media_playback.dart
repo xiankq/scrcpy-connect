@@ -15,6 +15,8 @@ import 'package:scrcpy_connect/core/media/audio_output_service.dart';
 import 'package:scrcpy_connect/core/media/audio_player.dart';
 import 'package:scrcpy_connect/core/media/media_intent.dart';
 import 'package:scrcpy_connect/core/media/media_output_reconciliation.dart';
+import 'package:scrcpy_connect/core/media/models/audio_output_event.dart';
+import 'package:scrcpy_connect/core/media/models/device_audio_changed.dart';
 import 'package:scrcpy_connect/core/media/models/video_output.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/core/media/video_output_service.dart';
@@ -47,6 +49,7 @@ final class MediaPlayback
     required this.dataDirectory,
     required ScrcpyCaptureAdapter Function() capture,
     this.diagnostics,
+    this.audioPlayerFactory,
   }) : _createCapture = captures,
        _createAdapter = capture;
 
@@ -65,6 +68,7 @@ final class MediaPlayback
   final ScrcpyCaptureAdapter Function() _createAdapter;
   late final ScrcpyCaptureAdapter capture = _createAdapter();
   final DiagnosticLog? diagnostics;
+  final AudioPlayerFactory? audioPlayerFactory;
   bool _closing = false;
   bool get _disposed => _closing || isDisposed();
   final _textures = <String, VideoOutputReceipt>{};
@@ -81,6 +85,7 @@ final class MediaPlayback
         platform: platform,
         emit: _handleAudioOutput,
         isDisposed: () => _disposed,
+        playerFactory: audioPlayerFactory,
       );
   VideoQualityService? _deviceQualityInstance;
   VideoQualityService get _deviceQuality =>
@@ -159,18 +164,15 @@ final class MediaPlayback
     await _audioOutputsInstance?.stop(id);
   }
 
-  void _handleAudioOutput(Map<String, dynamic> event) {
+  void _handleAudioOutput(AudioOutputEvent event) {
     if (_disposed) return;
-    emit(event);
-    final data = Map<String, dynamic>.from(event['data'] as Map);
-    final id = data['sourceId'];
+    emit(event.toApplicationEvent());
+    final id = event.sourceId;
     final source = _audioSources[id];
-    if (id is! String ||
-        source == null ||
-        data['deviceId'] != source.deviceId) {
+    if (source == null || event.deviceId != source.deviceId) {
       return;
     }
-    if (event['type'] == 'audio.output.failed') {
+    if (event is AudioOutputFailed) {
       // 等待前先认领精确所有者，防止重复或迟到的焦点事件二次停止或影响其他设备的替换源。
       _audioSources.remove(id);
       _mediaIntents.stop(id, audio: true);
@@ -183,10 +185,10 @@ final class MediaPlayback
           await _closeAudio(id);
         }
       }());
-    } else if (event['type'] == 'audio.presentation') {
+    } else if (event case AudioPresentationChanged(:final receipt)) {
       unawaited(
         captures
-            .presentAudio(AudioOutputReceipt.fromJson(data))
+            .presentAudio(receipt)
             .then<void>((_) {})
             .catchError((Object _) {}),
       );
@@ -268,9 +270,6 @@ final class MediaPlayback
       );
 
   void handleApplicationEvent(Map<String, dynamic> event) {
-    final data = event['data'] is Map
-        ? Map<String, dynamic>.from(event['data'] as Map)
-        : const <String, dynamic>{};
     if (event['data'] case DeviceListChanged(:final devices)) {
       _mediaIntents.retainDevices({
         for (final device in devices)
@@ -299,15 +298,14 @@ final class MediaPlayback
               .catchError((Object _) {}),
         );
       }
-    } else if (event['type'] == 'audio.updated' &&
-        const [
-          'stopped',
-          'failed',
-          'error',
-          'closed',
-        ].contains(data['status'])) {
-      final id = data['sourceId'];
-      if (id is String) unawaited(_closeAudio(id));
+    } else if (event['data'] case DeviceAudioChanged(:final snapshot)
+        when snapshot.status == .stopped || snapshot.status == .error) {
+      final current = _audioSources[snapshot.sourceId];
+      if (current != null &&
+          current.deviceId == snapshot.deviceId &&
+          current.generation == snapshot.generation) {
+        unawaited(_closeAudio(snapshot.sourceId));
+      }
     }
   }
 

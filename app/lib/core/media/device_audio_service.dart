@@ -6,8 +6,7 @@ import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/core/devices/device_connection.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
-
-typedef AudioSourceJson = Map<String, Object?>;
+import 'package:scrcpy_connect/core/media/models/device_audio_changed.dart';
 
 /// 产品设备音源所有者；页面租约、质量交接资格和本机播放器分别由调用方持有。
 /// 每台设备只有一份 output PCM，媒体内容直接经原生源 ABI 交给播放器。
@@ -16,7 +15,7 @@ final class DeviceAudioService {
     required this.requireConnection,
     required this.scrcpy,
     required this.hasAudioOwner,
-    required this.emit,
+    required this.onChanged,
     this.deviceName,
     this.apiLevel,
   });
@@ -24,7 +23,7 @@ final class DeviceAudioService {
   final DeviceConnection Function(String) requireConnection;
   final ScrcpyClient scrcpy;
   final bool Function(String) hasAudioOwner;
-  final void Function(String, String, AudioSourceJson) emit;
+  final void Function(DeviceAudioChanged) onChanged;
   final String Function(String)? deviceName;
   final int? Function(String)? apiLevel;
   final _current = <String, _DeviceAudioSource>{};
@@ -439,7 +438,7 @@ final class DeviceAudioService {
 
   void _updated(_DeviceAudioSource entry) {
     try {
-      emit('audio.updated', entry.deviceId, _snapshot(entry).toJson());
+      onChanged(DeviceAudioChanged(_snapshot(entry)));
     } catch (_) {
       // 投影消费者失败不能中断撤权或丢掉精确原生关闭权。
     }

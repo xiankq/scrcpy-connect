@@ -1,7 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'device_audio_snapshot.freezed.dart';
-part 'device_audio_snapshot.g.dart';
 
 enum DeviceAudioStatus { starting, playing, paused, error, stopped }
 
@@ -21,15 +20,11 @@ abstract class AudioCleanupFailure with _$AudioCleanupFailure {
     required String code,
     required String reason,
   }) = _AudioCleanupFailure;
-  factory AudioCleanupFailure.fromJson(Map<String, Object?> json) =>
-      _$AudioCleanupFailureFromJson(json);
 }
 
 /// 捕获所有者的唯一状态；原生输出的事实由精确回执提交，源包数不构成可闻证明。
 @freezed
 abstract class DeviceAudioSnapshot with _$DeviceAudioSnapshot {
-  // ignore: invalid_annotation_target
-  @JsonSerializable(explicitToJson: true, includeIfNull: false)
   const factory DeviceAudioSnapshot({
     required String sourceId,
     required String deviceId,
@@ -71,8 +66,6 @@ abstract class DeviceAudioSnapshot with _$DeviceAudioSnapshot {
     String? reason,
     AudioCleanupFailure? cleanupError,
   }) = _DeviceAudioSnapshot;
-  factory DeviceAudioSnapshot.fromJson(Map<String, Object?> json) =>
-      _$DeviceAudioSnapshotFromJson(json);
 }
 
 @freezed
@@ -87,8 +80,6 @@ abstract class AudioVolumeChange with _$AudioVolumeChange {
 /// 输出所有者提交的实际播放器证据，必须关联精确设备与源，不能代替系统可闻性证明。
 @freezed
 abstract class AudioOutputReceipt with _$AudioOutputReceipt {
-  // ignore: invalid_annotation_target
-  @JsonSerializable(includeIfNull: false)
   const factory AudioOutputReceipt({
     required String sourceId,
     required String deviceId,
@@ -123,8 +114,6 @@ abstract class AudioOutputReceipt with _$AudioOutputReceipt {
     @Default(false) bool volumeConfigured,
     @Default(false) bool volumeOutputVerified,
   }) = _AudioOutputReceipt;
-  factory AudioOutputReceipt.fromJson(Map<String, Object?> json) =>
-      _$AudioOutputReceiptFromJson(json);
 }
 
 typedef DeviceAudioPlayback = ({

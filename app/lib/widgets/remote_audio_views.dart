@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/core/media/models/audio_output_event.dart';
 
 import 'models/device_audio_view_snapshot.dart';
 
@@ -43,11 +43,11 @@ class DeviceAudioViewCoordinator {
   bool _deviceAudioDirty = false;
 
   void handleEvent(Json event) {
-    if (_disposed || event['type'] != 'audio.resume.required') return;
-    final data = jsonObject(event['data']);
-    final device = value(data, 'deviceId');
-    if (device.isEmpty || data['requiresUserResume'] != true) return;
-    _resumeRequired[device] = ++_resumeRevision;
+    if (_disposed) return;
+    if (event['data'] case AudioResumeRequired(:final deviceId)
+        when deviceId.isNotEmpty) {
+      _resumeRequired[deviceId] = ++_resumeRevision;
+    }
   }
 
   int playbackRequestRevision(String deviceId) =>

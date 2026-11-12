@@ -15,6 +15,7 @@ import 'package:scrcpy_connect/core/devices/scrcpy_server_queries.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/media/device_audio_service.dart';
+import 'package:scrcpy_connect/core/media/models/device_audio_changed.dart';
 import 'package:scrcpy_connect/core/media/models/recovered_video_session.dart';
 import 'package:scrcpy_connect/core/media/models/video_session_view.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
@@ -119,7 +120,11 @@ final class CaptureResources {
       hasAudioOwner: (id) => _sessions?.hasAudioOwner(id) ?? false,
       deviceName: (id) => _records.current.find(id)?.name ?? 'Android 设备',
       apiLevel: (id) => _records.current.find(id)?.apiLevel,
-      emit: (type, device, data) => publishBusiness(type, device, data),
+      onChanged: (DeviceAudioChanged change) {
+        if (!_closed && !isDisposed()) {
+          publish(change.toApplicationEvent());
+        }
+      },
     );
   }
 
