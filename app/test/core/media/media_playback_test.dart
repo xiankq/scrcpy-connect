@@ -1,8 +1,8 @@
-import 'package:scrcpy_connect/core/media/models/video_session_view.dart';
-import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
-
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
+import 'package:scrcpy_connect/core/media/models/video_session_view.dart';
+import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/core/control/media_capture.dart';
 import 'package:scrcpy_connect/core/control/models/video_session.dart';
@@ -37,13 +37,14 @@ void main() {
           isA<RequestFailure>().having((e) => e.code, 'code', 'cancelled'),
         ),
       );
-      media.handleApplicationEvent({
-        'type': 'devices.changed',
-        'data': DeviceListChanged([
-          if (!removed) const DeviceSnapshot(id: 'device', status: .offline),
-          const DeviceSnapshot(id: 'other', status: .connected),
-        ]),
-      });
+      media.handleApplicationEvent(
+        RuntimeEvent(
+          DeviceListChanged([
+            if (!removed) const DeviceSnapshot(id: 'device', status: .offline),
+            const DeviceSnapshot(id: 'other', status: .connected),
+          ]),
+        ),
+      );
       capture.source.complete(
         const DeviceAudioSnapshot(
           sourceId: 'late-source',

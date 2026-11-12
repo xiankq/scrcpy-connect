@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
@@ -44,7 +45,7 @@ void main() {
   late void Function() leave;
   final provider = shareSubmissionProvider('share', scope: scope);
   final dependencies = _Session();
-  const events = Stream<Map<String, dynamic>>.empty();
+  const events = Stream<RuntimeEvent>.empty();
   sourceOverrides() => [
     appSessionProvider.overrideWithValue(dependencies),
     deviceReaderProvider.overrideWithValue(dependencies.devices),
@@ -363,7 +364,7 @@ class _Session implements AppSession {
     loading: false,
   );
   @override
-  Stream<Map<String, dynamic>> get events => const Stream.empty();
+  Stream<RuntimeEvent> get events => const Stream.empty();
   @override
   bool get initialize => false;
   @override

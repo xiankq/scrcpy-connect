@@ -155,7 +155,7 @@ final class AppComposition {
     reconnections: _connections.reconnections,
     isDisposed: () => _isDisposed,
     stopConnections: _connections.stopConnections,
-    emit: (event) => _events.emit(event),
+    emit: _events.emitEvent,
     handleShare: _files.receiveShare,
     handleMedia: _media.handlePlatformEvent,
   );

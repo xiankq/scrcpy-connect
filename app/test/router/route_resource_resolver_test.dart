@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
@@ -151,7 +152,7 @@ class _Session implements AppSession {
   @override
   final initialState = AppState();
   @override
-  Stream<Map<String, dynamic>> get events => const Stream.empty();
+  Stream<RuntimeEvent> get events => const Stream.empty();
   @override
   bool get initialize => false;
   @override

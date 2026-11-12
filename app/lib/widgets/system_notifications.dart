@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -11,7 +12,6 @@ import 'package:scrcpy_connect/core/companion/models/companion_event.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/devices/models/observed_device_snapshot.dart';
-import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
@@ -41,7 +41,7 @@ class SystemNotifications {
   }
 
   SystemNotifications({
-    required Stream<Json> events,
+    required Stream<RuntimeEvent> events,
     required this._readSnapshot,
     required this._current,
     required this.sink,
@@ -52,7 +52,7 @@ class SystemNotifications {
   final SystemNotificationSnapshot Function() _readSnapshot;
   final bool Function() _current;
   final SystemNotificationSink sink;
-  late final StreamSubscription<Json> _events;
+  late final StreamSubscription<RuntimeEvent> _events;
   late final StreamSubscription<String> _activations;
   final _owners = <String, _Owner>{};
   final _invalidThrough = <String, int>{};
@@ -290,9 +290,9 @@ class SystemNotifications {
     });
   }
 
-  void _event(Json event) {
+  void _event(RuntimeEvent event) {
     if (_disposed || !_current()) return;
-    final payload = event['data'];
+    final payload = event.data;
     if (payload is RecoveryStarted || payload is RecoveryFailed) {
       _suspend();
       return;
@@ -309,7 +309,7 @@ class SystemNotifications {
       if (_pending.isNotEmpty) _changed();
       return;
     }
-    if (event['type'] == 'connections.stopped') {
+    if (event.type == 'connections.stopped') {
       _nativeStopped.addAll(_readSnapshot().devices.take(32).map((d) => d.id));
       for (final entry in _owners.entries.toList()) {
         _invalidate(entry.key, entry.value.generation);
@@ -326,7 +326,7 @@ class SystemNotifications {
       }
       return;
     }
-    if (event['data'] case DeviceListChanged(:final devices)) {
+    if (event.data case DeviceListChanged(:final devices)) {
       _connectionLifecycle(devices, complete: true);
       final connected = {
         for (final device in devices)

@@ -26,23 +26,23 @@ class ShareInboxNotifier extends _$ShareInboxNotifier {
     );
     final subscription = session.stateEvents.listen((event) {
       if (!_current(owner)) return;
-      if (event['data'] is RecoveryStarted || event['data'] is RecoveryFailed) {
+      if (event.data is RecoveryStarted || event.data is RecoveryFailed) {
         owner.request++;
-      } else if (event['data'] case RecoveryCompleted(:final snapshot)) {
+      } else if (event.data case RecoveryCompleted(:final snapshot)) {
         owner.request++;
         state = ShareInboxState(
           shares: snapshot.shares
               .where((share) => !owner.consumed.contains(share.shareId))
               .toList(),
         );
-      } else if (event['data'] case ShareConsumed(shareId: final id)) {
+      } else if (event.data case ShareConsumed(shareId: final id)) {
         if (id.isEmpty) return;
         owner.request++;
         owner.consumed.add(id);
         state = state.copyWith(
           shares: state.shares.where((share) => share.shareId != id).toList(),
         );
-      } else if (event['data'] case ShareReceived(:final share)) {
+      } else if (event.data case ShareReceived(:final share)) {
         state = _withShare(owner, state, share);
       }
     });

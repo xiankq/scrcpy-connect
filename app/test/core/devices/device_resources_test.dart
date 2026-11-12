@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:scrcpy_connect/core/settings/models/settings_changed.dart';
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/core/control/display_recovery.dart';
@@ -66,16 +67,13 @@ void main() {
       (await resources.identities.selectForDevice()).fingerprint,
       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     );
-    resources.handleEvent({'type': 'settings.changed'});
+    resources.handleEvent(SettingsChanged(Preferences()).toApplicationEvent());
     resources.handleRecovery(const RecoveryStarted());
     resources.handleRecovery(const RecoveryFailed('unverified'));
     resources.handleRecovery(
       RecoveryCompleted(RuntimeSnapshot(sequence: 0, settings: Preferences())),
     );
-    resources.handleEvent({
-      'type': 'devices.changed',
-      'data': DeviceListChanged([]),
-    });
+    resources.handleEvent(RuntimeEvent(DeviceListChanged([])));
     await resources.prepareChange(
       const ConnectionChange(.cancel, attemptId: 'unused'),
     );
@@ -84,10 +82,7 @@ void main() {
     await resources.stopAdmission();
     await resources.close();
     await resources.close();
-    resources.handleEvent({
-      'type': 'devices.changed',
-      'data': DeviceListChanged([]),
-    });
+    resources.handleEvent(RuntimeEvent(DeviceListChanged([])));
     _expectUnused(resources);
   });
 
@@ -138,11 +133,7 @@ void main() {
     );
     expect(resources.currentObservations(), isEmpty);
     await resources.reconnections.start();
-    resources.handleEvent({
-      'type': 'devices.changed',
-      'sequence': 1,
-      'data': DeviceListChanged([]),
-    });
+    resources.handleEvent(RuntimeEvent(DeviceListChanged([]), sequence: 1));
     resources.handleRecovery(const RecoveryStarted());
     resources.handleRecovery(
       RecoveryCompleted(

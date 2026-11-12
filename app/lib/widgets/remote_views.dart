@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:flutter/widgets.dart';
 import 'package:scrcpy_connect/core/control/models/session_activity.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
@@ -9,7 +10,6 @@ import 'package:scrcpy_connect/core/media/models/video_output.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/core/media/video_sessions.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/remote_audio_views.dart';
 
 /// 由 widget 树持有控制画面、可见性和声音租约；provider 只提供应用数据。
@@ -17,7 +17,7 @@ class RemoteViews {
   RemoteViews({
     required VideoSessions videos,
     required RemoteAudio audio,
-    required Stream<Json> events,
+    required Stream<RuntimeEvent> events,
     required DeviceAudioViewSnapshot Function() readSnapshot,
     required void Function(String?) onAudioError,
     required bool Function() current,
@@ -43,11 +43,11 @@ class RemoteViews {
   bool _disposed = false;
   late final SessionViewRegistry _sessionViewRegistry;
   late final DeviceAudioViewCoordinator _deviceAudio;
-  late final StreamSubscription<Json> _subscription;
+  late final StreamSubscription<RuntimeEvent> _subscription;
 
-  void _onEvent(Json event) {
-    if (event['type'] == 'session.frame') return;
-    final payload = event['data'];
+  void _onEvent(RuntimeEvent event) {
+    if (event.telemetry) return;
+    final payload = event.data;
     if (payload is RecoveryStarted || payload is RecoveryFailed) {
       _sessionViewRegistry.markUncertain();
     } else if (payload case RecoveryCompleted(:final snapshot)) {
@@ -55,8 +55,8 @@ class RemoteViews {
     }
     _deviceAudio.handleEvent(event);
     if (payload is RecoveryCompleted ||
-        value(event, 'type').startsWith('session.') ||
-        event['type'] == 'devices.changed') {
+        event.type.startsWith('session.') ||
+        event.type == 'devices.changed') {
       reconcile();
     }
   }

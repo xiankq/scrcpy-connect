@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
@@ -21,7 +22,7 @@ import 'package:scrcpy_connect/core/settings/settings_management.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test('剪贴板换源立即撤销原准入，重新建基线后仅同步新捕获事件', () async {
-    final events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
+    final events = StreamController<RuntimeEvent>.broadcast(sync: true);
     final dependencies = _Session(events.stream);
     final previous = _Clipboard();
     final replacement = _Clipboard();
@@ -202,7 +203,7 @@ class _Clipboard implements RemoteClipboard {
 class _Session implements AppSession {
   _Session(this.events);
   @override
-  final Stream<Map<String, dynamic>> events;
+  final Stream<RuntimeEvent> events;
   @override
   final initialState = AppState(
     devices: [

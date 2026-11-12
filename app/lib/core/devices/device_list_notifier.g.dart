@@ -44,7 +44,7 @@ final class DeviceListNotifierProvider
 }
 
 String _$deviceListNotifierHash() =>
-    r'7ff554b9f5d744b5e508364e9cb60344db151b3e';
+    r'c889600341af0f71373656a68cbd90fe904443e7';
 
 abstract class _$DeviceListNotifier extends $Notifier<DeviceListState> {
   DeviceListState build();

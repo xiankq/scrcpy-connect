@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -23,7 +24,7 @@ import 'package:scrcpy_connect/widgets/system_notifications.dart';
 
 void main() {
   testWidgets('类型化来电呈现电话入口，后台前迟到的呈现不打开，新回执可重试', (tester) async {
-    final events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
+    final events = StreamController<RuntimeEvent>.broadcast(sync: true);
     final navigator = GlobalKey<NavigatorState>();
     final router = GoRouter(
       navigatorKey: navigator,

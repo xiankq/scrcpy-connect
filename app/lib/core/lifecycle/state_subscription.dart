@@ -1,10 +1,9 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
-import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
 
 /// Scope 的传输与事件所有者。先同步交付状态，再向页面和查询发布事件。
 final class StateSubscription {
@@ -22,9 +21,9 @@ final class StateSubscription {
   final AppSession session;
   final _connectionErrors = StreamController<Object>.broadcast(sync: true);
   final _stateCommits = StreamController<void>.broadcast(sync: true);
-  final _states = StreamController<Json>.broadcast(sync: true);
-  final _events = StreamController<Json>.broadcast(sync: true);
-  late final StreamSubscription<Json> _subscription;
+  final _states = StreamController<RuntimeEvent>.broadcast(sync: true);
+  final _events = StreamController<RuntimeEvent>.broadcast(sync: true);
+  late final StreamSubscription<RuntimeEvent> _subscription;
   bool disposed = false;
   bool applyingState = false;
   bool _reconciling = false;
@@ -32,14 +31,12 @@ final class StateSubscription {
 
   Stream<Object> get connectionErrors => _connectionErrors.stream;
   Stream<void> get stateCommits => _stateCommits.stream;
-  Stream<Json> get stateEvents => _states.stream;
-  Stream<Json> get events => _events.stream;
+  Stream<RuntimeEvent> get stateEvents => _states.stream;
+  Stream<RuntimeEvent> get events => _events.stream;
 
-  void _accept(Json event) {
+  void _accept(RuntimeEvent event) {
     if (disposed) return;
-    final frozen = immutableJson(event);
-    final type = event['type'];
-    if (event['data'] case RecoveryCompleted(:final snapshot)) {
+    if (event.data case RecoveryCompleted(:final snapshot)) {
       if (_snapshotSequence case final previous?
           when snapshot.sequence < previous) {
         return;
@@ -49,20 +46,19 @@ final class StateSubscription {
       }
       _snapshotSequence = snapshot.sequence;
       _reconciling = false;
-    } else if (event['data'] is RecoveryStarted ||
-        event['data'] is RecoveryFailed) {
+    } else if (event.data is RecoveryStarted || event.data is RecoveryFailed) {
       _reconciling = true;
     }
-    if (type != 'session.frame') {
+    if (!event.telemetry) {
       applyingState = true;
       try {
-        _states.add(frozen);
+        _states.add(event);
       } finally {
         applyingState = false;
       }
       _stateCommits.add(null);
     }
-    _events.add(frozen);
+    _events.add(event);
   }
 
   void dispose() {

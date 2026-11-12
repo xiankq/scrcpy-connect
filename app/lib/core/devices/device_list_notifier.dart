@@ -28,7 +28,7 @@ class DeviceListNotifier extends _$DeviceListNotifier {
     final initial = session.session.initialState;
     final subscription = session.stateEvents.listen((event) {
       if (!_current(owner)) return;
-      final payload = event['data'];
+      final payload = event.data;
       if (payload is RecoveryStarted || payload is RecoveryFailed) {
         owner.request++;
       } else if (payload case RecoveryCompleted(:final snapshot)) {
@@ -38,7 +38,7 @@ class DeviceListNotifier extends _$DeviceListNotifier {
           loading: false,
           error: null,
         );
-      } else if (event['data'] case DeviceListChanged(:final devices)) {
+      } else if (event.data case DeviceListChanged(:final devices)) {
         owner.request++;
         state = state.copyWith(devices: devices, loading: false, error: null);
       }

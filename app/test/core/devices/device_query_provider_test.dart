@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/devices/models/device_disconnect_requested.dart';
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:adb/adb.dart' show AdbCancellation;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -11,14 +13,16 @@ import 'package:scrcpy_connect/core/devices/device_setup.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 
+import '../../fixtures/video_events.dart';
+
 void main() {
   group('设备查询独立装配', () {
     late _Inspection inspection;
-    late StreamController<Map<String, dynamic>> events;
+    late StreamController<RuntimeEvent> events;
     late ProviderContainer container;
     setUp(() {
       inspection = _Inspection();
-      events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
+      events = StreamController<RuntimeEvent>.broadcast(sync: true);
       container = ProviderContainer(
         overrides: [
           deviceInspectionProvider.overrideWithValue(inspection),
@@ -55,12 +59,16 @@ void main() {
       final provider = deviceDetailsProvider('device');
       container.listen(provider, (_, _) {});
       final previous = inspection.reads.single;
-      events.add({'type': 'device.connected', 'deviceId': 'another-device'});
-      events.add({'type': 'session.frame', 'deviceId': 'device'});
+      events.add(
+        const DeviceDisconnectRequested('another-device').toApplicationEvent(),
+      );
+      events.add(videoChange().toApplicationEvent());
       await _flush(container);
       expect(inspection.reads, hasLength(1));
       expect(previous.cancellation.isCancelled, isFalse);
-      events.add({'type': 'device.connected', 'deviceId': 'device'});
+      events.add(
+        const DeviceDisconnectRequested('device').toApplicationEvent(),
+      );
       expect(previous.cancellation.isCancelled, isTrue);
       await _flush(container);
       expect(inspection.reads, hasLength(2));
@@ -80,8 +88,9 @@ void main() {
       container.listen(provider, (_, _) {});
       final previous = inspection.reads.single;
       final replacement = _Inspection();
-      final replacementEvents =
-          StreamController<Map<String, dynamic>>.broadcast(sync: true);
+      final replacementEvents = StreamController<RuntimeEvent>.broadcast(
+        sync: true,
+      );
       addTearDown(replacementEvents.close);
       container.updateOverrides([
         deviceInspectionProvider.overrideWithValue(replacement),
@@ -93,7 +102,7 @@ void main() {
       replacement.reads.single.result.complete(_details('replacement'));
       await _flush(container);
       previous.result.complete(_details('retired'));
-      events.add({'type': 'state.resync', 'data': const RecoveryStarted()});
+      events.add(RuntimeEvent(const RecoveryStarted()));
       await _flush(container);
       expect(container.read(provider).requireValue.connectionId, 'replacement');
       expect(replacement.reads, hasLength(1));

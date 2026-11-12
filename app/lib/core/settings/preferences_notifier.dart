@@ -1,7 +1,6 @@
-import 'package:scrcpy_connect/core/settings/models/settings_changed.dart';
-
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/settings/models/settings_changed.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
@@ -28,7 +27,7 @@ class PreferencesNotifier extends _$PreferencesNotifier {
     final initial = session.session.initialState;
     final subscription = session.stateEvents.listen((event) {
       if (!_current(owner)) return;
-      final payload = event['data'];
+      final payload = event.data;
       if (payload is RecoveryStarted || payload is RecoveryFailed) {
         owner.request++;
         owner.epoch++;

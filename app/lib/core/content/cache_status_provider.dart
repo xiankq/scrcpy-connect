@@ -17,8 +17,7 @@ part 'cache_status_provider.g.dart';
 Future<CacheStatus> cacheStatus(Ref ref) {
   final source = ref.watch(contentCacheControlProvider);
   final subscription = ref.watch(runtimeEventsProvider).listen((event) {
-    if (event['data'] is ContentCacheChanged ||
-        event['data'] is RecoveryCompleted) {
+    if (event.data is ContentCacheChanged || event.data is RecoveryCompleted) {
       ref.invalidateSelf();
     }
   });

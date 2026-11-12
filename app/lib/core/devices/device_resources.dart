@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:scrcpy_connect/core/devices/models/connections_stopped.dart';
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:adb/adb.dart';
 import 'package:scrcpy_connect/core/activities/models/activity_cleanup_failed.dart';
 import 'package:scrcpy_connect/core/companion/companion_recovery.dart';
@@ -431,14 +433,14 @@ final class DeviceResources {
     });
   }
 
-  void handleEvent(Map<String, dynamic> event) {
+  void handleEvent(RuntimeEvent event) {
     if (_isDisposed) return;
     if (_reconnectionInstance case final reconnect?) {
       if (_reconnectEvent(event) case final update?) {
         reconnect.handleEvent(update);
       }
     }
-    if (event['data'] is! DeviceListChanged) return;
+    if (event.data is! DeviceListChanged) return;
     final ids = {
       ..._observedConnections.keys,
       ..._records.current.devices.map((record) => record.id),
@@ -543,28 +545,20 @@ final class _DeviceReconnectHost implements DeviceReconnectHost {
 }
 
 // 应用事件信封在此转换为设备事实；重连规则不解析全应用协议字段。
-DeviceReconnectEvent? _reconnectEvent(Map<String, dynamic> event) {
-  final type = event['type'];
-  if (type == 'session.frame') return null;
-  final raw = event['data'];
-  final data = raw is Map
-      ? Map<String, dynamic>.from(raw)
-      : <String, dynamic>{};
-  final sequence = event['sequence'];
-  if (sequence is! int || sequence < 0) return null;
-  return switch (type) {
-    'devices.changed' when raw is DeviceListChanged =>
-      DeviceReconnectDevicesChanged(raw.devices, sequence: sequence),
-    'settings.changed' when raw is SettingsChanged =>
-      DeviceReconnectSettingsChanged(
-        raw.preferences.backgroundKeepAlive,
-        sequence: sequence,
-      ),
-    'adb.discovery.changed' => DeviceReconnectDiscoveryChanged(
-      data['guid'] as String?,
+DeviceReconnectEvent? _reconnectEvent(RuntimeEvent event) {
+  if (event.telemetry) return null;
+  final sequence = event.sequence;
+  if (sequence == null) return null;
+  return switch (event.data) {
+    DeviceListChanged(:final devices) => DeviceReconnectDevicesChanged(
+      devices,
       sequence: sequence,
     ),
-    'connections.stopped' => DeviceReconnectStopped(sequence: sequence),
+    SettingsChanged(:final preferences) => DeviceReconnectSettingsChanged(
+      preferences.backgroundKeepAlive,
+      sequence: sequence,
+    ),
+    ConnectionsStopped() => DeviceReconnectStopped(sequence: sequence),
     _ => DeviceReconnectWatermark(sequence: sequence),
   };
 }

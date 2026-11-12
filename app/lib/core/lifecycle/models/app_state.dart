@@ -1,10 +1,9 @@
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
-import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/files/models/incoming_share.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
 
 part 'app_state.freezed.dart';
 
@@ -15,7 +14,7 @@ class AppState with _$AppState {
     List<DeviceSnapshot> devices = const [],
     Preferences? settings,
     List<IncomingShare> pendingShares = const [],
-    Json? lastEvent,
+    this.lastEvent,
     this.eventRevision = 0,
     this.loading = true,
     this.deviceError,
@@ -27,13 +26,12 @@ class AppState with _$AppState {
     this.reconciledSnapshot,
   }) : devices = immutableDeviceSnapshots(devices),
        settings = settings ?? Preferences(),
-       pendingShares = List.unmodifiable(pendingShares),
-       lastEvent = lastEvent == null ? null : immutableJson(lastEvent);
+       pendingShares = List.unmodifiable(pendingShares);
 
   final List<DeviceSnapshot> devices;
   final Preferences settings;
   final List<IncomingShare> pendingShares;
-  final Json? lastEvent;
+  final RuntimeEvent? lastEvent;
   final int eventRevision;
   final bool loading;
   final String? deviceError;

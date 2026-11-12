@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
@@ -14,7 +15,7 @@ import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 
 void main() {
-  late StreamController<Map<String, dynamic>> events;
+  late StreamController<RuntimeEvent> events;
   late _Devices source;
   late _Session dependencies;
   late ProviderContainer container;
@@ -62,7 +63,7 @@ void main() {
     final devices = [const DeviceSnapshot(id: 'latest', name: 'Latest')];
     final change = DeviceListChanged(devices);
     devices.clear();
-    events.add({'type': 'devices.changed', 'data': change});
+    events.add(RuntimeEvent(change));
     expect(container.read(deviceListProvider).devices.single.id, 'latest');
     expect(change.devices.clear, throwsUnsupportedError);
     replacement.reads.last.complete([
@@ -75,23 +76,24 @@ void main() {
   test('权威恢复快照作废在途读取，scope 关闭后不再提交或订阅', () async {
     final actions = container.read(deviceListProvider.notifier);
     final loading = actions.refresh();
-    events.add({'type': 'state.resync', 'data': const RecoveryStarted()});
-    events.add({
-      'type': 'state.resynced',
-      'data': RecoveryCompleted(
-        RuntimeSnapshot(
-          sequence: 1,
-          settings: Preferences(),
-          devices: [
-            const DeviceSnapshot(
-              id: 'verified',
-              name: 'Verified',
-              status: .connected,
-            ),
-          ],
+    events.add(RuntimeEvent(const RecoveryStarted()));
+    events.add(
+      RuntimeEvent(
+        RecoveryCompleted(
+          RuntimeSnapshot(
+            sequence: 1,
+            settings: Preferences(),
+            devices: [
+              const DeviceSnapshot(
+                id: 'verified',
+                name: 'Verified',
+                status: .connected,
+              ),
+            ],
+          ),
         ),
       ),
-    });
+    );
     source.reads.single.complete([
       const DeviceSnapshot(id: 'old', name: 'Old'),
     ]);
@@ -127,7 +129,7 @@ class _Session implements AppSession {
     loading: false,
   );
   @override
-  final Stream<Map<String, dynamic>> events;
+  final Stream<RuntimeEvent> events;
   @override
   bool get initialize => false;
   @override

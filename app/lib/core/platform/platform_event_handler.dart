@@ -1,4 +1,6 @@
 import 'package:scrcpy_connect/core/devices/device_reconnect_service.dart';
+import 'package:scrcpy_connect/core/devices/models/connections_stopped.dart';
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 
 /// 宿主事实不参与核心事件序列；同步撤销本地准入，再发布事件并交接异步清理。
 class PlatformEventHandler {
@@ -13,7 +15,7 @@ class PlatformEventHandler {
 
   final DeviceReconnectService reconnections;
   final bool Function() isDisposed;
-  final void Function(Map<String, dynamic>) emit;
+  final void Function(AppEvent) emit;
   final Future<void> Function(Map<String, dynamic>) handleShare;
   final Future<void> Function(Map<String, dynamic>) handleMedia;
   final Future<void> Function() stopConnections;
@@ -26,12 +28,13 @@ class PlatformEventHandler {
       // 同步执行回调直到其第一次挂起，事件消费者只能看到已经撤销的连接。
       // 两条清理均登记监听；任一路径失败都不能跳过另一条或提前返回。
       final stopped = Future<void>.sync(stopConnections);
-      final published = Future<void>.sync(() => emit(event));
+      final published = Future<void>.sync(
+        () => emit(const ConnectionsStopped()),
+      );
       final media = Future<void>.sync(() => handleMedia(event));
       await Future.wait([stopped, published, media]);
       return;
     }
-    emit(event);
     final data = event['data'] is Map
         ? Map<String, dynamic>.from(event['data'] as Map)
         : const <String, dynamic>{};

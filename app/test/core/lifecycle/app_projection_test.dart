@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/devices/current_device_notifier.dart';
@@ -8,7 +9,6 @@ import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
-import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/files/incoming_shares.dart';
@@ -23,7 +23,7 @@ import 'package:scrcpy_connect/core/settings/settings_management.dart';
 
 void main() {
   test('事件发布前一次提交完整投影，恢复不覆盖当前设备和音频错误', () async {
-    final events = StreamController<Json>.broadcast(sync: true);
+    final events = StreamController<RuntimeEvent>.broadcast(sync: true);
     final dependencies = _Session(events.stream, 'initial');
     final container = ProviderContainer(
       overrides: [
@@ -42,23 +42,24 @@ void main() {
     final subscription = container.read(runtimeEventsProvider).listen((_) {
       observed.add(container.read(appSnapshotProvider));
     });
-    events.add({
-      'type': 'state.resynced',
-      'data': RecoveryCompleted(
-        RuntimeSnapshot(
-          sequence: 1,
-          devices: [
-            const DeviceSnapshot(
-              id: 'device',
-              name: 'updated',
-              status: .connected,
-            ),
-          ],
-          settings: Preferences(appearance: .dark),
-          shares: [const IncomingShare(shareId: 'share', status: .ready)],
+    events.add(
+      RuntimeEvent(
+        RecoveryCompleted(
+          RuntimeSnapshot(
+            sequence: 1,
+            devices: [
+              const DeviceSnapshot(
+                id: 'device',
+                name: 'updated',
+                status: .connected,
+              ),
+            ],
+            settings: Preferences(appearance: .dark),
+            shares: [const IncomingShare(shareId: 'share', status: .ready)],
+          ),
         ),
       ),
-    });
+    );
     expect(projections, hasLength(1));
     final snapshot = observed.single;
     expect(snapshot.devices.single.name, 'updated');
@@ -69,28 +70,31 @@ void main() {
     expect(snapshot.focusedDeviceId, 'selected');
     expect(snapshot.audioError, 'local audio failure');
     // 相同水位在没有恢复请求时是重复回执，不重复交付状态或事件。
-    events.add({
-      'type': 'state.resynced',
-      'data': RecoveryCompleted(
-        RuntimeSnapshot(sequence: 1, settings: Preferences()),
+    events.add(
+      RuntimeEvent(
+        RecoveryCompleted(
+          RuntimeSnapshot(sequence: 1, settings: Preferences()),
+        ),
       ),
-    });
+    );
     expect(observed, hasLength(1));
     expect(projections, hasLength(1));
-    events.add({
-      'type': 'state.resynced',
-      'data': RecoveryCompleted(
-        RuntimeSnapshot(sequence: 0, settings: Preferences()),
+    events.add(
+      RuntimeEvent(
+        RecoveryCompleted(
+          RuntimeSnapshot(sequence: 0, settings: Preferences()),
+        ),
       ),
-    });
+    );
     expect(observed, hasLength(1));
     expect(projections, hasLength(1));
-    events.add({
-      'type': 'devices.changed',
-      'data': DeviceListChanged([
-        const DeviceSnapshot(id: 'new-device', name: 'New'),
-      ]),
-    });
+    events.add(
+      RuntimeEvent(
+        DeviceListChanged([
+          const DeviceSnapshot(id: 'new-device', name: 'New'),
+        ]),
+      ),
+    );
     expect(observed.last.devices.single.id, 'new-device');
     expect(observed.last.settings.appearance, Appearance.dark);
     expect(observed.last.focusedDeviceId, 'selected');
@@ -103,8 +107,8 @@ void main() {
   });
 
   test('替换应用作用域后取消旧事件订阅，只关闭各自所有者一次', () async {
-    final oldEvents = StreamController<Json>.broadcast(sync: true);
-    final newEvents = StreamController<Json>.broadcast(sync: true);
+    final oldEvents = StreamController<RuntimeEvent>.broadcast(sync: true);
+    final newEvents = StreamController<RuntimeEvent>.broadcast(sync: true);
     final previous = _Session(oldEvents.stream, 'previous');
     final replacement = _Session(newEvents.stream, 'replacement');
     final container = ProviderContainer(
@@ -128,8 +132,8 @@ void main() {
     expect(snapshot.audioError, 'replacement audio');
     expect(oldEvents.hasListener, isFalse);
     expect(previous.closes, 1);
-    oldEvents.add({'type': 'state.resync', 'data': const RecoveryStarted()});
-    newEvents.add({'type': 'state.resync', 'data': const RecoveryStarted()});
+    oldEvents.add(RuntimeEvent(const RecoveryStarted()));
+    newEvents.add(RuntimeEvent(const RecoveryStarted()));
     snapshot = container.read(appSnapshotProvider);
     expect(snapshot.reconciliationPending, isTrue);
     expect(snapshot.focusedDeviceId, 'replacement');
@@ -153,7 +157,7 @@ class _Session implements AppSession {
   final IncomingShares incomingShares = _Shares();
   final DeviceReader devices = _Devices();
   @override
-  final Stream<Json> events;
+  final Stream<RuntimeEvent> events;
   @override
   final AppState initialState;
   @override

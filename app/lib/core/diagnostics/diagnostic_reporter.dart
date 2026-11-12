@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
+import 'package:scrcpy_connect/core/devices/models/connections_stopped.dart';
 import 'package:scrcpy_connect/core/media/models/video_session_view.dart';
 import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
 import 'package:scrcpy_connect/core/media/models/video_output.dart';
@@ -194,8 +196,8 @@ class DiagnosticReporter {
     );
   }
 
-  void applicationEvent(Map<String, dynamic> event) {
-    if (event['data'] case DeviceAudioChanged(:final snapshot)) {
+  void applicationEvent(RuntimeEvent event) {
+    if (event.data case DeviceAudioChanged(:final snapshot)) {
       if (snapshot.status != .stopped && snapshot.status != .error) return;
       log?.record(
         DiagnosticArea.runtime,
@@ -208,7 +210,7 @@ class DiagnosticReporter {
       );
       return;
     }
-    if (event['data'] case DeviceListChanged(:final devices)) {
+    if (event.data case DeviceListChanged(:final devices)) {
       log?.record(
         DiagnosticArea.connection,
         'devices.changed',
@@ -219,8 +221,7 @@ class DiagnosticReporter {
       );
       return;
     }
-    final type = event['type'];
-    if (event['data']
+    if (event.data
         case VideoSessionChanged(view: VideoSessionView(:final session))
         when !session.live) {
       log?.record(
@@ -237,7 +238,7 @@ class DiagnosticReporter {
       );
       return;
     }
-    if (event['data'] case VideoOutputFailed(
+    if (event.data case VideoOutputFailed(
       :final sessionId,
       :final deviceId,
       :final captureGeneration,
@@ -256,33 +257,9 @@ class DiagnosticReporter {
       );
       return;
     }
-    if (!const {'platform.failed', 'connections.stopped'}.contains(type)) {
-      return;
+    if (event.data is ConnectionsStopped) {
+      log?.record(DiagnosticArea.runtime, 'connections.stopped');
     }
-    final data = event['data'] is Map
-        ? Map<Object?, Object?>.from(event['data'] as Map)
-        : const <Object?, Object?>{};
-    log?.record(
-      DiagnosticArea.runtime,
-      type as String,
-      level: type == 'platform.failed' || data['status'] == 'failed'
-          ? LogLevel.error
-          : LogLevel.info,
-      fields: {
-        if (event['deviceId'] is String && log != null)
-          'scope': log!.scope(event['deviceId'] as String),
-        if (const {
-          'connected',
-          'connecting',
-          'offline',
-          'unauthorized',
-          'failed',
-          'stopped',
-          'error',
-        }.contains(data['status']))
-          'status': data['status'],
-      },
-    );
   }
 
   void playerEvent(

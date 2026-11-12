@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:analyzer/dart/ast/ast.dart';
+import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/analysis/utilities.dart';
 import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
@@ -126,6 +127,18 @@ List<String> checkArchitecture(
         }
         // 生命周期与状态组合层没有通用操作端口；真实平台/伴生协议适配在所属能力目录。
         final parts = p.split(path);
+        if (!const {
+          'core/companion/companion_client.dart',
+          'core/companion/companion_service.dart',
+        }.contains(p.posix.joinAll(parts))) {
+          final streams = _RawApplicationEventStreams();
+          parsed.unit.accept(streams);
+          if (streams.found) {
+            problems.add(
+              '${relative(file.path)}: 应用事件流使用 RuntimeEvent，原始协议流归实际协议适配',
+            );
+          }
+        }
         if (parts.first == 'bootstrap' ||
             parts.length > 1 &&
                 parts[0] == 'core' &&
@@ -397,6 +410,19 @@ List<String> checkArchitecture(
     problems.add('模块依赖环包含：${cycle.map(relative).join('，')}');
   }
   return problems..sort();
+}
+
+final class _RawApplicationEventStreams extends RecursiveAstVisitor<void> {
+  bool found = false;
+
+  @override
+  void visitNamedType(NamedType node) {
+    if (RegExp(r'^Stream(?:Controller|Subscription)?\s*<\s*(?:Json\b|Map\s*<)')
+        .hasMatch(node.toSource())) {
+      found = true;
+    }
+    super.visitNamedType(node);
+  }
 }
 
 // 应用边界涵盖测试、hook 与平台目录；构建缓存不是源输入，不递归其受控依赖。

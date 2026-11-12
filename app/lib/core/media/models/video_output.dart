@@ -97,6 +97,8 @@ final class VideoOutputChanged extends VideoOutputEvent {
 
 final class VideoOutputFrame extends VideoOutputEvent {
   const VideoOutputFrame(this.output);
+  @override
+  bool get telemetry => true;
   final VideoOutputReceipt output;
   @override
   String get sessionId => output.sessionId;

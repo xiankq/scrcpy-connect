@@ -11,4 +11,6 @@ final class VideoSessionChanged extends AppEvent {
   String get type => 'session.${change.name}';
   @override
   String get deviceId => view.deviceId;
+  @override
+  bool get telemetry => change == VideoSessionChange.frame;
 }

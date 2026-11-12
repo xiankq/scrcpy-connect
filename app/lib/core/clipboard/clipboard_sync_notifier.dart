@@ -1,9 +1,9 @@
+import 'dart:async';
+
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:scrcpy_connect/core/media/models/video_session_view.dart';
 import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
 import 'package:scrcpy_connect/core/clipboard/models/remote_clipboard_changed.dart';
-
-import 'dart:async';
-
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -146,7 +146,7 @@ typedef _ClipboardContext = ({
 class _ClipboardCoordinator {
   _ClipboardCoordinator(
     this.clipboard,
-    Stream<Json> events,
+    Stream<RuntimeEvent> events,
     this.readContext,
     this.onStatus,
     this.onOperation,
@@ -162,7 +162,7 @@ class _ClipboardCoordinator {
   final void Function(ClipboardSyncStatus, String?) onStatus;
   final void Function(_ClipboardOperation) onOperation;
   late final void Function() _releaseAdmission;
-  StreamSubscription<Json>? _events;
+  StreamSubscription<RuntimeEvent>? _events;
   Timer? _timer;
   Future<void> _queue = Future<void>.value();
   ({
@@ -377,9 +377,9 @@ class _ClipboardCoordinator {
     });
   }
 
-  void _event(Json event) {
+  void _event(RuntimeEvent event) {
     if (_disposed) return;
-    if (event['data'] case DeviceDisconnectRequested(:final deviceId)
+    if (event.data case DeviceDisconnectRequested(:final deviceId)
         when deviceId == _target) {
       _generation++;
       _target = null;
@@ -391,7 +391,7 @@ class _ClipboardCoordinator {
       onStatus(ClipboardSyncStatus.waitingDevice, null);
       return;
     }
-    final payload = event['data'];
+    final payload = event.data;
     if (payload is RecoveryStarted || payload is RecoveryFailed) {
       _suspendForVerification(
         payload is RecoveryFailed
@@ -414,7 +414,7 @@ class _ClipboardCoordinator {
     if (!_foreground ||
         _reconciling ||
         readContext()?.reconciliationPending == true ||
-        event['deviceId'] != _target) {
+        event.deviceId != _target) {
       return;
     }
     if (payload case VideoSessionChanged(view: VideoSessionView(:final session))

@@ -1,12 +1,12 @@
+import 'dart:async';
+
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
 import 'package:scrcpy_connect/core/media/models/video_playback_resumed.dart';
 import 'package:scrcpy_connect/core/control/models/app_launch_record.dart';
 import 'package:scrcpy_connect/core/media/models/video_output.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
-
-import 'dart:async';
-
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -48,6 +48,7 @@ import 'package:scrcpy_connect/router/models/remote_control_intent.dart';
 import 'package:scrcpy_connect/router/models/remote_launch_intent.dart';
 import 'package:scrcpy_connect/router/route_observers.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
+
 import 'package:scrcpy_connect/widgets/dialogs.dart'
     show confirm, glassSnackBar;
 import 'package:scrcpy_connect/widgets/remote_failure.dart';
@@ -205,8 +206,8 @@ class _ControlPageState extends ConsumerState<ControlPage>
   late final RemoteInputOwner inputs;
   TextEditingController get text => inputs.text;
   Future<void> get inputQueue => inputs.idle;
-  StreamSubscription<Json>? eventSubscription;
-  late final Stream<Json> _events;
+  StreamSubscription<RuntimeEvent>? eventSubscription;
+  late final Stream<RuntimeEvent> _events;
   late final VideoSessions _videos;
   late final ClipboardFocusLease _clipboardFocus;
   bool _retired = false;
@@ -488,10 +489,10 @@ class _ControlPageState extends ConsumerState<ControlPage>
     ).pushReplacement(context);
   }
 
-  void onEvent(Json event) {
+  void onEvent(RuntimeEvent event) {
     if (!_sourcesCurrent) return;
-    final payload = event['data'];
-    if (event['data'] case DeviceListChanged(:final devices)) {
+    final payload = event.data;
+    if (event.data case DeviceListChanged(:final devices)) {
       final updated = devices
           .where((d) => d.id == widget.device.id)
           .firstOrNull;
@@ -520,15 +521,15 @@ class _ControlPageState extends ConsumerState<ControlPage>
       }
       return;
     }
-    if (event['data'] is RecoveryStarted) {
+    if (event.data is RecoveryStarted) {
       markStateUnknown();
       return;
     }
-    if (event['data'] case RecoveryFailed(:final reason)) {
+    if (event.data case RecoveryFailed(:final reason)) {
       markStateUnknown(reason: reason);
       return;
     }
-    if (event['data'] case RecoveryCompleted(:final snapshot)) {
+    if (event.data case RecoveryCompleted(:final snapshot)) {
       applyReconciledState(snapshot);
       return;
     }
@@ -540,7 +541,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
     bool belongs(String id, String deviceId) =>
         id == sessionId &&
         deviceId == widget.device.id &&
-        (event['deviceId'] == null || event['deviceId'] == deviceId);
+        (event.deviceId == null || event.deviceId == deviceId);
     switch (payload) {
       case VideoOutputReady(:final output) ||
           VideoOutputChanged(:final output) ||
@@ -582,8 +583,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
         setState(() {});
       case VideoSessionChanged(view: final sessionView):
         final session = sessionView.session, wake = sessionView.wake;
-        if (event['type'] == 'session.frame' ||
-            !belongs(session.sessionId, session.deviceId)) {
+        if (event.telemetry || !belongs(session.sessionId, session.deviceId)) {
           return;
         }
         final outgoing = presentation.binding;

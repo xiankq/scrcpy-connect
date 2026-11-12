@@ -272,14 +272,14 @@ final class MediaPlayback
         current: current,
       );
 
-  void handleApplicationEvent(Map<String, dynamic> event) {
-    if (event['data'] case DeviceListChanged(:final devices)) {
+  void handleApplicationEvent(RuntimeEvent event) {
+    if (event.data case DeviceListChanged(:final devices)) {
       _mediaIntents.retainDevices({
         for (final device in devices)
           if (device.status == .connected) device.id,
       });
     }
-    if (event['data']
+    if (event.data
         case VideoSessionChanged(view: VideoSessionView(:final session))
         when !session.live) {
       final output = _textures[session.sessionId];
@@ -302,7 +302,7 @@ final class MediaPlayback
               .catchError((Object _) {}),
         );
       }
-    } else if (event['data'] case DeviceAudioChanged(:final snapshot)
+    } else if (event.data case DeviceAudioChanged(:final snapshot)
         when snapshot.status == .stopped || snapshot.status == .error) {
       final current = _audioSources[snapshot.sourceId];
       if (current != null &&

@@ -1,7 +1,7 @@
-import 'package:scrcpy_connect/core/settings/models/settings_changed.dart';
-
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
+import 'package:scrcpy_connect/core/settings/models/settings_changed.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
@@ -13,11 +13,11 @@ import 'package:scrcpy_connect/core/settings/settings_management.dart';
 void main() {
   late _Settings settings;
   late _Session dependencies;
-  late StreamController<Map<String, dynamic>> events;
+  late StreamController<RuntimeEvent> events;
   late ProviderContainer container;
   setUp(() {
     settings = _Settings();
-    events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
+    events = StreamController<RuntimeEvent>.broadcast(sync: true);
     dependencies = _Session(events.stream);
     container = ProviderContainer(
       overrides: [
@@ -193,7 +193,7 @@ class _Settings implements SettingsManagement {
 class _Session implements AppSession {
   _Session(this.events);
   @override
-  final Stream<Map<String, dynamic>> events;
+  final Stream<RuntimeEvent> events;
   @override
   AppState get initialState => AppState();
   @override

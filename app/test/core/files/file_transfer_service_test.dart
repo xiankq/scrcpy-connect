@@ -68,7 +68,7 @@ void main() {
     await executor.copyStarted.future;
     await Future<void>.delayed(Duration.zero);
     final progress = received
-        .map((event) => event['data'])
+        .map((event) => event.data)
         .whereType<FileTransferProgress>()
         .single;
     expect(progress.transferId, submitted.transferId);
@@ -77,7 +77,7 @@ void main() {
     expect(changes.every((change) => change.kind == .transfer), isTrue);
 
     final completed = events.stream.firstWhere(
-      (event) => event['data'] is FileTransferChanged && executor.committed,
+      (event) => event.data is FileTransferChanged && executor.committed,
     );
     executor.copied.complete(3);
     await completed;
@@ -86,7 +86,7 @@ void main() {
     expect(task.status, FileTransferStatus.completed);
     expect(task.transferred, 3);
     expect(
-      received.map((event) => event['sequence']),
+      received.map((event) => event.sequence),
       List.generate(received.length, (index) => index + 1),
     );
     expect(events.cursor, (

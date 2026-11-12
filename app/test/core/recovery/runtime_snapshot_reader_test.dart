@@ -1,11 +1,14 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/settings/models/settings_changed.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/events/runtime_events.dart';
 import 'package:scrcpy_connect/core/media/models/recovered_video_session.dart';
 import 'package:scrcpy_connect/core/recovery/runtime_snapshot_reader.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
+
+import '../../fixtures/video_events.dart';
 
 void main() {
   late RuntimeEvents events;
@@ -34,7 +37,7 @@ void main() {
       },
       readAudio: () => [],
       readShares: () async {
-        events.publishBusiness('session.frame', null, {});
+        events.publishEvent(videoChange());
         return [];
       },
       readObservations: () => [],
@@ -42,7 +45,7 @@ void main() {
     );
     final reading = reader.readSnapshot();
     settings = Preferences(appearance: .dark);
-    events.publish({'type': 'settings.changed', 'data': settings});
+    events.publishEvent(SettingsChanged(settings));
     first.complete([]);
     final snapshot = await reading;
     expect(reads, 2);
@@ -61,7 +64,7 @@ void main() {
       readAudio: () => [],
       readShares: () async {
         reads++;
-        events.publishBusiness('share.received', null, {});
+        events.publishEvent(SettingsChanged(Preferences()));
         return [];
       },
       readObservations: () => [],

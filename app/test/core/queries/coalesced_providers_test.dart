@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/devices/models/device_disconnect_requested.dart';
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:hooks_riverpod/misc.dart' show Override, ProviderBase;
@@ -13,15 +15,17 @@ import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/media/audio_sources_provider.dart';
 import 'package:scrcpy_connect/core/media/media_capabilities_provider.dart';
 
+import '../../fixtures/video_events.dart';
+
 void main() {
   for (final kind in _Kind.values) {
     group(kind.name, () {
       late _Source source;
-      late StreamController<Map<String, dynamic>> events;
+      late StreamController<RuntimeEvent> events;
       late ProviderContainer container;
       setUp(() {
         source = _Source();
-        events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
+        events = StreamController<RuntimeEvent>.broadcast(sync: true);
         container = ProviderContainer(overrides: _overrides(source, events));
       });
       tearDown(() async {
@@ -35,12 +39,16 @@ void main() {
         final second = container.listen(provider, (_, _) {});
         await _flush(container);
         expect(source.reads, hasLength(1));
-        events.add({'type': kind.event, 'deviceId': 'other'});
-        events.add({'type': 'session.frame', 'deviceId': 'device'});
+        events.add(
+          const DeviceDisconnectRequested('other').toApplicationEvent(),
+        );
+        events.add(videoChange().toApplicationEvent());
         await _flush(container);
         expect(source.reads, hasLength(1));
         for (var index = 0; index < 10; index++) {
-          events.add({'type': kind.event, 'deviceId': 'device'});
+          events.add(
+            const DeviceDisconnectRequested('device').toApplicationEvent(),
+          );
           await _flush(container);
         }
         expect(source.reads, hasLength(1));
@@ -53,11 +61,7 @@ void main() {
         source.reads[1].complete(latest);
         await _flush(container);
         expect(container.read(provider).requireValue, latest);
-        events.add({
-          'type': 'state.resync',
-          'deviceId': 'other',
-          'data': const RecoveryStarted(),
-        });
+        events.add(RuntimeEvent(const RecoveryStarted()));
         expect(container.read(provider).isLoading, isTrue);
         expect(container.read(provider).value, latest);
         await _flush(container);
@@ -115,7 +119,9 @@ void main() {
         final previous = kind.value(1);
         source.reads.single.complete(previous);
         await _flush(container);
-        events.add({'type': kind.event, 'deviceId': 'device'});
+        events.add(
+          const DeviceDisconnectRequested('device').toApplicationEvent(),
+        );
         await _flush(container);
         final failure = StateError('unavailable');
         source.reads[1].completeError(failure);
@@ -144,12 +150,6 @@ enum _Kind {
     audio => audioSourcesProvider(deviceId: 'device'),
     quality => videoQualityProvider(deviceId: 'device'),
     activities => activitiesProvider(deviceId: 'device'),
-  };
-
-  String get event => switch (this) {
-    audio => 'audio.changed',
-    quality => 'video.capabilities.changed',
-    activities => 'activities.changed',
   };
 
   Object value(int version) => switch (this) {
@@ -191,7 +191,7 @@ enum _Kind {
 
 List<Override> _overrides(
   _Source source,
-  StreamController<Map<String, dynamic>> events, {
+  StreamController<RuntimeEvent> events, {
   String connectionId = 'connection',
   bool recovering = false,
 }) => [

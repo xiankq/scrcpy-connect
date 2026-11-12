@@ -11,9 +11,8 @@ final fileChangesProvider = Provider<Stream<FileChange>>((ref) {
   return ref
       .watch(runtimeEventsProvider)
       .map((event) {
-        final type = event['type'];
-        if (type is! String) return null;
-        final data = event['data'];
+        final type = event.type;
+        final data = event.data;
         final kind = data is FileTransferEvent
             ? FileChangeKind.transfer
             : data is RecoveryEvent
@@ -22,18 +21,10 @@ final fileChangesProvider = Provider<Stream<FileChange>>((ref) {
                   type == 'devices.changed' ||
                   type == 'connections.stopped'
             ? FileChangeKind.connection
-            : type == 'files.directory.changed'
-            ? FileChangeKind.directory
             : null;
         if (kind == null) return null;
-        final deviceId =
-            event['deviceId'] ?? (data is Map ? data['deviceId'] : null);
-        final path = data is Map ? data['path'] : null;
-        return FileChange(
-          kind,
-          deviceId: deviceId is String ? deviceId : null,
-          path: path is String ? path : null,
-        );
+        final deviceId = event.deviceId;
+        return FileChange(kind, deviceId: deviceId);
       })
       .where((event) => event != null)
       .cast<FileChange>();

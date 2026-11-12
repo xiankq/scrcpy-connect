@@ -1,9 +1,8 @@
-import 'package:scrcpy_connect/core/settings/models/settings_changed.dart';
-
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:scrcpy_connect/core/settings/models/settings_changed.dart';
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -45,7 +44,7 @@ void main() {
     final observed = <RecoveryEvent>[];
     final failureStates = <({bool pending, String? reason})>[];
     final subscription = container.read(runtimeEventsProvider).listen((event) {
-      if (event['data'] case final RecoveryEvent recovery) {
+      if (event.data case final RecoveryEvent recovery) {
         observed.add(recovery);
         if (recovery is RecoveryFailed) {
           final state = container.read(appSnapshotProvider);
@@ -116,13 +115,13 @@ void main() {
     final preview = await source.previewImport(document);
     final changed = container
         .read(runtimeEventsProvider)
-        .firstWhere((event) => event['data'] is DeviceListChanged);
+        .firstWhere((event) => event.data is DeviceListChanged);
     final imported = await source.importMetadata(
       preview,
       importGlobalPreferences: true,
     );
     final receipt = imported.records.receipt.deviceIds.single;
-    final projection = (await changed)['data'] as DeviceListChanged;
+    final projection = (await changed).data as DeviceListChanged;
     expect(projection.devices.single.id, receipt);
     expect(
       projection.devices.single.status,
@@ -186,7 +185,7 @@ void main() {
     expect(recovered.keepAwake!.keepActiveLeaseActive, isFalse);
     final stopRequests = <VideoStopRequested>[];
     final subscription = container.read(runtimeEventsProvider).listen((event) {
-      if (event['data'] case final VideoStopRequested stop) {
+      if (event.data case final VideoStopRequested stop) {
         stopRequests.add(stop);
       }
     });
@@ -235,23 +234,23 @@ void main() {
     expect(activities.activities, isEmpty);
     final preferencesChanged = container
         .read(runtimeEventsProvider)
-        .firstWhere((event) => event['type'] == 'settings.changed');
+        .firstWhere((event) => event.type == 'settings.changed');
     final preferences = await container
         .read(settingsManagementProvider)
         .update(PreferenceChanges(appearance: .dark));
     expect(
-      ((await preferencesChanged)['data'] as SettingsChanged).preferences,
+      ((await preferencesChanged).data as SettingsChanged).preferences,
       same(preferences),
     );
     expect(container.read(appSnapshotProvider).settings, same(preferences));
     final changed = container
         .read(runtimeEventsProvider)
-        .firstWhere((event) => event['data'] is DeviceListChanged);
+        .firstWhere((event) => event.data is DeviceListChanged);
     final saved = await container
         .read(deviceManagementProvider)
         .addDevice(const DeviceEndpoint(address: '192.0.2.1', port: 5555));
     final event = await changed;
-    expect((event['data'] as DeviceListChanged).devices.single.id, saved.id);
+    expect((event.data as DeviceListChanged).devices.single.id, saved.id);
     // 实际发布链先提交状态，页面收到同一事件时无需重新查询。
     expect(container.read(appSnapshotProvider).devices.single, saved);
     await container.read(deviceManagementProvider).forgetDevice(saved.id);

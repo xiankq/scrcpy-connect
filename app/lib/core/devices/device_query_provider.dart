@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:adb/adb.dart' show AdbCancellation;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/devices/device_apps.dart';
@@ -145,20 +146,19 @@ Future<DeviceNotificationsSnapshot> deviceNotificationsSnapshot(
 /// 设备查询共享连接事件筛选；释放和源替换同步取消原读取。
 AdbCancellation _observeConnection(
   Ref ref,
-  Stream<Map<String, dynamic>> events,
+  Stream<RuntimeEvent> events,
   String deviceId, {
   List<String> eventPrefixes = const [],
 }) {
   final cancellation = AdbCancellation();
   final subscription = events.listen((event) {
-    if (event['data'] is RecoveryEvent) {
+    if (event.data is RecoveryEvent) {
       ref.invalidateSelf();
       return;
     }
-    final type = event['type'];
-    if (type is! String || type == 'session.frame') return;
-    final data = event['data'];
-    final owner = event['deviceId'] ?? (data is Map ? data['deviceId'] : null);
+    final type = event.type;
+    if (event.telemetry) return;
+    final owner = event.deviceId;
     if (owner != null && owner != deviceId) return;
     if (type == 'devices.changed' ||
         type.startsWith('device.') ||

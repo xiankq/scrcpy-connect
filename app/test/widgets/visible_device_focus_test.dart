@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -85,7 +86,7 @@ class _Session implements AppSession {
   @override
   AppState get initialState => AppState();
   @override
-  Stream<Map<String, dynamic>> get events => const Stream.empty();
+  Stream<RuntimeEvent> get events => const Stream.empty();
   @override
   Future<void> Function()? get close => null;
   @override

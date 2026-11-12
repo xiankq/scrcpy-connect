@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
@@ -13,7 +14,7 @@ import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 
 void main() {
-  late StreamController<Map<String, dynamic>> events;
+  late StreamController<RuntimeEvent> events;
   late _Shares source;
   late _Session dependencies;
   late ProviderContainer container;
@@ -81,16 +82,17 @@ void main() {
       const IncomingShare(shareId: 'share', status: .ready),
     ]);
     await late;
-    events.add({
-      'type': 'state.resynced',
-      'data': RecoveryCompleted(
-        RuntimeSnapshot(
-          sequence: 1,
-          settings: Preferences(),
-          shares: [const IncomingShare(shareId: 'share', status: .ready)],
+    events.add(
+      RuntimeEvent(
+        RecoveryCompleted(
+          RuntimeSnapshot(
+            sequence: 1,
+            settings: Preferences(),
+            shares: [const IncomingShare(shareId: 'share', status: .ready)],
+          ),
         ),
       ),
-    });
+    );
     expect(container.read(shareInboxProvider).shares, isEmpty);
   });
 
@@ -138,7 +140,7 @@ class _Shares implements IncomingShares {
 class _Session implements AppSession {
   _Session(this.events);
   @override
-  final Stream<Map<String, dynamic>> events;
+  final Stream<RuntimeEvent> events;
   @override
   final initialState = AppState();
   @override

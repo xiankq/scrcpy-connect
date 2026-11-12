@@ -44,7 +44,7 @@ final class RecoveryStateNotifierProvider
 }
 
 String _$recoveryStateNotifierHash() =>
-    r'1a50959664a440e65f3057650cfb41d8a2b9084a';
+    r'c681fed285c97477d6d82154460a6a50f84535e8';
 
 abstract class _$RecoveryStateNotifier extends $Notifier<RecoveryState> {
   RecoveryState build();

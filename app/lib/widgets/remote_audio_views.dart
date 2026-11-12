@@ -1,7 +1,7 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
-import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/core/media/models/audio_output_event.dart';
 
@@ -42,9 +42,9 @@ class DeviceAudioViewCoordinator {
   bool _deviceAudioScheduled = false;
   bool _deviceAudioDirty = false;
 
-  void handleEvent(Json event) {
+  void handleEvent(RuntimeEvent event) {
     if (_disposed) return;
-    if (event['data'] case AudioResumeRequired(:final deviceId)
+    if (event.data case AudioResumeRequired(:final deviceId)
         when deviceId.isNotEmpty) {
       _resumeRequired[deviceId] = ++_resumeRevision;
     }

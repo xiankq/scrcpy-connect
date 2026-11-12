@@ -4,11 +4,20 @@ abstract class AppEvent {
 
   String get type;
   String? get deviceId => null;
+  bool get telemetry => false;
 
-  /// 兼容现有事件传输，负载保留原类型，不进行 JSON 编解码。
-  Map<String, dynamic> toApplicationEvent() => {
-    'type': type,
-    'deviceId': ?deviceId,
-    'data': this,
-  };
+  RuntimeEvent toApplicationEvent({int? sequence}) =>
+      RuntimeEvent(this, sequence: sequence);
+}
+
+/// 唯一事件所有者登记的交付；恢复、意图和呈现回执不占用业务序列。
+final class RuntimeEvent {
+  const RuntimeEvent(this.data, {this.sequence})
+    : assert(sequence == null || sequence >= 0);
+
+  final AppEvent data;
+  final int? sequence;
+  String get type => data.type;
+  String? get deviceId => data.deviceId;
+  bool get telemetry => data.telemetry;
 }

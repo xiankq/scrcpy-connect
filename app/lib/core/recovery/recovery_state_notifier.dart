@@ -15,7 +15,7 @@ class RecoveryStateNotifier extends _$RecoveryStateNotifier {
     final initial = session.session.initialState;
     final subscription = session.stateEvents.listen((event) {
       if (!ref.mounted || session.disposed) return;
-      final payload = event['data'];
+      final payload = event.data;
       state = state.copyWith(
         lastEvent: event,
         eventRevision: state.eventRevision + 1,

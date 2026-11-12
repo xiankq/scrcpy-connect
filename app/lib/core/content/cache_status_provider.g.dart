@@ -52,4 +52,4 @@ final class CacheStatusProvider
   }
 }
 
-String _$cacheStatusHash() => r'd29c34959a15089e0c617ff8e5061ed414be1d87';
+String _$cacheStatusHash() => r'98b67eb937a8a7a882cddbd63e85aab472c40407';

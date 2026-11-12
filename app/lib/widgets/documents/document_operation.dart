@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
@@ -49,15 +50,15 @@ class DocumentOperationController extends ChangeNotifier {
   DocumentOperationController({
     required this.documents,
     this.completeSelection,
-    required Stream<Json> events,
+    required Stream<RuntimeEvent> events,
     this.exportSource,
   }) : loaded = exportSource == null {
     _events = events.listen((event) {
-      if (event['data'] case DocumentSelectionRequested(:final request)
+      if (event.data case DocumentSelectionRequested(:final request)
           when request.operationId == operationId && !disposed) {
         unawaited(_choose(request));
       }
-      if (event['data'] case DocumentDeliveryChanged(:final source)
+      if (event.data case DocumentDeliveryChanged(:final source)
           when exportSource == source && !busy && !disposed) {
         unawaited(refresh());
       }
@@ -87,7 +88,7 @@ class DocumentOperationController extends ChangeNotifier {
   final bool Function(String, DocumentSelectionResult)? completeSelection;
   final SystemDocuments documents;
   final DocumentSource? exportSource;
-  StreamSubscription<Json>? _events;
+  StreamSubscription<RuntimeEvent>? _events;
   int _readGeneration = 0;
   String? recordOperationId;
   bool loaded;

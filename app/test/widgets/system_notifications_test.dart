@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/core/companion/models/companion_event.dart';
 import 'package:scrcpy_connect/core/devices/models/device_call.dart';
@@ -23,7 +24,7 @@ void main() {
     reconciliationPending: false,
   );
   test('完整设备投影移除来源后撤回提醒，迟到通知不能复活', () async {
-    final events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
+    final events = StreamController<RuntimeEvent>.broadcast(sync: true);
     final sink = _Sink();
     final notifications = SystemNotifications(
       events: events.stream,
@@ -36,7 +37,7 @@ void main() {
     events.add(notificationsChanged('live'));
     await notifications.drain();
     expect(sink.shown, hasLength(1));
-    events.add({'type': 'devices.changed', 'data': DeviceListChanged([])});
+    events.add(RuntimeEvent(DeviceListChanged([])));
     events.add(notificationsChanged('late'));
     await notifications.drain();
     expect(sink.cancelled, [sink.shown.single.id]);
@@ -48,7 +49,7 @@ void main() {
   });
 
   test('旧伴生连接的停止不撤回当前提醒，当前连接停止后迟到内容不能复活', () async {
-    final events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
+    final events = StreamController<RuntimeEvent>.broadcast(sync: true);
     final sink = _Sink();
     final notifications = SystemNotifications(
       events: events.stream,
@@ -129,7 +130,7 @@ void main() {
 
   test('迟到展示仍由原系统能力撤回，不撤销替换来源的提醒', () async {
     var current = true;
-    final events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
+    final events = StreamController<RuntimeEvent>.broadcast(sync: true);
     final sink = _Sink()..showing = Completer<void>();
     final original = SystemNotifications(
       events: events.stream,
@@ -147,9 +148,7 @@ void main() {
     current = false;
     original.dispose();
 
-    final newEvents = StreamController<Map<String, dynamic>>.broadcast(
-      sync: true,
-    );
+    final newEvents = StreamController<RuntimeEvent>.broadcast(sync: true);
     final newSink = _Sink();
     final replacement = SystemNotifications(
       events: newEvents.stream,
@@ -178,7 +177,7 @@ void main() {
     await newSink.activationsController.close();
   });
   test('类型化恢复只建立通知和来电基线，同代重复更新不重放系统提醒', () async {
-    final events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
+    final events = StreamController<RuntimeEvent>.broadcast(sync: true);
     final sink = _Sink();
     final settings = Preferences(notificationAlerts: true, callAlerts: true);
     final devices = [const DeviceSnapshot(id: 'device', status: .connected)];
@@ -195,55 +194,48 @@ void main() {
     );
     await notifications.initialize();
     notifications.setForeground(false);
-    events.add({'type': 'state.resync', 'data': const RecoveryStarted()});
-    events.add({
-      'type': 'state.resynced',
-      'data': RecoveryCompleted(
-        RuntimeSnapshot(
-          sequence: 1,
-          settings: settings,
-          devices: devices,
-          observations: [
-            ObservedDeviceSnapshot(
-              observation: const DeviceObservationSnapshot(
-                deviceId: 'device',
-                wanted: true,
-                phase: .observing,
-                generation: 1,
+    events.add(RuntimeEvent(const RecoveryStarted()));
+    events.add(
+      RuntimeEvent(
+        RecoveryCompleted(
+          RuntimeSnapshot(
+            sequence: 1,
+            settings: settings,
+            devices: devices,
+            observations: [
+              ObservedDeviceSnapshot(
+                observation: const DeviceObservationSnapshot(
+                  deviceId: 'device',
+                  wanted: true,
+                  phase: .observing,
+                  generation: 1,
+                ),
+                notifications: notificationData('baseline'),
+                calls: callData(1),
               ),
-              notifications: notificationData('baseline'),
-              calls: callData(1),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    });
+    );
     events.add(notificationsChanged('baseline'));
-    events.add({
-      'type': 'calls.changed',
-      'deviceId': 'device',
-      'data': DeviceCallsChanged(callData(1)),
-    });
+    events.add(RuntimeEvent(DeviceCallsChanged(callData(1))));
     await notifications.drain();
     expect(sink.shown, isEmpty);
     events.add(notificationsChanged('new'));
-    events.add({
-      'type': 'calls.changed',
-      'deviceId': 'device',
-      'data': DeviceCallsChanged(callData(2)),
-    });
+    events.add(RuntimeEvent(DeviceCallsChanged(callData(2))));
     await notifications.drain();
     expect(sink.shown.map((notice) => notice.kind), [
       SystemNotificationKind.notification,
       SystemNotificationKind.call,
     ]);
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'device',
-      'data': DeviceNotificationsChanged(
-        notificationData('stale').copyWith(observationEpoch: 0),
+    events.add(
+      RuntimeEvent(
+        DeviceNotificationsChanged(
+          notificationData('stale').copyWith(observationEpoch: 0),
+        ),
       ),
-    });
+    );
     await notifications.drain();
     expect(sink.shown, hasLength(2));
     notifications.dispose();
@@ -253,10 +245,8 @@ void main() {
   });
 }
 
-Map<String, dynamic> observing() => {
-  'type': 'observation.changed',
-  'deviceId': 'device',
-  'data': DeviceObservationChanged(
+RuntimeEvent observing() => RuntimeEvent(
+  DeviceObservationChanged(
     ObservedDeviceSnapshot(
       observation: const DeviceObservationSnapshot(
         deviceId: 'device',
@@ -268,12 +258,9 @@ Map<String, dynamic> observing() => {
       calls: const DeviceCallsSnapshot(deviceId: 'device'),
     ),
   ),
-};
-Map<String, dynamic> notificationsChanged(String id) => {
-  'type': 'notifications.changed',
-  'deviceId': 'device',
-  'data': DeviceNotificationsChanged(notificationData(id)),
-};
+);
+RuntimeEvent notificationsChanged(String id) =>
+    RuntimeEvent(DeviceNotificationsChanged(notificationData(id)));
 DeviceNotificationsSnapshot notificationData(String? id) =>
     DeviceNotificationsSnapshot(
       deviceId: 'device',

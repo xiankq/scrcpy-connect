@@ -4,7 +4,8 @@ import 'dart:collection';
 import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 
-typedef RuntimeEvent = Map<String, dynamic>;
+export 'package:scrcpy_connect/core/events/models/app_event.dart'
+    show RuntimeEvent;
 
 /// 应用的唯一业务事件序列；水位对应 Dart 所有者已发布的状态。
 /// 媒体帧及呈现遥测不改变业务版本，持续播放不会使快照饥饿。
@@ -24,7 +25,7 @@ final class RuntimeEvents {
   final void Function(RuntimeEvent) onState;
   final void Function(RuntimeEvent) beforePublish;
   final void Function(RuntimeEvent) afterState;
-  final Future<void> Function(RuntimeEvent) handlePlatform;
+  final Future<void> Function(Map<String, dynamic>) handlePlatform;
   final bool Function() isDisposed;
   final void Function()? onLocalStateChanged;
   final _events = StreamController<RuntimeEvent>.broadcast();
@@ -68,20 +69,12 @@ final class RuntimeEvents {
     _files.add(source.listen(publishEvent, onError: _error));
   }
 
-  void publishBusiness(
-    String type,
-    String? deviceId,
-    Map<String, Object?> data,
-  ) => publish({'type': type, 'deviceId': ?deviceId, 'data': data});
-
-  void publishEvent(AppEvent event) => publish(event.toApplicationEvent());
-
   /// 业务状态先登记水位再通知策略；同步回调重入也不能逆序发布。
-  void publish(RuntimeEvent event) {
+  void publishEvent(AppEvent event) {
     if (!_active) return;
-    final telemetry = event['type'] == 'session.frame';
+    final telemetry = event.telemetry;
     final sequence = ++_sequence;
-    final stamped = {...event, 'sequence': sequence};
+    final stamped = event.toApplicationEvent(sequence: sequence);
     if (!telemetry) _revision++;
     _pending.add((event: stamped, sequence: sequence, telemetry: telemetry));
     if (_publishing) return;
@@ -124,11 +117,9 @@ final class RuntimeEvents {
   }
 
   /// 呈现遥测与恢复回执不修改业务版本，也不重新触发设备策略。
-  void emit(RuntimeEvent event) {
-    if (_active) _events.add(event);
+  void emitEvent(AppEvent event) {
+    if (_active) _events.add(event.toApplicationEvent());
   }
-
-  void emitEvent(AppEvent event) => emit(event.toApplicationEvent());
 
   void _error(Object error, StackTrace stack) {
     if (_active) _events.addError(error, stack);

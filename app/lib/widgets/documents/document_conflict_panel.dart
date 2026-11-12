@@ -1,7 +1,7 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/files/system_documents.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
@@ -31,7 +31,7 @@ class _ConflictView extends StatefulWidget {
     required this.operationId,
   });
   final SystemDocuments documents;
-  final Stream<Json> events;
+  final Stream<RuntimeEvent> events;
   final String operationId;
 
   @override
@@ -40,7 +40,7 @@ class _ConflictView extends StatefulWidget {
 
 class _ConflictViewState extends State<_ConflictView> {
   int _scope = 0;
-  StreamSubscription<Json>? _events;
+  StreamSubscription<RuntimeEvent>? _events;
   DocumentConflict? _pending;
   String? _error, _resolving;
   bool _applyToRemaining = false;
@@ -70,7 +70,7 @@ class _ConflictViewState extends State<_ConflictView> {
   void _follow() {
     // 先订阅再读取，避免漏掉初始化期间的冲突，也防止旧读取重新显示已解决的提示。
     _events = widget.events.listen((event) {
-      final data = event['data'];
+      final data = event.data;
       if (data is! DocumentConflictChanged ||
           data.operationId != widget.operationId) {
         return;

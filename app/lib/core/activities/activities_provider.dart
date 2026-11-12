@@ -20,12 +20,11 @@ final _readProvider = Provider.autoDispose
       final source = ref.watch(activityManagementProvider);
       if (deviceId != null) ref.watch(deviceReadinessProvider(deviceId));
       final events = ref.watch(runtimeEventsProvider).where((event) {
-        if (event['data'] is RecoveryEvent) return true;
-        final type = event['type'];
-        if (type is! String || type == 'session.frame') return false;
-        final data = event['data'];
-        final owner =
-            event['deviceId'] ?? (data is Map ? data['deviceId'] : null);
+        if (event.data is RecoveryEvent) return true;
+        final type = event.type;
+        if (event.telemetry) return false;
+        final data = event.data;
+        final owner = event.deviceId;
         if (deviceId != null && owner != null && owner != deviceId) {
           return false;
         }

@@ -9,6 +9,8 @@ import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 
+import '../../fixtures/video_events.dart';
+
 void main() {
   test('重入发布保持业务与帧序列，类型化恢复回执不改变业务水位或重入策略', () async {
     final accepted = <({int sequence, bool telemetry})>[];
@@ -21,13 +23,13 @@ void main() {
         return true;
       },
       onState: (event) {
-        if (event['type'] == 'first') {
-          events.publish({'type': 'session.frame'});
-          events.publish({'type': 'second'});
+        if (event.type == 'first') {
+          events.publishEvent(videoChange());
+          events.publishEvent(const _Event('second'));
         }
       },
       onLocalStateChanged: () => revisions++,
-      beforePublish: (event) => delivered.add(event['type'] as String),
+      beforePublish: (event) => delivered.add(event.type),
       afterState: (_) {},
       handlePlatform: (_) async {},
       isDisposed: () => false,
@@ -36,7 +38,7 @@ void main() {
     final received = <RuntimeEvent>[];
     final subscription = events.stream.listen(received.add);
     addTearDown(subscription.cancel);
-    events.publish({'type': 'first'});
+    events.publishEvent(const _Event('first'));
     final recovery = <RecoveryEvent>[
       const RecoveryStarted(),
       const RecoveryFailed('unverified'),
@@ -53,9 +55,9 @@ void main() {
       (sequence: 3, telemetry: false),
     ]);
     expect(delivered, ['first', 'session.frame', 'second']);
-    expect(received.take(3).map((event) => event['sequence']), [1, 2, 3]);
-    expect(received.skip(3).map((event) => event['data']), recovery);
-    expect(received.skip(3).map((event) => event['type']), [
+    expect(received.take(3).map((event) => event.sequence), [1, 2, 3]);
+    expect(received.skip(3).map((event) => event.data), recovery);
+    expect(received.skip(3).map((event) => event.type), [
       'state.resync',
       'state.resync.failed',
       'state.resync',
@@ -85,21 +87,17 @@ void main() {
       path: '/sdcard',
     ));
     source.add(change);
-    expect(await received, {
-      'type': 'files.search.changed',
-      'deviceId': 'device',
-      'data': same(change),
-      'sequence': 1,
-    });
+    final delivery = await received;
+    expect(delivery.data, same(change));
+    expect(delivery.deviceId, 'device');
+    expect(delivery.sequence, 1);
     expect(events.cursor, (sequence: 1, revision: 1));
     final consumed = events.stream.first;
     const consumption = ShareConsumed('share');
     sharing.add(consumption);
-    expect(await consumed, {
-      'type': 'share.consumed',
-      'data': same(consumption),
-      'sequence': 2,
-    });
+    final consumptionDelivery = await consumed;
+    expect(consumptionDelivery.data, same(consumption));
+    expect(consumptionDelivery.sequence, 2);
     expect(events.cursor, (sequence: 2, revision: 2));
     await events.detach();
     expect(source.hasListener, isFalse);
@@ -109,4 +107,10 @@ void main() {
     await sharing.close();
     await events.close();
   });
+}
+
+final class _Event extends AppEvent {
+  const _Event(this.type);
+  @override
+  final String type;
 }

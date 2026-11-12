@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/clipboard/clipboard_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/clipboard/remote_clipboard.dart';
@@ -183,7 +184,7 @@ final class _ShareSubmissionOwner {
   final FileDirectories directories;
   final FileTransfers transfers;
   final RemoteClipboard clipboard;
-  final Stream<Json> events;
+  final Stream<RuntimeEvent> events;
   FileCancellation? directoryRead;
   bool disposed = false;
 

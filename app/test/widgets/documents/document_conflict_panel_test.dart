@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -14,7 +15,7 @@ void main() {
   testWidgets('换源取消原保存操作，迟到的同名冲突决策不清除新来源提示', (tester) async {
     final previous = _Documents();
     final replacement = _Documents();
-    final events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
+    final events = StreamController<RuntimeEvent>.broadcast(sync: true);
     final container = ProviderContainer(
       overrides: [
         systemDocumentsProvider.overrideWithValue(previous),
@@ -51,7 +52,7 @@ void main() {
 
   testWidgets('权威冲突事件先于初次读取，旧读取不能恢复已解决的提示', (tester) async {
     final documents = _Documents();
-    final events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
+    final events = StreamController<RuntimeEvent>.broadcast(sync: true);
     final container = ProviderContainer(
       overrides: [
         systemDocumentsProvider.overrideWithValue(documents),

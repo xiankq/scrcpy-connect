@@ -173,7 +173,7 @@ class AppPresentationHost extends HookConsumerWidget {
     useEffect(() {
       var active = true;
       final subscription = events.listen((event) {
-        final change = event['data'];
+        final change = event.data;
         if (change is! DeviceCallsChanged ||
             !change.incoming ||
             WidgetsBinding.instance.lifecycleState !=

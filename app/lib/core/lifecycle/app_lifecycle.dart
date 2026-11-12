@@ -96,7 +96,7 @@ final class AppLifecycle {
     await _connections.reconnections.start();
   }
 
-  Stream<Map<String, dynamic>> get events => _events.stream;
+  Stream<RuntimeEvent> get events => _events.stream;
 
   Future<void> reconcileState() async {
     if (_disposed) {

@@ -1,7 +1,7 @@
-import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
-
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
+import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
 import 'package:adb/adb.dart' show AdbCancellation;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -37,7 +37,7 @@ import 'package:scrcpy_connect/widgets/remote_views.dart';
 void main() {
   testWidgets('控制页直接消费类型化输出及会话，丢弃旧捕获失败并等待画质双回执', (tester) async {
     final videos = _Videos();
-    final events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
+    final events = StreamController<RuntimeEvent>.broadcast(sync: true);
     final dependencies = _Session();
     final container = ProviderContainer(
       overrides: [
@@ -163,10 +163,7 @@ void main() {
       presentation.canSendInput(foreground: true, ownerCurrent: true),
       isTrue,
     );
-    events.add({
-      'type': 'state.resync.failed',
-      'data': const RecoveryFailed('连接状态核对失败。'),
-    });
+    events.add(RuntimeEvent(const RecoveryFailed('连接状态核对失败。')));
     await tester.pump();
     expect(presentation.stateUnverified, isTrue);
     expect(presentation.error, '连接状态核对失败。');
@@ -189,7 +186,7 @@ void main() {
   testWidgets('控制页能力换源不重放打开，迟到启动只由原能力清理', (tester) async {
     final original = _Videos();
     final replacement = _Videos();
-    final events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
+    final events = StreamController<RuntimeEvent>.broadcast(sync: true);
     final dependencies = _Session();
     final control = _Control();
     final inspection = _Inspection();
@@ -263,12 +260,13 @@ void main() {
     expect(replacement.starts, 0);
     expect(replacement.reads, 0);
     expect(replacement.stops, isEmpty);
-    events.add({
-      'type': 'state.resynced',
-      'data': RecoveryCompleted(
-        RuntimeSnapshot(sequence: 1, settings: Preferences()),
+    events.add(
+      RuntimeEvent(
+        RecoveryCompleted(
+          RuntimeSnapshot(sequence: 1, settings: Preferences()),
+        ),
       ),
-    });
+    );
     await tester.pump();
     expect(replacement.starts, 0);
     await tester.pumpWidget(const SizedBox());
@@ -313,7 +311,7 @@ class _Session implements AppSession {
   final DeviceReader devices = _Devices();
   final SettingsManagement settings = _Settings();
   @override
-  Stream<Map<String, dynamic>> get events => const Stream.empty();
+  Stream<RuntimeEvent> get events => const Stream.empty();
   @override
   bool get initialize => false;
   @override
