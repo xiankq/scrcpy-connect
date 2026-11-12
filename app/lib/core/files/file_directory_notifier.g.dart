@@ -64,7 +64,7 @@ final class FileDirectoryNotifierProvider
 }
 
 String _$fileDirectoryNotifierHash() =>
-    r'80c4bc749a58f338542f73a90d118fbe1da8373e';
+    r'c8c2a91aa4c2f2cdd7c3bb2af2cfaf4f8836b8bf';
 
 /// 同一目录共享读取；失效立即撤销操作资格，在途旧回执不能恢复资格。
 

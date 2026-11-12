@@ -1,5 +1,5 @@
-import 'package:scrcpy_connect/core/media/audio_format.dart';
 import 'package:media_codec/media_codec.dart';
+import 'package:scrcpy_connect/core/media/models/audio_format.dart';
 
 /// 远程声音采用 PCM16，本输出无需创建压缩音频解码器。
 final class _NativeAudioPlayer implements AudioPlayer {

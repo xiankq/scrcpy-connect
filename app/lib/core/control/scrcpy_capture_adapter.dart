@@ -1,7 +1,6 @@
 import 'package:media_codec/media_codec.dart';
-
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
 /// 将产品命令转换为通用协议能力；只附着会话所有者已创建的捕获。
 final class ScrcpyCaptureAdapter {

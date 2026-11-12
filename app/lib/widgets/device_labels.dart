@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 
 String deviceName(DeviceSnapshot device) =>
     device.name ?? device.model ?? 'Android 设备';

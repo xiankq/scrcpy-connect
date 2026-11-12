@@ -129,7 +129,7 @@ List<String> checkArchitecture(
         if (parts.first == 'bootstrap' ||
             parts.length > 1 &&
                 parts[0] == 'core' &&
-                parts[1] == 'application') {
+                {'lifecycle', 'recovery'}.contains(parts[1])) {
           final genericNames = {'request', 'execute', 'dispatch', 'command'};
           final methods = parsed.unit.declarations
               .whereType<ClassDeclaration>()
@@ -156,8 +156,8 @@ List<String> checkArchitecture(
 
       if (package.name == 'scrcpy_connect') {
         final segments = p.split(p.relative(file.path, from: package.lib));
-        if (segments.first == 'core') {
-          if (segments.length < 3) {
+        if ({'core', 'pages'}.contains(segments.first)) {
+          if (segments.first == 'core' && segments.length < 3) {
             problems.add('${relative(file.path)}: core 文件须归入所属能力目录');
           }
           final declarations = parsed.unit.declarations;
@@ -171,7 +171,7 @@ List<String> checkArchitecture(
           final basename = p.basenameWithoutExtension(file.path);
           final providerFile = basename.endsWith('_provider');
           final notifierFile = basename.endsWith('_notifier');
-          if (classes.isNotEmpty && !providerFile) {
+          if (segments.first == 'core' && classes.isNotEmpty && !providerFile) {
             final names = [
               ...classes.map(
                 (declaration) => declaration.namePart.typeName.lexeme,
@@ -180,14 +180,7 @@ List<String> checkArchitecture(
                 (declaration) => declaration.name.lexeme,
               ),
             ];
-            final expected = names.map(
-              (name) => name
-                  .replaceAllMapped(
-                    RegExp(r'([a-z0-9])([A-Z])'),
-                    (match) => '${match[1]}_${match[2]}',
-                  )
-                  .toLowerCase(),
-            );
+            final expected = names.map(_snakeCase);
             // 同一契约的参数、状态、句柄可以就近维护，文件名保留共同语义。
             if (!expected.any(
               (name) => name == basename || name.startsWith('${basename}_'),
@@ -195,6 +188,31 @@ List<String> checkArchitecture(
               problems.add(
                 '${relative(file.path)}: 文件名应与主类 ${names.join(' / ')} 一致',
               );
+            }
+          }
+          if (!segments.contains('models') &&
+              declarations.any(
+                (declaration) => declaration.metadata.any(
+                  (annotation) => {
+                    'freezed',
+                    'Freezed',
+                    'JsonSerializable',
+                  }.contains(annotation.name.name),
+                ),
+              )) {
+            problems.add('${relative(file.path)}: 纯数据与序列化类型归所属模块的 models/');
+          }
+          if (segments.first == 'pages') {
+            if (segments.contains('index')) {
+              problems.add('${relative(file.path)}: 页面按功能组织，入口不增加 index 层');
+            }
+            if (basename.endsWith('_page') &&
+                !classes.any(
+                  (declaration) =>
+                      _snakeCase(declaration.namePart.typeName.lexeme) ==
+                      basename,
+                )) {
+              problems.add('${relative(file.path)}: 页面文件名须对应其 Page 类');
             }
           }
           final hasProvider =
@@ -338,17 +356,12 @@ List<String> checkArchitecture(
                   '${relative(source)}: core 不得反向依赖应用启动装配 ${relative(normalized)}',
                 );
               } else if (fromLayer == 'core' &&
-                  !p.isWithin(p.join(appLib, 'core', 'application'), source) &&
+                  !p.isWithin(p.join(appLib, 'core', 'lifecycle'), source) &&
                   !RegExp(r'_(provider|notifier)\.dart$').hasMatch(source) &&
-                  p.isWithin(
-                    p.join(appLib, 'core', 'application'),
-                    normalized,
-                  ) &&
+                  p.isWithin(p.join(appLib, 'core', 'lifecycle'), normalized) &&
                   {
                     'app_dependencies.dart',
-                    'app_notifier.dart',
-                    'application_session.dart',
-                    'application_command_dispatcher.dart',
+                    'state_subscription.dart',
                   }.contains(p.basename(normalized))) {
                 problems.add(
                   '${relative(source)}: 能力实现不得依赖应用分发或会话装配 ${relative(normalized)}',
@@ -500,3 +513,10 @@ List<List<String>> _cycles(Map<String, Set<String>> graph) {
   }
   return cycles;
 }
+
+String _snakeCase(String name) => name
+    .replaceAllMapped(
+      RegExp(r'([a-z0-9])([A-Z])'),
+      (match) => '${match[1]}_${match[2]}',
+    )
+    .toLowerCase();

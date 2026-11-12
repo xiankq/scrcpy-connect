@@ -1,11 +1,9 @@
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
-
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
 /// 有界设备文本查询，共用旧版 shell 与 shell v2 的退出、取消及解码规则。
 /// 只收集 stdout；stderr 同样计入预算，不把错误信息当作设备属性。

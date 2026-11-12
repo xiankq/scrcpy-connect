@@ -1,6 +1,5 @@
-import 'video_display.dart';
-
-import 'package:scrcpy_connect/core/application/request_failure.dart'
+import 'package:scrcpy_connect/core/control/video_display.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart'
     show RequestFailure;
 
 /// 在当前编码器上限内求解产品宽高比，并保留偶数像素及极窄视口的比例。

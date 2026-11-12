@@ -1,13 +1,12 @@
-import 'dart:ui';
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
-
-import '../../styles/generated/design_tokens.g.dart';
-import '../../styles/theme.dart';
-import 'glass_preferences.dart';
-import 'glass_geometry.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_geometry.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 
 /// regular 区分浮动控件与内容，clear 用于媒体上方。
 enum GlassVariant { regular, clear }

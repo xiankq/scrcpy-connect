@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
 /// 文档任务等待用户输入的数据通道；选择器由持有该任务的视图打开。
 final class FileSelectionRequests {

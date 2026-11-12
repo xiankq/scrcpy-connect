@@ -1,0 +1,95 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:scrcpy_connect/pages/control/remote_window.dart';
+
+/// 当前远控窗口的屏幕状态轮询；旧连接的迟到回执不能更新当前画面。
+class RemoteScreenState {
+  RemoteScreenState({
+    required this.window,
+    required this.foreground,
+    required this.onChanged,
+  });
+
+  final RemoteWindow window;
+  final bool Function() foreground;
+  final VoidCallback onChanged;
+  Timer? _timer;
+  bool? _screenOn;
+  bool? _screenLocked;
+  bool _reading = false;
+  bool _disposed = false;
+  int _generation = 0;
+
+  bool? get screenOn => _screenOn;
+  bool? get screenLocked => _screenLocked;
+
+  void start() {
+    if (_disposed || _timer != null) return;
+    _timer = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) => unawaited(refresh()),
+    );
+    unawaited(refresh());
+  }
+
+  Future<void> refresh() async {
+    final presentation = window.presentation;
+    if (_disposed ||
+        !window.isCurrent ||
+        presentation.exiting ||
+        !foreground() ||
+        presentation.covered ||
+        _reading) {
+      return;
+    }
+    _reading = true;
+    final generation = ++_generation;
+    final connection = window.connectionId();
+    final inspection = window.inspection;
+    try {
+      final result = await inspection.readScreenState(
+        window.deviceId,
+        connectionId: connection,
+      );
+      if (_disposed ||
+          presentation.exiting ||
+          generation != _generation ||
+          !window.isCurrent ||
+          !foreground() ||
+          presentation.covered) {
+        return;
+      }
+      final currentConnection = window.connectionId();
+      if (connection != currentConnection ||
+          result.deviceId != window.deviceId ||
+          (connection != null && result.connectionId != connection)) {
+        return;
+      }
+      _screenOn = result.value.screenOn;
+      _screenLocked = result.value.locked;
+      onChanged();
+    } catch (_) {
+      if (!_disposed && generation == _generation && window.isCurrent) {
+        _screenOn = null;
+        _screenLocked = null;
+        onChanged();
+      }
+    } finally {
+      _reading = false;
+    }
+  }
+
+  void invalidate() {
+    if (_disposed) return;
+    _generation++;
+    _screenOn = null;
+    _screenLocked = null;
+    onChanged();
+  }
+
+  void dispose() {
+    _disposed = true;
+    _timer?.cancel();
+  }
+}

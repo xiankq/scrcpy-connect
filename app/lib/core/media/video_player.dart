@@ -1,6 +1,6 @@
-import 'package:scrcpy_connect/core/media/video_texture.dart';
-import 'package:scrcpy_connect/core/media/video_pixels.dart';
 import 'package:media_codec/media_codec.dart';
+import 'package:scrcpy_connect/core/media/models/video_pixels.dart';
+import 'package:scrcpy_connect/core/media/models/video_texture.dart';
 
 /// 控制器只通过 Dart 传递源能力和控制信息；Rust 直接向原生 FFmpeg 解码器提交压缩包。
 final class _NativeVideoPlayer implements VideoPlayer {

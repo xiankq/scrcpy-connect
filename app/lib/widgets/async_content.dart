@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-
-import 'content.dart';
-import 'page_chrome.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
 
 /// 读取过程保留已有内容；首次加载、失败及重试由视图呈现。
 class AsyncContent<T extends Object> extends StatelessWidget {

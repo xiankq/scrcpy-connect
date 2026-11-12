@@ -1,14 +1,12 @@
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-import 'package:scrcpy_connect/core/devices/scrcpy_query_result.dart';
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
-
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/core/devices/models/scrcpy_query_result.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
 String _quote(String value) {
   if (value.contains('\x00')) throw ArgumentError('Shell 参数不能包含 NUL。');

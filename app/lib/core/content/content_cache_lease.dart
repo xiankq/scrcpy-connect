@@ -1,7 +1,7 @@
-import 'package:scrcpy_connect/core/application/request_failure.dart'
-    show RequestFailure;
-
 import 'dart:async';
+
+import 'package:scrcpy_connect/core/errors/request_failure.dart'
+    show RequestFailure;
 
 typedef CacheLeaseRelease = Future<void> Function(String leaseId);
 

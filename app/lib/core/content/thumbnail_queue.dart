@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'dart:collection';
 
-import 'package:uuid/uuid.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart'
-    show RequestFailure;
 import 'package:scrcpy_connect/core/content/content_cache_lease.dart';
-
-import 'cached_content.dart';
+import 'package:scrcpy_connect/core/content/models/cached_content.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart'
+    show RequestFailure;
+import 'package:uuid/uuid.dart';
 
 /// 每台设备在同一传输内共享一个有界解码通道；网格项离开或换源时释放租约。
 class ThumbnailQueue {

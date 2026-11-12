@@ -1,14 +1,12 @@
-import 'package:scrcpy_connect/core/identity/identity_transaction.dart';
-
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
 import 'package:path/path.dart' as p;
-
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-import 'package:scrcpy_connect/core/devices/device_record.dart'
+import 'package:scrcpy_connect/core/devices/models/device_record.dart'
     show validDeviceId;
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/identity/models/identity_transaction.dart';
 
 /// 由身份所有者的串行队列独占；私有目录的边界在应用初始化时统一核验。
 final class IdentityTransactionFile {

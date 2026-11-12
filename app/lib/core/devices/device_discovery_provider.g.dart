@@ -54,4 +54,4 @@ final class DeviceDiscoveryProvider
   }
 }
 
-String _$deviceDiscoveryHash() => r'3c02ebded510a73c9acbf229977c4be863928301';
+String _$deviceDiscoveryHash() => r'232eb31f9136e3efba97e9fd39cec1b9d8414e0e';

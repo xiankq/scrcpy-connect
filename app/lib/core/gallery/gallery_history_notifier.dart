@@ -1,11 +1,10 @@
-import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:scrcpy_connect/core/application/app_dependencies_provider.dart';
-import 'package:scrcpy_connect/core/files/file_catalog_entry.dart';
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/files/models/file_catalog_entry.dart';
+import 'package:scrcpy_connect/core/gallery/gallery_scanner.dart';
+import 'package:scrcpy_connect/core/gallery/models/gallery_history_entry.dart';
 
-import 'gallery_scan.dart';
-
-import 'package:scrcpy_connect/core/gallery/gallery_history_entry.dart';
+import 'gallery_scanner_provider.dart';
 
 part 'gallery_history_notifier.g.dart';
 
@@ -14,7 +13,7 @@ part 'gallery_history_notifier.g.dart';
 class GalleryHistoryNotifier extends _$GalleryHistoryNotifier {
   @override
   Map<String, GalleryHistoryEntry> build() {
-    ref.watch(appDependenciesProvider);
+    ref.watch(galleryScannerProvider);
     return const {};
   }
 
@@ -31,8 +30,7 @@ class GalleryHistoryNotifier extends _$GalleryHistoryNotifier {
     double offset, {
     required GalleryScanner source,
   }) {
-    if (!ref.mounted ||
-        !identical(ref.read(appDependenciesProvider).gallery, source)) {
+    if (!ref.mounted || !identical(ref.read(galleryScannerProvider), source)) {
       return;
     }
     final id = device.id;

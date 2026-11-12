@@ -1,14 +1,13 @@
-import 'package:freezed_annotation/freezed_annotation.dart';
-
 import 'dart:async';
 
 import 'package:adb/adb.dart' show AdbCancellation;
+import 'package:scrcpy_connect/core/devices/device_connection_control.dart'
+    show DeviceEndpoint;
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_wake_receipt.dart';
+import 'package:scrcpy_connect/core/identity/models/setup_identity.dart';
 
-import '../identity/setup_identity.dart';
-import 'device_connection_control.dart' show DeviceEndpoint;
-import 'device_snapshot.dart';
-
-part 'device_management.freezed.dart';
+export 'package:scrcpy_connect/core/devices/models/device_wake_receipt.dart';
 
 /// 本机设备记录及其实际交付的连接投影；读取不产生连接或重新执行操作。
 abstract interface class DeviceManagement {
@@ -38,15 +37,4 @@ abstract interface class DeviceManagement {
 abstract interface class DeviceWake {
   /// 仅确认 WAKEUP 命令退出成功；屏幕是否点亮或解锁须独立读取。
   Future<DeviceWakeReceipt> wakeDevice(String id, {String? connectionId});
-}
-
-enum DeviceWakeEvidence { shellExitSuccess, legacyShellExitSuccess }
-
-@freezed
-abstract class DeviceWakeReceipt with _$DeviceWakeReceipt {
-  const factory DeviceWakeReceipt({
-    required String deviceId,
-    required String connectionId,
-    required DeviceWakeEvidence evidence,
-  }) = _DeviceWakeReceipt;
 }

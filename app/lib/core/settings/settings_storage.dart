@@ -1,12 +1,10 @@
-import 'preference_codec.dart';
-
-import 'package:scrcpy_connect/core/settings/settings_snapshot.dart';
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:scrcpy_connect/core/settings/models/settings_snapshot.dart';
+import 'package:scrcpy_connect/core/settings/preference_codec.dart';
 import 'package:scrcpy_connect/core/settings/preference_schema.dart';
 
 const _format = 'scrcpy-connect-preferences';

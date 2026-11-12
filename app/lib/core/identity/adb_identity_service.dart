@@ -1,23 +1,20 @@
-import 'setup_identity.dart';
-import 'authorization_identity.dart';
-
-export 'authorization_identity.dart';
-
-import 'package:scrcpy_connect/core/identity/identity_transaction.dart';
-import 'package:scrcpy_connect/core/identity/identity_selection.dart';
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:adb/adb.dart';
 import 'package:path/path.dart' as p;
-
-import 'package:scrcpy_connect/core/application/request_failure.dart';
 import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
-import 'package:scrcpy_connect/core/devices/device_record.dart'
+import 'package:scrcpy_connect/core/devices/models/device_record.dart'
     show validDeviceId;
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/identity/identity_transaction_file.dart';
+import 'package:scrcpy_connect/core/identity/models/authorization_identity.dart';
+import 'package:scrcpy_connect/core/identity/models/identity_selection.dart';
+import 'package:scrcpy_connect/core/identity/models/identity_transaction.dart';
+import 'package:scrcpy_connect/core/identity/models/setup_identity.dart';
+
+export 'package:scrcpy_connect/core/identity/models/authorization_identity.dart';
 
 /// 身份准备事务的执行句柄；释放由创建它的身份模块确认。
 abstract interface class IdentityAttempt {

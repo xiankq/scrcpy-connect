@@ -2,10 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-import 'package:scrcpy_connect/core/control/video_renderer_receipt.dart';
-
-import 'video_output.dart';
+import 'package:scrcpy_connect/core/control/models/video_renderer_receipt.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/media/models/video_output.dart';
 
 /// 将本地输出观察关联到已提交捕获；候选输出在提交前仍归播放器所有者持有。
 class VideoRecovery {

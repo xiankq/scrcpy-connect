@@ -1,25 +1,22 @@
-import 'file_transfers.dart';
-
-import 'package:scrcpy_connect/core/content/cache_status.dart';
-
-import 'package:scrcpy_connect/core/files/file_failure.dart';
-import 'package:scrcpy_connect/core/files/file_cancellation.dart';
-import 'package:scrcpy_connect/core/files/file_stamp.dart';
-import 'package:scrcpy_connect/core/files/file_executor.dart';
-import 'package:scrcpy_connect/core/files/file_cache_reservation.dart';
-import 'package:scrcpy_connect/core/files/file_cache_leases.dart';
-import 'package:scrcpy_connect/core/files/file_publication_leases.dart';
-
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:uuid/uuid.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/core/files/file_transfer_journal.dart';
+import 'package:scrcpy_connect/core/content/models/cache_status.dart';
+import 'package:scrcpy_connect/core/files/file_cache_leases.dart';
+import 'package:scrcpy_connect/core/files/file_cache_reservation.dart';
+import 'package:scrcpy_connect/core/files/file_cancellation.dart';
+import 'package:scrcpy_connect/core/files/file_executor.dart';
+import 'package:scrcpy_connect/core/files/file_failure.dart';
 import 'package:scrcpy_connect/core/files/file_paths.dart';
+import 'package:scrcpy_connect/core/files/file_publication_leases.dart';
+import 'package:scrcpy_connect/core/files/file_transfer_journal.dart';
+import 'package:scrcpy_connect/core/files/file_transfers.dart';
+import 'package:scrcpy_connect/core/files/models/file_stamp.dart';
+import 'package:uuid/uuid.dart';
 
 /// 持有传输任务、日志、来源租约与精确执行回收；目录快照和文件变更各自独立。
 class FileTransferService implements FileTransfers {

@@ -1,25 +1,20 @@
-import '../control/video_session.dart';
-
-import 'package:scrcpy_connect/core/media/audio_sources.dart';
-
-import 'device_assessment.dart';
-
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-import 'package:scrcpy_connect/core/identity/identity_selection.dart';
-import 'package:scrcpy_connect/core/devices/device_capability_observation.dart';
-import 'package:scrcpy_connect/core/devices/device_capability_facts.dart';
-
 import 'dart:async';
 import 'dart:io';
 
 import 'package:adb/adb.dart';
-
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-import 'package:scrcpy_connect/core/devices/connection_policy.dart';
+import 'package:scrcpy_connect/core/control/models/video_session.dart';
+import 'package:scrcpy_connect/core/devices/device_assessment.dart';
+import 'package:scrcpy_connect/core/devices/device_capability_facts.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
 import 'package:scrcpy_connect/core/devices/device_query.dart';
-import 'package:scrcpy_connect/core/identity/adb_identity_service.dart';
-import 'package:scrcpy_connect/core/devices/device_record.dart';
 import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
+import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
+import 'package:scrcpy_connect/core/devices/models/device_capability_observation.dart';
+import 'package:scrcpy_connect/core/devices/models/device_record.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/identity/adb_identity_service.dart';
+import 'package:scrcpy_connect/core/identity/models/identity_selection.dart';
+import 'package:scrcpy_connect/core/media/remote_audio.dart';
 
 /// 从应用的精确连接和公开 SDK 读取有界事实，不承担连接、部署或记录写入。
 final class DeviceCapabilityFactsReader {

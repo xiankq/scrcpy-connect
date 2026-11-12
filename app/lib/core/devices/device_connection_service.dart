@@ -1,22 +1,19 @@
-import 'device_setup.dart';
-import '../identity/setup_identity.dart';
-import 'connection_change.dart';
-
-import 'package:scrcpy_connect/core/devices/adb_discovery_endpoint.dart';
-import 'package:scrcpy_connect/core/identity/identity_selection.dart';
-import 'package:scrcpy_connect/core/identity/adb_identity_service.dart';
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
 import 'package:adb/adb.dart';
-
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-import 'package:scrcpy_connect/core/devices/connection_policy.dart';
-import 'package:scrcpy_connect/core/devices/device_service.dart';
 import 'package:scrcpy_connect/core/devices/device_discovery.dart';
-import 'package:scrcpy_connect/core/devices/device_record.dart';
+import 'package:scrcpy_connect/core/devices/device_service.dart';
+import 'package:scrcpy_connect/core/devices/device_setup.dart';
+import 'package:scrcpy_connect/core/devices/models/adb_discovery_endpoint.dart';
+import 'package:scrcpy_connect/core/devices/models/connection_change.dart';
+import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
+import 'package:scrcpy_connect/core/devices/models/device_record.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/identity/adb_identity_service.dart';
+import 'package:scrcpy_connect/core/identity/models/identity_selection.dart';
+import 'package:scrcpy_connect/core/identity/models/setup_identity.dart';
 
 /// 产品设置流程的唯一所有者；直接调用 Dart 能力并等待真实执行结束。
 /// 配对信任、监听切换与连接交付是三个独立事实，取消不能抹去已发生的前两项。

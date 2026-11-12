@@ -1,31 +1,45 @@
-import 'package:scrcpy_connect/core/files/system_documents.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-
 import 'dart:async';
 
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:flutter/material.dart';
-import 'package:scrcpy_connect/core/application/app_notifier.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/files/system_documents.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 /// 跟踪精确的系统保存操作，包含从持久账本恢复的操作。
-class DocumentConflictPanel extends StatefulWidget {
-  const DocumentConflictPanel({
-    super.key,
-    required this.controller,
-    required this.operationId,
-  });
-
-  final AppNotifier controller;
+class DocumentConflictPanel extends ConsumerWidget {
+  const DocumentConflictPanel({super.key, required this.operationId});
   final String operationId;
 
   @override
-  State<DocumentConflictPanel> createState() => _DocumentConflictPanelState();
+  Widget build(BuildContext context, WidgetRef ref) => _ConflictView(
+    documents: ref.watch(systemDocumentsProvider),
+    events: ref.watch(runtimeEventsProvider),
+    operationId: operationId,
+  );
 }
 
-class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
+class _ConflictView extends StatefulWidget {
+  const _ConflictView({
+    required this.documents,
+    required this.events,
+    required this.operationId,
+  });
+  final SystemDocuments documents;
+  final Stream<Json> events;
+  final String operationId;
+
+  @override
+  State<_ConflictView> createState() => _ConflictViewState();
+}
+
+class _ConflictViewState extends State<_ConflictView> {
+  int _scope = 0;
   StreamSubscription<Json>? _events;
   DocumentConflict? _pending;
   String? _error, _resolving;
@@ -39,9 +53,10 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
   }
 
   @override
-  void didUpdateWidget(DocumentConflictPanel oldWidget) {
+  void didUpdateWidget(_ConflictView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller == widget.controller &&
+    if (identical(oldWidget.documents, widget.documents) &&
+        identical(oldWidget.events, widget.events) &&
         oldWidget.operationId == widget.operationId) {
       return;
     }
@@ -54,7 +69,7 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
 
   void _follow() {
     // 先订阅再读取，避免漏掉初始化期间的冲突，也防止旧读取重新显示已解决的提示。
-    _events = widget.controller.eventStream().listen((event) {
+    _events = widget.events.listen((event) {
       if (event['type'] != 'documents.conflict.changed') return;
       final data = jsonObject(event['data']);
       if (data['operationId'] != widget.operationId) return;
@@ -72,9 +87,7 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
     final revision = ++_revision;
     final owner = widget.operationId;
     try {
-      final response = await widget.controller.documents.readDocumentConflict(
-        owner,
-      );
+      final response = await widget.documents.readDocumentConflict(owner);
       if (!mounted || revision != _revision || owner != widget.operationId) {
         return;
       }
@@ -106,18 +119,19 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
     final pending = _pending;
     if (pending == null || _resolving != null) return;
     final owner = widget.operationId;
+    final scope = _scope;
     final conflictId = pending.conflictId;
     setState(() => _resolving = conflictId);
     try {
-      final response = await widget.controller.documents
-          .resolveDocumentConflict(
-            owner,
-            conflictId,
-            choice,
-            applyToRemaining: choice != .cancel && _applyToRemaining,
-          );
+      final response = await widget.documents.resolveDocumentConflict(
+        owner,
+        conflictId,
+        choice,
+        applyToRemaining: choice != .cancel && _applyToRemaining,
+      );
       if (!mounted ||
           owner != widget.operationId ||
+          scope != _scope ||
           _pending?.conflictId != conflictId) {
         return;
       }
@@ -130,22 +144,27 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
     } catch (error) {
       if (mounted &&
           owner == widget.operationId &&
+          scope == _scope &&
           _pending?.conflictId == conflictId) {
         setState(() => _error = '同名处理未确认：$error');
       }
     } finally {
-      if (mounted && owner == widget.operationId && _resolving == conflictId) {
+      if (mounted &&
+          owner == widget.operationId &&
+          scope == _scope &&
+          _resolving == conflictId) {
         setState(() => _resolving = null);
       }
     }
   }
 
-  void _release(DocumentConflictPanel owner) {
+  void _release(_ConflictView owner) {
     _revision++;
+    _scope++;
     unawaited(_events?.cancel());
     _events = null;
     // 恢复的待保存操作也需要离页取消所有者；幂等命令不会取消替换后的新操作。
-    owner.controller.documents.cancelDocument(owner.operationId).ignore();
+    owner.documents.cancelDocument(owner.operationId).ignore();
   }
 
   @override

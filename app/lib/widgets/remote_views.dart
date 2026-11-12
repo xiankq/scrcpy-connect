@@ -1,44 +1,43 @@
-import 'package:scrcpy_connect/core/media/video_sessions.dart';
-import 'package:scrcpy_connect/core/media/video_output.dart';
-import 'package:scrcpy_connect/core/control/session_activity.dart';
-import 'package:scrcpy_connect/core/control/remote_control.dart';
-import 'package:scrcpy_connect/core/media/audio_sources.dart';
-
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-import 'package:scrcpy_connect/core/application/app_notifier.dart';
+import 'package:scrcpy_connect/core/control/models/session_activity.dart';
+import 'package:scrcpy_connect/core/control/remote_control.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/media/models/video_output.dart';
+import 'package:scrcpy_connect/core/media/remote_audio.dart';
+import 'package:scrcpy_connect/core/media/video_sessions.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
-
-import 'remote_audio_views.dart';
+import 'package:scrcpy_connect/widgets/remote_audio_views.dart';
 
 /// 由 widget 树持有控制画面、可见性和声音租约；provider 只提供应用数据。
 class RemoteViews {
-  RemoteViews(this.controller) : _generation = controller.generation {
+  RemoteViews({
+    required VideoSessions videos,
+    required RemoteAudio audio,
+    required Stream<Json> events,
+    required DeviceAudioViewSnapshot Function() readSnapshot,
+    required void Function(String?) onAudioError,
+    required bool Function() current,
+  }) : _audio = audio,
+       _current = current {
     _sessionViewRegistry = SessionViewRegistry(
-      controller.videos,
-      current: () =>
-          !_disposed &&
-          !controller.isDisposed() &&
-          controller.generation == _generation,
+      videos,
+      current: () => !_disposed && current(),
     );
     _deviceAudio = DeviceAudioViewCoordinator(
-      audio: controller.remoteAudio,
-      readSnapshot: () => DeviceAudioViewSnapshot(
-        devices: controller.snapshot().devices,
-        reconciliationPending: controller.snapshot().reconciliationPending,
-      ),
-      onError: controller.updateAudioError,
+      audio: audio,
+      readSnapshot: readSnapshot,
+      onError: onAudioError,
     );
-    _subscription = controller.eventStream().listen(_onEvent);
-    if (controller.snapshot().reconciliationPending) {
+    _subscription = events.listen(_onEvent);
+    if (readSnapshot().reconciliationPending) {
       _sessionViewRegistry.markUncertain();
     }
   }
 
-  final AppNotifier controller;
-  final int _generation;
+  final RemoteAudio _audio;
+  final bool Function() _current;
   bool _disposed = false;
   late final SessionViewRegistry _sessionViewRegistry;
   late final DeviceAudioViewCoordinator _deviceAudio;
@@ -64,15 +63,21 @@ class RemoteViews {
   void reconcile() => _deviceAudio.reconcile();
 
   Future<DeviceAudioPlayback> startAudio(String deviceId) async {
+    if (_disposed || !_current()) {
+      throw const RequestFailure('stale_view', '画面所有者已释放。');
+    }
     final revision = _deviceAudio.playbackRequestRevision(deviceId);
-    final result = await controller.remoteAudio.startAudio(deviceId);
+    final result = await _audio.startAudio(deviceId);
     _deviceAudio.playbackSucceeded(result, revision);
     return result;
   }
 
   Future<DeviceAudioPlayback> resumeAudio(DeviceAudioTarget target) async {
+    if (_disposed || !_current()) {
+      throw const RequestFailure('stale_view', '画面所有者已释放。');
+    }
     final revision = _deviceAudio.playbackRequestRevision(target.deviceId);
-    final result = await controller.remoteAudio.resumeAudio(target);
+    final result = await _audio.resumeAudio(target);
     _deviceAudio.playbackSucceeded(result, revision);
     return result;
   }
@@ -109,7 +114,7 @@ class RemoteViews {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
-    _sessionViewRegistry.invalidate();
+    _sessionViewRegistry.retire();
     _deviceAudio.dispose();
     unawaited(_subscription.cancel());
   }
@@ -138,16 +143,17 @@ class SessionViewRegistry {
   SessionViewRegistry(this.videos, {bool Function()? current})
     : _current = current ?? (() => true);
   final bool Function() _current;
-  bool _owns(SessionViewLease view) =>
-      _current() && identical(_owners[view.id], view);
+  bool get _accepting => !_retired && _current();
+  bool _owns(SessionViewLease view) => identical(_owners[view.id], view);
   final VideoSessions videos;
   final _owners = <String, SessionViewLease>{};
   final _tails = <String, Future<void>>{};
   final _closed = <String>{};
   bool _uncertain = false;
+  bool _retired = false;
 
   SessionViewLease claim(String id, {required bool visible}) {
-    if (!_current()) throw StateError('画面所有者已释放。');
+    if (!_accepting) throw StateError('画面所有者已释放。');
     if (id.isEmpty) throw ArgumentError.value(id, 'id');
     if (_closed.contains(id)) throw StateError('控制窗口已关闭，请明确打开新画面。');
     final view = SessionViewLease._(this, id, visible);
@@ -156,6 +162,9 @@ class SessionViewRegistry {
   }
 
   void invalidate() => _owners.clear();
+
+  /// 退役后禁止新操作，原租约仍可排空输入并清理自己绑定的原能力。
+  void retire() => _retired = true;
 
   /// 取得权威快照前，旧视图只能清理自己绑定的会话。
   void markUncertain() {
@@ -186,7 +195,7 @@ class SessionViewRegistry {
     SessionViewLease view,
     Future<void>? afterInput,
   ) {
-    final operation = Future<void>.value().then((_) async {
+    final operation = (_tails[view.id] ?? Future<void>.value()).then((_) async {
       await afterInput;
       if (!_owns(view)) return null;
       try {
@@ -216,6 +225,7 @@ class SessionViewRegistry {
       // 即使旧视图已被替换，也必须先排空其释放输入再恢复新视图。
       await afterInput;
       if (!_owns(view)) return null;
+      if (visible && !_accepting) return null;
       if ((_uncertain && visible) || (revision != view._revision && !release)) {
         return null;
       }
@@ -260,7 +270,7 @@ class SessionViewLease {
   bool _visible;
   bool _released = false;
   int _revision = 0;
-  bool get isCurrent => _registry._current() && !_released && ownsBinding;
+  bool get isCurrent => _registry._accepting && !_released && ownsBinding;
 
   /// 有序释放仍在排空最后输入时，视图仍持有绑定。
   bool get ownsBinding => _registry._owns(this);

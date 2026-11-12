@@ -1,7 +1,6 @@
-import 'package:scrcpy_connect/core/devices/adb_discovery_endpoint.dart';
 import 'package:adb/adb.dart';
-
 import 'package:scrcpy_connect/core/devices/device_discovery.dart';
+import 'package:scrcpy_connect/core/devices/models/adb_discovery_endpoint.dart';
 
 /// 已保存 GUID 的候选读取与代次核验；广播只提供位置，不授予设备信任。
 abstract interface class DeviceReconnectionCandidates {

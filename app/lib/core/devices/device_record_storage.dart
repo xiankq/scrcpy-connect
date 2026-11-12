@@ -1,17 +1,16 @@
-import 'package:scrcpy_connect/core/devices/device_records_snapshot.dart';
-import 'package:scrcpy_connect/core/devices/device_import_receipt.dart';
-import 'package:scrcpy_connect/core/devices/device_records_import.dart';
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:scrcpy_connect/core/devices/models/device_import_receipt.dart';
+import 'package:scrcpy_connect/core/devices/models/device_metadata.dart';
+import 'package:scrcpy_connect/core/devices/models/device_record.dart';
+import 'package:scrcpy_connect/core/devices/models/device_records_import.dart';
+import 'package:scrcpy_connect/core/devices/models/device_records_snapshot.dart';
 import 'package:uuid/uuid.dart';
-import 'package:scrcpy_connect/core/devices/device_record.dart';
-import 'package:scrcpy_connect/core/devices/device_metadata.dart';
 
-export 'package:scrcpy_connect/core/devices/device_record.dart'
+export 'package:scrcpy_connect/core/devices/models/device_record.dart'
     show DeviceRecord, DeviceTransport, DeviceRecordsFailure;
 
 const _maximumBytes = 8 * 1024 * 1024;

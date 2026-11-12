@@ -2,15 +2,14 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart'
-    show RequestFailure;
 import 'package:scrcpy_connect/core/companion/companion_exception.dart';
 import 'package:scrcpy_connect/core/companion/companion_service.dart';
-
-import 'device_apps.dart';
-import 'device_connection.dart';
-import 'device_record.dart';
-import 'scrcpy_server_queries.dart';
+import 'package:scrcpy_connect/core/devices/device_apps.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/core/devices/models/device_record.dart';
+import 'package:scrcpy_connect/core/devices/scrcpy_server_queries.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart'
+    show RequestFailure;
 
 /// 安装清单读取 scrcpy；后台任务和图标读取伴生协议，不互相回退。
 final class DeviceAppsReader implements DeviceApps {

@@ -1,12 +1,11 @@
-import 'package:scrcpy_connect/core/files/file_share_owner.dart';
-
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
 import 'package:adb/adb.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/files/file_share_owner.dart';
 
 typedef SharePlatformRequest = Future<Map<String, dynamic>> Function(
   String command,

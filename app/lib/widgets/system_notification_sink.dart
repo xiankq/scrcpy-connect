@@ -3,46 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-enum SystemNotificationKind { notification, call }
+import 'models/system_notice.dart';
 
-const systemNotificationIdMin = 100000;
-const systemNotificationIdMax = 199999;
-
-@immutable
-class SystemNotificationStatus {
-  const SystemNotificationStatus({
-    this.supported = false,
-    this.permissionGranted,
-    this.notificationChannelEnabled,
-    this.callChannelEnabled,
-    this.canRequest = false,
-    this.canOpenSettings = false,
-    this.reason = '',
-  });
-  final bool supported;
-  final bool? permissionGranted;
-  final bool? notificationChannelEnabled;
-  final bool? callChannelEnabled;
-  final bool canRequest;
-  final bool canOpenSettings;
-  final String reason;
-}
-
-@immutable
-class SystemNotice {
-  const SystemNotice({
-    required this.id,
-    required this.kind,
-    required this.title,
-    required this.body,
-    required this.payload,
-  });
-  final int id;
-  final SystemNotificationKind kind;
-  final String title;
-  final String body;
-  final String payload;
-}
+export 'models/system_notice.dart';
 
 abstract interface class SystemNotificationSink {
   Stream<String> get activations;

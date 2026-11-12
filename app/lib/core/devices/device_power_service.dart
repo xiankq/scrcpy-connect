@@ -1,16 +1,13 @@
-import 'device_management.dart';
-
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
-
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-import 'package:scrcpy_connect/core/devices/device_record.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/core/devices/device_management.dart';
+import 'package:scrcpy_connect/core/devices/models/device_record.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
 /// 一次明确唤醒及其精确 shell 资源；连接、窗口和重试意图仍由各自所有者持有。
 /// 成功仅证明命令取得退出码 0，不证明实体屏幕已亮或设备已解锁。

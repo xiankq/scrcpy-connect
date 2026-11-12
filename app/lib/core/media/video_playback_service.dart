@@ -1,11 +1,9 @@
-import 'package:scrcpy_connect/core/control/remote_control.dart';
-
 import 'dart:async';
 
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-
-import 'video_output.dart';
-import '../control/video_session.dart';
+import 'package:scrcpy_connect/core/control/models/video_session.dart';
+import 'package:scrcpy_connect/core/control/remote_control.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/media/models/video_output.dart';
 
 /// 协调本地呈现与核心转发状态；官方服务在本地呈现暂停时仍继续捕获。
 class VideoPlaybackService {

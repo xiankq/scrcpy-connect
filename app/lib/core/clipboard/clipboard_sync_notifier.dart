@@ -1,17 +1,18 @@
-import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
-import 'package:scrcpy_connect/core/clipboard/remote_clipboard.dart';
-
 import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:scrcpy_connect/core/application/app_dependencies_provider.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-import 'package:scrcpy_connect/core/clipboard/clipboard_sync_state.dart';
-import 'package:scrcpy_connect/core/application/application_session_provider.dart';
-import 'package:scrcpy_connect/core/application/application_status_notifier.dart';
+import 'package:scrcpy_connect/core/clipboard/models/clipboard_sync_state.dart';
+import 'package:scrcpy_connect/core/clipboard/remote_clipboard.dart';
+import 'package:scrcpy_connect/core/devices/current_device_notifier.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/clipboard/clipboard_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/clipboard/clipboard_focus_notifier.dart';
+import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
+import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 
@@ -26,17 +27,22 @@ class ClipboardSyncNotifier extends _$ClipboardSyncNotifier {
 
   @override
   ClipboardSyncState build() {
-    final dependencies = ref.watch(appDependenciesProvider);
-    final session = ref.watch(applicationSessionProvider);
+    final clipboard = ref.watch(remoteClipboardProvider);
+    final session = ref.watch(stateSubscriptionProvider);
     _ClipboardContext? context() {
-      if (!ref.mounted || session.disposed) return null;
-      final status = ref.read(applicationStatusProvider);
-      final target = status.focusedDeviceId;
+      if (!ref.mounted ||
+          session.disposed ||
+          !identical(ref.read(remoteClipboardProvider), clipboard)) {
+        return null;
+      }
+      final status = ref.read(recoveryStateProvider);
+      final target = ref.read(currentDeviceProvider);
       final device = ref
           .read(deviceListProvider)
           .devices
           .where((device) => device.id == target)
           .firstOrNull;
+      final focus = ref.read(clipboardFocusProvider);
       return (
         enabled:
             target != null &&
@@ -49,7 +55,7 @@ class ClipboardSyncNotifier extends _$ClipboardSyncNotifier {
         deviceId: target,
         connectionId: device?.connectionId,
         connected: device?.status == DeviceConnectionStatus.connected,
-        sessionId: target == null ? null : session.clipboardSessionFor(target),
+        sessionId: focus?.deviceId == target ? focus?.sessionId : null,
         reconciliationPending: status.reconciliationPending,
         reconciliationError: status.reconciliationError,
       );
@@ -58,7 +64,7 @@ class ClipboardSyncNotifier extends _$ClipboardSyncNotifier {
     late final _ClipboardCoordinator coordinator;
     bool current() => ref.mounted && identical(_coordinator, coordinator);
     coordinator = _ClipboardCoordinator(
-      dependencies.clipboard,
+      clipboard,
       session.events,
       context,
       (status, error) {
@@ -94,15 +100,13 @@ class ClipboardSyncNotifier extends _$ClipboardSyncNotifier {
       (_, _) => configure(),
     );
     ref.listen(
-      applicationStatusProvider.select(
-        (state) => (
-          state.focusedDeviceId,
-          state.reconciliationPending,
-          state.reconciliationError,
-        ),
+      recoveryStateProvider.select(
+        (state) => (state.reconciliationPending, state.reconciliationError),
       ),
       (_, _) => configure(),
     );
+    ref.listen(currentDeviceProvider, (_, _) => configure());
+    ref.listen(clipboardFocusProvider, (_, _) => configure());
     final commits = session.stateCommits.listen((_) => coordinator.configure());
     ref.onDispose(() => unawaited(commits.cancel()));
     ref.onDispose(coordinator.dispose);
@@ -370,10 +374,6 @@ class _ClipboardCoordinator {
 
   void _event(Json event) {
     if (_disposed) return;
-    if (event['type'] == 'clipboard.focus') {
-      configure();
-      return;
-    }
     if (event['type'] == 'device.disconnect.requested' &&
         event['deviceId'] == _target) {
       _generation++;

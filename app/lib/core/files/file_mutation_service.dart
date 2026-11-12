@@ -1,12 +1,11 @@
-import 'package:scrcpy_connect/core/files/file_failure.dart';
-import 'package:scrcpy_connect/core/files/file_cancellation.dart';
-import 'package:scrcpy_connect/core/files/file_stamp.dart';
-import 'package:scrcpy_connect/core/files/file_executor.dart';
-import 'package:scrcpy_connect/core/files/file_mutations.dart';
-
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/files/file_cancellation.dart';
+import 'package:scrcpy_connect/core/files/file_executor.dart';
+import 'package:scrcpy_connect/core/files/file_failure.dart';
+import 'package:scrcpy_connect/core/files/file_mutations.dart';
 import 'package:scrcpy_connect/core/files/file_paths.dart';
+import 'package:scrcpy_connect/core/files/models/file_stamp.dart';
 
 /// 一次用户变更固定一条设备连接，持有在途及迟到批次直至真正释放。
 final class FileMutationService implements FileMutations {

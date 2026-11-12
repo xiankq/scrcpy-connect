@@ -2,10 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
-
-import '../../styles/generated/design_tokens.g.dart';
-import '../../styles/theme.dart';
-import 'glass_material.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 
 /// 依次组装 regular 轨道、静止镜片和官方前景栏。
 /// 栏通过 navigationBarSettings 保留手势、焦点和语义；指针手势期间由原移动镜片接管，不绘制额外边缘。

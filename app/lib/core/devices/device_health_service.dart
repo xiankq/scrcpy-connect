@@ -1,10 +1,8 @@
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-
 import 'dart:async';
 
 import 'package:adb/adb.dart';
-
-import 'package:scrcpy_connect/core/devices/connection_policy.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
 
 /// 应用按闲置时间解释协议事实；探针只拥有自己的流，不拥有设备连接。
 /// 退休复用设备所有者；本模块不建立连接，也不保存第二份在线状态。

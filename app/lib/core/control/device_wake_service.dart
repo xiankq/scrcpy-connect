@@ -1,13 +1,10 @@
-import 'keep_awake_snapshot.dart';
-
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-
 import 'dart:async';
 
 import 'package:adb/adb.dart';
 import 'package:scrcpy/scrcpy.dart';
-
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
 /// 每设备共享的保持唤醒控制服务；窗口资格由控制窗口所有者提供，包含有界画质交接。
 /// 不点亮屏幕、不修改永久超时；关闭须等待 SDK 的本机排空与精确主进程退出证明。

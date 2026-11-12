@@ -1,8 +1,7 @@
-import 'video_quality.dart';
-
-import 'package:scrcpy_connect/core/settings/preferences.dart';
+import 'package:scrcpy_connect/core/control/video_quality.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/core/settings/preference_codec.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
 
 /// 与应用默认值共用的远程捕获基础设置。
 Map<String, Object?> get defaultVideoQuality =>

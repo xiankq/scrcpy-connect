@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
 /// 为直接混音的宿主登记本机焦点租约，不将租约当作系统焦点证明。
 /// 原生输出创建仍须确认实际系统音频设备。

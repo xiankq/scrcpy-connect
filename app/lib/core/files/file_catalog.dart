@@ -1,24 +1,20 @@
-import 'file_catalog_entry.dart';
-
-import 'package:scrcpy_connect/core/gallery/gallery_scan.dart';
-
-import 'file_search.dart';
-import 'file_directory.dart';
-
-import 'package:scrcpy_connect/core/files/file_failure.dart';
-import 'package:scrcpy_connect/core/files/file_cancellation.dart';
-import 'package:scrcpy_connect/core/files/file_entry_fact.dart';
-import 'package:scrcpy_connect/core/files/file_directory_facts.dart';
-
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 
-import 'package:uuid/uuid.dart';
 import 'package:path/path.dart' as p;
+import 'package:scrcpy_connect/core/files/file_cancellation.dart';
+import 'package:scrcpy_connect/core/files/file_directories.dart';
 import 'package:scrcpy_connect/core/files/file_executor.dart';
-import 'package:scrcpy_connect/core/files/file_kind.dart';
+import 'package:scrcpy_connect/core/files/file_failure.dart';
+import 'package:scrcpy_connect/core/files/models/file_kind.dart';
 import 'package:scrcpy_connect/core/files/file_paths.dart';
+import 'package:scrcpy_connect/core/files/file_search.dart';
+import 'package:scrcpy_connect/core/files/models/file_catalog_entry.dart';
+import 'package:scrcpy_connect/core/files/models/file_directory_facts.dart';
+import 'package:scrcpy_connect/core/files/models/file_entry_fact.dart';
+import 'package:scrcpy_connect/core/gallery/gallery_scanner.dart';
+import 'package:uuid/uuid.dart';
 
 /// 拥有目录浏览、搜索与图库快照；不持有持久传输状态。
 final class FileCatalog implements FileSearch, GalleryScanner, FileDirectories {

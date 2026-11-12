@@ -1,14 +1,11 @@
-import 'audio_sources.dart';
-
-import 'package:media_codec/media_codec.dart';
-
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-
 import 'dart:async';
 import 'dart:math';
 
+import 'package:media_codec/media_codec.dart';
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/media/remote_audio.dart';
 
 typedef AudioSourceJson = Map<String, Object?>;
 

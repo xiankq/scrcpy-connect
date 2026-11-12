@@ -72,7 +72,7 @@ final class DeviceDetailsProvider
   }
 }
 
-String _$deviceDetailsHash() => r'6901ccdc9c50e058d70e91578d5886cde3ddb6c7';
+String _$deviceDetailsHash() => r'e27a07305cdd6ae64995b22f30a31c6dc3d57a1f';
 
 /// 同一能力的设备读取共享连接事件筛选；每个查询独立持有取消令牌。
 
@@ -161,7 +161,7 @@ final class DeviceCapabilitiesProvider
 }
 
 String _$deviceCapabilitiesHash() =>
-    r'5eaa83396dc9eb9ba68c5c67c5488e6e6165ec24';
+    r'd875133773ad0c28edec3bd672697df3cd2e78db';
 
 final class DeviceCapabilitiesFamily extends $Family
     with
@@ -243,7 +243,7 @@ final class DeviceDiagnosisProvider
   }
 }
 
-String _$deviceDiagnosisHash() => r'296ed793cb972980556e9dda397cc8e9cdbd0ff8';
+String _$deviceDiagnosisHash() => r'1f70823c937629ca9905ec4f43a9d8911f79cd21';
 
 final class DeviceDiagnosisFamily extends $Family
     with
@@ -326,7 +326,7 @@ final class InstalledDeviceAppsProvider
 }
 
 String _$installedDeviceAppsHash() =>
-    r'26d88047cd57b589237abdfdab3c0ad9b2794197';
+    r'fd857708c10cee1effb7d56313484ad24902a5fc';
 
 final class InstalledDeviceAppsFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<List<DeviceApp>>, String> {
@@ -403,7 +403,7 @@ final class RunningDeviceAppsProvider
   }
 }
 
-String _$runningDeviceAppsHash() => r'ef08f9fb21bef8403fbc43ade9c9eae23d4af5b1';
+String _$runningDeviceAppsHash() => r'866f1e5f88f6969bc992202b855a84db1c700d84';
 
 final class RunningDeviceAppsFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<RunningDeviceApps>, String> {
@@ -478,7 +478,7 @@ final class DeviceAppIconProvider
   }
 }
 
-String _$deviceAppIconHash() => r'faf1697cf7b51cbfdd1199a5696c065dc885ce65';
+String _$deviceAppIconHash() => r'3e3b89a2130b94ca3a250d7771ae25039e1e22e2';
 
 final class DeviceAppIconFamily extends $Family
     with
@@ -505,10 +505,10 @@ final class DeviceAppIconFamily extends $Family
   String toString() => r'deviceAppIconProvider';
 }
 
-@ProviderFor(deviceCalls)
-final deviceCallsProvider = DeviceCallsFamily._();
+@ProviderFor(deviceCallsSnapshot)
+final deviceCallsSnapshotProvider = DeviceCallsSnapshotFamily._();
 
-final class DeviceCallsProvider
+final class DeviceCallsSnapshotProvider
     extends
         $FunctionalProvider<
           AsyncValue<DeviceCallsSnapshot>,
@@ -518,23 +518,23 @@ final class DeviceCallsProvider
     with
         $FutureModifier<DeviceCallsSnapshot>,
         $FutureProvider<DeviceCallsSnapshot> {
-  DeviceCallsProvider._({
-    required DeviceCallsFamily super.from,
+  DeviceCallsSnapshotProvider._({
+    required DeviceCallsSnapshotFamily super.from,
     required String super.argument,
   }) : super(
          retry: _noRetry,
-         name: r'deviceCallsProvider',
+         name: r'deviceCallsSnapshotProvider',
          isAutoDispose: true,
          dependencies: null,
          $allTransitiveDependencies: null,
        );
 
   @override
-  String debugGetCreateSourceHash() => _$deviceCallsHash();
+  String debugGetCreateSourceHash() => _$deviceCallsSnapshotHash();
 
   @override
   String toString() {
-    return r'deviceCallsProvider'
+    return r'deviceCallsSnapshotProvider'
         ''
         '($argument)';
   }
@@ -548,12 +548,12 @@ final class DeviceCallsProvider
   @override
   FutureOr<DeviceCallsSnapshot> create(Ref ref) {
     final argument = this.argument as String;
-    return deviceCalls(ref, argument);
+    return deviceCallsSnapshot(ref, argument);
   }
 
   @override
   bool operator ==(Object other) {
-    return other is DeviceCallsProvider && other.argument == argument;
+    return other is DeviceCallsSnapshotProvider && other.argument == argument;
   }
 
   @override
@@ -562,30 +562,32 @@ final class DeviceCallsProvider
   }
 }
 
-String _$deviceCallsHash() => r'655784e669b1d55005ae111e4fe3540c18d4d02a';
+String _$deviceCallsSnapshotHash() =>
+    r'd47195a8aebf86192be7628e1fa73b2fe5a0642d';
 
-final class DeviceCallsFamily extends $Family
+final class DeviceCallsSnapshotFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<DeviceCallsSnapshot>, String> {
-  DeviceCallsFamily._()
+  DeviceCallsSnapshotFamily._()
     : super(
         retry: _noRetry,
-        name: r'deviceCallsProvider',
+        name: r'deviceCallsSnapshotProvider',
         dependencies: null,
         $allTransitiveDependencies: null,
         isAutoDispose: true,
       );
 
-  DeviceCallsProvider call(String deviceId) =>
-      DeviceCallsProvider._(argument: deviceId, from: this);
+  DeviceCallsSnapshotProvider call(String deviceId) =>
+      DeviceCallsSnapshotProvider._(argument: deviceId, from: this);
 
   @override
-  String toString() => r'deviceCallsProvider';
+  String toString() => r'deviceCallsSnapshotProvider';
 }
 
-@ProviderFor(deviceNotifications)
-final deviceNotificationsProvider = DeviceNotificationsFamily._();
+@ProviderFor(deviceNotificationsSnapshot)
+final deviceNotificationsSnapshotProvider =
+    DeviceNotificationsSnapshotFamily._();
 
-final class DeviceNotificationsProvider
+final class DeviceNotificationsSnapshotProvider
     extends
         $FunctionalProvider<
           AsyncValue<DeviceNotificationsSnapshot>,
@@ -595,23 +597,23 @@ final class DeviceNotificationsProvider
     with
         $FutureModifier<DeviceNotificationsSnapshot>,
         $FutureProvider<DeviceNotificationsSnapshot> {
-  DeviceNotificationsProvider._({
-    required DeviceNotificationsFamily super.from,
+  DeviceNotificationsSnapshotProvider._({
+    required DeviceNotificationsSnapshotFamily super.from,
     required String super.argument,
   }) : super(
          retry: _noRetry,
-         name: r'deviceNotificationsProvider',
+         name: r'deviceNotificationsSnapshotProvider',
          isAutoDispose: true,
          dependencies: null,
          $allTransitiveDependencies: null,
        );
 
   @override
-  String debugGetCreateSourceHash() => _$deviceNotificationsHash();
+  String debugGetCreateSourceHash() => _$deviceNotificationsSnapshotHash();
 
   @override
   String toString() {
-    return r'deviceNotificationsProvider'
+    return r'deviceNotificationsSnapshotProvider'
         ''
         '($argument)';
   }
@@ -625,12 +627,13 @@ final class DeviceNotificationsProvider
   @override
   FutureOr<DeviceNotificationsSnapshot> create(Ref ref) {
     final argument = this.argument as String;
-    return deviceNotifications(ref, argument);
+    return deviceNotificationsSnapshot(ref, argument);
   }
 
   @override
   bool operator ==(Object other) {
-    return other is DeviceNotificationsProvider && other.argument == argument;
+    return other is DeviceNotificationsSnapshotProvider &&
+        other.argument == argument;
   }
 
   @override
@@ -639,27 +642,27 @@ final class DeviceNotificationsProvider
   }
 }
 
-String _$deviceNotificationsHash() =>
-    r'6f5f84a52aaa98d08c9e7af21237bc4895ff23b6';
+String _$deviceNotificationsSnapshotHash() =>
+    r'ca2c6a7582be2374edf1bb7d1941b2b76d57f259';
 
-final class DeviceNotificationsFamily extends $Family
+final class DeviceNotificationsSnapshotFamily extends $Family
     with
         $FunctionalFamilyOverride<
           FutureOr<DeviceNotificationsSnapshot>,
           String
         > {
-  DeviceNotificationsFamily._()
+  DeviceNotificationsSnapshotFamily._()
     : super(
         retry: _noRetry,
-        name: r'deviceNotificationsProvider',
+        name: r'deviceNotificationsSnapshotProvider',
         dependencies: null,
         $allTransitiveDependencies: null,
         isAutoDispose: true,
       );
 
-  DeviceNotificationsProvider call(String deviceId) =>
-      DeviceNotificationsProvider._(argument: deviceId, from: this);
+  DeviceNotificationsSnapshotProvider call(String deviceId) =>
+      DeviceNotificationsSnapshotProvider._(argument: deviceId, from: this);
 
   @override
-  String toString() => r'deviceNotificationsProvider';
+  String toString() => r'deviceNotificationsSnapshotProvider';
 }

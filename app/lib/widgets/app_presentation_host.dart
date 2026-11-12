@@ -1,23 +1,23 @@
-import 'package:scrcpy_connect/core/files/share_inbox_notifier.dart';
-import 'package:scrcpy_connect/widgets/clipboard_visibility.dart';
-
 import 'dart:async';
 
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
-import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/core/application/app_notifier.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/core/clipboard/clipboard_sync_notifier.dart';
-import 'package:scrcpy_connect/widgets/system_notifications.dart';
-import 'package:scrcpy_connect/widgets/device_labels.dart';
+import 'package:scrcpy_connect/core/files/share_inbox_notifier.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
+import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/widgets/clipboard_visibility.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
+import 'package:scrcpy_connect/widgets/system_notifications.dart';
 
 /// 应用根部的外部意图呈现边界；调度与迟到回调必须同时遵循当前前台资格。
 class AppPresentationHost extends HookConsumerWidget {
@@ -33,7 +33,7 @@ class AppPresentationHost extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(appProvider.notifier);
+    final events = ref.watch(runtimeEventsProvider);
     final appPendingShares = ref.watch(
       shareInboxProvider.select((state) => state.shares),
     );
@@ -58,59 +58,69 @@ class AppPresentationHost extends HookConsumerWidget {
       return null;
     }, [systemNotifications, lifecycle]);
     final appLoading = ref.watch(
-      appProvider.select(
+      appSnapshotProvider.select(
         (state) => state.loading || state.reconciliationPending,
       ),
     );
-    useEffect(() {
-      if (appLoading ||
-          systemNotifications.pendingActivation == null ||
-          (lifecycle != null && lifecycle != AppLifecycleState.resumed)) {
-        return null;
-      }
-      var active = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!active ||
-            controller.snapshot().loading ||
-            controller.snapshot().reconciliationPending ||
-            (WidgetsBinding.instance.lifecycleState != null &&
-                WidgetsBinding.instance.lifecycleState !=
-                    AppLifecycleState.resumed)) {
-          return;
+    useEffect(
+      () {
+        if (appLoading ||
+            systemNotifications.pendingActivation == null ||
+            (lifecycle != null && lifecycle != AppLifecycleState.resumed)) {
+          return null;
         }
-        final context = navigator.currentContext;
-        if (context == null || !context.mounted) return;
-        final activation = systemNotifications.takeActivation();
-        if (activation == null) return;
-        if (!activation.available) {
-          showGlassDialog<void>(
-            context: context,
-            builder: (context) => GlassAlertDialog(
-              title: const Text('这条提醒已失效'),
-              content: Text(activation.reason),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('知道了'),
-                ),
-              ],
-            ),
-          );
-          return;
-        }
-        switch (activation.target.kind) {
-          case SystemNotificationKind.notification:
-            router.push<void>(
-              NotificationsRoute(deviceId: activation.target.deviceId).location,
+        var active = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!active ||
+              ref.read(appSnapshotProvider).loading ||
+              ref.read(appSnapshotProvider).reconciliationPending ||
+              (WidgetsBinding.instance.lifecycleState != null &&
+                  WidgetsBinding.instance.lifecycleState !=
+                      AppLifecycleState.resumed)) {
+            return;
+          }
+          final context = navigator.currentContext;
+          if (context == null || !context.mounted) return;
+          final activation = systemNotifications.takeActivation();
+          if (activation == null) return;
+          if (!activation.available) {
+            showGlassDialog<void>(
+              context: context,
+              builder: (context) => GlassAlertDialog(
+                title: const Text('这条提醒已失效'),
+                content: Text(activation.reason),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('知道了'),
+                  ),
+                ],
+              ),
             );
-          case SystemNotificationKind.call:
-            router.push<void>(
-              CallsRoute(deviceId: activation.target.deviceId).location,
-            );
-        }
-      });
-      return () => active = false;
-    }, [systemNotifications.pendingActivation, appLoading, lifecycle, router]);
+            return;
+          }
+          switch (activation.target.kind) {
+            case SystemNotificationKind.notification:
+              router.push<void>(
+                NotificationsRoute(deviceId: activation.target.deviceId)
+                    .location,
+              );
+            case SystemNotificationKind.call:
+              router.push<void>(
+                CallsRoute(deviceId: activation.target.deviceId).location,
+              );
+          }
+        });
+        return () => active = false;
+      },
+      [
+        systemNotifications,
+        systemNotifications.pendingActivation,
+        appLoading,
+        lifecycle,
+        router,
+      ],
+    );
     useEffect(() {
       if (appLoading ||
           sharing.value != null ||
@@ -129,8 +139,8 @@ class AppPresentationHost extends HookConsumerWidget {
         if (!active ||
             state == null ||
             !state.mounted ||
-            controller.snapshot().loading ||
-            controller.snapshot().reconciliationPending ||
+            ref.read(appSnapshotProvider).loading ||
+            ref.read(appSnapshotProvider).reconciliationPending ||
             (WidgetsBinding.instance.lifecycleState != null &&
                 WidgetsBinding.instance.lifecycleState !=
                     AppLifecycleState.resumed)) {
@@ -140,7 +150,11 @@ class AppPresentationHost extends HookConsumerWidget {
         opened = true;
         await IncomingShareRoute(shareId: shareId).push<void>(state.context);
         if (identical(sharing.value, reservation)) sharing.value = null;
-        if (context.mounted && state.mounted) shareCycle.value++;
+        if (context.mounted &&
+            state.mounted &&
+            identical(ref.read(runtimeEventsProvider), events)) {
+          shareCycle.value++;
+        }
       });
       return () {
         active = false;
@@ -148,7 +162,7 @@ class AppPresentationHost extends HookConsumerWidget {
           sharing.value = null;
         }
       };
-    }, [appPendingShares, appLoading, lifecycle, shareCycle.value]);
+    }, [events, appPendingShares, appLoading, lifecycle, shareCycle.value]);
     final presentedCall = useRef<String?>(null);
     final callPresentationEpoch = useRef(0);
     useOnAppLifecycleStateChange((previous, current) {
@@ -158,7 +172,7 @@ class AppPresentationHost extends HookConsumerWidget {
     });
     useEffect(() {
       var active = true;
-      final subscription = controller.eventStream().listen((event) {
+      final subscription = events.listen((event) {
         if (!['calls.incoming', 'call.incoming'].contains(event['type']) ||
             WidgetsBinding.instance.lifecycleState !=
                 AppLifecycleState.resumed) {
@@ -174,9 +188,10 @@ class AppPresentationHost extends HookConsumerWidget {
         final id = value(call, 'id');
         final key = '${event['deviceId']}:$id';
         if (id.isEmpty || presentedCall.value == key) return;
-        final matches = controller.snapshot().devices.where(
-          (d) => d.id == event['deviceId'],
-        );
+        final matches = ref
+            .read(appSnapshotProvider)
+            .devices
+            .where((d) => d.id == event['deviceId']);
         if (matches.isEmpty) return;
         presentedCall.value = key;
         final epoch = callPresentationEpoch.value;
@@ -237,7 +252,7 @@ class AppPresentationHost extends HookConsumerWidget {
         presentedCall.value = null;
         unawaited(subscription.cancel());
       };
-    }, [controller, navigator]);
+    }, [events, navigator]);
     return SystemNotificationsScope(
       notifications: systemNotifications,
       child: child,

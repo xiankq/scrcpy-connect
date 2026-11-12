@@ -1,10 +1,9 @@
-import 'package:scrcpy_connect/core/files/file_document_scope.dart';
-
 import 'dart:async';
 import 'dart:math';
 
 import 'package:adb/adb.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/files/file_document_scope.dart';
 
 /// 恢复读取前撤销旧 isolate 的文档 worker；关闭失败仍保留精确 scope 供重试。
 final class FileDocumentRecovery {

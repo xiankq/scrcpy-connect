@@ -1,8 +1,3 @@
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-import 'package:scrcpy_connect/core/platform/bundled_server_files.dart';
-import 'package:scrcpy_connect/core/identity/application_identity_host.dart';
-import 'package:scrcpy_connect/core/platform/native_host_dependencies.dart';
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -12,14 +7,17 @@ import 'package:adb/adb.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-import 'package:scrcpy_connect/core/devices/connection_policy.dart';
 import 'package:scrcpy_connect/core/control/display_recovery.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/identity/models/identity_host_record.dart';
+import 'package:scrcpy_connect/core/platform/bundled_server_files.dart';
+import 'package:scrcpy_connect/core/platform/native_host_dependencies.dart';
+import 'package:scrcpy_connect/core/platform/native_host_record.dart';
 import 'package:scrcpy_connect/core/platform/usb_recovery.dart';
 import 'package:scrcpy_connect/core/settings/app_settings.dart';
 import 'package:scrcpy_connect/core/settings/settings_storage.dart';
-
-import 'package:scrcpy_connect/core/platform/native_host_record.dart';
 
 /// 应用的进程资源组合；同 isolate 的 UI 重新附着复用此所有者。
 /// 新 isolate 通过真实原生登记接管，磁盘记录只核验产品策略和所选身份。
@@ -64,7 +62,7 @@ final class NativeHost {
   late NativeHostRecord _record;
   final _clients = <String, AdbClient>{};
   final _servers = <String, AdbHost>{};
-  final _pendingRestores = <String, ApplicationIdentityHost>{};
+  final _pendingRestores = <String, IdentityHostRecord>{};
   final _releasingIdentities = <String>{};
   Future<void> _tail = Future<void>.value();
   Future<void>? _closing;
@@ -501,7 +499,7 @@ final class NativeHost {
     );
   }
 
-  Future<void> _verifyIdentity(ApplicationIdentityHost identity) async {
+  Future<void> _verifyIdentity(IdentityHostRecord identity) async {
     final actual = await identities.inspectIdentity(identity.identityPath);
     if (actual == null || actual.fingerprint != identity.fingerprint) {
       throw const RequestFailure(
@@ -511,10 +509,7 @@ final class NativeHost {
     }
   }
 
-  Future<void> _restoreDesktop(
-    String key,
-    ApplicationIdentityHost identity,
-  ) async {
+  Future<void> _restoreDesktop(String key, IdentityHostRecord identity) async {
     final owner = await _claimDesktop(key, identity);
     if (owner == null) return;
     // 先保留精确关闭权，再验证磁盘身份；失败绝不交付产品执行能力。
@@ -525,7 +520,7 @@ final class NativeHost {
 
   Future<AdbHost?> _claimDesktop(
     String key,
-    ApplicationIdentityHost identity,
+    IdentityHostRecord identity,
   ) async {
     // 查询失败也不能把未知资源当成不存在；仅明确的首次未登记结果可撤销此责任。
     _pendingRestores[key] = identity;
@@ -597,7 +592,7 @@ final class NativeHost {
       }
       final identity =
           _record.identities[key] ??
-          ApplicationIdentityHost(
+          IdentityHostRecord(
             identityPath: path,
             fingerprint: fingerprint,
             directory: p.join(_records.path, 'identities', key),

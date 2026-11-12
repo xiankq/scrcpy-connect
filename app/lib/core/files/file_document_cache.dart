@@ -1,16 +1,14 @@
-import 'file_publication_leases.dart';
-import 'file_transfer_plan.dart';
-
-import 'package:scrcpy_connect/core/files/file_failure.dart';
-import 'package:scrcpy_connect/core/files/shared_source_file.dart';
-
 import 'dart:io';
 import 'dart:math';
 
-import 'package:uuid/uuid.dart';
 import 'package:path/path.dart' as p;
+import 'package:scrcpy_connect/core/files/file_failure.dart';
+import 'package:scrcpy_connect/core/files/file_publication_leases.dart';
 import 'package:scrcpy_connect/core/files/file_share_ledger.dart';
 import 'package:scrcpy_connect/core/files/file_source_tree.dart';
+import 'package:scrcpy_connect/core/files/models/file_transfer_plan.dart';
+import 'package:scrcpy_connect/core/files/models/shared_source_file.dart';
+import 'package:uuid/uuid.dart';
 
 /// 文档复制结果的页面持有权；持久发布关系复用来源账本。
 /// 打开前，调用方必须先排空旧文档 scope 和平台 worker。

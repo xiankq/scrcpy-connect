@@ -1,8 +1,7 @@
 import 'package:scrcpy_connect/core/control/remote_control.dart';
-import 'package:scrcpy_connect/core/diagnostics/diagnostic_record.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
+import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
 class DiagnosticReporter {
   DiagnosticReporter(this.log);

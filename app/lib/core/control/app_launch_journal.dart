@@ -1,12 +1,11 @@
-import 'package:scrcpy_connect/core/control/app_launch_record.dart';
-import 'package:scrcpy_connect/core/control/app_launch_permit.dart';
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/control/app_launch_permit.dart';
+import 'package:scrcpy_connect/core/control/models/app_launch_record.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
 /// 单次打开的准入；调用方在实际交给控制队列前认领，取消后不能再次认领。
 ///

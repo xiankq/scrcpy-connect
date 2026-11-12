@@ -1,9 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
-import 'generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 
 /// 直接映射 designs/design.md 的语义值。
 abstract final class ConnectTokens {

@@ -1,16 +1,15 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:scrcpy_connect/core/application/application_session_provider.dart';
+import 'package:scrcpy_connect/core/content/thumbnail_queue.dart';
 
-import 'thumbnail_queue.dart';
+import 'content_capabilities_provider.dart';
 
-export 'thumbnail_queue.dart';
+export 'package:scrcpy_connect/core/content/thumbnail_queue.dart';
 
 part 'thumbnail_queue_provider.g.dart';
 
 @riverpod
 ThumbnailQueue thumbnailQueue(Ref ref, String deviceId) {
-  final session = ref.watch(applicationSessionProvider);
-  final content = session.dependencies.content;
+  final content = ref.watch(contentReaderProvider);
   final queue = ThumbnailQueue(
     load: (path, operationId) => content.thumbnail(
       deviceId: deviceId,

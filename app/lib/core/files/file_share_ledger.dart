@@ -1,22 +1,19 @@
-import 'incoming_shares.dart';
-
-import 'file_transfers.dart';
-
-import 'package:scrcpy_connect/core/files/file_failure.dart';
-import 'package:scrcpy_connect/core/files/file_publication_leases.dart';
-import 'package:scrcpy_connect/core/files/shared_source_file.dart';
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:uuid/uuid.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/core/files/share_limits.dart';
+import 'package:scrcpy_connect/core/files/file_failure.dart';
+import 'package:scrcpy_connect/core/files/file_publication_leases.dart';
 import 'package:scrcpy_connect/core/files/file_share_ledger_format.dart';
 import 'package:scrcpy_connect/core/files/file_share_storage.dart';
 import 'package:scrcpy_connect/core/files/file_source_tree.dart';
+import 'package:scrcpy_connect/core/files/file_transfers.dart';
+import 'package:scrcpy_connect/core/files/incoming_shares.dart';
+import 'package:scrcpy_connect/core/files/models/shared_source_file.dart';
+import 'package:scrcpy_connect/core/files/share_limits.dart';
+import 'package:uuid/uuid.dart';
 
 export 'package:scrcpy_connect/core/files/file_share_storage.dart'
     show ShareStoreCommit;

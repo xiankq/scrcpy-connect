@@ -1,13 +1,12 @@
-import 'dart:ui';
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
-
-import '../../styles/generated/design_tokens.g.dart';
-import 'glass_material.dart';
-import 'glass_overlays.dart';
-import 'glass_press_feedback.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_press_feedback.dart';
 
 /// 已有的单个应用动作，不了解设备或路由。
 @immutable

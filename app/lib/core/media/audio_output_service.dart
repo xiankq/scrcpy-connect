@@ -1,17 +1,13 @@
-import 'audio_sources.dart';
+import 'dart:async';
 
 import 'package:media_codec/media_codec.dart';
 import 'package:scrcpy/scrcpy.dart';
-
-import 'package:scrcpy_connect/core/diagnostics/diagnostic_record.dart';
-
-import 'dart:async';
-
-import 'package:scrcpy_connect/core/application/request_failure.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
-
+import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/media/audio_player.dart';
+import 'package:scrcpy_connect/core/media/remote_audio.dart';
 
 /// 进程或引擎范围内的输出所有者；捕获协调器持有远端捕获，平台持有系统焦点及前台服务资格。
 /// PCM 数据包不进入 Dart。

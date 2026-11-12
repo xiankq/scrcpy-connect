@@ -1,8 +1,7 @@
-import 'package:scrcpy_connect/core/settings/preferences.dart';
-
 import 'dart:math' as math;
-
 import 'dart:ui' show Size;
+
+import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 
 /// 在此解析设备偏好，原生执行层只接收具体像素。
 class RemoteDisplaySettings {

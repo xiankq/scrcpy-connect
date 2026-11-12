@@ -1,28 +1,21 @@
-import 'video_output.dart';
-
-import 'package:scrcpy_connect/core/control/video_capture.dart';
-
-import 'video_screenshot.dart';
-
-import 'package:scrcpy_connect/core/control/video_quality.dart';
-
-import 'package:media_codec/media_codec.dart';
-
-import 'package:scrcpy_connect/core/diagnostics/diagnostic_record.dart';
-import 'package:scrcpy_connect/core/media/video_texture.dart';
-import 'package:scrcpy_connect/core/media/video_pixels.dart';
-
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:media_codec/media_codec.dart';
+import 'package:scrcpy_connect/core/control/models/video_capture.dart';
+import 'package:scrcpy_connect/core/control/video_quality.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
-
+import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/media/models/video_output.dart';
+import 'package:scrcpy_connect/core/media/models/video_pixels.dart';
+import 'package:scrcpy_connect/core/media/models/video_texture.dart';
 import 'package:scrcpy_connect/core/media/video_player.dart';
+import 'package:scrcpy_connect/core/media/video_screenshots.dart';
 
 /// 持有本机视频输出及未确认释放的旧输出；捕获协调器拥有远端控制会话与编码进程。
 class VideoOutputService {

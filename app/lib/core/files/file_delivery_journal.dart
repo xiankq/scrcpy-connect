@@ -1,17 +1,13 @@
-import 'system_documents.dart';
-
-import 'package:scrcpy_connect/core/content/cache_status.dart';
-
-import 'file_delivery.dart';
-
-import 'package:scrcpy_connect/core/content/content_cache_gate.dart';
-
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/content/content_cache_gate.dart';
+import 'package:scrcpy_connect/core/content/models/cache_status.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/files/file_delivery.dart';
+import 'package:scrcpy_connect/core/files/system_documents.dart';
 
 typedef _Json = Map<String, dynamic>;
 

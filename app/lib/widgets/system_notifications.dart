@@ -1,11 +1,22 @@
-import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
-
-import 'system_notification_sink_provider.dart';
-export 'system_notification_sink_provider.dart';
+import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
+
+import 'models/system_notification_snapshot.dart';
+import 'models/system_notification_target.dart';
+
+import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/system_notification_sink.dart';
+import 'package:scrcpy_connect/widgets/system_notification_sink_provider.dart';
+
+export 'models/system_notification_target.dart';
+
 export 'package:scrcpy_connect/widgets/system_notification_sink.dart'
     show
         SystemNotificationKind,
@@ -15,93 +26,25 @@ export 'package:scrcpy_connect/widgets/system_notification_sink.dart'
         SystemNotice,
         SystemNotificationSink,
         NoopSystemNotificationSink;
-import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-
-import 'dart:async';
-import 'dart:convert';
-
-import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/core/application/app_notifier.dart';
-
-/// 只向系统交付定位信息，不把它作为授权回执。
-@immutable
-class SystemNotificationTarget {
-  const SystemNotificationTarget({
-    required this.kind,
-    required this.deviceId,
-    required this.objectId,
-    required this.revision,
-    required this.observationGeneration,
-  });
-  final SystemNotificationKind kind;
-  final String deviceId;
-  final String objectId;
-  final String revision;
-  final int observationGeneration;
-
-  String encode() => jsonEncode({
-    'v': 1,
-    'kind': kind.name,
-    'deviceId': deviceId,
-    'objectId': objectId,
-    'revision': revision,
-    'observationGeneration': observationGeneration,
-  });
-
-  static SystemNotificationTarget? decode(String payload) {
-    if (payload.length > 4096) return null;
-    try {
-      final data = jsonDecode(payload);
-      if (data is! Map<String, dynamic> || data['v'] != 1) return null;
-      final kind = SystemNotificationKind.values
-          .where((kind) => kind.name == data['kind'])
-          .firstOrNull;
-      final generation = data['observationGeneration'];
-      if (kind == null || generation is! int || generation < 0) return null;
-      for (final key in ['deviceId', 'objectId', 'revision']) {
-        if (data[key] is! String ||
-            (data[key] as String).isEmpty ||
-            (data[key] as String).length > 512) {
-          return null;
-        }
-      }
-      return SystemNotificationTarget(
-        kind: kind,
-        deviceId: data['deviceId'] as String,
-        objectId: data['objectId'] as String,
-        revision: data['revision'] as String,
-        observationGeneration: generation,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-}
-
-@immutable
-class SystemNotificationActivation {
-  const SystemNotificationActivation({
-    required this.target,
-    required this.available,
-    this.reason = '',
-  });
-  final SystemNotificationTarget target;
-  final bool available;
-  final String reason;
-}
+export 'package:scrcpy_connect/widgets/system_notification_sink_provider.dart';
 
 class SystemNotifications {
   final changes = ValueNotifier<int>(0);
   void _changed() {
-    if (!_disposed) changes.value++;
+    if (!_disposed && _current()) changes.value++;
   }
 
-  SystemNotifications(this.controller, this.sink) {
-    _events = controller.eventStream().listen(_event);
+  SystemNotifications({
+    required Stream<Json> events,
+    required this._readSnapshot,
+    required this._current,
+    required this.sink,
+  }) {
+    _events = events.listen(_event);
     _activations = sink.activations.listen(_activate);
   }
-  final AppNotifier controller;
+  final SystemNotificationSnapshot Function() _readSnapshot;
+  final bool Function() _current;
   final SystemNotificationSink sink;
   late final StreamSubscription<Json> _events;
   late final StreamSubscription<String> _activations;
@@ -155,18 +98,19 @@ class SystemNotifications {
 
   Future<void> initialize() => _initializing ??= _initialize();
   Future<void> _initialize() async {
+    if (_disposed || !_current()) return;
     try {
       await sink.initialize();
-      if (!_disposed) await _readStatus();
+      if (!_disposed && _current()) await _readStatus();
     } catch (_) {
-      if (!_disposed) {
+      if (!_disposed && _current()) {
         status = const SystemNotificationStatus(
           reason: '系统提醒暂时无法初始化，请稍后检查系统设置。',
         );
         _changed();
       }
     } finally {
-      if (!_disposed) {
+      if (!_disposed && _current()) {
         _initialized = true;
         _changed();
       }
@@ -175,7 +119,7 @@ class SystemNotifications {
 
   Future<SystemNotificationStatus> refreshStatus() async {
     await initialize();
-    if (_disposed) return status;
+    if (_disposed || !_current()) return status;
     return _readStatus();
   }
 
@@ -183,13 +127,13 @@ class SystemNotifications {
     final epoch = ++_statusEpoch;
     try {
       final next = await sink.status();
-      if (!_disposed && epoch == _statusEpoch) {
+      if (!_disposed && _current() && epoch == _statusEpoch) {
         status = next;
         configure();
         _changed();
       }
     } catch (_) {
-      if (!_disposed && epoch == _statusEpoch) {
+      if (!_disposed && _current() && epoch == _statusEpoch) {
         status = const SystemNotificationStatus(reason: '尚未确认系统提醒权限，请稍后重试。');
         configure();
         _changed();
@@ -200,7 +144,7 @@ class SystemNotifications {
 
   Future<SystemNotificationStatus> requestPermission() async {
     await initialize();
-    if (_disposed) return status;
+    if (_disposed || !_current()) return status;
     try {
       await sink.requestPermission();
     } catch (_) {
@@ -211,7 +155,7 @@ class SystemNotifications {
 
   Future<bool> openSettings() async {
     await initialize();
-    if (_disposed) return false;
+    if (_disposed || !_current()) return false;
     try {
       return await sink.openSettings();
     } catch (_) {
@@ -220,11 +164,11 @@ class SystemNotifications {
   }
 
   void configure() {
-    if (_disposed || controller.isDisposed()) return;
+    if (_disposed || !_current()) return;
     for (final delivery in _withdrawals.values.toList()) {
       _withdraw(delivery);
     }
-    if (controller.snapshot().reconciliationPending) {
+    if (_readSnapshot().reconciliationPending) {
       _suspend();
       return;
     }
@@ -241,7 +185,7 @@ class SystemNotifications {
   }
 
   void setForeground(bool foreground) {
-    if (_disposed || _foreground == foreground) return;
+    if (_disposed || !_current() || _foreground == foreground) return;
     _foreground = foreground;
     if (_pending.isNotEmpty) _changed();
   }
@@ -252,10 +196,10 @@ class SystemNotifications {
         !_initialized ||
         _reconciling ||
         !_foreground ||
-        controller.isDisposed() ||
+        !_current() ||
         _pending.isEmpty ||
-        controller.snapshot().loading ||
-        controller.snapshot().reconciliationPending) {
+        _readSnapshot().loading ||
+        _readSnapshot().reconciliationPending) {
       return null;
     }
     final target = _pending.first;
@@ -285,7 +229,7 @@ class SystemNotifications {
       _pending.removeAt(0);
       if (_pending.isNotEmpty) {
         scheduleMicrotask(() {
-          if (!_disposed) _changed();
+          if (!_disposed && _current()) _changed();
         });
       }
     }
@@ -293,7 +237,7 @@ class SystemNotifications {
   }
 
   void _activate(String payload) {
-    if (_disposed) return;
+    if (_disposed || !_current()) return;
     final target = SystemNotificationTarget.decode(payload);
     if (target == null || !_consumed.add(target.encode())) return;
     if (_consumed.length > 256) _consumed.remove(_consumed.first);
@@ -303,11 +247,9 @@ class SystemNotifications {
   }
 
   bool _connected(String deviceId) =>
-      !controller.isDisposed() &&
+      _current() &&
       !_nativeStopped.contains(deviceId) &&
-      controller
-          .snapshot()
-          .devices
+      _readSnapshot().devices
           .take(32)
           .any(
             (d) =>
@@ -319,8 +261,8 @@ class SystemNotifications {
       status.supported &&
       status.permissionGranted == true &&
       (kind == SystemNotificationKind.call
-          ? controller.snapshot().settings.callAlerts
-          : controller.snapshot().settings.notificationAlerts) &&
+          ? _readSnapshot().settings.callAlerts
+          : _readSnapshot().settings.notificationAlerts) &&
       (kind == SystemNotificationKind.call
               ? status.callChannelEnabled
               : status.notificationChannelEnabled) !=
@@ -328,7 +270,7 @@ class SystemNotifications {
 
   void _enqueue(Future<void> Function() work) {
     _queue = _queue.then((_) => work()).catchError((Object _) {
-      if (_disposed) return;
+      if (_disposed || !_current()) return;
       status = SystemNotificationStatus(
         supported: status.supported,
         permissionGranted: status.permissionGranted,
@@ -343,7 +285,7 @@ class SystemNotifications {
   }
 
   void _event(Json event) {
-    if (_disposed) return;
+    if (_disposed || !_current()) return;
     final deviceId = value(event, 'deviceId');
     final data = jsonObject(event['data']);
     if (event['type'] == 'state.resync' ||
@@ -368,9 +310,7 @@ class SystemNotifications {
       return;
     }
     if (event['type'] == 'connections.stopped') {
-      _nativeStopped.addAll(
-        controller.snapshot().devices.take(32).map((d) => d.id),
-      );
+      _nativeStopped.addAll(_readSnapshot().devices.take(32).map((d) => d.id));
       for (final entry in _owners.entries.toList()) {
         _invalidate(entry.key, entry.value.generation);
       }
@@ -400,7 +340,7 @@ class SystemNotifications {
       }
       return;
     }
-    if (_reconciling || controller.snapshot().reconciliationPending) return;
+    if (_reconciling || _readSnapshot().reconciliationPending) return;
     if (event['type'] == 'observation.changed') {
       final generation = data['generation'];
       if (generation is! int || !_connected(deviceId)) return;
@@ -475,12 +415,7 @@ class SystemNotifications {
   }
 
   void _pruneTombstones() {
-    final known = controller
-        .snapshot()
-        .devices
-        .take(32)
-        .map((d) => d.id)
-        .toSet();
+    final known = _readSnapshot().devices.take(32).map((d) => d.id).toSet();
     _invalidThrough.removeWhere((id, _) => !known.contains(id));
     _nativeStopped.removeWhere((id) => !known.contains(id));
     _disconnectedAfterStop.removeWhere((id) => !known.contains(id));
@@ -784,14 +719,32 @@ SystemNotifications useSystemNotifications(
   final shared = context
       .dependOnInheritedWidgetOfExactType<SystemNotificationsScope>()
       ?.notifications;
-  final controller = ref.watch(appProvider.notifier);
+  final events = ref.watch(runtimeEventsProvider);
   final sink = ref.watch(systemNotificationSinkProvider);
   final notifications = useMemoized(
-    () => shared ?? SystemNotifications(controller, sink),
-    [shared, controller, sink, controller.generation],
+    () =>
+        shared ??
+        SystemNotifications(
+          events: events,
+          sink: sink,
+          current: () =>
+              context.mounted &&
+              identical(ref.read(runtimeEventsProvider), events) &&
+              identical(ref.read(systemNotificationSinkProvider), sink),
+          readSnapshot: () {
+            final snapshot = ref.read(appSnapshotProvider);
+            return SystemNotificationSnapshot(
+              devices: snapshot.devices,
+              settings: snapshot.settings,
+              loading: snapshot.loading,
+              reconciliationPending: snapshot.reconciliationPending,
+            );
+          },
+        ),
+    [shared, events, sink],
   );
   ref.listen(
-    appProvider.select(
+    appSnapshotProvider.select(
       (state) => (
         state.devices,
         state.settings,

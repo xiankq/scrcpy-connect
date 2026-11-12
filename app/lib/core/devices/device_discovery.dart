@@ -1,13 +1,11 @@
-import 'package:scrcpy_connect/core/devices/adb_discovery_endpoint.dart';
-
 import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 
 import 'package:adb/adb.dart';
 import 'package:multicast_dns/multicast_dns.dart';
-
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/devices/models/adb_discovery_endpoint.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
 /// 有界发现、候选有效期和 socket 的唯一所有者；不写设备记录或授予信任。
 /// 每轮使用新客户端，避免库的缓存命中阻止刷新发送实际查询。

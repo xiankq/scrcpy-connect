@@ -1,30 +1,34 @@
-import 'package:scrcpy_connect/core/files/system_documents.dart';
-import 'package:scrcpy_connect/widgets/documents/document_picker.dart';
-
 import 'dart:async';
-
-import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-import 'package:scrcpy_connect/core/application/app_notifier.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
-
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/files/system_documents.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/widgets/documents/document_picker.dart';
 
 DocumentOperationController useDocumentOperationController(
-  AppNotifier controller, {
+  WidgetRef ref, {
   DocumentSource? exportSource,
 }) {
+  final documents = ref.watch(systemDocumentsProvider);
+  final completeSelection = ref.watch(documentSelectionResponderProvider);
+  final events = ref.watch(runtimeEventsProvider);
   final operation = useMemoized(
     () => DocumentOperationController(
-      documents: controller.documents,
-      completeSelection: controller.completeDocumentSelection,
-      events: controller.eventStream(),
+      documents: documents,
+      completeSelection: completeSelection,
+      events: events,
       exportSource: exportSource,
     ),
     [
-      controller,
+      documents,
+      completeSelection,
+      events,
       exportSource?.sourceId,
       exportSource?.localPath,
       exportSource?.kind,

@@ -53,7 +53,7 @@ final class GalleryHistoryNotifierProvider
 }
 
 String _$galleryHistoryNotifierHash() =>
-    r'82955ea08202a8169097fca027bb920f6823b2e8';
+    r'8e9c65811f09cb1388d15d5f4433b2a8a900da81';
 
 /// 同一应用 scope 的已核验相册历史，最多保留八台设备。
 

@@ -1,10 +1,10 @@
 import 'package:flutter/widgets.dart';
 
-import 'package:scrcpy_connect/router/remote_control_intent.dart';
+import 'package:scrcpy_connect/router/models/remote_control_intent.dart';
 
 import 'package:go_router/go_router.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/router/remote_launch_intent.dart';
+import 'package:scrcpy_connect/router/models/remote_launch_intent.dart';
 
 /// 明确打开意图仅保存在内存中，恢复 URL 不能创建新流；已有会话按身份重新查找。
 Future<void> openRemoteRoute(

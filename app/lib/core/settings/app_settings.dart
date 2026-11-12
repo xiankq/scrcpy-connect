@@ -1,20 +1,18 @@
-import 'package:scrcpy_connect/core/devices/device_records_import.dart';
-
 import 'dart:async';
 import 'dart:io';
 
-import 'metadata_management.dart';
-import 'settings_management.dart';
-import 'preference_codec.dart';
-
-import 'package:scrcpy_connect/core/settings/settings_storage.dart';
-import 'package:scrcpy_connect/core/devices/device_metadata.dart';
-import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
-import 'package:scrcpy_connect/core/settings/preference_schema.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart'
-    show RequestFailure;
 import 'package:scrcpy_connect/core/control/video_quality_policy.dart'
     show defaultVideoQuality, VideoQualityPolicy;
+import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
+import 'package:scrcpy_connect/core/devices/models/device_metadata.dart';
+import 'package:scrcpy_connect/core/devices/models/device_records_import.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart'
+    show RequestFailure;
+import 'package:scrcpy_connect/core/settings/metadata_management.dart';
+import 'package:scrcpy_connect/core/settings/preference_codec.dart';
+import 'package:scrcpy_connect/core/settings/preference_schema.dart';
+import 'package:scrcpy_connect/core/settings/settings_management.dart';
+import 'package:scrcpy_connect/core/settings/settings_storage.dart';
 
 const _devicePreferences = {'deviceQuality', 'deviceSettings', 'appOpenModes'};
 

@@ -1,33 +1,39 @@
-import 'package:scrcpy_connect/core/settings/preferences.dart';
-import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
-
 import 'dart:async';
 
-import 'package:scrcpy_connect/widgets/application_lifecycle.dart';
-import 'package:scrcpy_connect/widgets/remote_views.dart';
-import 'package:scrcpy_connect/core/application/app_dependencies_provider.dart';
-import 'package:scrcpy_connect/widgets/app_presentation_host.dart';
-import 'package:scrcpy_connect/styles/system_visual_preferences.dart';
-import 'package:scrcpy_connect/styles/system_typography.dart';
-
-import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/styles/theme.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_dependencies_provider.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
+import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
+import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
+import 'package:scrcpy_connect/core/media/media_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/media/audio_error_notifier.dart';
+import 'package:scrcpy_connect/core/settings/models/preferences.dart';
+import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
+import 'package:scrcpy_connect/router/app_router.dart';
+import 'package:scrcpy_connect/styles/system_typography.dart';
+import 'package:scrcpy_connect/styles/system_visual_preferences.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/app_lifecycle_observer.dart';
+import 'package:scrcpy_connect/widgets/app_presentation_host.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
+import 'package:scrcpy_connect/widgets/remote_views.dart';
+import 'package:scrcpy_connect/widgets/models/device_audio_view_snapshot.dart';
 
 class ConnectApp extends HookConsumerWidget {
   const ConnectApp({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(appProvider.notifier);
+    final session = ref.watch(stateSubscriptionProvider);
+    final events = ref.watch(runtimeEventsProvider);
+    final videos = ref.watch(videoSessionsProvider);
+    final audio = ref.watch(remoteAudioProvider);
     final dependencies = ref.watch(appDependenciesProvider);
     useEffect(() {
-      final lifecycle = ApplicationLifecycle(
+      final lifecycle = AppLifecycleObserver(
         setVisible: dependencies.setVisible,
         diagnostics: dependencies.diagnostics,
         shutdown: dependencies.close,
@@ -35,13 +41,40 @@ class ConnectApp extends HookConsumerWidget {
       unawaited(lifecycle.attach());
       return lifecycle.dispose;
     }, [dependencies]);
-    final views = useMemoized(() => RemoteViews(controller), [
-      controller,
-      dependencies,
-    ]);
+    final views = useMemoized(() {
+      bool current() =>
+          context.mounted &&
+          !session.disposed &&
+          identical(ref.read(stateSubscriptionProvider), session) &&
+          identical(ref.read(runtimeEventsProvider), events) &&
+          identical(ref.read(videoSessionsProvider), videos) &&
+          identical(ref.read(remoteAudioProvider), audio);
+      return RemoteViews(
+        videos: videos,
+        audio: audio,
+        events: events,
+        current: current,
+        readSnapshot: () {
+          if (!current()) {
+            return const DeviceAudioViewSnapshot(
+              devices: [],
+              reconciliationPending: true,
+            );
+          }
+          final snapshot = ref.read(appSnapshotProvider);
+          return DeviceAudioViewSnapshot(
+            devices: snapshot.devices,
+            reconciliationPending: snapshot.reconciliationPending,
+          );
+        },
+        onAudioError: (error) {
+          if (current()) ref.read(audioErrorProvider.notifier).update(error);
+        },
+      );
+    }, [session, events, videos, audio]);
     useEffect(() => views.dispose, [views]);
     ref.listen(
-      appProvider.select((s) => (s.devices, s.reconciliationPending)),
+      appSnapshotProvider.select((s) => (s.devices, s.reconciliationPending)),
       (_, _) => views.reconcile(),
     );
     final appSettings = ref.watch(
@@ -49,7 +82,7 @@ class ConnectApp extends HookConsumerWidget {
     );
     final navigator = useMemoized(() => GlobalKey<NavigatorState>());
     final router = useMemoized(() => createAppRouter(navigatorKey: navigator), [
-      controller,
+      session,
     ]);
     useEffect(() => router.dispose, [router]);
     final systemVisualPreferences = useMemoized(SystemVisualPreferences.new);

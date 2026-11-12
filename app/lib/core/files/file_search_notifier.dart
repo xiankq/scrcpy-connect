@@ -1,29 +1,14 @@
 import 'dart:async';
 
-import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:scrcpy_connect/core/application/app_dependencies_provider.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/files/file_search.dart';
+import 'package:scrcpy_connect/core/files/models/file_search_state.dart';
 
-import 'file_search.dart';
+export 'package:scrcpy_connect/core/files/models/file_search_state.dart';
 
-part 'file_search_notifier.freezed.dart';
 part 'file_search_notifier.g.dart';
-
-@freezed
-abstract class FileSearchState with _$FileSearchState {
-  const FileSearchState._();
-  const factory FileSearchState({
-    FileSearchSnapshot? result,
-    String? error,
-    @Default(false) bool starting,
-    @Default(false) bool stopping,
-  }) = _FileSearchState;
-
-  String? get searchId => result?.searchId;
-  bool get running => starting || result?.status == .running;
-}
 
 /// 每个页面 scope 独立拥有搜索、轮询与原任务的取消责任。
 @riverpod
@@ -32,9 +17,7 @@ class FileSearchNotifier extends _$FileSearchNotifier {
 
   @override
   FileSearchState build(String deviceId, {required Object scope}) {
-    final access = ref.watch(
-      appDependenciesProvider.select((source) => source.fileSearch),
-    );
+    final access = ref.watch(fileSearchSourceProvider);
     final owner = _owner = _SearchOwner(access, deviceId);
     ref.onDispose(() {
       owner.disposed = true;

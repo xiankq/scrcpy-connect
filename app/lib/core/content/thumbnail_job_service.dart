@@ -1,14 +1,10 @@
-import 'thumbnail_job.dart';
-
-import 'package:scrcpy_connect/core/companion/companion_exception.dart';
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-
 import 'dart:async';
 
 import 'package:adb/adb.dart';
-
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-
+import 'package:scrcpy_connect/core/companion/companion_exception.dart';
+import 'package:scrcpy_connect/core/content/thumbnail_jobs.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/files/file_paths.dart';
 
 /// 与 CompanionService.request 相同的准入边界；请求绑定原连接及同一有序 RPC 通道。

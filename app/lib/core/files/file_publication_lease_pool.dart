@@ -1,8 +1,7 @@
-import 'file_transfer_plan.dart';
-
+import 'package:scrcpy_connect/core/files/file_document_cache.dart';
 import 'package:scrcpy_connect/core/files/file_failure.dart';
 import 'package:scrcpy_connect/core/files/file_publication_leases.dart';
-import 'package:scrcpy_connect/core/files/file_document_cache.dart';
+import 'package:scrcpy_connect/core/files/models/file_transfer_plan.dart';
 
 /// 只组合来源所有者；任务日志与来源账本仍各自负责持久状态。
 final class FilePublicationLeasePool implements ManagedFilePublicationLeases {

@@ -64,7 +64,7 @@ final class FileSearchNotifierProvider
 }
 
 String _$fileSearchNotifierHash() =>
-    r'724d8a3b3f6c9687eb2fc5127bab2c73a7d9ab9d';
+    r'020b2d71b40388c7ea72d09a60df43a45137df29';
 
 /// 每个页面 scope 独立拥有搜索、轮询与原任务的取消责任。
 

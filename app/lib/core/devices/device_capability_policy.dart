@@ -1,11 +1,8 @@
 import 'package:adb/adb.dart' show AdbCancellation;
-
-import 'device_assessment.dart';
-import 'device_snapshot.dart';
-
-import 'package:scrcpy_connect/core/devices/device_capability_observation.dart';
-
+import 'package:scrcpy_connect/core/devices/device_assessment.dart';
 import 'package:scrcpy_connect/core/devices/device_capability_facts_reader.dart';
+import 'package:scrcpy_connect/core/devices/models/device_capability_observation.dart';
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 
 /// 根据明确的执行事实组装产品功能说明，不分派底层 JSON 探测命令。
 class DeviceCapabilityPolicy implements DeviceAssessment {

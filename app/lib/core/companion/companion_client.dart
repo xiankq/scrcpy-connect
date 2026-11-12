@@ -1,9 +1,3 @@
-import 'package:scrcpy_connect/utils/shell_quote.dart';
-import 'package:scrcpy_connect/core/companion/companion_exception.dart';
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-import 'package:scrcpy_connect/core/companion/companion_deployment_identity.dart';
-import 'package:scrcpy_connect/core/companion/companion_config.dart';
-
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -11,8 +5,12 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
-
+import 'package:scrcpy_connect/core/companion/companion_exception.dart';
 import 'package:scrcpy_connect/core/companion/companion_process.dart';
+import 'package:scrcpy_connect/core/companion/models/companion_config.dart';
+import 'package:scrcpy_connect/core/companion/models/companion_deployment_identity.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/utils/shell_quote.dart';
 
 export 'package:scrcpy_connect/core/companion/companion_process.dart'
     show cleanupCompanionDeployment;

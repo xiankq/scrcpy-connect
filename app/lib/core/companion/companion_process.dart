@@ -1,12 +1,11 @@
-import 'package:scrcpy_connect/utils/shell_quote.dart';
-import 'package:scrcpy_connect/core/companion/companion_exception.dart';
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-import 'package:scrcpy_connect/core/companion/companion_deployment_identity.dart';
-
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
+import 'package:scrcpy_connect/core/companion/companion_exception.dart';
+import 'package:scrcpy_connect/core/companion/models/companion_deployment_identity.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/utils/shell_quote.dart';
 
 Future<String> companionShell(
   DeviceConnection connection,

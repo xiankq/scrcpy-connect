@@ -1,0 +1,1 @@
+enum ConnectionTransport { tls, tcp }

@@ -1,42 +1,39 @@
-import 'video_sessions.dart';
-import 'video_output.dart';
-import '../control/video_session.dart';
-
-import 'video_screenshot.dart';
-
-import 'package:scrcpy_connect/core/control/video_quality.dart';
-
-import 'package:scrcpy_connect/core/control/session_activity.dart';
-
-import 'audio_sources.dart';
-
-import 'package:scrcpy_connect/core/control/remote_control.dart';
-
-import 'package:scrcpy_connect/core/settings/preferences.dart';
-import 'package:scrcpy_connect/core/media/media_intent.dart';
-
 import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show debugPrint;
-import 'package:scrcpy_connect/core/application/request_failure.dart';
 import 'package:scrcpy_connect/core/control/media_capture.dart';
-import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
-import 'package:scrcpy_connect/core/media/audio_player.dart';
-import 'package:scrcpy_connect/core/media/video_quality_service.dart';
+import 'package:scrcpy_connect/core/control/models/session_activity.dart';
+import 'package:scrcpy_connect/core/control/models/video_session.dart';
+import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/control/scrcpy_capture_adapter.dart';
-import 'package:scrcpy_connect/core/media/audio_output_service.dart';
-import 'package:scrcpy_connect/core/media/video_output_service.dart';
-import 'package:scrcpy_connect/core/media/video_recovery.dart';
-import 'package:scrcpy_connect/core/media/video_playback_service.dart';
+import 'package:scrcpy_connect/core/control/video_quality.dart';
 import 'package:scrcpy_connect/core/control/video_quality_policy.dart';
-
+import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/media/audio_output_service.dart';
+import 'package:scrcpy_connect/core/media/audio_player.dart';
+import 'package:scrcpy_connect/core/media/media_intent.dart';
 import 'package:scrcpy_connect/core/media/media_output_reconciliation.dart';
+import 'package:scrcpy_connect/core/media/models/video_output.dart';
+import 'package:scrcpy_connect/core/media/remote_audio.dart';
+import 'package:scrcpy_connect/core/media/video_output_service.dart';
+import 'package:scrcpy_connect/core/media/video_playback_service.dart';
+import 'package:scrcpy_connect/core/media/video_quality_service.dart';
+import 'package:scrcpy_connect/core/media/video_recovery.dart';
+import 'package:scrcpy_connect/core/media/video_screenshots.dart';
+import 'package:scrcpy_connect/core/media/video_sessions.dart';
+import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 
 /// 拥有当前 Dart 附着的媒体输出、启动意图与释放回执。
 /// 设备连接和原生捕获仍由执行层持有。
-final class MediaPlayback {
+final class MediaPlayback
+    implements
+        VideoSessions,
+        RemoteAudio,
+        VideoScreenshots,
+        VideoQualityControl {
   MediaPlayback({
     required this.captures,
     required this.readSnapshot,
@@ -211,6 +208,7 @@ final class MediaPlayback {
     }
   }
 
+  @override
   Future<VideoQualityOptions> readVideoQualityOptions(String deviceId) async {
     final result = await captures.readVideoQualityOptions(deviceId);
     final decoders = _decoderCapabilities();
@@ -224,6 +222,7 @@ final class MediaPlayback {
     );
   }
 
+  @override
   Future<VideoQualityApplication> changeVideoQuality(
     String deviceId,
     VideoQualityPatch patch,
@@ -232,6 +231,7 @@ final class MediaPlayback {
     return _deviceQuality.change(deviceId, patch);
   }
 
+  @override
   Future<VideoScreenshot> captureScreenshot(String sessionId) async {
     if (_disposed) throw const RequestFailure('disposed', '媒体所有者已关闭。');
     final directory = await Directory('$dataDirectory/screenshots')
@@ -306,6 +306,7 @@ final class MediaPlayback {
     }
   }
 
+  @override
   Future<List<VideoSessionView>> readVideoSessions({String? deviceId}) async {
     _checkVideoOpen();
     return List.unmodifiable([
@@ -320,6 +321,7 @@ final class MediaPlayback {
     ]);
   }
 
+  @override
   Future<VideoSessionView> startVideo(VideoSessionPlan plan) async {
     _checkVideoOpen(verified: true);
     final intent = _mediaIntents.begin(plan.deviceId, audio: false);
@@ -341,8 +343,10 @@ final class MediaPlayback {
     }
   }
 
+  @override
   Future<VideoPlaybackReceipt> pauseVideo(ControlTarget target) =>
       _presentVideo(target, true);
+  @override
   Future<VideoPlaybackReceipt> resumeVideo(ControlTarget target) =>
       _presentVideo(target, false);
   Future<VideoPlaybackReceipt> _presentVideo(
@@ -363,6 +367,7 @@ final class MediaPlayback {
     return receipt;
   }
 
+  @override
   Future<VideoStopReceipt> stopVideo(
     ControlTarget target, {
     bool keepLaunchRecord = false,
@@ -509,15 +514,18 @@ final class MediaPlayback {
     }
   }
 
+  @override
   Future<List<DeviceAudioSnapshot>> readAudioSources({
     String? deviceId,
   }) async => List.unmodifiable([
     for (final source in await captures.audioSources())
       if (deviceId == null || source.deviceId == deviceId) source,
   ]);
+  @override
   Future<Set<String>> readAudioEligibleDevices() async =>
       captures.audioEligibleDevices;
 
+  @override
   Future<DeviceAudioPlayback> startAudio(String deviceId) async {
     _checkAudioOpen();
     final intent = _mediaIntents.begin(deviceId, audio: true);
@@ -531,6 +539,7 @@ final class MediaPlayback {
     }
   }
 
+  @override
   Future<void> stopAudio(DeviceAudioTarget target) async {
     _checkAudioOpen();
     final source = target.sourceId;
@@ -557,8 +566,10 @@ final class MediaPlayback {
     }
   }
 
+  @override
   Future<DeviceAudioPlayback> pauseAudio(DeviceAudioTarget target) =>
       _setAudioPaused(target, true);
+  @override
   Future<DeviceAudioPlayback> resumeAudio(DeviceAudioTarget target) =>
       _setAudioPaused(target, false);
   Future<DeviceAudioPlayback> _setAudioPaused(
@@ -574,6 +585,7 @@ final class MediaPlayback {
     return (source: updated, output: applied);
   }
 
+  @override
   Future<DeviceAudioPlayback> changeAudioVolume(
     DeviceAudioTarget target, {
     double? volume,

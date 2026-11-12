@@ -5,7 +5,7 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
 /// 文档访问的本机边界；启动接管和用户操作必须使用同一资源名称与根集合。
 final class FileDocumentScope {

@@ -1,13 +1,12 @@
-import 'package:scrcpy_connect/core/companion/companion_exception.dart';
-import 'package:scrcpy_connect/core/companion/companion_deployment_identity.dart';
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:adb/adb.dart';
+import 'package:scrcpy_connect/core/companion/companion_exception.dart';
 import 'package:scrcpy_connect/core/companion/companion_process.dart';
+import 'package:scrcpy_connect/core/companion/models/companion_deployment_identity.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
 
 const _maximumBytes = 1024 * 1024;
 const _maximumEntries = 4096;

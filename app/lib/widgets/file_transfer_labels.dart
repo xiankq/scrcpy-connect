@@ -1,8 +1,8 @@
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/files/models/file_transfer_plan.dart';
+import 'package:scrcpy_connect/core/files/models/file_transfer_snapshot.dart';
 import 'package:scrcpy_connect/utils/formatters.dart';
-import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/core/files/file_transfer_snapshot.dart';
-import 'package:scrcpy_connect/core/files/file_transfer_plan.dart';
 
 FileTransferSnapshot transferView(
   Iterable<DeviceSnapshot> devices,

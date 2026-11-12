@@ -1,20 +1,17 @@
-import 'package:scrcpy_connect/core/control/video_quality.dart';
-
-import 'device_apps.dart';
-
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-import 'package:scrcpy_connect/core/devices/scrcpy_query_result.dart';
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:scrcpy_connect/core/devices/device_query.dart';
-import 'package:uuid/uuid.dart';
 import 'package:adb/adb.dart';
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/control/video_quality.dart';
+import 'package:scrcpy_connect/core/devices/device_apps.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/core/devices/device_query.dart';
+import 'package:scrcpy_connect/core/devices/models/scrcpy_query_result.dart';
 import 'package:scrcpy_connect/core/devices/scrcpy_query_process.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:uuid/uuid.dart';
 
 final class _ServerQueryJob {
   _ServerQueryJob(this.connection, this.cancellation, this.remote, this.query);

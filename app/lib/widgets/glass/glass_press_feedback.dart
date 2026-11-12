@@ -2,9 +2,8 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
-
-import '../../styles/generated/design_tokens.g.dart';
-import 'glass_preferences.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 
 /// 为应用持有手势识别器的控件提供指针反馈。
 /// 只观察指针，点击、拖动和取消仍由 child 负责。

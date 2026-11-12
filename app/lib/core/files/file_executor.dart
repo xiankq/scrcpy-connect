@@ -1,10 +1,9 @@
-import 'package:scrcpy_connect/core/files/file_cancellation.dart';
-import 'package:scrcpy_connect/core/files/file_stamp.dart';
-import 'package:scrcpy_connect/core/files/file_directory_facts.dart';
-
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/files/file_cancellation.dart';
 import 'package:scrcpy_connect/core/files/file_failure.dart';
+import 'package:scrcpy_connect/core/files/models/file_directory_facts.dart';
+import 'package:scrcpy_connect/core/files/models/file_stamp.dart';
 
 /// 执行本机与被控设备文件操作，不持有排序、遍历、冲突策略或任务状态。
 /// 实现返回类型化批次并直接写入未发布片段；取消成功前必须完成 worker 清理。

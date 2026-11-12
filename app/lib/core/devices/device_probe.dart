@@ -1,11 +1,9 @@
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-import 'package:scrcpy_connect/core/devices/device_facts.dart';
-import 'package:scrcpy_connect/core/devices/device_battery.dart';
-
 import 'package:adb/adb.dart';
-
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
 import 'package:scrcpy_connect/core/devices/device_query.dart';
+import 'package:scrcpy_connect/core/devices/models/device_battery.dart';
+import 'package:scrcpy_connect/core/devices/models/device_facts.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
 /// 通过固定只读命令探测精确连接，不持有设备记录或发布业务状态。
 /// 调用方应在返回后核对 DeviceConnectionPool 代次，再接纳事实或更新缓存。

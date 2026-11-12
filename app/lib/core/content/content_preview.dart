@@ -1,27 +1,25 @@
-import 'thumbnail_job.dart';
-import 'cached_content.dart';
-
-export 'cached_content.dart';
-
-import 'package:scrcpy_connect/core/files/file_failure.dart';
-import 'package:scrcpy_connect/core/files/file_cancellation.dart';
-import 'package:scrcpy_connect/core/files/file_executor.dart';
-import 'package:scrcpy_connect/core/files/file_cache_reservation.dart';
-import 'package:scrcpy_connect/core/files/file_cache_leases.dart';
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:uuid/uuid.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/core/application/request_failure.dart'
-    show RequestFailure;
-import 'package:scrcpy_connect/core/files/file_paths.dart';
-import 'package:scrcpy_connect/core/files/file_kind.dart';
 import 'package:scrcpy_connect/core/content/content_cache.dart';
+import 'package:scrcpy_connect/core/content/models/cached_content.dart';
+import 'package:scrcpy_connect/core/content/thumbnail_jobs.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart'
+    show RequestFailure;
+import 'package:scrcpy_connect/core/files/file_cache_leases.dart';
+import 'package:scrcpy_connect/core/files/file_cache_reservation.dart';
+import 'package:scrcpy_connect/core/files/file_cancellation.dart';
+import 'package:scrcpy_connect/core/files/file_executor.dart';
+import 'package:scrcpy_connect/core/files/file_failure.dart';
+import 'package:scrcpy_connect/core/files/models/file_kind.dart';
+import 'package:scrcpy_connect/core/files/file_paths.dart';
+import 'package:uuid/uuid.dart';
+
+export 'package:scrcpy_connect/core/content/models/cached_content.dart';
 
 /// 页面与队列只借用内容读取和读保护，不取得任务所有者的关闭权。
 abstract interface class ContentReader {

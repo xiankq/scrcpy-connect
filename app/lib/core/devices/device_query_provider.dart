@@ -1,15 +1,14 @@
-import 'device_notifications.dart';
-import 'device_calls.dart';
-
 import 'dart:async';
 
 import 'package:adb/adb.dart' show AdbCancellation;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:scrcpy_connect/core/application/application_session_provider.dart';
-
-import 'device_apps.dart';
-import 'device_assessment.dart';
-import 'device_inspection.dart';
+import 'package:scrcpy_connect/core/devices/device_apps.dart';
+import 'package:scrcpy_connect/core/devices/device_assessment.dart';
+import 'package:scrcpy_connect/core/devices/device_calls.dart';
+import 'package:scrcpy_connect/core/devices/device_inspection.dart';
+import 'package:scrcpy_connect/core/devices/device_notifications.dart';
+import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 
 part 'device_query_provider.g.dart';
 
@@ -20,9 +19,13 @@ Future<DeviceReading<DeviceDetails>> deviceDetails(
   String deviceId, {
   String? connectionId,
 }) {
-  final session = ref.watch(applicationSessionProvider);
-  final cancellation = _observeConnection(ref, session.events, deviceId);
-  return session.dependencies.inspection.readDetails(
+  final source = ref.watch(deviceInspectionProvider);
+  final cancellation = _observeConnection(
+    ref,
+    ref.watch(runtimeEventsProvider),
+    deviceId,
+  );
+  return source.readDetails(
     deviceId,
     connectionId: connectionId,
     cancellation: cancellation,
@@ -35,17 +38,14 @@ Future<DeviceCapabilities> deviceCapabilities(
   String deviceId, {
   int revision = 0,
 }) {
-  final session = ref.watch(applicationSessionProvider);
+  final source = ref.watch(deviceAssessmentProvider);
   final cancellation = _observeConnection(
     ref,
-    session.events,
+    ref.watch(runtimeEventsProvider),
     deviceId,
     eventPrefixes: const ['observation.', 'companion.stopped'],
   );
-  return session.dependencies.assessment.readCapabilities(
-    deviceId,
-    cancellation: cancellation,
-  );
+  return source.readCapabilities(deviceId, cancellation: cancellation);
 }
 
 @Riverpod(retry: _noRetry)
@@ -54,32 +54,35 @@ Future<DeviceDiagnosis> deviceDiagnosis(
   String deviceId, {
   int revision = 0,
 }) {
-  final session = ref.watch(applicationSessionProvider);
-  final cancellation = _observeConnection(ref, session.events, deviceId);
-  return session.dependencies.assessment.diagnoseDevice(
+  final source = ref.watch(deviceAssessmentProvider);
+  final cancellation = _observeConnection(
+    ref,
+    ref.watch(runtimeEventsProvider),
     deviceId,
-    cancellation: cancellation,
   );
+  return source.diagnoseDevice(deviceId, cancellation: cancellation);
 }
 
 @Riverpod(retry: _noRetry)
 Future<List<DeviceApp>> installedDeviceApps(Ref ref, String deviceId) {
-  final session = ref.watch(applicationSessionProvider);
-  final cancellation = _observeConnection(ref, session.events, deviceId);
-  return session.dependencies.apps.readInstalledApps(
+  final source = ref.watch(deviceAppsProvider);
+  final cancellation = _observeConnection(
+    ref,
+    ref.watch(runtimeEventsProvider),
     deviceId,
-    cancellation: cancellation,
   );
+  return source.readInstalledApps(deviceId, cancellation: cancellation);
 }
 
 @Riverpod(retry: _noRetry)
 Future<RunningDeviceApps> runningDeviceApps(Ref ref, String deviceId) {
-  final session = ref.watch(applicationSessionProvider);
-  final cancellation = _observeConnection(ref, session.events, deviceId);
-  return session.dependencies.apps.readRunningApps(
+  final source = ref.watch(deviceAppsProvider);
+  final cancellation = _observeConnection(
+    ref,
+    ref.watch(runtimeEventsProvider),
     deviceId,
-    cancellation: cancellation,
   );
+  return source.readRunningApps(deviceId, cancellation: cancellation);
 }
 
 @Riverpod(retry: _noRetry)
@@ -88,9 +91,13 @@ Future<DeviceAppIcon> deviceAppIcon(
   DeviceAppIconTarget target, {
   Object? revision,
 }) {
-  final session = ref.watch(applicationSessionProvider);
-  final cancellation = _observeConnection(ref, session.events, target.deviceId);
-  return session.dependencies.apps.readAppIcon(
+  final source = ref.watch(deviceAppsProvider);
+  final cancellation = _observeConnection(
+    ref,
+    ref.watch(runtimeEventsProvider),
+    target.deviceId,
+  );
+  return source.readAppIcon(
     target.deviceId,
     target.packageName,
     userId: target.userId,
@@ -99,11 +106,11 @@ Future<DeviceAppIcon> deviceAppIcon(
 }
 
 @Riverpod(retry: _noRetry)
-Future<DeviceCallsSnapshot> deviceCalls(Ref ref, String deviceId) {
-  final session = ref.watch(applicationSessionProvider);
+Future<DeviceCallsSnapshot> deviceCallsSnapshot(Ref ref, String deviceId) {
+  final source = ref.watch(deviceCallsProvider);
   final cancellation = _observeConnection(
     ref,
-    session.events,
+    ref.watch(runtimeEventsProvider),
     deviceId,
     eventPrefixes: const [
       'calls.',
@@ -112,21 +119,18 @@ Future<DeviceCallsSnapshot> deviceCalls(Ref ref, String deviceId) {
       'companion.stopped',
     ],
   );
-  return session.dependencies.calls.readCalls(
-    deviceId,
-    cancellation: cancellation,
-  );
+  return source.readCalls(deviceId, cancellation: cancellation);
 }
 
 @Riverpod(retry: _noRetry)
-Future<DeviceNotificationsSnapshot> deviceNotifications(
+Future<DeviceNotificationsSnapshot> deviceNotificationsSnapshot(
   Ref ref,
   String deviceId,
 ) {
-  final session = ref.watch(applicationSessionProvider);
+  final source = ref.watch(deviceNotificationsProvider);
   final cancellation = _observeConnection(
     ref,
-    session.events,
+    ref.watch(runtimeEventsProvider),
     deviceId,
     eventPrefixes: const [
       'notifications.',
@@ -134,10 +138,7 @@ Future<DeviceNotificationsSnapshot> deviceNotifications(
       'companion.stopped',
     ],
   );
-  return session.dependencies.notifications.readNotifications(
-    deviceId,
-    cancellation: cancellation,
-  );
+  return source.readNotifications(deviceId, cancellation: cancellation);
 }
 
 /// 设备查询共享连接事件筛选；释放和源替换同步取消原读取。

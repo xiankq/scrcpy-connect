@@ -1,12 +1,11 @@
 import 'package:adb/adb.dart' show AdbException;
-import 'package:scrcpy_connect/core/application/request_failure.dart'
-    show RequestFailure;
-import 'package:scrcpy_connect/core/devices/device_record.dart'
+import 'package:scrcpy_connect/core/devices/models/device_record.dart'
     show DeviceRecordsFailure;
+import 'package:scrcpy_connect/core/errors/request_failure.dart'
+    show RequestFailure;
+import 'package:scrcpy_connect/core/identity/adb_identity_service.dart';
 
-import 'adb_identity_service.dart';
-
-export 'authorization_identity.dart';
+export 'package:scrcpy_connect/core/identity/models/authorization_identity.dart';
 
 /// 应用允许修改全局主控身份；已配对设备的专属身份继续由连接尝试管理。
 abstract interface class IdentityManagement {

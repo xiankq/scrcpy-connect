@@ -1,10 +1,8 @@
-import 'video_output.dart';
-import 'audio_sources.dart';
-
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/media/models/video_output.dart';
+import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/core/media/video_output_snapshot.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-
-import 'package:scrcpy_connect/core/application/state_recovery.dart';
+import 'package:scrcpy_connect/core/recovery/state_recovery.dart';
 
 /// 读取核心状态并回收已结束输出，再合成本机呈现状态。
 /// 读取前捕获本地所有者；该读取期间新建或替换的输出不能被旧快照释放。

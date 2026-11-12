@@ -1,13 +1,11 @@
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-
 import 'dart:async';
 import 'dart:math';
 
 import 'package:adb/adb.dart';
-
-import 'package:scrcpy_connect/core/application/request_failure.dart';
 import 'package:scrcpy_connect/core/control/physical_display_command.dart';
 import 'package:scrcpy_connect/core/control/physical_display_script.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
 /// 跨 isolate 恢复遗留物理显示的应用所有者。
 ///

@@ -1,17 +1,14 @@
-import 'package:scrcpy_connect/core/companion/companion_exception.dart';
-
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-import 'package:scrcpy_connect/core/companion/companion_config.dart';
-import 'package:scrcpy_connect/core/companion/companion_update.dart';
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
-
 import 'package:scrcpy_connect/core/companion/companion_client.dart';
+import 'package:scrcpy_connect/core/companion/companion_exception.dart';
 import 'package:scrcpy_connect/core/companion/companion_recovery.dart';
+import 'package:scrcpy_connect/core/companion/companion_update.dart';
+import 'package:scrcpy_connect/core/companion/models/companion_config.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
 
 typedef CompanionEmitter = void Function(
   String type,

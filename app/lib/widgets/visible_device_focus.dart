@@ -1,21 +1,20 @@
-import 'package:scrcpy_connect/core/application/application_status_notifier.dart';
-
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/core/application/app_notifier.dart';
+import 'package:scrcpy_connect/core/devices/current_device_notifier.dart';
+import 'package:scrcpy_connect/core/lifecycle/state_subscription.dart';
+import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
+import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
 
 /// 只有已核验且可交互的设备页面能取得焦点；远控画面另行核对会话所有权。
 class VisibleDeviceFocus extends ConsumerStatefulWidget {
   const VisibleDeviceFocus({
     super.key,
-    required this.controller,
     required this.deviceId,
     required this.child,
   });
 
-  final AppNotifier controller;
   final String deviceId;
   final Widget child;
 
@@ -25,6 +24,7 @@ class VisibleDeviceFocus extends ConsumerStatefulWidget {
 
 class _VisibleDeviceFocusState extends ConsumerState<VisibleDeviceFocus>
     with WidgetsBindingObserver {
+  StateSubscription? _session;
   bool _active = false;
   int _epoch = 0;
 
@@ -46,8 +46,7 @@ class _VisibleDeviceFocusState extends ConsumerState<VisibleDeviceFocus>
   @override
   void didUpdateWidget(VisibleDeviceFocus oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller ||
-        oldWidget.deviceId != widget.deviceId) {
+    if (oldWidget.deviceId != widget.deviceId) {
       _invalidate();
     }
   }
@@ -60,7 +59,12 @@ class _VisibleDeviceFocusState extends ConsumerState<VisibleDeviceFocus>
 
   @override
   Widget build(BuildContext context) {
-    final recovery = applicationStatusProvider.select(
+    final session = ref.watch(stateSubscriptionProvider);
+    if (!identical(_session, session)) {
+      _session = session;
+      _invalidate();
+    }
+    final recovery = recoveryStateProvider.select(
       (state) => state.reconciliationPending,
     );
     // 即使重同步在下一帧前完成，也要保留核验标记，使同一可见设备重新激活剪贴板。
@@ -74,20 +78,20 @@ class _VisibleDeviceFocusState extends ConsumerState<VisibleDeviceFocus>
     } else if (!_active) {
       _active = true;
       final epoch = ++_epoch;
-      final controller = widget.controller;
       final deviceId = widget.deviceId;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted ||
             !_active ||
             epoch != _epoch ||
-            controller.isDisposed() ||
-            controller.snapshot().reconciliationPending ||
+            session.disposed ||
+            !identical(ref.read(stateSubscriptionProvider), session) ||
+            ref.read(recoveryStateProvider).reconciliationPending ||
             !_foreground ||
             ModalRoute.of(context)?.isCurrent != true) {
           return;
         }
         // 核验后重新声明可见设备，即使公开焦点仍指向同一设备。
-        unawaited(controller.focusDevice(deviceId));
+        unawaited(ref.read(currentDeviceProvider.notifier).focus(deviceId));
       });
     }
     return widget.child;

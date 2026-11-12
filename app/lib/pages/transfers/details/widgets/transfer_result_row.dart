@@ -1,10 +1,10 @@
-import 'package:scrcpy_connect/core/files/file_transfer_snapshot.dart';
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/files/models/file_transfer_snapshot.dart';
 import 'package:scrcpy_connect/pages/transfers/widgets/transfer_direction_badge.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/file_transfer_labels.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 
 class TransferResultRow extends StatelessWidget {
   const TransferResultRow({

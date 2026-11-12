@@ -1,9 +1,10 @@
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/core/application/app_notifier.dart';
+import 'package:scrcpy_connect/core/recovery/recovery_actions_provider.dart';
+import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 /// 恢复状态位于正常页面内容流中，保留内容访问和清理操作。
@@ -30,7 +31,7 @@ class _RecoveryStatusState extends ConsumerState<RecoveryStatus> {
     if (_retrying) return;
     setState(() => _retrying = true);
     try {
-      await ref.read(appProvider.notifier).reconcileState();
+      await ref.read(reconcileStateProvider)();
     } catch (_) {
       // 桥接保持核验门禁，并发布权威失败状态。
     } finally {
@@ -41,7 +42,7 @@ class _RecoveryStatusState extends ConsumerState<RecoveryStatus> {
   @override
   Widget build(BuildContext context) {
     final (pending, error) = ref.watch(
-      appProvider.select(
+      recoveryStateProvider.select(
         (state) => (state.reconciliationPending, state.reconciliationError),
       ),
     );

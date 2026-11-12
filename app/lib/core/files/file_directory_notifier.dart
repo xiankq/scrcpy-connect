@@ -1,32 +1,18 @@
 import 'dart:async';
 
-import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-import 'package:scrcpy_connect/core/application/application_session_provider.dart';
-import 'package:scrcpy_connect/core/application/application_status_notifier.dart';
-import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
+import 'package:scrcpy_connect/core/devices/device_readiness_provider.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/files/file_cancellation.dart';
+import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/files/file_changes_provider.dart';
+import 'package:scrcpy_connect/core/files/file_directories.dart';
+import 'package:scrcpy_connect/core/files/file_paths.dart';
+import 'package:scrcpy_connect/core/files/models/file_directory_state.dart';
 
-import 'file_cancellation.dart';
-import 'file_directory.dart';
-import 'file_paths.dart';
+export 'package:scrcpy_connect/core/files/models/file_directory_state.dart';
 
-part 'file_directory_notifier.freezed.dart';
 part 'file_directory_notifier.g.dart';
-
-@freezed
-abstract class FileDirectoryState with _$FileDirectoryState {
-  const FileDirectoryState._();
-  const factory FileDirectoryState({
-    FileDirectorySnapshot? data,
-    @Default(true) bool loading,
-    Object? error,
-    @Default(0) int revision,
-  }) = _FileDirectoryState;
-
-  bool get verified => !loading && error == null && data != null;
-}
 
 /// 同一目录共享读取；失效立即撤销操作资格，在途旧回执不能恢复资格。
 @riverpod
@@ -40,39 +26,26 @@ class FileDirectoryNotifier extends _$FileDirectoryNotifier {
 
   @override
   FileDirectoryState build(FileDirectoryTarget target) {
-    final session = ref.watch(applicationSessionProvider);
-    final source = session.dependencies.directories;
+    final source = ref.watch(fileDirectoriesProvider);
     if (!identical(_source, source)) _lastSuccess = null;
     _source = source;
-    ref.watch(
-      deviceListProvider.select((state) {
-        final device = state.devices
-            .where((item) => item.id == target.deviceId)
-            .firstOrNull;
-        return (device?.connectionId, device?.status);
-      }),
-    );
-    ref.watch(
-      applicationStatusProvider.select((state) => state.reconciliationPending),
-    );
+    ref.watch(deviceReadinessProvider(target.deviceId));
     final generation = ++_generation;
     _pending = null;
     _dirty = false;
     final cancellation = _cancellation = FileCancellation();
-    final subscription = session.events.listen((event) {
-      if (!_current(generation)) return;
-      final type = event['type'];
-      if (type is! String || type == 'session.frame') return;
-      final data = event['data'];
-      final owner =
-          event['deviceId'] ?? (data is Map ? data['deviceId'] : null);
-      if (owner != null && owner != target.deviceId) return;
-      if (type.startsWith('state.resync') ||
-          type == 'devices.changed' ||
-          type.startsWith('device.') ||
-          type == 'connections.stopped') {
-        unawaited(refresh());
+    final subscription = ref.watch(fileChangesProvider).listen((event) {
+      if (!_current(generation) || event.kind == FileChangeKind.transfer) {
+        return;
       }
+      if (event.deviceId != null && event.deviceId != target.deviceId) return;
+      if (event.kind == FileChangeKind.directory &&
+          event.path != null &&
+          event.path != FilePaths.remote(target.path)) {
+        return;
+      }
+      // 连接事件先撤销目录资格；设备列表的异步刷新尚未完成也不能沿用旧核验。
+      unawaited(refresh());
     });
     ref.onDispose(() {
       if (_generation == generation) _generation++;

@@ -1,27 +1,18 @@
-import 'package:scrcpy_connect/core/media/audio_sources.dart';
-
-import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
-
 import 'dart:async';
 
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
+
+import 'models/device_audio_view_snapshot.dart';
+
+export 'models/device_audio_view_snapshot.dart';
 
 class _AudioStopFailure {
   _AudioStopFailure(this.error);
 
   final Object? error;
-}
-
-/// 音源准入只读取当前连接与核验状态，不接管应用快照。
-class DeviceAudioViewSnapshot {
-  const DeviceAudioViewSnapshot({
-    required this.devices,
-    required this.reconciliationPending,
-  });
-
-  final List<DeviceSnapshot> devices;
-  final bool reconciliationPending;
 }
 
 /// 按设备共享声音；页面租约、启动取消、停止去重与迟到回执由同一所有者协调。

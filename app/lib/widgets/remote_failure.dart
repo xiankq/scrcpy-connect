@@ -1,6 +1,5 @@
 import 'package:flutter/services.dart';
-
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
 String remoteFailure(Object error) {
   if (error is PlatformException) {

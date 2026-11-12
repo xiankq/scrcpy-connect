@@ -1,10 +1,3 @@
-import 'system_documents.dart';
-
-import 'package:scrcpy_connect/core/files/file_selection_requests.dart';
-
-import 'package:scrcpy_connect/core/files/file_document_scope.dart';
-import 'package:scrcpy_connect/core/files/file_failure.dart';
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -12,13 +5,15 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:path/path.dart' as p;
-
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/files/document_limits.dart';
 import 'package:scrcpy_connect/core/files/file_document_cache.dart';
+import 'package:scrcpy_connect/core/files/file_document_scope.dart';
+import 'package:scrcpy_connect/core/files/file_failure.dart';
+import 'package:scrcpy_connect/core/files/file_selection_requests.dart';
+import 'package:scrcpy_connect/core/files/system_documents.dart';
 
 export 'package:scrcpy_connect/core/files/document_limits.dart';
-
-import 'package:scrcpy_connect/core/application/request_failure.dart';
 
 typedef DocumentsJson = Map<String, dynamic>;
 typedef DocumentsRequest = Future<DocumentsJson> Function(

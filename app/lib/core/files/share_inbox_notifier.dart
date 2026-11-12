@@ -1,68 +1,83 @@
-import 'incoming_shares.dart';
-
 import 'dart:async';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:scrcpy_connect/core/application/application_session_provider.dart';
+import 'package:scrcpy_connect/core/files/incoming_shares.dart';
+import 'package:scrcpy_connect/core/files/models/share_inbox_state.dart';
+import 'package:scrcpy_connect/core/lifecycle/state_subscription.dart';
+import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/core/application/application_session.dart';
 
-import 'share_inbox_state.dart';
+import 'file_capabilities_provider.dart';
 
 part 'share_inbox_notifier.g.dart';
 
 @Riverpod(keepAlive: true)
 class ShareInboxNotifier extends _$ShareInboxNotifier {
-  late ApplicationSession _session;
-  final _consumedShareIds = <String>{};
-  int _request = 0;
+  _ShareInboxOwner? _owner;
 
   @override
   ShareInboxState build() {
-    final session = _session = ref.watch(applicationSessionProvider);
-    _consumedShareIds.clear();
+    final session = ref.watch(stateSubscriptionProvider);
+    final previous = _owner;
+    final owner = _owner = _ShareInboxOwner(
+      session,
+      ref.watch(incomingSharesProvider),
+    );
     final subscription = session.stateEvents.listen((event) {
-      if (!_current(session)) return;
+      if (!_current(owner)) return;
       final type = event['type'];
       final data = jsonObject(event['data']);
       if (type == 'state.resync' || type == 'state.resync.failed') {
-        _request++;
+        owner.request++;
       } else if (type == 'state.resynced') {
-        _request++;
+        owner.request++;
         state = ShareInboxState(
           shares: objects(data['shares'])
               .map(IncomingShare.fromJson)
-              .where((share) => !_consumedShareIds.contains(share.shareId))
+              .where((share) => !owner.consumed.contains(share.shareId))
               .toList(),
         );
       } else if (type == 'share.consumed') {
         final id = value(data, 'shareId');
         if (id.isEmpty) return;
-        _request++;
-        _consumedShareIds.add(id);
+        owner.request++;
+        owner.consumed.add(id);
         state = state.copyWith(
           shares: state.shares.where((share) => share.shareId != id).toList(),
         );
       } else if (type == 'share.received' && event['data'] is Map) {
-        state = _withShare(state, IncomingShare.fromJson(data));
+        state = _withShare(owner, state, IncomingShare.fromJson(data));
       }
     });
-    ref.onDispose(() => unawaited(subscription.cancel()));
+    ref.onDispose(() {
+      owner.disposed = true;
+      unawaited(subscription.cancel());
+    });
     if (session.dependencies.initialize) {
       scheduleMicrotask(() {
-        if (_current(session)) unawaited(load());
+        if (_current(owner)) unawaited(load());
       });
     }
     return ShareInboxState(
-      shares: session.dependencies.initialState.pendingShares,
+      shares: identical(previous?.session, session)
+          ? const []
+          : session.dependencies.initialState.pendingShares,
     );
   }
 
-  bool _current(ApplicationSession session) =>
-      ref.mounted && !session.disposed && identical(_session, session);
-  ShareInboxState _withShare(ShareInboxState source, IncomingShare share) {
+  bool _current(_ShareInboxOwner owner) =>
+      ref.mounted &&
+      !owner.disposed &&
+      !owner.session.disposed &&
+      identical(ref.read(incomingSharesProvider), owner.source) &&
+      identical(_owner, owner);
+  ShareInboxState _withShare(
+    _ShareInboxOwner owner,
+    ShareInboxState source,
+    IncomingShare share,
+  ) {
     final id = share.shareId;
-    if (id.isEmpty || _consumedShareIds.contains(id)) {
+    if (id.isEmpty || owner.consumed.contains(id)) {
       return source;
     }
     final index = source.shares.indexWhere((item) => item.shareId == id);
@@ -90,15 +105,14 @@ class ShareInboxNotifier extends _$ShareInboxNotifier {
   }
 
   Future<void> load() async {
-    final session = _session;
-    final requestId = ++_request;
+    final owner = _owner!;
+    final requestId = ++owner.request;
     try {
-      final result = await session.dependencies.incomingShares
-          .readIncomingShares();
-      if (!_current(session) || requestId != _request) return;
+      final result = await owner.source.readIncomingShares();
+      if (!_current(owner) || requestId != owner.request) return;
       var next = state;
       for (final share in result) {
-        next = _withShare(next, share);
+        next = _withShare(owner, next, share);
       }
       if (!identical(state, next)) state = next;
     } catch (_) {
@@ -106,13 +120,29 @@ class ShareInboxNotifier extends _$ShareInboxNotifier {
     }
   }
 
+  Future<IncomingShare?> find(String id) async {
+    final owner = _owner!;
+    await load();
+    if (!_current(owner)) return null;
+    return state.shares.where((share) => share.shareId == id).firstOrNull;
+  }
+
   Future<void> consume(String id) async {
-    final session = _session;
-    await session.dependencies.incomingShares.consumeShare(id);
-    if (!_current(session)) return;
-    _consumedShareIds.add(id);
+    final owner = _owner!;
+    await owner.source.consumeShare(id);
+    if (!_current(owner)) return;
+    owner.consumed.add(id);
     state = state.copyWith(
       shares: state.shares.where((share) => share.shareId != id).toList(),
     );
   }
+}
+
+final class _ShareInboxOwner {
+  _ShareInboxOwner(this.session, this.source);
+  final StateSubscription session;
+  final IncomingShares source;
+  final consumed = <String>{};
+  int request = 0;
+  bool disposed = false;
 }

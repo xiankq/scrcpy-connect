@@ -1,5 +1,3 @@
-import 'package:scrcpy_connect/core/diagnostics/diagnostic_record.dart';
-
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -9,6 +7,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
+import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
 
 // 日志只接收机器标识、数值和布尔值；禁止异常正文、原生日志、URI、负载及堆栈。
 const _fieldNames = {

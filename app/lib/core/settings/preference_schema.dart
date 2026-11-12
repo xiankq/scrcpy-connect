@@ -1,6 +1,6 @@
-import 'preferences.dart';
-
 import 'dart:convert';
+
+import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 
 final _defaultPreferences = Preferences();
 final preferenceDefaults = Map<String, Object?>.unmodifiable({

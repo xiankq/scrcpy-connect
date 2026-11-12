@@ -1,38 +1,31 @@
-import 'video_session.dart';
-import 'video_display.dart';
-
-import 'video_capture.dart';
-
-import 'video_quality.dart';
-
-import 'session_activity.dart';
-
-import 'video_renderer_receipt.dart';
-
-import 'remote_control.dart';
-
-import 'package:scrcpy_connect/core/clipboard/remote_clipboard.dart';
-import 'package:scrcpy_connect/core/settings/preferences.dart';
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-import 'package:scrcpy_connect/core/control/app_launch_permit.dart';
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
-import 'package:uuid/uuid.dart';
 import 'package:adb/adb.dart';
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/clipboard/remote_clipboard.dart';
+import 'package:scrcpy_connect/core/control/app_launch_journal.dart';
+import 'package:scrcpy_connect/core/control/app_launch_permit.dart';
+import 'package:scrcpy_connect/core/control/display_lease.dart';
+import 'package:scrcpy_connect/core/control/models/session_activity.dart';
+import 'package:scrcpy_connect/core/control/models/session_policy.dart';
+import 'package:scrcpy_connect/core/control/models/video_capture.dart';
+import 'package:scrcpy_connect/core/control/models/video_renderer_receipt.dart';
+import 'package:scrcpy_connect/core/control/models/video_session.dart';
+import 'package:scrcpy_connect/core/control/remote_control.dart';
+import 'package:scrcpy_connect/core/control/session_shell.dart';
+import 'package:scrcpy_connect/core/control/video_display.dart';
+import 'package:scrcpy_connect/core/control/video_quality.dart';
 import 'package:scrcpy_connect/core/control/video_quality_policy.dart';
 import 'package:scrcpy_connect/core/control/virtual_display_policy.dart';
-import 'package:scrcpy_connect/core/control/app_launch_journal.dart';
-import 'package:scrcpy_connect/core/control/display_lease.dart';
-import 'package:scrcpy_connect/core/control/session_policy.dart';
-import 'package:scrcpy_connect/core/control/session_shell.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
 import 'package:scrcpy_connect/core/devices/scrcpy_server_queries.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/settings/models/preferences.dart';
+import 'package:uuid/uuid.dart';
 
-export 'package:scrcpy_connect/core/control/session_policy.dart';
+export 'package:scrcpy_connect/core/control/models/session_policy.dart';
 
 final class _SessionWork {
   final stop = AdbCancellation();

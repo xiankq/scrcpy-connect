@@ -47,7 +47,7 @@ final class ClipboardSyncNotifierProvider
 }
 
 String _$clipboardSyncNotifierHash() =>
-    r'b92ff843286285a8b48edac06f471aba120d9170';
+    r'6112eb79d1a58adcc2db6a2da19aecd385568895';
 
 /// 同步状态、计数和资源由同一个 scope 所有者维护。
 

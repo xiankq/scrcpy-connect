@@ -1,12 +1,12 @@
-import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
-import 'package:scrcpy_connect/pages/devices/widgets/device_status.dart';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/pages/devices/widgets/device_identity.dart';
+import 'package:scrcpy_connect/widgets/devices/device_identity.dart';
+import 'package:scrcpy_connect/widgets/devices/device_status.dart';
 
 class ShareDeviceCard extends StatelessWidget {
   const ShareDeviceCard({

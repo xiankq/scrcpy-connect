@@ -1,9 +1,8 @@
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-
 import 'dart:async';
 
 import 'package:adb/adb.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
 final class _Attempt {
   _Attempt(this.generation);

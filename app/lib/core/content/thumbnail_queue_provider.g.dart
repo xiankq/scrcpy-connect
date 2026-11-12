@@ -68,7 +68,7 @@ final class ThumbnailQueueProvider
   }
 }
 
-String _$thumbnailQueueHash() => r'80aa3c875f0cbdf0802ad5407086eb4764e92b8f';
+String _$thumbnailQueueHash() => r'ed867ed7fc7505466fce90b306082670a9fb42e5';
 
 final class ThumbnailQueueFamily extends $Family
     with $FunctionalFamilyOverride<ThumbnailQueue, String> {

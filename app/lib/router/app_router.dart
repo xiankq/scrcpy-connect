@@ -1,66 +1,58 @@
-import 'package:scrcpy_connect/core/media/video_screenshot.dart';
-
-import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/screenshot/devices_workspace_screenshot_page.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-import 'package:scrcpy_connect/pages/settings/runtime_logs/settings_runtime_logs_page.dart';
-import 'package:scrcpy_connect/router/remote_control_intent.dart';
 import 'package:flutter/material.dart';
-import 'package:scrcpy_connect/router/route_observers.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/core/application/app_notifier.dart';
 import 'package:scrcpy_connect/core/devices/connection_validation.dart';
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/media/video_screenshots.dart';
+import 'package:scrcpy_connect/pages/activities/activities_page.dart';
+import 'package:scrcpy_connect/pages/apps/device_apps_page.dart';
+import 'package:scrcpy_connect/pages/calls/calls_page.dart';
+import 'package:scrcpy_connect/pages/control/control_page.dart';
+import 'package:scrcpy_connect/pages/control/screenshot/screenshot_page.dart';
+import 'package:scrcpy_connect/pages/control/settings/control_settings_page.dart';
+import 'package:scrcpy_connect/pages/device_setup/add_device_page.dart';
+import 'package:scrcpy_connect/pages/device_setup/connection/connection_form_page.dart';
+import 'package:scrcpy_connect/pages/device_setup/discovery/device_discovery_page.dart';
+import 'package:scrcpy_connect/pages/device_setup/wireless/wireless_setup_page.dart';
+import 'package:scrcpy_connect/pages/devices/connection_settings/device_connection_settings_page.dart';
+import 'package:scrcpy_connect/pages/devices/details/device_details_page.dart';
+import 'package:scrcpy_connect/pages/devices/devices_page.dart';
+import 'package:scrcpy_connect/pages/devices/diagnostics/connection_diagnostics_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/device_workspace_page.dart';
+import 'package:scrcpy_connect/pages/files/details/file_details_page.dart';
+import 'package:scrcpy_connect/pages/files/directory_picker/file_directory_picker_page.dart';
+import 'package:scrcpy_connect/pages/files/files_page.dart';
+import 'package:scrcpy_connect/pages/files/import/document_import_page.dart';
+import 'package:scrcpy_connect/pages/files/search/file_search_page.dart';
+import 'package:scrcpy_connect/pages/gallery/gallery_page.dart';
+import 'package:scrcpy_connect/pages/gallery/preview/media_preview_page.dart';
+import 'package:scrcpy_connect/pages/incoming_share/incoming_share_page.dart';
+import 'package:scrcpy_connect/pages/notifications/notifications_page.dart';
+import 'package:scrcpy_connect/pages/route_error/route_error_page.dart';
+import 'package:scrcpy_connect/pages/settings/adb_identity/adb_identity_page.dart';
+import 'package:scrcpy_connect/pages/settings/appearance/appearance_page.dart';
+import 'package:scrcpy_connect/pages/settings/background/background_page.dart';
+import 'package:scrcpy_connect/pages/settings/data_preferences/data_preferences_page.dart';
+import 'package:scrcpy_connect/pages/settings/media_cache/media_cache_page.dart';
+import 'package:scrcpy_connect/pages/settings/runtime_logs/runtime_logs_page.dart';
+import 'package:scrcpy_connect/pages/settings/settings_page.dart';
+import 'package:scrcpy_connect/pages/transfers/details/transfer_details_page.dart';
+import 'package:scrcpy_connect/pages/transfers/export/document_export_page.dart';
+import 'package:scrcpy_connect/pages/transfers/receive/receive_content_page.dart';
+import 'package:scrcpy_connect/pages/transfers/transfers_page.dart';
+import 'package:scrcpy_connect/router/models/remote_control_intent.dart';
+import 'package:scrcpy_connect/router/models/remote_launch_intent.dart';
+import 'package:scrcpy_connect/router/route_observers.dart';
 import 'package:scrcpy_connect/router/route_resource_resolver_provider.dart';
 import 'package:scrcpy_connect/router/route_resource_view.dart';
-import 'package:scrcpy_connect/router/remote_launch_intent.dart';
+import 'package:scrcpy_connect/widgets/navigation_scaffold.dart';
 import 'package:scrcpy_connect/widgets/visible_device_focus.dart';
-
-import 'package:scrcpy_connect/pages/devices/workspace/activities/devices_workspace_activities_page.dart';
-import 'package:scrcpy_connect/pages/connection/index/connection_index_page.dart';
-import 'package:scrcpy_connect/pages/settings/appearance/settings_appearance_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/apps/devices_workspace_apps_page.dart';
-import 'package:scrcpy_connect/pages/settings/background/settings_background_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/calls/devices_workspace_calls_page.dart';
-import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
-import 'package:scrcpy_connect/pages/settings/data_preferences/settings_data_preferences_page.dart';
-import 'package:scrcpy_connect/pages/devices/details/connection_preferences/devices_details_connection_preferences_page.dart';
-import 'package:scrcpy_connect/pages/devices/details/data/devices_details_data_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
-import 'package:scrcpy_connect/pages/devices/index/devices_index_page.dart';
-import 'package:scrcpy_connect/pages/devices/details/diagnostics/devices_details_diagnostics_page.dart';
-import 'package:scrcpy_connect/pages/connection/discovery/connection_discovery_page.dart';
-import 'package:scrcpy_connect/pages/transfers/details/export/transfers_details_export_page.dart';
-import 'package:scrcpy_connect/pages/transfers/details/receive/transfers_details_receive_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/files/import/devices_workspace_files_import_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/files/details/devices_workspace_files_details_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/files/search/devices_workspace_files_search_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/gallery/index/devices_workspace_gallery_index_page.dart';
-import 'package:scrcpy_connect/pages/home/home_page.dart';
-import 'package:scrcpy_connect/pages/incoming_share/incoming_share_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/devices_workspace_gallery_preview_page.dart';
-import 'package:scrcpy_connect/pages/settings/media_cache/settings_media_cache_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devices_workspace_notifications_index_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
-import 'package:scrcpy_connect/pages/route_error/route_error_page.dart';
-import 'package:scrcpy_connect/pages/settings/index/settings_index_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/files/directory_picker/devices_workspace_files_directory_picker_page.dart';
-import 'package:scrcpy_connect/pages/transfers/details/index/transfers_details_index_page.dart';
-import 'package:scrcpy_connect/pages/transfers/index/transfers_index_page.dart';
-
-import 'package:scrcpy_connect/pages/settings/adb_identity/settings_adb_identity_page.dart';
-import 'package:scrcpy_connect/pages/devices/details/convert_ip/devices_details_convert_ip_page.dart';
 
 part 'app_router.g.dart';
 
 GlobalKey<NavigatorState> _root = GlobalKey<NavigatorState>();
 GlobalKey<NavigatorState> _content = GlobalKey<NavigatorState>();
-AppNotifier _controller(BuildContext context) => ProviderScope.containerOf(
-  context,
-  listen: false,
-).read(appProvider.notifier);
 RouteResourceResolver _resources(BuildContext context) =>
     ProviderScope.containerOf(
       context,
@@ -140,7 +132,6 @@ Widget _deviceRecord(
         ['remote', 'remote-app', 'remote-session'].contains(name)
         ? build(context, state, device)
         : VisibleDeviceFocus(
-            controller: _controller(context),
             deviceId: AppNavigationShell.isVisible(context) ? device.id : '',
             child: build(context, state, device),
           ),
@@ -160,11 +151,10 @@ Widget _remoteView(
   if (session == null && intent is! RemoteLaunchIntent) {
     return const RouteErrorPage(message: '请从设备工作台明确打开画面。恢复这个位置不会自动创建新的控制会话。');
   }
-  return RemotePage(
+  return ControlPage(
     key: ValueKey(
       'remote:${state.pageKey.value}:${device.id}:${state.pathParameters['sessionId'] ?? packageName ?? 'screen'}',
     ),
-    controller: _controller(context),
     device: device,
     existingSession: session,
     packageName: packageName ?? (session?['packageName'] as String?),
@@ -209,7 +199,7 @@ class HomeShellRoute extends StatefulShellRouteData {
     StatefulNavigationShell navigationShell,
   ) => _page(
     state,
-    HomePage(navigationShell: navigationShell),
+    NavigationScaffold(navigationShell: navigationShell),
     restorationId: 'home-shell-page',
   );
 }
@@ -232,8 +222,7 @@ class SettingsBranch extends StatefulShellBranchData {
 class DevicesRoute extends GoRouteData with $DevicesRoute {
   const DevicesRoute();
   @override
-  Widget build(BuildContext context, GoRouterState state) =>
-      DevicesPage(controller: _controller(context));
+  Widget build(BuildContext context, GoRouterState state) => DevicesPage();
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) =>
       _page(state, build(context, state), restorationId: 'devices-page');
@@ -243,7 +232,7 @@ class TransfersRoute extends GoRouteData with $TransfersRoute {
   const TransfersRoute();
   @override
   Widget build(BuildContext context, GoRouterState state) =>
-      TransfersPage(controller: _controller(context), embedded: true);
+      const TransfersPage(embedded: true);
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) =>
       _page(state, build(context, state), restorationId: 'transfers-page');
@@ -283,8 +272,7 @@ class TransferCenterRoute extends _AppPageRoute with $TransferCenterRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
-    return TransfersPage(controller: controller);
+    return const TransfersPage();
   }
 }
 
@@ -305,16 +293,14 @@ class AddDeviceRoute extends _AppPageRoute with $AddDeviceRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     final resources = _resources(context);
     final id = deviceId;
     return id == null
-        ? AddDevicePage(controller: controller)
+        ? AddDevicePage()
         : RouteResourceView(
             identity: 'reauthorize:$id',
             load: () => resources.device(id),
-            builder: (_, device) =>
-                AddDevicePage(controller: controller, initialDevice: device),
+            builder: (_, device) => AddDevicePage(initialDevice: device),
           );
   }
 }
@@ -330,15 +316,10 @@ class WirelessGuideRoute extends _AppPageRoute with $WirelessGuideRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     final resources = _resources(context);
     final id = deviceId;
-    Widget guide([DeviceSnapshot? record]) => AddDevicePage(
-      initialDevice: record,
-      controller: controller,
-      deviceId: id,
-      address: address,
-    );
+    Widget guide([DeviceSnapshot? record]) =>
+        AddDevicePage(initialDevice: record, deviceId: id, address: address);
     return id == null
         ? guide()
         : RouteResourceView(
@@ -369,11 +350,9 @@ class ConnectionFormRoute extends _AppPageRoute with $ConnectionFormRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     final resources = _resources(context);
     Widget form([DeviceSnapshot? record]) => AddDevicePage(
       key: state.pageKey,
-      controller: controller,
       initialMode: pairing ? AddDeviceMode.pairing : AddDeviceMode.ip,
       address: address,
       port: port,
@@ -402,8 +381,7 @@ class DiscoveryRoute extends _AppPageRoute with $DiscoveryRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
-    return DiscoveryPage(controller: controller, returnSelection: selection);
+    return DeviceDiscoveryPage(returnSelection: selection);
   }
 }
 
@@ -414,10 +392,8 @@ class UsbGuideRoute extends _AppPageRoute with $UsbGuideRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     final id = deviceId;
     Widget page([DeviceSnapshot? record]) => AddDevicePage(
-      controller: controller,
       initialMode: AddDeviceMode.usb,
       deviceId: id,
       initialDevice: record,
@@ -439,8 +415,7 @@ class QrPairRoute extends _AppPageRoute with $QrPairRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
-    return AddDevicePage(controller: controller, initialMode: AddDeviceMode.qr);
+    return AddDevicePage(initialMode: AddDeviceMode.qr);
   }
 }
 
@@ -451,9 +426,8 @@ class WorkspaceRoute extends _AppPageRoute with $WorkspaceRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     Widget page(BuildContext _, GoRouterState state, DeviceSnapshot device) =>
-        DeviceWorkspacePage(controller: controller, device: device);
+        DeviceWorkspacePage(device: device);
     return _deviceRecord(context, state, deviceId, 'workspace', page);
   }
 }
@@ -468,9 +442,8 @@ class DeviceDetailsRoute extends _AppPageRoute with $DeviceDetailsRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     Widget page(BuildContext _, GoRouterState state, DeviceSnapshot device) =>
-        DeviceDataPage(controller: controller, device: device);
+        DeviceDetailsPage(device: device);
     return _deviceRecord(context, state, deviceId, 'device-details', page);
   }
 }
@@ -511,9 +484,8 @@ class DeviceConnectionRoute extends _AppPageRoute with $DeviceConnectionRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     Widget page(BuildContext _, GoRouterState state, DeviceSnapshot device) =>
-        DeviceConnectionPreferencesPage(controller: controller, device: device);
+        DeviceConnectionSettingsPage(device: device);
     return _deviceRecord(context, state, deviceId, 'device-connection', page);
   }
 }
@@ -529,7 +501,7 @@ class DiagnosticsRoute extends _AppPageRoute with $DiagnosticsRoute {
   @override
   Widget build(BuildContext context, GoRouterState state) {
     Widget page(BuildContext _, GoRouterState state, DeviceSnapshot device) =>
-        DiagnosticsPage(device: device);
+        ConnectionDiagnosticsPage(device: device);
     return _deviceRecord(context, state, deviceId, 'diagnostics', page);
   }
 }
@@ -542,11 +514,9 @@ class FilesRoute extends _AppPageRoute with $FilesRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     Widget page(BuildContext _, GoRouterState state, DeviceSnapshot device) =>
         FilesPage(
           key: ValueKey('files:${device.id}:$path'),
-          controller: controller,
           device: device,
           initialPath: path,
         );
@@ -565,7 +535,6 @@ class FileDetailsRoute extends _AppPageRoute with $FileDetailsRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     final resources = _resources(context);
     Widget page(
       BuildContext context,
@@ -575,8 +544,7 @@ class FileDetailsRoute extends _AppPageRoute with $FileDetailsRoute {
       return RouteResourceView(
         identity: 'file:${device.id}:$path',
         load: () => resources.file(device.id, path),
-        builder: (_, file) =>
-            FileDetailsPage(controller: controller, device: device, file: file),
+        builder: (_, file) => FileDetailsPage(device: device, file: file),
       );
     }
 
@@ -606,7 +574,6 @@ class FileSearchRoute extends _AppPageRoute with $FileSearchRoute {
       DeviceSnapshot device,
     ) => FileSearchPage(
       key: ValueKey('file-search:${device.id}:$path:$query'),
-      controller: _controller(context),
       device: device,
       initialPath: path,
       initialQuery: query,
@@ -622,9 +589,8 @@ class AppsRoute extends _AppPageRoute with $AppsRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     Widget page(BuildContext _, GoRouterState state, DeviceSnapshot device) =>
-        AppsPage(controller: controller, device: device);
+        DeviceAppsPage(device: device);
     return _deviceRecord(context, state, deviceId, 'apps', page);
   }
 }
@@ -636,9 +602,8 @@ class GalleryRoute extends _AppPageRoute with $GalleryRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     Widget page(BuildContext _, GoRouterState state, DeviceSnapshot device) =>
-        GalleryPage(controller: controller, device: device);
+        GalleryPage(device: device);
     return _deviceRecord(context, state, deviceId, 'gallery', page);
   }
 }
@@ -654,17 +619,12 @@ class MediaPreviewRoute extends _AppPageRoute with $MediaPreviewRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     final resources = _resources(context);
     Widget page(BuildContext _, GoRouterState state, DeviceSnapshot device) {
       return RouteResourceView(
         identity: 'media:${device.id}:$path',
         load: () => resources.file(device.id, path),
-        builder: (_, file) => MediaPreviewPage(
-          controller: controller,
-          device: device,
-          file: file,
-        ),
+        builder: (_, file) => MediaPreviewPage(device: device, file: file),
       );
     }
 
@@ -682,9 +642,8 @@ class NotificationsRoute extends _AppPageRoute with $NotificationsRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     Widget page(BuildContext _, GoRouterState state, DeviceSnapshot device) =>
-        NotificationsPage(controller: controller, device: device);
+        NotificationsPage(device: device);
     return _deviceRecord(context, state, deviceId, 'notifications', page);
   }
 }
@@ -696,9 +655,8 @@ class CallsRoute extends _AppPageRoute with $CallsRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     Widget page(BuildContext _, GoRouterState state, DeviceSnapshot device) =>
-        CallsPage(controller: controller, device: device);
+        CallsPage(device: device);
     return _deviceRecord(context, state, deviceId, 'calls', page);
   }
 }
@@ -710,9 +668,8 @@ class QualityRoute extends _AppPageRoute with $QualityRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     Widget page(BuildContext _, GoRouterState state, DeviceSnapshot device) =>
-        QualityPage(controller: controller, device: device);
+        ControlSettingsPage(device: device);
     return _deviceRecord(context, state, deviceId, 'quality', page);
   }
 }
@@ -854,14 +811,12 @@ class TransferDetailsRoute extends _AppPageRoute with $TransferDetailsRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     final resources = _resources(context);
     final id = taskId;
     return RouteResourceView(
       identity: 'transfer:$id',
       load: () => resources.transfer(id),
-      builder: (_, task) =>
-          TransferDetailsPage(controller: controller, task: task),
+      builder: (_, task) => TransferDetailsPage(task: task),
     );
   }
 }
@@ -885,11 +840,8 @@ class ScreenshotRoute extends _AppPageRoute with $ScreenshotRoute {
       state,
       deviceId,
       'screenshot',
-      (context, state, device) => ScreenshotPage(
-        controller: _controller(context),
-        device: device,
-        capture: $extra!,
-      ),
+      (context, state, device) =>
+          ScreenshotPage(device: device, capture: $extra!),
     );
   }
 }
@@ -905,7 +857,6 @@ class DocumentExportRoute extends _AppPageRoute with $DocumentExportRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     final resources = _resources(context);
     final id = taskId;
     return RouteResourceView(
@@ -921,7 +872,6 @@ class DocumentExportRoute extends _AppPageRoute with $DocumentExportRoute {
           );
         }
         return DocumentExportPage(
-          controller: controller,
           transferId: id,
           partial: partial,
           localPath: localPath,
@@ -945,13 +895,11 @@ class ReceiveContentRoute extends _AppPageRoute with $ReceiveContentRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     final resources = _resources(context);
     return RouteResourceView(
       identity: 'receive:$taskId:$share',
       load: () => resources.transfer(taskId),
-      builder: (_, task) =>
-          ReceiveContentPage(controller: controller, task: task, share: share),
+      builder: (_, task) => ReceiveContentPage(task: task, share: share),
     );
   }
 }
@@ -970,13 +918,11 @@ class DocumentImportRoute extends _AppPageRoute with $DocumentImportRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     Widget page(
       BuildContext context,
       GoRouterState state,
       DeviceSnapshot device,
     ) => DocumentImportPage(
-      controller: controller,
       device: device,
       destination: destination,
       onSubmitted: () {
@@ -999,14 +945,12 @@ class IncomingShareRoute extends _AppPageRoute with $IncomingShareRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     final resources = _resources(context);
     final id = shareId;
     return RouteResourceView(
       identity: 'share:$id',
       load: () => resources.share(id),
-      builder: (_, share) =>
-          IncomingSharePage(controller: controller, share: share),
+      builder: (_, share) => IncomingSharePage(share: share),
     );
   }
 }
@@ -1022,13 +966,8 @@ class ShareDirectoryRoute extends _AppPageRoute with $ShareDirectoryRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
     Widget page(BuildContext _, GoRouterState state, DeviceSnapshot device) =>
-        ShareDirectoryPickerPage(
-          controller: controller,
-          device: device,
-          initialPath: path,
-        );
+        FileDirectoryPickerPage(device: device, initialPath: path);
     return _deviceRecord(context, state, deviceId, 'share-directory', page);
   }
 }
@@ -1039,8 +978,7 @@ class AppearanceRoute extends _AppPageRoute with $AppearanceRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
-    return AppearancePage(controller: controller);
+    return const AppearancePage();
   }
 }
 
@@ -1072,8 +1010,7 @@ class DataPreferencesRoute extends _AppPageRoute with $DataPreferencesRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
-    return DataPreferencesPage(controller: controller);
+    return const DataPreferencesPage();
   }
 }
 
@@ -1086,7 +1023,7 @@ class MediaCacheRoute extends _AppPageRoute with $MediaCacheRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) =>
-      MediaCachePage(controller: _controller(context));
+      const MediaCachePage();
 }
 
 @TypedGoRoute<DeviceActivitiesRoute>(
@@ -1103,8 +1040,7 @@ class DeviceActivitiesRoute extends _AppPageRoute with $DeviceActivitiesRoute {
     state,
     deviceId,
     'device-activities',
-    (_, _, _) =>
-        ActivitiesPage(controller: _controller(context), deviceId: deviceId),
+    (_, _, _) => ActivitiesPage(deviceId: deviceId),
   );
 }
 
@@ -1114,7 +1050,7 @@ class AdbIdentityRoute extends _AppPageRoute with $AdbIdentityRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) =>
-      AdbIdentityPage(controller: _controller(context));
+      const AdbIdentityPage();
 }
 
 @TypedGoRoute<DeviceIdentityRoute>(
@@ -1144,8 +1080,7 @@ class DeviceIpRoute extends _AppPageRoute with $DeviceIpRoute {
     state,
     deviceId,
     'device-convert-ip',
-    (_, _, device) =>
-        DeviceConvertIpPage(controller: _controller(context), device: device),
+    (_, _, device) => WirelessSetupPage(device: device),
   );
 }
 

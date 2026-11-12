@@ -1,27 +1,24 @@
-import '../identity/setup_identity.dart';
-import 'device_connection_control.dart';
-import 'device_management.dart';
-import 'device_inspection.dart';
-
-import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-import 'package:scrcpy_connect/core/devices/adb_discovery_endpoint.dart';
-import 'package:scrcpy_connect/core/identity/identity_selection.dart';
-import 'package:scrcpy_connect/core/identity/adb_identity_service.dart';
-
 import 'dart:async';
 
 import 'package:adb/adb.dart';
-
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/core/devices/device_connection_control.dart';
 import 'package:scrcpy_connect/core/devices/device_connection_pool.dart';
-import 'package:scrcpy_connect/core/devices/connection_policy.dart';
 import 'package:scrcpy_connect/core/devices/device_details_reader.dart';
-import 'package:scrcpy_connect/core/devices/device_probe.dart';
 import 'package:scrcpy_connect/core/devices/device_discovery.dart';
+import 'package:scrcpy_connect/core/devices/device_inspection.dart';
+import 'package:scrcpy_connect/core/devices/device_management.dart';
+import 'package:scrcpy_connect/core/devices/device_probe.dart';
 import 'package:scrcpy_connect/core/devices/device_reconnection_candidates.dart';
-import 'package:scrcpy_connect/core/devices/device_record.dart';
 import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
+import 'package:scrcpy_connect/core/devices/models/adb_discovery_endpoint.dart';
+import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
+import 'package:scrcpy_connect/core/devices/models/device_record.dart';
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/identity/adb_identity_service.dart';
+import 'package:scrcpy_connect/core/identity/models/identity_selection.dart';
+import 'package:scrcpy_connect/core/identity/models/setup_identity.dart';
 
 const _transientConnectionErrors = {
   'connection_refused',

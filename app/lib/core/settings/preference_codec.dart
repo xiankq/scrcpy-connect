@@ -1,5 +1,5 @@
-import 'preferences.dart';
-import 'preference_schema.dart';
+import 'package:scrcpy_connect/core/settings/models/preferences.dart';
+import 'package:scrcpy_connect/core/settings/preference_schema.dart';
 
 /// preferences.json、迁移文件及状态快照的格式适配，不参与偏好编排。
 abstract final class PreferenceCodec {

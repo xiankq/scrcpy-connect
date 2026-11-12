@@ -1,9 +1,11 @@
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
-
 import 'dart:io';
 
-enum ConnectionTransport { tls, tcp }
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+
+import 'models/connection_transport.dart';
+
+export 'models/connection_transport.dart';
 
 ConnectionTransport connectionTransportForRecord(DeviceSnapshot record) =>
     record.transport == DeviceTransport.tcp && record.guid == null

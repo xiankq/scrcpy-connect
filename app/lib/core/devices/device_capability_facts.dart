@@ -1,10 +1,8 @@
-import 'device_assessment.dart';
-
-import 'package:scrcpy_connect/core/devices/device_capability_observation.dart';
-
 import 'dart:async';
 
-import 'package:scrcpy_connect/core/devices/device_record.dart';
+import 'package:scrcpy_connect/core/devices/device_assessment.dart';
+import 'package:scrcpy_connect/core/devices/models/device_capability_observation.dart';
+import 'package:scrcpy_connect/core/devices/models/device_record.dart';
 
 /// 单次查询绑定的连接事实；快照回调只读取已有所有者，不部署或恢复活动。
 final class DeviceCapabilityFacts {

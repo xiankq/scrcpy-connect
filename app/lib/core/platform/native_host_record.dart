@@ -1,19 +1,18 @@
-import 'package:scrcpy_connect/core/identity/application_identity_host.dart';
-
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
+import 'package:scrcpy_connect/core/identity/models/identity_host_record.dart';
 
 /// 每代宿主的恢复记录只属于该代 scope；旧 isolate 不能覆盖后继记录。
 final class NativeHostRecord {
   NativeHostRecord({
     required this.policy,
-    Map<String, ApplicationIdentityHost>? identities,
+    Map<String, IdentityHostRecord>? identities,
   }) : identities = {...?identities};
 
   final Map<String, Object?> policy;
-  final Map<String, ApplicationIdentityHost> identities;
+  final Map<String, IdentityHostRecord> identities;
 
   static File _file(Directory directory, String scopeId) {
     if (!RegExp(r'^[a-zA-Z0-9-]{1,128}$').hasMatch(scopeId)) {
@@ -46,12 +45,12 @@ final class NativeHostRecord {
         value['identities'] is! Map) {
       throw const FormatException('宿主恢复记录格式无效。');
     }
-    final entries = <String, ApplicationIdentityHost>{};
+    final entries = <String, IdentityHostRecord>{};
     for (final entry in (value['identities'] as Map).entries) {
       if (entry.key is! String || entry.value is! Map) {
         throw const FormatException('宿主身份记录格式无效。');
       }
-      entries[entry.key as String] = ApplicationIdentityHost.fromJson(
+      entries[entry.key as String] = IdentityHostRecord.fromJson(
         Map<String, Object?>.from(entry.value as Map),
       );
     }

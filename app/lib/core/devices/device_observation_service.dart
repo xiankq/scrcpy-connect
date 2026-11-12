@@ -1,19 +1,15 @@
-import 'device_assessment.dart';
-import 'device_notifications.dart';
-import 'device_calls.dart';
-import 'device_observation.dart';
-
-import 'package:scrcpy_connect/core/companion/companion_exception.dart';
-
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-import 'package:scrcpy_connect/core/companion/companion_update.dart';
-
 import 'dart:async';
 
 import 'package:adb/adb.dart';
-
-import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
+import 'package:scrcpy_connect/core/companion/companion_exception.dart';
 import 'package:scrcpy_connect/core/companion/companion_service.dart';
+import 'package:scrcpy_connect/core/companion/companion_update.dart';
+import 'package:scrcpy_connect/core/devices/device_assessment.dart';
+import 'package:scrcpy_connect/core/devices/device_calls.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/core/devices/device_notifications.dart';
+import 'package:scrcpy_connect/core/devices/device_observation.dart';
+import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
 
 Map<String, Object?> _unknown(
   String section,

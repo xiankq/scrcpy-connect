@@ -1,7 +1,6 @@
-import 'system_documents.dart';
-import 'file_delivery.dart';
-
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/files/file_delivery.dart';
+import 'package:scrcpy_connect/core/files/system_documents.dart';
 
 /// provider 可见写入前，先通过持久日志准入；请求保存的页面退出后仍记录完成结果。
 class FileExportService {

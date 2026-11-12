@@ -1,24 +1,16 @@
-import 'package:scrcpy_connect/core/settings/preferences.dart' show FileSortKey;
-export 'package:scrcpy_connect/core/settings/preferences.dart'
+import 'package:scrcpy_connect/core/files/models/file_kind.dart';
+
+import 'models/file_browser.dart';
+
+export 'models/file_browser.dart';
+
+import 'package:scrcpy_connect/core/files/models/file_catalog_entry.dart';
+import 'package:scrcpy_connect/core/settings/models/preferences.dart'
+    show FileSortKey;
+
+export 'package:scrcpy_connect/core/files/models/file_kind.dart';
+export 'package:scrcpy_connect/core/settings/models/preferences.dart'
     show FileViewMode, FileSortKey;
-import 'package:scrcpy_connect/core/files/file_catalog_entry.dart';
-export 'package:scrcpy_connect/core/files/file_kind.dart';
-import 'package:scrcpy_connect/core/files/file_kind.dart';
-
-enum FileTypeFilter { all, documents, images, videos, audio }
-
-typedef FileBreadcrumb = ({String label, String path});
-
-class DirectoryListing {
-  DirectoryListing({required this.folders, required this.files})
-    : entries = List<FileCatalogEntry>.unmodifiable([...folders, ...files]);
-
-  final List<FileCatalogEntry> folders;
-  final List<FileCatalogEntry> files;
-  final List<FileCatalogEntry> entries;
-
-  bool get isEmpty => folders.isEmpty && files.isEmpty;
-}
 
 DirectoryListing buildDirectoryListing({
   required List<FileCatalogEntry> entries,

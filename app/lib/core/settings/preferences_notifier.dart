@@ -1,39 +1,39 @@
 import 'dart:async';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:scrcpy_connect/core/application/application_session_provider.dart';
-
-import 'preferences.dart';
-import 'preference_codec.dart';
-
+import 'package:scrcpy_connect/core/lifecycle/state_subscription.dart';
+import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
+import 'package:scrcpy_connect/core/settings/models/preferences_state.dart';
+import 'package:scrcpy_connect/core/settings/preference_codec.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/core/application/application_session.dart';
 
-import 'preferences_state.dart';
+import 'settings_capabilities_provider.dart';
+import 'settings_management.dart';
 
 part 'preferences_notifier.g.dart';
 
 /// 偏好投影与串行写入的唯一所有者；权威事件作废旧写入回执。
 @Riverpod(keepAlive: true)
 class PreferencesNotifier extends _$PreferencesNotifier {
-  late ApplicationSession _session;
-  Future<void> _writes = Future.value();
-  int _request = 0, _epoch = 0;
+  late _PreferenceOwner _owner;
 
   @override
   PreferencesState build() {
-    final session = _session = ref.watch(applicationSessionProvider);
-    _writes = Future.value();
+    final session = ref.watch(stateSubscriptionProvider);
+    final owner = _owner = _PreferenceOwner(
+      session,
+      ref.watch(settingsManagementProvider),
+    );
     final initial = session.dependencies.initialState;
     final subscription = session.stateEvents.listen((event) {
-      if (!_current(session)) return;
+      if (!_current(owner)) return;
       final type = event['type'];
       if (type == 'state.resync' || type == 'state.resync.failed') {
-        _request++;
-        _epoch++;
+        owner.request++;
+        owner.epoch++;
       } else if (type == 'state.resynced' || type == 'settings.changed') {
-        _request++;
-        _epoch++;
+        owner.request++;
+        owner.epoch++;
         final data = jsonObject(event['data']);
         state = state.copyWith(
           values: PreferenceCodec.decode(
@@ -43,10 +43,13 @@ class PreferencesNotifier extends _$PreferencesNotifier {
         );
       }
     });
-    ref.onDispose(() => unawaited(subscription.cancel()));
+    ref.onDispose(() {
+      owner.disposed = true;
+      unawaited(subscription.cancel());
+    });
     if (session.dependencies.initialize) {
       scheduleMicrotask(() {
-        if (_current(session)) unawaited(load());
+        if (_current(owner)) unawaited(load());
       });
     }
     return PreferencesState(
@@ -55,38 +58,41 @@ class PreferencesNotifier extends _$PreferencesNotifier {
     );
   }
 
-  bool _current(ApplicationSession session) =>
-      ref.mounted && !session.disposed && identical(_session, session);
+  bool _current(_PreferenceOwner owner) =>
+      ref.mounted &&
+      !owner.disposed &&
+      !owner.session.disposed &&
+      identical(_owner, owner);
   Future<void> load() async {
-    final session = _session;
-    final requestId = ++_request;
+    final owner = _owner;
+    final requestId = ++owner.request;
     try {
-      final result = await session.dependencies.settings.read();
-      if (_current(session) && requestId == _request) {
-        _epoch++;
+      final result = await owner.settings.read();
+      if (_current(owner) && requestId == owner.request) {
+        owner.epoch++;
         state = state.copyWith(values: result, error: null);
       }
     } catch (error) {
-      if (_current(session) && requestId == _request) {
+      if (_current(owner) && requestId == owner.request) {
         state = state.copyWith(error: '$error');
       }
     }
   }
 
   Future<void> _update(PreferenceChanges? Function(Preferences) changes) {
-    final session = _session;
-    _request++;
-    final operation = _writes.catchError((Object _) {}).then((_) async {
-      if (!_current(session)) return;
+    final owner = _owner;
+    owner.request++;
+    final operation = owner.writes.catchError((Object _) {}).then((_) async {
+      if (!_current(owner)) return;
       final patch = changes(state.values);
       if (patch == null) return;
-      final epoch = _epoch;
-      final result = await session.dependencies.settings.update(patch);
-      if (_current(session) && epoch == _epoch) {
+      final epoch = owner.epoch;
+      final result = await owner.settings.update(patch);
+      if (_current(owner) && epoch == owner.epoch) {
         state = state.copyWith(values: result, error: null);
       }
     });
-    _writes = operation;
+    owner.writes = operation;
     return operation;
   }
 
@@ -122,4 +128,14 @@ class PreferencesNotifier extends _$PreferencesNotifier {
       },
     );
   });
+}
+
+// 依赖重建时 Notifier 可保持身份；每批排队写入仍属于创建它的能力代次。
+final class _PreferenceOwner {
+  _PreferenceOwner(this.session, this.settings);
+  final StateSubscription session;
+  final SettingsManagement settings;
+  Future<void> writes = Future.value();
+  int request = 0, epoch = 0;
+  bool disposed = false;
 }

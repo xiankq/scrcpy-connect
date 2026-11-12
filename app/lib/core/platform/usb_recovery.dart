@@ -2,8 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/services.dart';
-
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
 /// 先封存旧 USB 准入，再由宿主排空 SDK，最后确认平台原始描述符实际回收。
 /// 同一对象的失败重试保持原候选；不会按 ready 跳过恢复或用超时丢弃在途调用。

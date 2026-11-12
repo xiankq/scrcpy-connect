@@ -1,48 +1,60 @@
-import 'package:scrcpy_connect/core/files/incoming_shares.dart';
-import 'package:scrcpy_connect/core/files/file_transfers.dart';
-import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
-import 'package:scrcpy_connect/core/clipboard/remote_clipboard.dart';
-import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
-
-import 'widgets/share_device_card.dart';
-
-import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/router/app_router.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/files/incoming_shares.dart';
+import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/files/share_inbox_notifier.dart';
+
+import 'share_submission_notifier.dart';
+
+import 'package:scrcpy_connect/pages/incoming_share/widgets/share_device_card.dart';
+import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/core/application/app_notifier.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/content.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class IncomingSharePage extends HookConsumerWidget {
-  const IncomingSharePage({
-    super.key,
-    required this.controller,
-    required this.share,
-  });
-  final AppNotifier controller;
+  const IncomingSharePage({super.key, required this.share});
   final IncomingShare share;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final share =
-        ref.watch(
-          appProvider.select(
-            (state) => state.pendingShares
-                .where((item) => item.shareId == this.share.shareId)
-                .firstOrNull,
-          ),
-        ) ??
-        this.share;
+    final latest = ref.watch(
+      shareInboxProvider.select(
+        (state) => state.shares
+            .where((item) => item.shareId == this.share.shareId)
+            .firstOrNull,
+      ),
+    );
+    final share = latest ?? this.share;
+    final directorySource = ref.watch(fileDirectoriesProvider);
+    final scope = useMemoized(Object.new, [share.shareId]);
+    final provider = shareSubmissionProvider(share.shareId, scope: scope);
+    final submission = ref.watch(provider);
+    final actions = ref.read(provider.notifier);
+    useEffect(() {
+      if (!submission.completed) return null;
+      var cancelled = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (cancelled || !context.mounted || !ref.read(provider).completed) {
+          return;
+        }
+        closePage<void>(context);
+        if (submission.showTransfers && context.mounted) {
+          const TransferCenterRoute().push<void>(context);
+        }
+      });
+      return () => cancelled = true;
+    }, [provider, submission]);
     final appDevices = ref.watch(
       deviceListProvider.select((state) => state.devices),
     );
@@ -57,103 +69,35 @@ class IncomingSharePage extends HookConsumerWidget {
     useListenable(path);
     final includeFiles = useState(true);
     final includeText = useState(text.isNotEmpty);
-    final busy = useState(false);
-    final pushed = useState(false);
-    final copied = useState(false);
-    final finished = useState(false);
-    final error = useState<String?>(null);
-    final locked = pushed.value || copied.value;
+    final locked = submission.pushed || submission.copied;
     final devices = appDevices
         .where((d) => d.status == DeviceConnectionStatus.connected)
         .toList();
     final selected = devices.where((d) => d.id == deviceId.value).firstOrNull;
-    final needsPush = includeFiles.value && files.isNotEmpty && !pushed.value;
-    final needsCopy = includeText.value && !copied.value;
+    final needsPush =
+        includeFiles.value && files.isNotEmpty && !submission.pushed;
+    final needsCopy = includeText.value && !submission.copied;
     final canSubmit =
-        !busy.value &&
+        latest != null &&
+        !submission.busy &&
         !importing &&
         (selected != null || (!needsPush && !needsCopy)) &&
         ((includeFiles.value && files.isNotEmpty) || includeText.value) &&
         (!needsPush ||
             (path.text.startsWith('/') && !path.text.contains('\u0000')));
 
-    Future<void> finish({bool showTransfers = false}) async {
-      await controller.shareInbox.consume(share.shareId);
-      if (!context.mounted) return;
-      finished.value = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!context.mounted) return;
-        closePage<void>(context);
-        if (showTransfers && context.mounted) {
-          const TransferCenterRoute().push<void>(context);
-        }
-      });
-    }
-
-    Future<void> cancel() async {
-      if (busy.value) return;
-      busy.value = true;
-      try {
-        await finish();
-      } catch (e) {
-        if (context.mounted) error.value = '暂时无法关闭本次分享：$e';
-      } finally {
-        if (context.mounted) busy.value = false;
-      }
-    }
-
-    Future<void> submit() async {
-      if (!canSubmit) return;
-      // 任何异步请求前先固定用户确认的目标。
-      final target = deviceId.value;
-      final directory = path.text.trim().replaceFirst(RegExp(r'/+$'), '');
-      busy.value = true;
-      error.value = null;
-      try {
-        if (needsPush) {
-          if (target == null) {
-            throw const RequestFailure('missing_device', '请先选择目标设备。');
-          }
-          await controller.directories.readDirectory((
-            deviceId: target,
-            path: directory.isEmpty ? '/' : directory,
-          ));
-          await controller.fileTransfers.startTransfer(
-            FileTransferPlan(
-              deviceId: target,
-              direction: .push,
-              items: [
-                for (final file in files)
-                  FileTransferSelection(
-                    source: file.localPath,
-                    destination: '$directory/${file.name}',
-                  ),
-              ],
-            ),
-            shareId: share.shareId,
-          );
-          if (!context.mounted) return;
-          pushed.value = true;
-        }
-        if (needsCopy) {
-          await controller.clipboard.writeClipboard(
-            ClipboardTarget.device(deviceId: target!),
-            text,
-          );
-          if (!context.mounted) return;
-          copied.value = true;
-        }
-        await finish(showTransfers: pushed.value);
-      } catch (e) {
-        if (context.mounted) error.value = '$e';
-      } finally {
-        if (context.mounted) busy.value = false;
-      }
-    }
+    Future<void> submit() => actions.submit(
+      deviceId: deviceId.value,
+      directory: path.text,
+      includeFiles: includeFiles.value,
+      includeText: includeText.value,
+    );
 
     final errors = share.errors;
     final leading = <Widget>[
       const StateNote('选择设备后确认保存目录；提交时固定来源和目标，切换页面不改目标。'),
+      if (latest == null && !submission.busy && !submission.completed)
+        const StateNote('这次分享已处理或来源已变化，请重新从系统分享。'),
       if (importing) ...[
         const ContentLoadingIndicator(),
         const StateNote('正在读取分享内容，完成后即可发送。你也可以取消本次分享。'),
@@ -164,7 +108,7 @@ class IncomingSharePage extends HookConsumerWidget {
         ConnectSwitchRow(
           title: Text('传入 ${files.length} 个文件'),
           value: includeFiles.value,
-          onChanged: busy.value || locked
+          onChanged: submission.busy || locked
               ? null
               : (v) => includeFiles.value = v,
         ),
@@ -175,7 +119,9 @@ class IncomingSharePage extends HookConsumerWidget {
           title: const Text('写入设备剪贴板'),
 
           value: includeText.value,
-          onChanged: busy.value || locked ? null : (v) => includeText.value = v,
+          onChanged: submission.busy || locked
+              ? null
+              : (v) => includeText.value = v,
         ),
         ContentPanel(child: SelectableText(text)),
         const SizedBox(height: DesignTokens.spacingMd),
@@ -189,7 +135,7 @@ class IncomingSharePage extends HookConsumerWidget {
         const SectionTitle('目标目录'),
         TextField(
           controller: path,
-          enabled: !busy.value && !locked,
+          enabled: !submission.busy && !locked,
           decoration: const InputDecoration(
             labelText: '设备上的完整目录',
             helperText: '同名文件会在传输中心等待你确认',
@@ -197,14 +143,21 @@ class IncomingSharePage extends HookConsumerWidget {
         ),
         const SizedBox(height: DesignTokens.spacingSm),
         OutlinedButton.icon(
-          onPressed: selected == null || busy.value || locked
+          onPressed: selected == null || submission.busy || locked
               ? null
               : () async {
                   final directory = await ShareDirectoryRoute(
                     deviceId: selected.id,
                     path: path.text,
                   ).push<String>(context);
-                  if (directory != null && context.mounted) {
+                  if (directory != null &&
+                      context.mounted &&
+                      identical(
+                        ref.read(fileDirectoriesProvider),
+                        directorySource,
+                      ) &&
+                      deviceId.value == selected.id &&
+                      !ref.read(provider).busy) {
                     path.text = directory;
                   }
                 },
@@ -219,22 +172,22 @@ class IncomingSharePage extends HookConsumerWidget {
         StateNote(
           '本次目标：${deviceName(selected)}${includeFiles.value ? ' · ${path.text}' : ' · 剪贴板'}',
         ),
-      if (pushed.value) const StateNote('文件任务已提交；再次确认不会重复提交这批文件。'),
-      if (copied.value) const StateNote('文字已写入指定设备剪贴板。'),
-      if (error.value != null)
-        StateNote(error.value!, icon: LucideIcons.circleAlert),
+      if (submission.pushed) const StateNote('文件任务已提交；再次确认不会重复提交这批文件。'),
+      if (submission.copied) const StateNote('文字已写入指定设备剪贴板。'),
+      if (submission.error != null)
+        StateNote(submission.error!, icon: LucideIcons.circleAlert),
       const SizedBox(height: DesignTokens.spacingMd),
       FilledButton(
         onPressed: canSubmit ? submit : null,
         child: Text(
-          busy.value
+          submission.busy
               ? '正在提交…'
               : locked
               ? '继续完成'
               : '确认提交',
         ),
       ),
-      if (busy.value)
+      if (submission.busy)
         const Padding(
           padding: EdgeInsets.all(DesignTokens.spacingMd),
           child: ContentLoadingIndicator(),
@@ -256,15 +209,15 @@ class IncomingSharePage extends HookConsumerWidget {
     };
 
     return PopScope(
-      canPop: finished.value,
+      canPop: submission.completed,
       onPopInvokedWithResult: (popped, _) {
-        if (!popped) cancel();
+        if (!popped) actions.cancel();
       },
       child: PageFrame(
         title: '发送到设备',
 
         trailingAction: TextButton(
-          onPressed: busy.value ? null : cancel,
+          onPressed: submission.busy ? null : actions.cancel,
           child: Text(locked ? '关闭' : '取消'),
         ),
         child: GroupedListView.builder(
@@ -297,7 +250,7 @@ class IncomingSharePage extends HookConsumerWidget {
               key: ValueKey(('incoming-device', device.id)),
               device: device,
               selected: deviceId.value == device.id,
-              onTap: busy.value || locked
+              onTap: submission.busy || locked
                   ? null
                   : () => deviceId.value = device.id,
             );

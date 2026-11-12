@@ -1,46 +1,17 @@
 import 'dart:async';
 
-import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:scrcpy_connect/core/application/app_dependencies_provider.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
-import 'package:scrcpy_connect/core/devices/device_snapshot.dart';
-import 'package:scrcpy_connect/core/files/file_catalog_entry.dart';
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/gallery/gallery_history_notifier.dart';
+import 'package:scrcpy_connect/core/gallery/gallery_scanner.dart';
+import 'package:scrcpy_connect/core/gallery/models/gallery_scan_state.dart';
 
-import 'gallery_history_notifier.dart';
-import 'gallery_scan.dart';
+import 'gallery_scanner_provider.dart';
 
-part 'gallery_scan_notifier.freezed.dart';
+export 'package:scrcpy_connect/core/gallery/models/gallery_scan_state.dart';
+
 part 'gallery_scan_notifier.g.dart';
-
-@freezed
-abstract class GalleryScanState with _$GalleryScanState {
-  const GalleryScanState._();
-  const factory GalleryScanState({
-    GalleryScanSnapshot? result,
-    GalleryScanSnapshot? latest,
-    GalleryScanSnapshot? pendingResult,
-    @Default([]) List<FileCatalogEntry> items,
-    @Default([]) List<FileCatalogEntry> pendingItems,
-    @Default(false) bool showingPrevious,
-    @Default(false) bool starting,
-    @Default(false) bool paging,
-    @Default(false) bool stopping,
-    String? error,
-  }) = _GalleryScanState;
-
-  GalleryScanSnapshot? get progress => latest ?? result;
-  String? get scanId => latest?.scanId;
-  bool get scanning => starting || latest?.status == .scanning;
-  bool get hasUpdate => pendingResult != null;
-  bool get canLoadMore =>
-      result?.nextOffset != null &&
-      switch (result?.status) {
-        .completed || .partial || .cancelled => true,
-        .unknown || .scanning || null => false,
-      };
-}
 
 /// 每页独立拥有后台检查；可见集合与新终态分开，采用新集合由用户决定。
 @riverpod
@@ -49,9 +20,7 @@ class GalleryScanNotifier extends _$GalleryScanNotifier {
 
   @override
   GalleryScanState build(DeviceSnapshot device, {required Object scope}) {
-    final access = ref.watch(
-      appDependenciesProvider.select((source) => source.gallery),
-    );
+    final access = ref.watch(galleryScannerProvider);
     final previous = ref.read(galleryHistoryProvider.notifier).read(device);
     final owner = _owner = _ScanOwner(access, device.id);
     ref.onDispose(() {

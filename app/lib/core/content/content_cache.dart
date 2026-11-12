@@ -1,19 +1,17 @@
-import 'cache_status.dart';
-
-export 'cache_status.dart';
-
-import 'package:scrcpy_connect/core/files/file_cache_reservation.dart';
-import 'package:scrcpy_connect/core/files/file_cache_leases.dart';
-import 'package:scrcpy_connect/core/content/content_cache_failure.dart';
-import 'package:scrcpy_connect/core/content/content_cache_gate.dart';
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:uuid/uuid.dart';
 import 'package:path/path.dart' as p;
+import 'package:scrcpy_connect/core/content/content_cache_failure.dart';
+import 'package:scrcpy_connect/core/content/content_cache_gate.dart';
+import 'package:scrcpy_connect/core/content/models/cache_status.dart';
+import 'package:scrcpy_connect/core/files/file_cache_leases.dart';
+import 'package:scrcpy_connect/core/files/file_cache_reservation.dart';
+import 'package:uuid/uuid.dart';
+
+export 'package:scrcpy_connect/core/content/models/cache_status.dart';
 
 const defaultMediaCacheBudget = 512 * 1024 * 1024;
 const _maximumConfigurationBytes = 1024 * 1024;

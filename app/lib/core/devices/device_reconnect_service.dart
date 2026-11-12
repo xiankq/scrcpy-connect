@@ -1,9 +1,8 @@
-import 'connection_change.dart';
-
 import 'dart:async';
 import 'dart:math';
 
-import 'package:scrcpy_connect/core/devices/connection_policy.dart';
+import 'package:scrcpy_connect/core/devices/models/connection_change.dart';
+import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
 
 typedef ReconnectJson = Map<String, dynamic>;
 

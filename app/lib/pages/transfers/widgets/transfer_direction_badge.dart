@@ -1,9 +1,9 @@
-import 'package:scrcpy_connect/core/files/file_transfer_snapshot.dart';
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/files/models/file_transfer_snapshot.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/file_transfer_labels.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 
 class TransferDirectionBadge extends StatelessWidget {
   const TransferDirectionBadge({super.key, required this.transfer});

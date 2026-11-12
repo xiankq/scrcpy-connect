@@ -19,7 +19,7 @@ esac
 npm ci --ignore-scripts --prefix scripts/design_tokens
 dart --disable-dart-dev servers/build.dart --check vendor companion helpers
 dart --disable-dart-dev scripts/generate.dart --check
-dart format --output=none --set-exit-if-changed app/lib scripts servers packages
+dart format --output=none --set-exit-if-changed app/lib app/test scripts servers packages
 cargo fmt --all --check
 cargo fmt --manifest-path rust/media_codec/Cargo.toml --check
 cargo clippy --workspace --lib --bins -- -D warnings
@@ -43,6 +43,7 @@ if [[ "$(uname -s)" == Linux* ]]; then
   cargo clippy --locked --manifest-path rust/adb/device_fs_helper/Cargo.toml --bins -- -D warnings
 fi
 flutter analyze --no-pub --fatal-infos
+(cd app && flutter test --no-pub)
 npm run lint --prefix scripts/design_tokens
 if [[ "${1:-}" == "--android" ]]; then
   # 调试只构建当次宿主 ABI；跨 ABI 交付检查由发布构建负责。

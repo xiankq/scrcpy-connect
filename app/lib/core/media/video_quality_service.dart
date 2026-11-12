@@ -1,9 +1,8 @@
-import 'package:scrcpy_connect/core/control/video_capture.dart';
-
-import 'package:scrcpy_connect/core/application/request_failure.dart'
-    show RequestFailure;
-import 'package:scrcpy_connect/core/control/session_activity.dart';
+import 'package:scrcpy_connect/core/control/models/session_activity.dart';
+import 'package:scrcpy_connect/core/control/models/video_capture.dart';
 import 'package:scrcpy_connect/core/control/video_quality.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart'
+    show RequestFailure;
 
 /// 保存一次设备偏好，再依次重建当前窗口；停止或连接更换会撤销旧意图。
 class VideoQualityService {

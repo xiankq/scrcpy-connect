@@ -1,26 +1,24 @@
-import 'package:scrcpy_connect/core/files/system_documents.dart';
-import 'package:scrcpy_connect/widgets/documents/document_operation.dart';
-import 'package:scrcpy_connect/hooks/use_transfer_cache_lease.dart';
-import 'package:scrcpy_connect/utils/formatters.dart';
-import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/core/application/app_notifier.dart';
-import 'package:scrcpy_connect/widgets/state_note.dart';
-import 'package:scrcpy_connect/widgets/documents/original_file_header.dart';
-import 'package:scrcpy_connect/widgets/documents/file_delivery_path.dart';
-import 'package:scrcpy_connect/widgets/dialogs.dart' show confirm;
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-
+import 'package:scrcpy_connect/core/files/system_documents.dart';
+import 'package:scrcpy_connect/hooks/use_transfer_cache_lease.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/utils/formatters.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/dialogs.dart' show confirm;
 import 'package:scrcpy_connect/widgets/documents/document_conflict_panel.dart';
+import 'package:scrcpy_connect/widgets/documents/document_operation.dart';
+import 'package:scrcpy_connect/widgets/documents/file_delivery_path.dart';
+import 'package:scrcpy_connect/widgets/documents/original_file_header.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/state_note.dart';
 
-class DocumentExportForm extends HookWidget {
+class DocumentExportForm extends HookConsumerWidget {
   const DocumentExportForm({
     super.key,
-    required this.controller,
     required this.localPath,
     required this.name,
     required this.kind,
@@ -28,7 +26,6 @@ class DocumentExportForm extends HookWidget {
     this.partial = false,
     this.sourceLabel = '被控设备',
   });
-  final AppNotifier controller;
   final String localPath;
   final String name;
   final String kind;
@@ -36,13 +33,12 @@ class DocumentExportForm extends HookWidget {
   final bool partial;
   final String sourceLabel;
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (!supportsSystemDocumentSave) {
       return SingleChildScrollView(
         padding: const EdgeInsets.all(DesignTokens.spacingMd),
         child: SystemFileShareForm(
           key: ValueKey('$transferId:$localPath'),
-          controller: controller,
           localPath: localPath,
           name: name,
           kind: kind,
@@ -51,9 +47,9 @@ class DocumentExportForm extends HookWidget {
         ),
       );
     }
-    final cacheLease = useTransferCacheLease(controller, transferId);
+    final cacheLease = useTransferCacheLease(ref, transferId);
     final operation = useDocumentOperationController(
-      controller,
+      ref,
       exportSource: DocumentSource(
         sourceId: transferId == null ? 'local' : 'transfer:$transferId',
         localPath: localPath,
@@ -118,7 +114,7 @@ class DocumentExportForm extends HookWidget {
         ),
         if ((operation.operationId ?? operation.recordOperationId)
             case final owner?)
-          DocumentConflictPanel(controller: controller, operationId: owner),
+          DocumentConflictPanel(operationId: owner),
       ],
       if (operation.error != null)
         StateNote(operation.error!, icon: LucideIcons.circleAlert),

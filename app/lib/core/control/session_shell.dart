@@ -1,12 +1,11 @@
-import 'package:scrcpy_connect/core/devices/device_connection.dart';
-import 'package:scrcpy_connect/core/control/session_shell_result.dart';
-
 import 'dart:convert';
 import 'dart:math' as math;
 
-import 'package:scrcpy_connect/core/devices/device_query.dart';
 import 'package:adb/adb.dart';
-import 'package:scrcpy_connect/core/application/request_failure.dart';
+import 'package:scrcpy_connect/core/control/models/session_shell_result.dart';
+import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/core/devices/device_query.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
 /// 固定的设备查询与任务操作；等待 SDK 流结束，不用 Future.timeout 丢弃执行。
 final class SessionShell {
