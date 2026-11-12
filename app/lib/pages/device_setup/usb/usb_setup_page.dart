@@ -1,14 +1,11 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/devices/device_setup.dart';
-import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
+import 'package:scrcpy_connect/pages/device_setup/usb/usb_setup_notifier.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
@@ -32,96 +29,28 @@ class UsbSetupPage extends HookConsumerWidget {
   final VoidCallback? onUseWireless;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final deviceManagement = ref.watch(deviceManagementProvider);
     final setup = ref.watch(deviceSetupProvider);
+    final management = ref.watch(deviceManagementProvider);
+    final scope = useMemoized(Object.new, [deviceId]);
+    final viewScope = useRef(scope)..value = scope;
+    final provider = usbSetupProvider(deviceId: deviceId, scope: scope);
+    final state = ref.watch(provider);
+    final actions = ref.read(provider.notifier);
     final usbSupported = kIsWeb
         ? false
         : defaultTargetPlatform != TargetPlatform.iOS;
-    final state = useState<UsbSetupResult?>(null);
-    final busy = useState(false);
-    final cancelling = useState(false);
-    final attempt = useRef<String?>(null);
-    final message = useState<String?>(null);
-    bool ownsScope() =>
-        context.mounted &&
-        identical(setup, ref.read(deviceSetupProvider)) &&
-        identical(deviceManagement, ref.read(deviceManagementProvider));
-    useEffect(() {
-      Future.microtask(() {
-        if (!context.mounted || !ownsScope()) return;
-        state.value = null;
-        busy.value = false;
-        cancelling.value = false;
-        message.value = null;
-      });
-      return () {
-        final id = attempt.value;
-        attempt.value = null;
-        if (id != null) deviceManagement.cancelConnectionAttempt(id).ignore();
-      };
-    }, [setup, deviceManagement, deviceId]);
-    Future<void> cancel() async {
-      final id = attempt.value;
-      if (id == null || cancelling.value) return;
-      cancelling.value = true;
-      try {
-        await deviceManagement.cancelConnectionAttempt(id);
-        if (!context.mounted || !ownsScope() || attempt.value != id) {
-          return;
-        }
-        attempt.value = null;
-        busy.value = false;
-        message.value = '检查已取消。';
-      } catch (error) {
-        if (context.mounted && ownsScope()) message.value = '$error';
-      } finally {
-        if (context.mounted && ownsScope()) cancelling.value = false;
-      }
-    }
-
     Future<void> check({String? serial, String? usbDeviceId}) async {
-      if (busy.value) return;
+      if (state.hasPendingAttempt) return;
       final allowed = await prepareConnection?.call() ?? true;
-      if (!allowed || !context.mounted || !ownsScope() || busy.value) {
+      if (!allowed ||
+          !context.mounted ||
+          !identical(viewScope.value, scope) ||
+          !identical(ref.read(deviceSetupProvider), setup) ||
+          !identical(ref.read(deviceManagementProvider), management) ||
+          !identical(ref.read(provider.notifier), actions)) {
         return;
       }
-      final id =
-          'usb-${DateTime.now().microsecondsSinceEpoch}-${identityHashCode(attempt)}';
-      attempt.value = id;
-      busy.value = true;
-      state.value = null;
-      message.value = null;
-      try {
-        final result = await setup.connectUsb(
-          attemptId: id,
-          deviceId: deviceId,
-          serial: serial,
-          usbDeviceId: usbDeviceId,
-          connect: serial != null || usbDeviceId != null,
-        );
-        if (!context.mounted || !ownsScope() || attempt.value != id) {
-          return;
-        }
-        if (deviceId != null &&
-            result.deviceId != null &&
-            result.deviceId != deviceId) {
-          throw const RequestFailure(
-            'device_identity_mismatch',
-            'USB连接结果不属于原设备，请重新检查。',
-          );
-        }
-        state.value = result;
-        await ref.read(deviceListProvider.notifier).refresh();
-      } catch (error) {
-        if (context.mounted && ownsScope() && attempt.value == id) {
-          message.value = '$error';
-        }
-      } finally {
-        if (context.mounted && ownsScope() && attempt.value == id) {
-          busy.value = false;
-          attempt.value = null;
-        }
-      }
+      await actions.check(serial: serial, usbDeviceId: usbDeviceId);
     }
 
     if (!usbSupported) {
@@ -156,26 +85,30 @@ class UsbSetupPage extends HookConsumerWidget {
       ),
       const SizedBox(height: DesignTokens.spacingSectionTitle),
       FilledButton(
-        onPressed: busy.value ? null : () => check(),
-        child: Text(busy.value ? '正在检查…' : '检查连接'),
+        onPressed: state.hasPendingAttempt ? null : () => check(),
+        child: Text(state.phase == .checking ? '正在检查…' : '检查连接'),
       ),
-      if (busy.value)
+      if (state.hasPendingAttempt)
         TextButton(
-          onPressed: cancelling.value ? null : cancel,
-          child: Text(cancelling.value ? '正在取消…' : '取消本次检查'),
+          onPressed: state.phase == .cancelling ? null : actions.cancel,
+          child: Text(switch (state.phase) {
+            .cancelling => '正在取消…',
+            .cleanupRequired => '重试取消',
+            _ => '取消本次检查',
+          }),
         ),
-      if (message.value != null) StateNote(message.value!),
-      if (state.value != null)
+      if (state.message != null) StateNote(state.message!),
+      if (state.result != null)
         ContentPanel(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(switch (state.value!) {
+              Text(switch (state.result!) {
                 UsbSelectionRequired(:final message) =>
                   message ?? '选择 USB 设备，并在手机上允许调试。',
                 UsbConnected() => 'USB 连接已建立',
               }),
-              if (state.value case UsbConnected(:final receipt))
+              if (state.result case UsbConnected(:final receipt))
                 FilledButton(
                   onPressed: () =>
                       WorkspaceRoute(deviceId: receipt.deviceId)
@@ -186,7 +119,7 @@ class UsbSetupPage extends HookConsumerWidget {
           ),
         ),
     ];
-    final devices = switch (state.value) {
+    final devices = switch (state.result) {
       UsbSelectionRequired(:final devices) => devices,
       _ => const <UsbDeviceChoice>[],
     };
@@ -194,8 +127,11 @@ class UsbSetupPage extends HookConsumerWidget {
       if (!embedded)
         TextButton(
           onPressed: () async {
-            if (busy.value) await cancel();
-            if (context.mounted && !busy.value) {
+            if (state.hasPendingAttempt) await actions.cancel();
+            if (context.mounted &&
+                identical(viewScope.value, scope) &&
+                identical(ref.read(provider.notifier), actions) &&
+                !ref.read(provider).hasPendingAttempt) {
               if (onUseWireless != null) {
                 onUseWireless!();
               } else {
@@ -231,7 +167,8 @@ class UsbSetupPage extends HookConsumerWidget {
               ? () =>
                     WorkspaceRoute(deviceId: d.device!.id)
                         .pushReplacement(context)
-              : (usbDeviceId.isNotEmpty || serial.isNotEmpty) && !busy.value
+              : (usbDeviceId.isNotEmpty || serial.isNotEmpty) &&
+                    !state.hasPendingAttempt
               ? () => check(
                   usbDeviceId: usbDeviceId.isNotEmpty ? usbDeviceId : null,
                   serial: serial.isNotEmpty ? serial : null,

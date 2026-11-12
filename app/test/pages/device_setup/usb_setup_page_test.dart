@@ -30,7 +30,13 @@ void main() {
     await tester.tap(find.text('检查连接'));
     await tester.pumpAndSettle();
     expect(setup.attempts, hasLength(1));
-    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const SizedBox.shrink(),
+      ),
+    );
+    await tester.pump();
     expect(management.cancelled, [setup.attempts.single.id]);
     setup.attempts.single.result.complete(
       const UsbSetupResult.selectionRequired([], message: 'retired'),

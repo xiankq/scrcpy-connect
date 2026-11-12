@@ -527,7 +527,7 @@ class ConnectionFormPage extends HookConsumerWidget {
                                       autoGenerate:
                                           !configuring && !reauthorizing,
                                       prepareConnection: prepareConnection,
-                                      deviceId: targetDeviceId(),
+                                      deviceId: deviceId,
                                       embedded: true,
                                       onUsePairingCode: () =>
                                           selectMode(AddDeviceMode.pairing),
