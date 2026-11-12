@@ -91,6 +91,12 @@ abstract class VideoSessionSnapshot with _$VideoSessionSnapshot {
     String? linkedSessionId,
   }) = _VideoSessionSnapshot;
 
+  bool get live => switch (status) {
+    .stopped => false,
+    .failed => qualityRetryable,
+    _ => true,
+  };
+
   VideoCapture get capture {
     final ref = captureRef, source = videoSourceId, codec = videoCodec;
     final w = width, h = height;

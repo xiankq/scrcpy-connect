@@ -5,12 +5,11 @@ import 'package:flutter/widgets.dart' show Size;
 import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/control/remote_display_settings.dart';
 import 'package:scrcpy_connect/core/control/video_display.dart';
-import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/pages/control/remote_input_owner.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
 import 'package:scrcpy_connect/pages/control/remote_window.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/core/media/models/video_session_view.dart';
 
 /// 单个远控窗口的尺寸适配，持有防抖、输入法过渡和在途调整状态。
 class RemoteDisplaySizing {
@@ -53,11 +52,13 @@ class RemoteDisplaySizing {
       );
   bool get canSendInput => !_disposed && !_resizing && _hasInputAuthority;
 
-  void bind(Json receipt) {
-    _auto = receipt['displayAuto'] == true;
-    final size = jsonObject(receipt['displaySize']);
-    if (size['width'] is int && size['height'] is int) {
-      _requested = (width: size['width'] as int, height: size['height'] as int);
+  void bind(VideoSessionView view) {
+    final session = view.session;
+    _auto = session.displayAuto;
+    if (session.displayWidth case final width?) {
+      if (session.displayHeight case final height?) {
+        _requested = (width: width, height: height);
+      }
     }
   }
 

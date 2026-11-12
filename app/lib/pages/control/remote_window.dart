@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:scrcpy_connect/core/control/remote_control.dart';
+import 'package:scrcpy_connect/core/control/models/video_session.dart';
 import 'package:scrcpy_connect/core/devices/device_apps.dart';
 import 'package:scrcpy_connect/core/devices/device_inspection.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
@@ -8,6 +9,7 @@ import 'package:scrcpy_connect/core/media/video_sessions.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
 import 'package:scrcpy_connect/widgets/remote_failure.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
 
 import 'models/remote_window_close.dart';
 
@@ -45,8 +47,173 @@ class RemoteWindow {
   SessionViewLease? _view;
   bool _disposed = false;
   Future<void>? _disposing;
+  _RemoteOpening? _opening;
   bool get isCurrent => !_disposed && _current();
   SessionViewLease? get view => _view;
+  bool get recoveringConnection => _opening?.recoveringConnection == true;
+
+  /// 选择既有会话或提交一次打开；迟到回执仍由借用原能力的窗口清理。
+  /// 页面提供尺寸及明确唤醒的准备工作，不参与会话选择或回执归属判断。
+  Future<RemoteWindowOpened?> open({
+    required String? packageName,
+    required bool recoveringConnection,
+    required Future<void> Function() releaseInputs,
+    required Future<VideoSessionPlan?> Function(bool Function() current)
+    prepare,
+    required bool Function() canProceed,
+    VideoSessionView? existing,
+  }) async {
+    if (!isCurrent || presentation.exiting) return null;
+    if (presentation.appLaunchUnknown) {
+      await checkAppLaunch(packageName);
+      return null;
+    }
+    if (presentation.stateUnverified ||
+        (presentation.reconcileOnly && !recoveringConnection)) {
+      return null;
+    }
+    final opening = _opening = _RemoteOpening(
+      presentation.beginStart(),
+      recoveringConnection,
+    );
+    final attempt = opening.ticket;
+    bool accepts() => isCurrent && presentation.acceptsStart(attempt);
+    var submittedAppStart = false;
+    try {
+      await releaseInputs();
+      if (!accepts() || !canProceed()) return null;
+      presentation.replaceBinding();
+      var retained = recoveringConnection || presentation.appLaunchClosed
+          ? null
+          : existing;
+      if (retained != null &&
+          (retained.deviceId != deviceId ||
+              retained.session.packageName != packageName)) {
+        throw const RequestFailure('stale_session', '现有会话不属于当前控制窗口。');
+      }
+      if (retained == null) {
+        final listed = await videos.readVideoSessions(deviceId: deviceId);
+        if (!accepts() || !canProceed()) return null;
+        retained = listed.where((view) {
+          final session = view.session;
+          return session.deviceId == deviceId &&
+              session.packageName == packageName &&
+              (session.launchOutcome == .unknown || session.live);
+        }).firstOrNull;
+      }
+      if (retained?.session.launchOutcome == .unknown) {
+        presentation.showUnknownAppLaunch(retained!.toSnapshot());
+        return null;
+      }
+      VideoSessionView result;
+      if (retained != null) {
+        result = retained;
+      } else {
+        final plan = await prepare(() => accepts() && canProceed());
+        if (plan == null || !accepts() || !canProceed()) return null;
+        if (plan.deviceId != deviceId || plan.packageName != packageName) {
+          throw const RequestFailure('invalid_argument', '打开意图不属于当前控制窗口。');
+        }
+        submittedAppStart = packageName != null;
+        result = await videos.startVideo(plan);
+      }
+      if (result.deviceId != deviceId ||
+          result.session.packageName != packageName) {
+        throw const RequestFailure('stale_session', '会话回执不属于当前控制窗口。');
+      }
+      if (!accepts()) {
+        if (isCurrent && presentation.requiresVerification(attempt)) {
+          // 状态中断后只保留已提交身份，不能重开或停止可能仍存活的真实任务。
+          presentation.retainUnverifiedStart(result.toSnapshot());
+        } else if (retained == null &&
+            result.sessionId.isNotEmpty &&
+            result.sessionId != presentation.sessionId) {
+          try {
+            await videos.stopVideo(
+              ControlTarget(sessionId: result.sessionId),
+              keepLaunchRecord: packageName != null,
+            );
+          } catch (_) {
+            // 精确捕获的释放失败仍由执行所有者保留，不能复活原窗口。
+          }
+        }
+        return null;
+      }
+      final submitted = submittedAppStart;
+      submittedAppStart = false;
+      presentation.bindStart(
+        result.toSnapshot(),
+        retained: retained != null,
+        recoveringConnection: recoveringConnection,
+        submittedAppStart: submitted,
+      );
+      if (result.sessionId.isNotEmpty && result.textureId != null) {
+        bind(visible: result.session.status != .paused);
+      }
+      return RemoteWindowOpened(result, retained != null, attempt);
+    } catch (failure) {
+      if (accepts()) {
+        presentation.failStart(
+          remoteFailure(failure),
+          remoteFailureCode(failure),
+          submittedAppStart: submittedAppStart,
+          details: failure is RequestFailure ? jsonObject(failure.details) : {},
+        );
+      }
+      return null;
+    } finally {
+      if (identical(_opening, opening)) _opening = null;
+    }
+  }
+
+  void cancelRecovery() {
+    if (!recoveringConnection) return;
+    presentation.invalidateStart();
+    _opening = null;
+    presentation.deferStart();
+  }
+
+  Future<void> checkAppLaunch(String? packageName) async {
+    if (!isCurrent || presentation.exiting) return;
+    final attempt = presentation.beginStart();
+    try {
+      final listed = await videos.readVideoSessions(deviceId: deviceId);
+      if (!isCurrent || !presentation.acceptsStart(attempt)) return;
+      final record = listed.where((view) {
+        final session = view.session;
+        return session.deviceId == deviceId &&
+            (presentation.sessionId.isNotEmpty
+                ? session.sessionId == presentation.sessionId
+                : session.packageName == packageName);
+      }).firstOrNull;
+      presentation.showUnknownAppLaunch(
+        record?.toSnapshot() ?? presentation.session ?? {},
+      );
+    } catch (failure) {
+      if (isCurrent && presentation.acceptsStart(attempt)) {
+        presentation.failOperation(remoteFailure(failure));
+      }
+    }
+  }
+
+  Future<bool> closeAppLaunchRecord({required bool resetInitialAction}) async {
+    if (!isCurrent || presentation.exiting) return false;
+    final attempt = presentation.beginStart();
+    final id = presentation.sessionId;
+    try {
+      if (id.isNotEmpty) await videos.stopVideo(ControlTarget(sessionId: id));
+      if (!isCurrent || !presentation.acceptsStart(attempt)) return false;
+      presentation.closeUnknownAppLaunch(
+        resetInitialAction: resetInitialAction,
+      );
+      return true;
+    } catch (failure) {
+      if (isCurrent && presentation.acceptsStart(attempt)) {
+        presentation.failOperation(remoteFailure(failure));
+      }
+      return false;
+    }
+  }
 
   void bind({required bool visible}) {
     if (!isCurrent) throw StateError('画面所有者已释放。');
@@ -273,4 +440,18 @@ class RemoteWindow {
     }
     await release;
   }
+}
+
+/// 同次启动的回执与呈现许可；页面只可在该许可仍有效时继续附着视图。
+final class RemoteWindowOpened {
+  const RemoteWindowOpened(this.view, this.retained, this.ticket);
+  final VideoSessionView view;
+  final bool retained;
+  final RemoteStartTicket ticket;
+}
+
+final class _RemoteOpening {
+  const _RemoteOpening(this.ticket, this.recoveringConnection);
+  final RemoteStartTicket ticket;
+  final bool recoveringConnection;
 }

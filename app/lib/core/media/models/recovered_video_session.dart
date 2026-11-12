@@ -24,11 +24,7 @@ final class RecoveredVideoSession {
     ...?keepAwake?.sessionSnapshot,
   }, output?.toSnapshot());
 
-  bool get live => switch (session.status) {
-    .stopped => false,
-    .failed => session.qualityRetryable,
-    _ => true,
-  };
+  bool get live => session.live;
 }
 
 KeepAwakeSnapshot _freezeWake(KeepAwakeSnapshot value) => value.copyWith(

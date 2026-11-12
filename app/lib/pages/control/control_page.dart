@@ -58,7 +58,7 @@ class ControlPage extends ConsumerStatefulWidget {
   });
   final DeviceSnapshot device;
   final String? packageName;
-  final Json? existingSession;
+  final VideoSessionView? existingSession;
   final bool requestKeyboard;
   final RemoteControlIntent? initialAction;
   @override
@@ -77,7 +77,6 @@ class _ControlPageState extends ConsumerState<ControlPage>
   late final RemoteWindow window;
   RemotePresentation get presentation => window.presentation;
   final connectionRecovery = RemoteConnectionRecovery();
-  bool restoringConnection = false;
   late final notices = RemoteNotices(
     presentation: presentation,
     isVisible: () =>
@@ -300,7 +299,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
     eventSubscription = _events.listen(onEvent);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     if (ref.read(recoveryStateProvider).reconciliationPending) {
-      markStateUnknown(initialSession: widget.existingSession);
+      markStateUnknown(initialSession: widget.existingSession?.toSnapshot());
     } else {
       unawaited(start());
     }
@@ -317,114 +316,52 @@ class _ControlPageState extends ConsumerState<ControlPage>
       await reconcileState();
       return;
     }
-    late final RemoteStartTicket attempt;
-    restoringConnection = recoveringConnection;
-    trace(
-      'start.begin lifecycle=${WidgetsBinding.instance.lifecycleState?.name}',
-    );
-    setState(() => attempt = presentation.beginStart());
-    var submittedAppStart = false;
-    try {
-      await releaseInputs();
-      if (!_sourcesCurrent || !presentation.acceptsStart(attempt)) {
-        return;
-      }
-      if (deferConnectionStart(recoveringConnection)) return;
-      presentation.replaceBinding();
-      Json? retained = recoveringConnection ? null : widget.existingSession;
-      if (retained == null) {
-        final listed = (await _videos.readVideoSessions(
-          deviceId: widget.device.id,
-        )).map((view) => view.toSnapshot()).toList();
-        final matches = listed.where(
-          (item) =>
-              item['deviceId'] == widget.device.id &&
-              item['packageName'] == widget.packageName &&
-              (item['launchOutcome'] == 'unknown' ||
-                  !['stopped', 'failed', 'error'].contains(item['status'])),
-        );
-        retained = matches.firstOrNull;
-      }
-      if (!_sourcesCurrent || !presentation.acceptsStart(attempt)) {
-        return;
-      }
-      if (deferConnectionStart(recoveringConnection)) return;
-      if (retained?['launchOutcome'] == 'unknown') {
-        showUnknownAppLaunch(retained!);
-        return;
-      }
-      final viewport = displaySettings.mode == 'auto'
-          ? await displaySizing.initialViewport
-          : Size.zero;
-      if (!_sourcesCurrent || !presentation.acceptsStart(attempt)) return;
-      final dimensions = displaySettings.dimensions(viewport);
-      if (retained == null &&
-          !recoveringConnection &&
-          displaySettings.values.wakeOnConnect != false) {
-        // 请求前先消耗新窗口唤醒意图，失败或缺少回执时不能随重建和通用重试重放。
-        await (newWindowWake ??= requestWake());
-        if (!_sourcesCurrent || !presentation.acceptsStart(attempt)) return;
-      }
-      submittedAppStart = retained == null && widget.packageName != null;
-      final result =
-          retained ??
-          (await _videos.startVideo(
-            VideoSessionPlan(
-              deviceId: widget.device.id,
-              packageName: widget.packageName,
-              displaySize: dimensions == null
-                  ? null
-                  : (width: dimensions.width, height: dimensions.height),
-              displayAuto: dimensions != null && displaySettings.mode == 'auto',
-            ),
-          )).toSnapshot();
-      if (!_sourcesCurrent || !presentation.acceptsStart(attempt)) {
-        if (_sourcesCurrent && presentation.requiresVerification(attempt)) {
-          // 打开请求已提交；迟到结果仅用于核验身份，不能触发再次打开或停止真实任务。
-          if (sessionId.isEmpty) {
-            setState(() => presentation.retainUnverifiedStart(result));
+    late final Future<RemoteWindowOpened?> opening;
+    setState(() {
+      opening = window.open(
+        packageName: widget.packageName,
+        existing: widget.existingSession,
+        recoveringConnection: recoveringConnection,
+        releaseInputs: releaseInputs,
+        canProceed: () => !deferConnectionStart(recoveringConnection),
+        prepare: (current) async {
+          final viewport = displaySettings.mode == 'auto'
+              ? await displaySizing.initialViewport
+              : Size.zero;
+          if (!current()) return null;
+          final dimensions = displaySettings.dimensions(viewport);
+          if (_sourcesCurrent &&
+              !recoveringConnection &&
+              displaySettings.values.wakeOnConnect != false) {
+            // 准备新窗口时消耗唤醒意图，通用重试不重放缺少回执的请求。
+            await (newWindowWake ??= requestWake());
           }
-          return;
-        }
-        if (retained == null) {
-          final staleId = value(result, 'sessionId', value(result, 'id'));
-          if (staleId.isNotEmpty && staleId != sessionId) {
-            try {
-              await _videos.stopVideo(
-                ControlTarget(sessionId: staleId),
-                keepLaunchRecord: widget.packageName != null,
-              );
-            } catch (_) {
-              // 迟到回执不能重新创建已释放视图。
-            }
-          }
-        }
-        return;
-      }
-      trace(
-        'start.return status=${value(result, 'status')} hasTexture=${result['textureId'] != null} boundBefore=${sessionId.isNotEmpty} lifecycle=${WidgetsBinding.instance.lifecycleState?.name}',
+          return VideoSessionPlan(
+            deviceId: widget.device.id,
+            packageName: widget.packageName,
+            displaySize: dimensions,
+            displayAuto: dimensions != null && displaySettings.mode == 'auto',
+          );
+        },
       );
-      setState(() {
-        displaySizing.bind(result);
-        presentation.bindStart(
-          result,
-          retained: retained != null,
-          recoveringConnection: recoveringConnection,
-          submittedAppStart: submittedAppStart,
-        );
-        if (widget.requestKeyboard && result['textureId'] != null) ime = true;
-      });
-      if (ime && widget.requestKeyboard) requestImeFocus();
-      if (sessionId.isEmpty || result['textureId'] == null) return;
-      window.bind(visible: result['status'] != 'paused');
-      notices.consume(result);
-      unawaited(screenState.refresh());
-      if (retained == null) {
-        focusVisibleDevice();
+    });
+    final opened = await opening;
+    if (!_sourcesCurrent) return;
+    setState(() {});
+    if (opened == null || !presentation.acceptsStart(opened.ticket)) return;
+    try {
+      displaySizing.bind(opened.view);
+      if (widget.requestKeyboard && opened.view.textureId != null) {
+        setState(() => ime = true);
+        requestImeFocus();
       }
-      if (retained != null) {
+      if (sessionId.isEmpty || opened.view.textureId == null) return;
+      notices.consume(opened.view.toSnapshot());
+      unawaited(screenState.refresh());
+      if (!opened.retained) focusVisibleDevice();
+      if (opened.retained) {
         await resumeView();
-        if (!_sourcesCurrent || !presentation.acceptsStart(attempt)) {
+        if (!_sourcesCurrent || !presentation.acceptsStart(opened.ticket)) {
           return;
         }
       }
@@ -434,27 +371,20 @@ class _ControlPageState extends ConsumerState<ControlPage>
       if (widget.packageName == null && !presentation.appLaunchUnknown) {
         connectionRecovery.viewed();
       }
-
-      trace('start.bound paused=${presentation.paused}');
-      // 桥接只在实际解码像素后返回纹理；早期输出事件可能先于页面绑定。
-      if (result['textureId'] != null) showResourceAdjustment();
+      showResourceAdjustment();
       final lifecycle = WidgetsBinding.instance.lifecycleState;
       if (lifecycle != null && lifecycle != AppLifecycleState.resumed) {
         didChangeAppLifecycleState(lifecycle);
       }
-    } catch (e) {
-      if (_sourcesCurrent && presentation.acceptsStart(attempt)) {
+    } catch (failure) {
+      if (_sourcesCurrent && presentation.acceptsStart(opened.ticket)) {
         setState(
-          () => presentation.failStart(
-            remoteFailure(e),
-            remoteFailureCode(e),
-            submittedAppStart: submittedAppStart,
-            details: e is RequestFailure ? jsonObject(e.details) : {},
+          () => presentation.failOperation(
+            remoteFailure(failure),
+            code: remoteFailureCode(failure),
           ),
         );
       }
-    } finally {
-      if (presentation.isLatestStart(attempt)) restoringConnection = false;
     }
   }
 
@@ -501,38 +431,16 @@ class _ControlPageState extends ConsumerState<ControlPage>
     }
   }
 
-  void showUnknownAppLaunch(Json record) {
-    setState(() => presentation.showUnknownAppLaunch(record));
-  }
-
   void detachForUnknownAppLaunch(Json record) {
     setState(() => window.detachUnknownLaunch(record, releaseInputs));
   }
 
   Future<void> checkAppLaunch() async {
     if (!_sourcesCurrent) return;
-    setState(() => presentation.checking());
-    try {
-      final listed = (await _videos.readVideoSessions(
-        deviceId: widget.device.id,
-      )).map((view) => view.toSnapshot()).toList();
-      if (!_sourcesCurrent || presentation.exiting) return;
-      final record = listed
-          .where(
-            (item) => sessionId.isNotEmpty
-                ? value(item, 'sessionId', value(item, 'id')) == sessionId
-                : item['deviceId'] == widget.device.id &&
-                      item['packageName'] == widget.packageName,
-          )
-          .firstOrNull;
-      showUnknownAppLaunch(record ?? presentation.session ?? {});
-    } catch (failure) {
-      if (mounted && !presentation.exiting) {
-        setState(() {
-          presentation.failOperation(remoteFailure(failure));
-        });
-      }
-    }
+    late final Future<void> checking;
+    setState(() => checking = window.checkAppLaunch(widget.packageName));
+    await checking;
+    if (_sourcesCurrent) setState(() {});
   }
 
   Future<void> closeUnknownAppLaunch() async {
@@ -546,26 +454,16 @@ class _ControlPageState extends ConsumerState<ControlPage>
         !_sourcesCurrent) {
       return;
     }
-    setState(() => presentation.checking());
-    try {
-      if (sessionId.isNotEmpty) {
-        await _videos.stopVideo(ControlTarget(sessionId: sessionId));
-      }
-      if (!_sourcesCurrent || presentation.exiting) return;
-      newWindowWake = null;
-      setState(
-        () => presentation.closeUnknownAppLaunch(
-          resetInitialAction:
-              widget.initialAction?.tool == RemoteTool.launchApp,
-        ),
+    late final Future<bool> closing;
+    setState(() {
+      closing = window.closeAppLaunchRecord(
+        resetInitialAction: widget.initialAction?.tool == RemoteTool.launchApp,
       );
-    } catch (failure) {
-      if (mounted && !presentation.exiting) {
-        setState(() {
-          presentation.failOperation(remoteFailure(failure));
-        });
-      }
-    }
+    });
+    final closed = await closing;
+    if (!_sourcesCurrent) return;
+    if (closed) newWindowWake = null;
+    setState(() {});
   }
 
   Future<void> continueOnPhoneScreen() async {
@@ -619,11 +517,9 @@ class _ControlPageState extends ConsumerState<ControlPage>
         (event['type'] == 'device.disconnect.requested' &&
             event['deviceId'] == widget.device.id)) {
       connectionRecovery.stop();
-      if (restoringConnection) {
+      if (window.recoveringConnection) {
         // 替换会话取得新身份前接受的停止，不能被迟到列表或启动回执撤销。
-        presentation.invalidateStart();
-        restoringConnection = false;
-        setState(() => presentation.deferStart());
+        setState(window.cancelRecovery);
       }
       return;
     }

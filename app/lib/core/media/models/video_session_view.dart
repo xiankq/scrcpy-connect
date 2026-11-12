@@ -18,6 +18,7 @@ abstract class VideoSessionView with _$VideoSessionView {
 
   String get sessionId => session.sessionId;
   String get deviceId => session.deviceId;
+  int? get textureId => output?.textureId ?? session.textureId;
   Map<String, dynamic> toSnapshot() => {
     ...sessionWithVideoOutput(session.toSnapshot(), output?.toSnapshot()),
     ...wake.sessionSnapshot,

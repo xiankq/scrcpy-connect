@@ -1,9 +1,9 @@
+import 'package:scrcpy_connect/core/media/video_sessions.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/devices/connection_validation.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
-import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/media/video_screenshots.dart';
 import 'package:scrcpy_connect/pages/activities/activities_page.dart';
 import 'package:scrcpy_connect/pages/apps/device_apps_page.dart';
@@ -145,7 +145,7 @@ Widget _remoteView(
   Object? intent,
   bool keyboard = false,
   String? packageName,
-  Json? session,
+  VideoSessionView? session,
   RemoteControlIntent? action,
 }) {
   if (session == null && intent is! RemoteLaunchIntent) {
@@ -157,7 +157,7 @@ Widget _remoteView(
     ),
     device: device,
     existingSession: session,
-    packageName: packageName ?? (session?['packageName'] as String?),
+    packageName: packageName ?? session?.session.packageName,
     requestKeyboard: keyboard,
     initialAction:
         action ?? (intent is RemoteLaunchIntent ? intent.action : null),
@@ -785,7 +785,7 @@ class RemoteSessionRoute extends _AppPageRoute with $RemoteSessionRoute {
       final id = sessionId;
       return RouteResourceView(
         identity: 'session:${device.id}:$id',
-        load: () async => (await resources.session(device.id, id)).toSnapshot(),
+        load: () => resources.session(device.id, id),
         builder: (context, session) => _remoteView(
           context,
           state,

@@ -95,8 +95,6 @@ class RemotePresentation {
         (width / height - imageWidth / imageHeight).abs() < .005;
   }
 
-  void checking() => _connecting = true;
-
   void deferStart() => _connecting = false;
 
   void failOperation(String reason, {String? code}) {
@@ -204,6 +202,7 @@ class RemotePresentation {
   void retainUnverifiedStart(RemoteData result) {
     if (sessionId.isNotEmpty) return;
     _session = {...result}..remove('textureId');
+    _launch = _Launch.normal;
     _verification = _Verification.pending;
     _connecting = false;
     _error = '会话结果尚待核验，请重新检查。';
@@ -216,6 +215,7 @@ class RemotePresentation {
     required bool submittedAppStart,
   }) {
     _session = _retainedImage(result);
+    _launch = _Launch.normal;
     if (recoveringConnection) _reconcileOnly = false;
     _controlAvailable =
         sessionId.isNotEmpty &&
@@ -403,6 +403,7 @@ class RemotePresentation {
         }
       }
       _verification = _Verification.verified;
+      _launch = _Launch.normal;
       if (!_qualityFailed) _error = null;
       _controlAvailable = false;
       _paused = true;
