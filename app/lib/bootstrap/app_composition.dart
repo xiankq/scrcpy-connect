@@ -135,8 +135,8 @@ final class AppComposition {
     diagnostics: _diagnostics,
     readRevision: () => _events.cursor.revision,
     devices: _connections.devices,
-    readSessions: ({deviceId}) async =>
-        await _captureInstance?.readActivitySessions(deviceId: deviceId) ?? [],
+    readSessions: ({deviceId}) =>
+        _captureResources.readActivitySessions(deviceId: deviceId),
     readAudio: () => _captureInstance?.audioSnapshots() ?? [],
     readObservations: _connections.currentObservations,
     transfers: _files.transfers,
@@ -271,8 +271,7 @@ final class AppComposition {
 
   late final RuntimeSnapshotReader _state = RuntimeSnapshotReader(
     readCursor: () => _events.cursor,
-    readSessions: () async =>
-        await _captureInstance?.readRecoverySessions() ?? [],
+    readSessions: () => _captureResources.readRecoverySessions(),
     readDevices: () => _connections.devices.readDevices(),
     readAudio: () => _captureInstance?.audioSnapshots() ?? [],
     readShares: () async => await _files.sharing?.readIncomingShares() ?? [],

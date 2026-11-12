@@ -8,6 +8,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/bootstrap/app_bootstrap.dart';
 import 'package:scrcpy_connect/core/activities/activity_management_provider.dart';
+import 'package:scrcpy_connect/core/control/app_launch_journal.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/models/device_endpoint.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
@@ -22,6 +23,54 @@ import 'package:scrcpy_connect/router/route_resource_resolver_provider.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('实际启动未使用控制捕获时，仍恢复持久化待核对记录并能明确关闭', () async {
+    final fixture = await _Assembly.open();
+    const operation = '00000000-0000-0000-0000-000000000001';
+    final journal = await AppLaunchJournal.open(directory: fixture.directory);
+    await journal.begin(
+      operationId: operation,
+      sessionId: operation,
+      deviceId: 'phone',
+      packageName: 'com.example.app',
+    );
+    final bootstrap = await AppBootstrap.initialize(
+      dataDirectory: fixture.directory.path,
+    );
+    addTearDown(bootstrap.dispose);
+    final container = ProviderContainer(overrides: bootstrap.overrides);
+    addTearDown(container.dispose);
+    final activities = container.read(activityManagementProvider);
+    final initial = await activities.readActivities();
+    expect(initial.pendingApplications.single.sessionId, operation);
+    expect(initial.pendingApplications.single.recordOnly, isTrue);
+    expect(initial.pendingApplications.single.name, 'com.example.app');
+    expect(
+      (await activities.readActivities(deviceId: 'another-phone')).activities,
+      isEmpty,
+    );
+    container.read(appSnapshotProvider);
+    await container.read(reconcileStateProvider)();
+    final recovered = container
+        .read(appSnapshotProvider)
+        .reconciledSnapshot!
+        .sessions
+        .single;
+    expect(recovered.session.sessionId, operation);
+    expect(recovered.session.recordOnly, isTrue);
+    expect(recovered.live, isFalse);
+    expect(recovered.output, isNull);
+    expect(recovered.keepAwake!.keepActiveLeaseActive, isFalse);
+    await activities.stopActivity(initial.activities.single.target);
+    expect((await activities.readActivities()).pendingApplications, isEmpty);
+    await container.read(reconcileStateProvider)();
+    expect(
+      container.read(appSnapshotProvider).reconciledSnapshot!.sessions,
+      isEmpty,
+    );
+    await bootstrap.dispose();
+    expect(fixture.api.closed, ['files:files-1', 'admission:scope-1']);
+  });
 
   test('实际装配完成恢复与状态交付，空设备不调用捕获，模块关闭后才释放宿主', () async {
     final fixture = await _Assembly.open();

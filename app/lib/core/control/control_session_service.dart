@@ -575,7 +575,7 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
     String? deviceId,
   }) async => List.unmodifiable([
     for (final session in await readSessions(deviceId: deviceId))
-      _activitySnapshot(session),
+      SessionActivity.fromSession(session),
   ]);
 
   VideoCapture _captureDescription(_LogicalSession slot) {
@@ -598,22 +598,7 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
   }
 
   SessionActivity _activity(_LogicalSession slot) =>
-      _activitySnapshot(slot.state);
-
-  SessionActivity _activitySnapshot(VideoSessionSnapshot session) =>
-      SessionActivity(
-        sessionId: session.sessionId,
-        deviceId: session.deviceId,
-        name: session.name,
-        status: session.status.name.replaceAll(
-          'awaitingRenderer',
-          'awaiting_renderer',
-        ),
-        needsLaunchReview: session.launchOutcome == VideoLaunchOutcome.unknown,
-        recordOnly: session.recordOnly,
-        linkedSessionId: session.linkedSessionId,
-        reason: session.reason,
-      );
+      SessionActivity.fromSession(slot.state);
 
   Future<List<VideoSessionSnapshot>> readSessions({String? deviceId}) async {
     final unresolved = await _launches.unresolved(deviceId: deviceId);

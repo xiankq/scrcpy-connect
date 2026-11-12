@@ -14,6 +14,39 @@ import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/settings/app_settings.dart';
 
 void main() {
+  test('持久化待核对记录进入活动及恢复投影，不创建捕获子资源', () async {
+    final directory = await Directory.systemTemp.createTemp('pending-launch-');
+    addTearDown(() => directory.delete(recursive: true));
+    const operation = '00000000-0000-0000-0000-000000000001';
+    const original = '00000000-0000-0000-0000-000000000002';
+    final previous = await AppLaunchJournal.open(directory: directory);
+    await previous.begin(
+      operationId: operation,
+      sessionId: original,
+      deviceId: 'phone',
+      packageName: 'com.example.app',
+    );
+    final launches = await AppLaunchJournal.open(directory: directory);
+    final resources = await _resources(launches: launches);
+    final activities = await resources.readActivitySessions(deviceId: 'phone');
+    expect(activities.single.sessionId, operation);
+    expect(activities.single.linkedSessionId, original);
+    expect(activities.single.recordOnly, isTrue);
+    expect(activities.single.needsLaunchReview, isTrue);
+    expect(await resources.readActivitySessions(deviceId: 'other'), isEmpty);
+    final recovered = (await resources.readRecoverySessions()).single;
+    expect(recovered.session.sessionId, operation);
+    expect(recovered.session.failureCode, 'interrupted');
+    expect(recovered.keepAwake!.keepActiveLeaseActive, isFalse);
+    expect(resources.currentSessions(), isEmpty);
+    await resources.close();
+    expect(() => resources.capture, throwsA(isA<RequestFailure>()));
+    expect(() => resources.sessions, throwsA(isA<RequestFailure>()));
+    expect(() => resources.audio, throwsA(isA<RequestFailure>()));
+    expect(() => resources.keepAwake, throwsA(isA<RequestFailure>()));
+    expect((await launches.unresolved()).single.operationId, operation);
+  });
+
   test('取得媒体适配与唤醒投影不创建会话、音频或唤醒执行者', () async {
     final resources = await _resources();
     final capture = resources.capture;
@@ -138,6 +171,7 @@ void main() {
 Future<CaptureResources> _resources({
   ScrcpyServerQueries Function()? readServerQueries,
   DeviceConnection Function(String)? requireConnection,
+  AppLaunchJournal? launches,
 }) async {
   final directory = await Directory.systemTemp.createTemp('capture-resources-');
   addTearDown(() => directory.delete(recursive: true));
@@ -156,7 +190,7 @@ Future<CaptureResources> _resources({
     connectionForDevice: (_) => throw StateError('不应读取连接'),
     records: records,
     preferences: settings,
-    launches: await AppLaunchJournal.open(directory: directory),
+    launches: launches ?? await AppLaunchJournal.open(directory: directory),
     diagnostics: DiagnosticReporter(null),
     isDisposed: () => false,
     isStateUnverified: () => false,

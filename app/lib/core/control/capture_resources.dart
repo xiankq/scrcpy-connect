@@ -137,8 +137,18 @@ final class CaptureResources {
 
   List<VideoSessionSnapshot> currentSessions() =>
       _sessions?.currentSessions() ?? [];
-  Future<List<VideoSessionSnapshot>> readSessions() async =>
-      await _sessions?.readSessions() ?? [];
+  Future<List<VideoSessionSnapshot>> readSessions({String? deviceId}) async {
+    if (_sessions case final sessions?) {
+      return sessions.readSessions(deviceId: deviceId);
+    }
+    final records = await _launches.unresolved(deviceId: deviceId);
+    // 等待存储期间可能首次打开控制页；已有会话须由同一所有者合并，不能丢失。
+    if (_sessions case final sessions?) {
+      return sessions.readSessions(deviceId: deviceId);
+    }
+    return List.unmodifiable([for (final record in records) record.snapshot]);
+  }
+
   Future<List<RecoveredVideoSession>> readRecoverySessions() async => [
     for (final session in await readSessions())
       RecoveredVideoSession(
@@ -148,7 +158,10 @@ final class CaptureResources {
   ];
   Future<List<SessionActivity>> readActivitySessions({
     String? deviceId,
-  }) async => await _sessions?.readActivitySessions(deviceId: deviceId) ?? [];
+  }) async => List.unmodifiable([
+    for (final session in await readSessions(deviceId: deviceId))
+      SessionActivity.fromSession(session),
+  ]);
   List<DeviceAudioSnapshot> audioSnapshots({bool activeOnly = false}) =>
       _audio?.snapshots(activeOnly: activeOnly) ?? [];
   KeepAwakeSnapshot readWake(String deviceId) =>
