@@ -46,14 +46,12 @@ final class ContentPreview implements ContentReader {
     required this.cache,
     required this.executor,
     required this.jobs,
-    this.emit,
     this.isDisposed,
   });
   final ContentCache cache;
   final FileExecutor executor;
   final ThumbnailJobs jobs;
   final bool Function()? isDisposed;
-  final void Function(Map<String, dynamic>)? emit;
   final _active = <String, _Operation>{};
   final _seen = <String, bool>{};
   final _queues = <String, Future<void>>{};
@@ -163,13 +161,6 @@ final class ContentPreview implements ContentReader {
     try {
       await Future.any([previous, task.token.whenCancelled]);
       task.check();
-      if (thumbnail) {
-        emit?.call({
-          'type': 'media.thumbnail.started',
-          'deviceId': device,
-          'data': {'operationId': operation},
-        });
-      }
       final result = thumbnail
           ? await _thumbnail(device, path, thumbnailSize!, operation, task)
           : await _preview(device, path, task);

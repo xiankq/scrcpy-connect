@@ -6,8 +6,8 @@ import 'package:scrcpy_connect/core/files/system_documents.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
+import 'package:scrcpy_connect/core/files/models/document_event.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
@@ -70,15 +70,13 @@ class _ConflictViewState extends State<_ConflictView> {
   void _follow() {
     // 先订阅再读取，避免漏掉初始化期间的冲突，也防止旧读取重新显示已解决的提示。
     _events = widget.events.listen((event) {
-      if (event['type'] != 'documents.conflict.changed') return;
-      final data = jsonObject(event['data']);
-      if (data['operationId'] != widget.operationId) return;
+      final data = event['data'];
+      if (data is! DocumentConflictChanged ||
+          data.operationId != widget.operationId) {
+        return;
+      }
       _revision++;
-      _accept(
-        data['pending'] is Map
-            ? DocumentConflict.fromJson(jsonObject(data['pending']))
-            : null,
-      );
+      _accept(data.pending);
     });
     unawaited(_read());
   }

@@ -4,6 +4,8 @@ import 'package:scrcpy_connect/core/files/file_export_service.dart';
 import 'package:scrcpy_connect/core/files/file_selection_requests.dart';
 import 'package:scrcpy_connect/core/files/system_document_backend.dart';
 import 'package:scrcpy_connect/core/files/system_documents.dart';
+import 'package:scrcpy_connect/core/files/models/document_event.dart';
+import 'package:scrcpy_connect/core/files/models/document_selection.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 
 /// 系统文档的准入、持久交付与执行资源所有者。
@@ -14,14 +16,14 @@ final class SystemDocumentService implements SystemDocuments {
     required this._createBackend,
     required this.allowImport,
     required this.isDisposed,
-    required this.emit,
+    required this.onChanged,
   });
 
   final FileDeliveryRecords _deliveries;
   final SystemDocumentBackend Function(FileSelectionRequests)? _createBackend;
   final bool allowImport;
   final bool Function() isDisposed;
-  final void Function(Map<String, dynamic>) emit;
+  final void Function(DocumentEvent) onChanged;
   bool _closed = false;
   SystemDocumentBackend? _backend;
   FileExportService? _delivery;
@@ -48,7 +50,7 @@ final class SystemDocumentService implements SystemDocuments {
     return _backend ??= _createBackend!(
       _selections ??= FileSelectionRequests((selection) {
         if (!_closed && !isDisposed()) {
-          emit({'type': 'documents.selection.requested', 'data': selection});
+          onChanged(DocumentSelectionRequested(selection));
         }
       }),
     );
@@ -60,12 +62,12 @@ final class SystemDocumentService implements SystemDocuments {
     cancelWrite: (id) async => await _backend?.cancel(id),
     onChanged: (source) {
       if (!_closed && !isDisposed()) {
-        emit({'type': 'delivery.changed', 'data': source.toJson()});
+        onChanged(DocumentDeliveryChanged(source));
       }
     },
   );
 
-  bool completeSelection(String id, Map<String, dynamic> result) =>
+  bool completeSelection(String id, DocumentSelectionResult result) =>
       _selections?.complete(id, result) ?? false;
 
   @override

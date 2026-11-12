@@ -6,6 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/files/system_documents.dart';
+import 'package:scrcpy_connect/core/files/models/document_event.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/documents/document_conflict_panel.dart';
 
@@ -60,19 +61,17 @@ void main() {
     addTearDown(container.dispose);
     addTearDown(events.close);
     await tester.pumpWidget(_page(container));
-    events.add({
-      'type': 'documents.conflict.changed',
-      'data': {
-        'operationId': 'operation',
-        'pending': _conflict('current').toJson(),
-      },
-    });
+    events.add(
+      DocumentConflictChanged(
+        'operation',
+        _conflict('current'),
+      ).toApplicationEvent(),
+    );
     await tester.pumpAndSettle();
     expect(find.text('current'), findsOneWidget);
-    events.add({
-      'type': 'documents.conflict.changed',
-      'data': {'operationId': 'operation', 'pending': null},
-    });
+    events.add(
+      const DocumentConflictChanged('operation', null).toApplicationEvent(),
+    );
     documents.reads.single.complete(_conflict('retired'));
     await tester.pumpAndSettle();
     expect(find.text('current'), findsNothing);

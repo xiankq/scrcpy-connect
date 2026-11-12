@@ -6,6 +6,7 @@ import 'package:scrcpy_connect/core/files/file_delivery.dart';
 import 'package:scrcpy_connect/core/files/system_document_backend.dart';
 import 'package:scrcpy_connect/core/files/system_document_service.dart';
 import 'package:scrcpy_connect/core/files/system_documents.dart';
+import 'package:scrcpy_connect/core/files/models/document_selection.dart';
 
 void main() {
   test('查询、取消、迟到选择与空关闭都不创建执行端', () async {
@@ -14,7 +15,7 @@ void main() {
       createBackend: (_) => throw StateError('未使用功能不应创建执行端'),
       allowImport: true,
       isDisposed: () => false,
-      emit: (_) {},
+      onChanged: (_) {},
     );
     expect(await service.readDelivery(_source), isNull);
     expect(await service.readDocumentConflict('unused'), isNull);
@@ -23,7 +24,7 @@ void main() {
       isFalse,
     );
     expect(
-      service.completeSelection('unused', {'status': 'cancelled'}),
+      service.completeSelection('unused', const DocumentSelectionCancelled()),
       isFalse,
     );
     await service.cancelDocument('unused');
@@ -47,7 +48,7 @@ void main() {
       },
       allowImport: true,
       isDisposed: () => false,
-      emit: (_) {},
+      onChanged: (_) {},
     );
     final saving = service.exportDocument(_plan);
     await backend.started.future;
@@ -71,7 +72,7 @@ void main() {
       createBackend: (_) => throw StateError('关闭后不应再创建执行端'),
       allowImport: true,
       isDisposed: () => false,
-      emit: (_) {},
+      onChanged: (_) {},
     );
     final saving = service.exportDocument(_plan);
     var closed = false;
@@ -94,7 +95,7 @@ void main() {
       },
       allowImport: true,
       isDisposed: () => false,
-      emit: (_) {},
+      onChanged: (_) {},
     );
     await service.importDocuments('import', .files);
     await expectLater(service.close(), throwsStateError);

@@ -541,7 +541,7 @@ Future<AppLifecycle> _lifecycle(
     isDisposed: () => false,
     isStateUnverified: () => false,
     diagnostics: DiagnosticReporter(null),
-    emit: (_) {},
+    onChanged: (_) {},
     attachCatalogEvents: events.attachFileEvents,
     onSharingOpened: (_) {},
   );

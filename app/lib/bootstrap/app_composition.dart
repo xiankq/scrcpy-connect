@@ -21,7 +21,6 @@ import 'package:scrcpy_connect/core/devices/usb_authorization.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log_provider.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
-import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/events/runtime_events.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/files/file_document_platform.dart';
@@ -193,9 +192,6 @@ final class AppComposition {
     },
     isDisposed: () => _isDisposed,
   );
-  bool completeDocumentSelection(String id, Json result) =>
-      _files.documents.completeSelection(id, result);
-
   late final RuntimeSnapshotReader _state = RuntimeSnapshotReader(
     readCursor: () => _events.cursor,
     readSessions: () => _captureResources.readRecoverySessions(),
@@ -277,7 +273,7 @@ final class AppComposition {
       isDisposed: () => session._isDisposed,
       isStateUnverified: () => session._stateRecovery.pending,
       diagnostics: DiagnosticReporter(diagnostics),
-      emit: (event) => session._events.emit(event),
+      onChanged: session._events.publishEvent,
       attachCatalogEvents: (source) => session._events.attachFileEvents(source),
       onSharingOpened: onSharingOpened,
     );
@@ -365,10 +361,10 @@ final class AppComposition {
     settingsManagementProvider.overrideWith((ref) => _preferences),
     contentCacheControlProvider.overrideWith((ref) => _files.cache),
     transferCacheLeaseProvider.overrideWith(
-      (ref) => _acquireTransferCacheLease,
+      (ref) => _files.acquireTransferCacheLease,
     ),
     documentSelectionResponderProvider.overrideWith(
-      (ref) => completeDocumentSelection,
+      (ref) => _files.documents.completeSelection,
     ),
     diagnosticLogProvider.overrideWith((ref) => diagnostics),
     videoSessionsProvider.overrideWith((ref) => _mediaOperations),
@@ -376,7 +372,4 @@ final class AppComposition {
 
   Future<void> configureOutgoingDirectory(String path) =>
       _files.cache.configure(outgoingDirectory: path);
-
-  Future<String> _acquireTransferCacheLease(String transferId) =>
-      _files.acquireTransferCacheLease(transferId);
 }

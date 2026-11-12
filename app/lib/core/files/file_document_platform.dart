@@ -9,6 +9,7 @@ import 'package:scrcpy_connect/core/files/file_document_recovery.dart';
 import 'package:scrcpy_connect/core/files/file_document_scope.dart';
 import 'package:scrcpy_connect/core/files/file_document_service.dart';
 import 'package:scrcpy_connect/core/files/file_selection_requests.dart';
+import 'package:scrcpy_connect/core/files/models/document_event.dart';
 import 'package:scrcpy_connect/core/files/system_document_backend.dart';
 
 /// 文档宿主协议、执行端选择与跨 isolate 接管；不承担应用级平台职责。
@@ -73,7 +74,7 @@ final class FileDocumentPlatform {
   SystemDocumentBackend createBackend({
     required FileSelectionRequests selections,
     required FileDocumentCache? sources,
-    required void Function(Json) conflictChanged,
+    required void Function(DocumentConflictChanged) conflictChanged,
   }) {
     if (Platform.isAndroid) {
       return FileDocumentService(
@@ -89,7 +90,7 @@ final class FileDocumentPlatform {
       return FileDesktopDelivery(
         selections: selections,
         files: files,
-        emit: conflictChanged,
+        onConflictChanged: conflictChanged,
       );
     }
     throw const RequestFailure('platform_unavailable', '此平台尚不支持系统位置保存。');

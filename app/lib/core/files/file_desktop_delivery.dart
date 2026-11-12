@@ -8,6 +8,8 @@ import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/files/document_limits.dart';
 import 'package:scrcpy_connect/core/files/file_selection_requests.dart';
+import 'package:scrcpy_connect/core/files/models/document_selection.dart';
+import 'package:scrcpy_connect/core/files/models/document_event.dart';
 import 'package:scrcpy_connect/core/files/system_documents.dart';
 import 'package:scrcpy_connect/core/files/system_document_backend.dart';
 
@@ -39,12 +41,12 @@ final class FileDesktopDelivery implements SystemDocumentBackend {
 
   FileDesktopDelivery({
     required this.files,
-    required this.emit,
+    required this.onConflictChanged,
     required this.selections,
     this.limits = const DocumentLimits(),
   });
   final Future<LocalFiles> Function() files;
-  final void Function(Json) emit;
+  final void Function(DocumentConflictChanged) onConflictChanged;
   final FileSelectionRequests selections;
   final DocumentLimits limits;
   _DesktopSave? _active;
@@ -118,17 +120,25 @@ final class FileDesktopDelivery implements SystemDocumentBackend {
         throw const RequestFailure('invalid_argument', '原件类型或名称无效。');
       }
       final selection = await Future.any([
-        selections.request({
-          'operationId': op.id,
-          'mode': 'desktopExport',
-          'name': name,
-          'kind': kind,
-        }),
-        op.cancelled.future.then<Json>((_) => {'status': 'cancelled'}),
+        selections.request(
+          DocumentSelectionRequest(
+            operationId: op.id,
+            mode: .desktopExport,
+            name: name,
+          ),
+        ),
+        op.cancelled.future.then<DocumentSelectionResult>(
+          (_) => const DocumentSelectionCancelled(),
+        ),
       ]);
-      final chosen = selection['destination'] as String?;
       op.check();
-      if (chosen == null) return op.result('cancelled');
+      if (selection is DocumentSelectionCancelled) {
+        return op.result('cancelled');
+      }
+      if (selection is! DocumentDestinationSelected) {
+        throw const RequestFailure('invalid_path', '系统没有返回本机保存位置。');
+      }
+      final chosen = selection.path;
       var destination = _absolute(chosen);
       if (destination == source || p.isWithin(source, destination)) {
         throw const RequestFailure('invalid_argument', '保存位置不能位于本机原件内部。');
@@ -176,7 +186,7 @@ final class FileDesktopDelivery implements SystemDocumentBackend {
       op.reply?.complete('cancel');
       op.reply = null;
       op.pending = null;
-      emit({'operationId': op.id, 'pending': null});
+      onConflictChanged(DocumentConflictChanged(op.id, null));
       try {
         await _finish(op);
       } catch (error) {
@@ -205,7 +215,7 @@ final class FileDesktopDelivery implements SystemDocumentBackend {
         conflictId: _nonce(),
         name: p.basename(destination),
       );
-      emit({'operationId': op.id, 'pending': op.pending?.toJson()});
+      onConflictChanged(DocumentConflictChanged(op.id, op.pending));
       try {
         decision = await Future.any([
           reply.future,
@@ -214,7 +224,7 @@ final class FileDesktopDelivery implements SystemDocumentBackend {
       } finally {
         op.pending = null;
         op.reply = null;
-        emit({'operationId': op.id, 'pending': null});
+        onConflictChanged(DocumentConflictChanged(op.id, null));
       }
     }
     op.check();

@@ -8,7 +8,8 @@ import 'package:scrcpy_connect/core/files/system_documents.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/core/files/models/document_event.dart';
+import 'package:scrcpy_connect/core/files/models/document_selection.dart';
 import 'package:scrcpy_connect/widgets/documents/document_picker.dart';
 
 DocumentOperationController useDocumentOperationController(
@@ -52,43 +53,38 @@ class DocumentOperationController extends ChangeNotifier {
     this.exportSource,
   }) : loaded = exportSource == null {
     _events = events.listen((event) {
-      final data = jsonObject(event['data']);
-      if (event['type'] == 'documents.selection.requested' &&
-          data['operationId'] == operationId &&
-          !disposed) {
-        unawaited(_choose(data));
+      if (event['data'] case DocumentSelectionRequested(:final request)
+          when request.operationId == operationId && !disposed) {
+        unawaited(_choose(request));
       }
-      if (exportSource != null &&
-          event['type'] == 'delivery.changed' &&
-          data['sourceId'] == exportSource!.sourceId &&
-          data['localPath'] == exportSource!.localPath &&
-          data['kind'] == exportSource!.kind.name &&
-          !busy) {
+      if (event['data'] case DocumentDeliveryChanged(:final source)
+          when exportSource == source && !busy && !disposed) {
         unawaited(refresh());
       }
     });
   }
 
-  Future<void> _choose(Json selection) async {
-    final id = selection['operationId'] as String;
-    Json receipt;
+  Future<void> _choose(DocumentSelectionRequest selection) async {
+    final id = selection.operationId;
+    DocumentSelectionResult receipt;
     try {
       receipt = await DocumentPicker.choose(selection);
     } catch (failure) {
-      receipt = {
-        'status': 'failed',
-        'code': failure is RequestFailure ? failure.code : 'selection_failed',
-        'message': '$failure',
-      };
+      receipt = DocumentSelectionFailed(
+        failure is RequestFailure ? failure.code : 'selection_failed',
+        '$failure',
+      );
     }
     // 退出或取消后拒绝迟到的选择；原任务仍负责回收原生资源。
     completeSelection?.call(
       id,
-      disposed || operationId != id ? {'status': 'cancelled'} : receipt,
+      disposed || operationId != id
+          ? const DocumentSelectionCancelled()
+          : receipt,
     );
   }
 
-  final bool Function(String, Json)? completeSelection;
+  final bool Function(String, DocumentSelectionResult)? completeSelection;
   final SystemDocuments documents;
   final DocumentSource? exportSource;
   StreamSubscription<Json>? _events;

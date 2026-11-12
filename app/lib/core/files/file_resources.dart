@@ -8,6 +8,7 @@ import 'package:scrcpy_connect/core/content/content_cache.dart';
 import 'package:scrcpy_connect/core/content/content_cache_gate.dart';
 import 'package:scrcpy_connect/core/content/content_preview.dart';
 import 'package:scrcpy_connect/core/content/thumbnail_job_service.dart';
+import 'package:scrcpy_connect/core/content/models/content_cache_changed.dart';
 import 'package:scrcpy_connect/core/devices/device_connection.dart';
 import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
@@ -45,7 +46,7 @@ final class FileResources {
     required this.diagnostics,
     required this.requireConnection,
     required this.request,
-    required this.emit,
+    required this.onChanged,
     required this.attachCatalogEvents,
   });
 
@@ -62,7 +63,7 @@ final class FileResources {
   final DiagnosticReporter diagnostics;
   final DeviceConnection Function(String) requireConnection;
   final ThumbnailJobRequest Function() request;
-  final void Function(Map<String, dynamic>) emit;
+  final void Function(AppEvent) onChanged;
   final void Function(Stream<AppEvent>) attachCatalogEvents;
   bool _closed = false;
   FileCatalog? _catalog;
@@ -101,7 +102,6 @@ final class FileResources {
       executor: _executor,
       jobs: jobs,
       isDisposed: () => _closed || isDisposed(),
-      emit: emit,
     );
   }
 
@@ -132,7 +132,7 @@ final class FileResources {
     required bool Function() isDisposed,
     required bool Function() isStateUnverified,
     required DiagnosticReporter diagnostics,
-    required void Function(Map<String, dynamic>) emit,
+    required void Function(AppEvent) onChanged,
     required void Function(Stream<AppEvent>) attachCatalogEvents,
     required void Function(FileShareService?) onSharingOpened,
   }) async {
@@ -174,8 +174,8 @@ final class FileResources {
       isDisposed: () => owner?.isDisposed() ?? false,
       onChanged: () {
         final current = owner;
-        if (current != null && !current.isDisposed()) {
-          emit({'type': 'media.cache.changed'});
+        if (current != null && !current._closed && !current.isDisposed()) {
+          onChanged(const ContentCacheChanged());
         }
       },
       protectionDetails: () async => [
@@ -222,14 +222,14 @@ final class FileResources {
                 sources: documentSources,
                 conflictChanged: (data) {
                   if (owner?._closed != true && !isDisposed()) {
-                    emit({'type': 'documents.conflict.changed', 'data': data});
+                    onChanged(data);
                   }
                 },
               )
             : null,
         allowImport: documentPlatform.allowImport,
         isDisposed: () => owner?._closed == true || isDisposed(),
-        emit: emit,
+        onChanged: onChanged,
       ),
       documentPlatform: documentPlatform,
       executor: fileExecutor,
@@ -238,7 +238,7 @@ final class FileResources {
       diagnostics: diagnostics,
       requireConnection: requireConnection,
       request: request,
-      emit: emit,
+      onChanged: onChanged,
       attachCatalogEvents: attachCatalogEvents,
     );
   }
@@ -299,7 +299,7 @@ final class FileResources {
 
   void _sharingFailed(Object error) {
     if (!_closed && !isDisposed()) {
-      emit(ShareFailed('$error').toApplicationEvent());
+      onChanged(ShareFailed('$error'));
     }
   }
 

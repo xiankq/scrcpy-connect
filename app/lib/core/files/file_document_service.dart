@@ -11,6 +11,8 @@ import 'package:scrcpy_connect/core/files/file_document_cache.dart';
 import 'package:scrcpy_connect/core/files/file_document_scope.dart';
 import 'package:scrcpy_connect/core/files/file_failure.dart';
 import 'package:scrcpy_connect/core/files/file_selection_requests.dart';
+import 'package:scrcpy_connect/core/files/models/document_selection.dart';
+import 'package:scrcpy_connect/core/files/models/document_event.dart';
 import 'package:scrcpy_connect/core/files/system_documents.dart';
 import 'package:scrcpy_connect/core/files/system_document_backend.dart';
 
@@ -70,7 +72,7 @@ class FileDocumentService implements SystemDocumentBackend {
   final DocumentsRequest _platform;
   final FileSelectionRequests selections;
   final bool Function() _isDisposed;
-  final void Function(DocumentsJson)? onConflictChanged;
+  final void Function(DocumentConflictChanged)? onConflictChanged;
   final FileDocumentCache? sources;
   final _issued = <String>{};
   _Operation? _active;
@@ -183,9 +185,9 @@ class FileDocumentService implements SystemDocumentBackend {
       });
       await _native(() => op.openingScope!);
       op.check(_disposed || _isDisposed());
-      String mode = importKind == DocumentImportKind.directory
-          ? 'importDirectory'
-          : 'importFiles';
+      var mode = importKind == DocumentImportKind.directory
+          ? DocumentSelectionMode.importDirectory
+          : DocumentSelectionMode.importFiles;
       String? source;
       if (export != null) {
         source = export.source.localPath;
@@ -198,38 +200,45 @@ class FileDocumentService implements SystemDocumentBackend {
         op.localPath = source;
         op.name = _name(export.name);
         mode = kind == LocalFileKind.directory
-            ? 'exportDirectory'
-            : 'exportFile';
+            ? DocumentSelectionMode.exportDirectory
+            : DocumentSelectionMode.exportFile;
       }
       op.check(_disposed || _isDisposed());
       final selection = await op.wait(
-        this.selections.request({
-          'ownerLeaseId': op.ownerLeaseId,
-          'operationId': id,
-          'mode': mode,
-          'name': op.name,
-          'mime':
-              export?.mime ??
-              (mode == 'exportFile' ? 'application/octet-stream' : '*/*'),
-        }),
+        this.selections.request(
+          DocumentSelectionRequest(
+            ownerLeaseId: op.ownerLeaseId,
+            operationId: id,
+            mode: mode,
+            name: op.name,
+            mime:
+                export?.mime ??
+                (mode == .exportFile ? 'application/octet-stream' : '*/*'),
+          ),
+        ),
       );
-      if (selection['status'] == 'cancelled') return op.response('cancelled');
+      if (selection is DocumentSelectionCancelled) {
+        return op.response('cancelled');
+      }
+      if (selection is! DocumentLocationsSelected) {
+        throw const RequestFailure('invalid_uri', '系统没有返回文档位置。');
+      }
       op.started = true;
       op.timer = Timer(op.limits.timeout, () {
         op.timedOut = true;
         unawaited(_cancel(op).catchError((Object _) {}));
       });
       op.check(_disposed || _isDisposed());
-      final selections = _maps(selection['documents']);
+      final selections = selection.documents;
       if (selections.isEmpty) {
         throw const RequestFailure('invalid_uri', '系统没有返回可读取的文档。');
       }
       if (selections.length > op.limits.maxSelected) {
         throw const RequestFailure('selection_limit', '最多选择 1000 个文件，请分批导入。');
       }
-      op.uri = _text(selections.first, 'uri');
-      if (mode == 'importDirectory') {
-        final root = await _metadata(op, selections.first);
+      op.uri = selections.first.uri;
+      if (mode == .importDirectory) {
+        final root = await _metadata(op, selections.first.toJson());
         if (root['directory'] != true || root['virtual'] == true) {
           throw const RequestFailure('not_a_directory', '请选择可读取的普通文档目录。');
         }
@@ -237,14 +246,14 @@ class FileDocumentService implements SystemDocumentBackend {
         final owner = await _owner(op);
         op.localPath = '$owner/${op.name}';
         await _importNode(op, root, op.localPath!, 0, op.name);
-      } else if (mode == 'importFiles') {
+      } else if (mode == .importFiles) {
         final owner = await _owner(op);
         op.localPath = owner;
         op.name = '所选文件';
         for (var index = 0; index < selections.length; index++) {
           op.examine();
           try {
-            final source = await _metadata(op, selections[index]);
+            final source = await _metadata(op, selections[index].toJson());
             if (source['directory'] == true) {
               throw const RequestFailure(
                 'not_a_file',
@@ -261,8 +270,8 @@ class FileDocumentService implements SystemDocumentBackend {
             op.record('所选文件 ${index + 1}', error);
           }
         }
-      } else if (mode == 'exportDirectory') {
-        final parent = await _metadata(op, selections.first);
+      } else if (mode == .exportDirectory) {
+        final parent = await _metadata(op, selections.first.toJson());
         if (parent['directory'] != true || parent['canCreate'] != true) {
           throw const RequestFailure(
             'create_unavailable',
@@ -276,7 +285,7 @@ class FileDocumentService implements SystemDocumentBackend {
           await _exportNode(op, source!, root, 0, op.name);
         }
       } else {
-        final target = await _metadata(op, selections.first);
+        final target = await _metadata(op, selections.first.toJson());
         op.name = _text(target, 'name');
         await _writeFile(op, source!, target, p.basename(source));
       }
@@ -798,10 +807,7 @@ class FileDocumentService implements SystemDocumentBackend {
       conflictId: _id(),
       name: name,
     );
-    onConflictChanged?.call({
-      'operationId': op.id,
-      'pending': op.pendingConflict?.toJson(),
-    });
+    onConflictChanged?.call(DocumentConflictChanged(op.id, op.pendingConflict));
     try {
       return await op.wait(reply.future);
     } finally {
@@ -813,7 +819,7 @@ class FileDocumentService implements SystemDocumentBackend {
   void _clearConflict(_Operation op) {
     if (op.pendingConflict == null) return;
     op.pendingConflict = null;
-    onConflictChanged?.call({'operationId': op.id, 'pending': null});
+    onConflictChanged?.call(DocumentConflictChanged(op.id, null));
   }
 
   Future<void> _exportNode(

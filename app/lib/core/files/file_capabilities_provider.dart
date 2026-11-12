@@ -6,7 +6,7 @@ import 'file_search.dart';
 import 'incoming_shares.dart';
 import 'system_documents.dart';
 
-import 'package:scrcpy_connect/core/errors/request_failure.dart' show Json;
+import 'models/document_selection.dart';
 
 import 'file_transfers.dart';
 
@@ -31,7 +31,7 @@ final systemDocumentsProvider = Provider<SystemDocuments>(
   (ref) => throw StateError('此能力须由启动装配提供。'),
 );
 final documentSelectionResponderProvider =
-    Provider<bool Function(String, Json)?>(
+    Provider<bool Function(String, DocumentSelectionResult)?>(
       (ref) => throw StateError('此能力须由启动装配提供。'),
     );
 final transferCacheLeaseProvider = Provider<Future<String> Function(String)>(
