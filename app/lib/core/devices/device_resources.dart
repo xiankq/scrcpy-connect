@@ -121,6 +121,16 @@ final class DeviceResources {
   Future<void> forgetObservation(String id) async =>
       await _observationInstance?.forget(id);
 
+  /// 宿主停止只撤销已存在的流程和连接；等待回收后仍允许新的手动连接。
+  Future<void> stopConnections() {
+    _reconnectionInstance?.stopAutomaticConnections();
+    return Future.wait<void>([
+      if (_setupInstance case final setup?) Future.sync(setup.stopPending),
+      if (_deviceInstance case final devices?)
+        Future.sync(devices.stopConnections),
+    ]);
+  }
+
   ScrcpyServerQueries? _queries;
   ScrcpyServerQueries get serverQueries {
     if (_queries == null) _checkCreation();

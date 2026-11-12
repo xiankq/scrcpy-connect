@@ -42,6 +42,7 @@ void main() {
       const ConnectionChange(.cancel, attemptId: 'unused'),
     );
     await resources.forgetObservation('unused');
+    await resources.stopConnections();
     await resources.stopAdmission();
     await resources.close();
     await resources.close();
@@ -234,6 +235,65 @@ void main() {
     await resources.close();
     expect(api.closed, hasLength(closed));
     expect(() => resources.companion, throwsA(isA<RequestFailure>()));
+  });
+
+  test('停止连接等待原 USB 租约释放，停止后仍允许新的手动流程', () async {
+    final ids = ['first', 'second'];
+    final authorizing = {for (final id in ids) id: Completer<void>()};
+    final authorized = {
+      for (final id in ids) id: Completer<Map<String, dynamic>>(),
+    };
+    final releasing = {for (final id in ids) id: Completer<void>()};
+    final released = {for (final id in ids) id: Completer<void>()};
+    final cancellations = <String>[];
+    final leases = <String>[];
+    final resources = await _resources(
+      authorizeUsb: (params) {
+        final id = params['attemptId'] as String;
+        authorizing[id]!.complete();
+        return authorized[id]!.future;
+      },
+      cancelUsb: (params) async =>
+          cancellations.add(params['attemptId'] as String),
+      releaseUsb: (params) async {
+        final id = params['usbLeaseId'] as String;
+        leases.add(id);
+        releasing[id]!.complete();
+        await released[id]!.future;
+      },
+      onDevicesChanged: (_) {},
+    );
+    addTearDown(() {
+      for (final id in ids) {
+        if (!authorized[id]!.isCompleted) authorized[id]!.complete({});
+        if (!released[id]!.isCompleted) released[id]!.complete();
+      }
+    });
+    final setup = resources.setup;
+    for (final id in ids) {
+      final request = expectLater(
+        setup.connectUsb(attemptId: id),
+        throwsA(
+          isA<RequestFailure>().having((e) => e.code, 'code', 'cancelled'),
+        ),
+      );
+      await authorizing[id]!.future;
+      var finished = false;
+      final stopping = resources.stopConnections().then((_) => finished = true);
+      expect(cancellations, contains(id));
+      authorized[id]!.complete({'usbLeaseId': id, 'fd': 7});
+      await releasing[id]!.future;
+      expect(finished, isFalse);
+      released[id]!.complete();
+      await request;
+      await stopping;
+      expect(resources.setup, same(setup));
+    }
+    expect(leases, ids);
+    await resources.close();
+    expect(() => resources.companion, throwsA(isA<RequestFailure>()));
+    expect(() => resources.observations, throwsA(isA<RequestFailure>()));
+    expect(() => resources.serverQueries, throwsA(isA<RequestFailure>()));
   });
 
   test('应用退出等待迟到 USB 租约，重试原资源后最后释放宿主', () async {
@@ -454,6 +514,7 @@ Future<DeviceResources> _resources({
   int Function()? readEventSequence,
   bool Function()? readBackgroundKeepAlive,
   Uint8List? scrcpyServerBytes,
+  void Function(DeviceListChanged)? onDevicesChanged,
 }) async {
   final temporary = await Directory.systemTemp.createTemp('device-resources-');
   final directory = Directory(await temporary.resolveSymbolicLinks());
@@ -484,7 +545,8 @@ Future<DeviceResources> _resources({
     releaseUsb: releaseUsb,
     emit: (_) => throw StateError('此流程不应发布事件'),
     publish: (_, _, _) => throw StateError('此流程不应发布事件'),
-    onDevicesChanged: (_) => throw StateError('此流程不应修改设备投影'),
+    onDevicesChanged:
+        onDevicesChanged ?? (_) => throw StateError('此流程不应修改设备投影'),
     stopWork: stopWork ?? (_, _, _) async => throw StateError('没有设备活动需要停止'),
   );
   addTearDown(resources.close);

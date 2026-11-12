@@ -182,10 +182,7 @@ final class AppComposition {
   late final _platformEvents = PlatformEventHandler(
     reconnections: _connections.reconnections,
     isDisposed: () => _isDisposed,
-    stopConnections: () => Future.wait([
-      _connections.setup.stopPending(),
-      _connections.devices.stopConnections(),
-    ]),
+    stopConnections: _connections.stopConnections,
     emit: (event) => _events.emit(event),
     handleShare: (data) async {
       try {
