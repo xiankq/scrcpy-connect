@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:adb/adb.dart' show AdbServices;
+import 'package:adb/adb.dart' show NativeAdbLocalFileApi;
 import 'package:scrcpy/scrcpy.dart'
     show createNativeScrcpyLocalFiles, readNativeScrcpyLocalStorageFreeBytes;
 import 'package:scrcpy_connect/core/content/content_cache.dart';
@@ -123,7 +123,7 @@ final class FileResources {
     required String fileScopeId,
     required String fileScopeKey,
     required FileDocumentPlatform documentPlatform,
-    required AdbServices localFiles,
+    required NativeAdbLocalFileApi localFiles,
     required String dataDirectory,
     required DeviceRecordStorage records,
     required DeviceConnection Function(String) requireConnection,

@@ -94,7 +94,7 @@ final class AdbFileExecutor
     return _AdbReadBatch(this, connection, device, cancellation);
   }
 
-  final adb.AdbServices _localFiles;
+  final adb.NativeAdbLocalFileApi _localFiles;
   final Future<DeviceConnection> Function(String) resolveConnection;
   @override
   final String fileScopeId;
@@ -335,10 +335,7 @@ final class AdbFileExecutor
 
     try {
       if (local) {
-        final facts = await _localFiles.localFileList(
-          utf8.encode(path),
-          limit: limit,
-        );
+        final facts = await _localFiles.localFileList(utf8.encode(path), limit);
         cancellation.check();
         add(facts.entries);
         return FileDirectoryFacts(entries, truncated: facts.truncated);

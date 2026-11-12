@@ -36,6 +36,13 @@ final class NativeHost {
   final NativeHostDependencies _dependencies;
   final Directory? _binaryDirectory;
   late final NativeAdbApi bindings;
+
+  /// 本机文件事实不需要身份客户端或 ADB server，直接借用同库能力。
+  NativeAdbLocalFileApi get localFiles {
+    _check();
+    return bindings as NativeAdbLocalFileApi;
+  }
+
   AdbIdentities get identities => bindings as AdbIdentities;
   late final SettingsStorage preferences;
   late final ScrcpyClient scrcpy;
@@ -199,6 +206,7 @@ final class NativeHost {
     if (bindings is! NativeAdbAdmissionApi ||
         bindings is! NativeAdbScopedFileScopeApi ||
         bindings is! NativeAdbFileApi ||
+        bindings is! NativeAdbLocalFileApi ||
         bindings is! NativeAdbHandshakeApi ||
         bindings is! AdbIdentities ||
         (_dependencies.desktop && bindings is! NativeAdbScopedServerApi)) {

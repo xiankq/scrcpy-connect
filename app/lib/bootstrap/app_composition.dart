@@ -259,11 +259,6 @@ final class AppComposition {
         session._files.stopForConnection(id, connection, accepted: accepted),
       ], eagerError: true),
     );
-    final identity = await connections.identities.selectForDevice();
-    final defaultClient = await host.clientForIdentity(
-      identityPath: identity.path,
-      fingerprint: identity.fingerprint,
-    );
     session._launches = await AppLaunchJournal.open(directory: host.directory);
     session._files = await FileResources.open(
       fileScopeId: host.fileScopeId,
@@ -273,7 +268,7 @@ final class AppComposition {
         request: _channels.request,
         isDisposed: () => session._isDisposed,
       ),
-      localFiles: defaultClient.services,
+      localFiles: host.localFiles,
       dataDirectory: dataDirectory,
       records: connections.records,
       requireConnection: (id) => connections.devices.requireConnection(id),

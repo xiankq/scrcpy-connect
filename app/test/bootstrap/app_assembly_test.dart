@@ -202,7 +202,7 @@ void main() {
     expect(fixture.api.closed, ['files:files-1', 'admission:scope-1']);
   });
 
-  test('实际装配完成恢复与状态交付，空设备不调用捕获，模块关闭后才释放宿主', () async {
+  test('实际桌面装配不准备 ADB server，完成恢复与状态交付后有序关闭', () async {
     final fixture = await _Assembly.open();
     final bootstrap = await AppBootstrap.initialize(
       dataDirectory: fixture.directory.path,
@@ -402,7 +402,15 @@ final class _Assembly {
 final class _Execution extends NativeHostDependencies {
   final api = _NativeExecution();
   @override
-  bool get desktop => false;
+  bool get desktop => true;
+  @override
+  Future<AdbHost> prepareServer({
+    required Directory directory,
+    required String identityPath,
+    required NativeAdbApi bindings,
+    required AdbAdmissionScopeInfo admissionScope,
+    Directory? binaryDirectory,
+  }) async => throw StateError('空装配和本机文件查询不应准备 ADB server');
   @override
   Future<NativeAdbApi> bindings() async => api;
   @override
@@ -424,7 +432,9 @@ final class _NativeExecution
         NativeAdbApi,
         NativeAdbAdmissionApi,
         NativeAdbScopedFileScopeApi,
+        NativeAdbScopedServerApi,
         NativeAdbFileApi,
+        NativeAdbLocalFileApi,
         NativeAdbHandshakeApi,
         AdbIdentities {
   AdbAdmissionScopeInfo? scope;

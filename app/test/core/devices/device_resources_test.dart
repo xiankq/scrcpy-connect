@@ -525,12 +525,6 @@ Future<AppLifecycle> _lifecycle(
     handlePlatform: (_) async {},
     isDisposed: () => false,
   );
-  final localFiles = AdbServices(
-    () => throw StateError('没有文件执行操作'),
-    (_) async => throw StateError('没有文件连接需要解析'),
-    () {},
-  );
-  addTearDown(localFiles.close);
   final files = await FileResources.open(
     fileScopeId: 'test-file-scope',
     fileScopeKey: 'test-file-owner',
@@ -539,7 +533,7 @@ Future<AppLifecycle> _lifecycle(
       request: (_, _) async => throw StateError('没有平台文档请求'),
       isDisposed: () => false,
     ),
-    localFiles: localFiles,
+    localFiles: _UnusedLocalFiles(),
     dataDirectory: directory.path,
     records: resources.records,
     requireConnection: (_) => throw StateError('没有文件连接'),
@@ -722,6 +716,12 @@ final class _QueryUpload implements NativeAdbApi {
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw StateError('清单查询不应调用其他 SDK 能力：${invocation.memberName}');
+}
+
+final class _UnusedLocalFiles implements NativeAdbLocalFileApi {
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw StateError('关闭和空恢复不应读取本机文件：${invocation.memberName}');
 }
 
 final class _QueryClient implements AdbClient {
