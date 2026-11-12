@@ -189,6 +189,7 @@ class VideoRecovery {
           return;
         }
         outputs[output.sessionId] = output;
+        _dimensionFrames.remove(output.sessionId);
         emit(event.toApplicationEvent());
         unawaited(
           readyCapture(output.rendererReceipt).catchError((Object _) {

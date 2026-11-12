@@ -118,6 +118,37 @@ void main() {
     expect(fixture.outputs['session'], same(frame));
   });
 
+  test('新捕获复用 renderer 代次时，帧计数从新绑定重新核验', () {
+    final fixture = _Recovery(_output(capture: 2, renderer: 3));
+    fixture.recovery.handle(
+      VideoOutputFrame(
+        _output(capture: 2, renderer: 3).copyWith(frameCount: 20),
+      ),
+    );
+    final replacement = _output(capture: 3, renderer: 3);
+    fixture.recovery.handle(VideoOutputChanged(replacement));
+    final first = replacement.copyWith(
+      frameCount: 1,
+      decodedWidth: 300,
+      decodedHeight: 200,
+    );
+    fixture.recovery.handle(VideoOutputFrame(first));
+    expect(fixture.outputs['session'], same(first));
+    expect(fixture.frames, hasLength(2));
+    expect(fixture.frames.last.captureGeneration, 3);
+    expect(
+      (fixture.events.last['data'] as VideoOutputFrame).output,
+      same(first),
+    );
+    fixture.recovery.handle(VideoOutputFrame(first.copyWith(frameCount: 0)));
+    fixture.recovery.handle(
+      VideoOutputFrame(
+        _output(capture: 2, renderer: 3).copyWith(frameCount: 21),
+      ),
+    );
+    expect(fixture.frames, hasLength(2));
+  });
+
   test('源状态迟到失败不能结束读取期间替换的新输出', () async {
     final fixture = _Recovery(_output());
     final status = Completer<ScrcpySourceStatus>();
