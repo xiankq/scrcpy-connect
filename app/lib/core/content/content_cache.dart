@@ -8,7 +8,7 @@ import 'package:scrcpy_connect/core/content/content_cache_failure.dart';
 import 'package:scrcpy_connect/core/content/content_cache_gate.dart';
 import 'package:scrcpy_connect/core/content/models/cache_status.dart';
 import 'package:scrcpy_connect/core/files/file_cache_leases.dart';
-import 'package:scrcpy_connect/core/files/file_cache_reservation.dart';
+import 'package:scrcpy_connect/core/files/models/file_cache_reservation.dart';
 import 'package:uuid/uuid.dart';
 
 export 'package:scrcpy_connect/core/content/models/cache_status.dart';

@@ -7,7 +7,7 @@ import 'dart:math';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/core/content/models/cache_status.dart';
 import 'package:scrcpy_connect/core/files/file_cache_leases.dart';
-import 'package:scrcpy_connect/core/files/file_cache_reservation.dart';
+import 'package:scrcpy_connect/core/files/models/file_cache_reservation.dart';
 import 'package:scrcpy_connect/core/files/file_cancellation.dart';
 import 'package:scrcpy_connect/core/files/file_executor.dart';
 import 'package:scrcpy_connect/core/files/file_failure.dart';

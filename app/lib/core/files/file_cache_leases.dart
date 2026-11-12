@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/core/files/file_cache_reservation.dart';
+import 'package:scrcpy_connect/core/files/models/file_cache_reservation.dart';
 
 import 'dart:async';
 

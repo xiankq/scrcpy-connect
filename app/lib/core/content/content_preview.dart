@@ -11,7 +11,7 @@ import 'package:scrcpy_connect/core/content/thumbnail_jobs.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart'
     show RequestFailure;
 import 'package:scrcpy_connect/core/files/file_cache_leases.dart';
-import 'package:scrcpy_connect/core/files/file_cache_reservation.dart';
+import 'package:scrcpy_connect/core/files/models/file_cache_reservation.dart';
 import 'package:scrcpy_connect/core/files/file_cancellation.dart';
 import 'package:scrcpy_connect/core/files/file_executor.dart';
 import 'package:scrcpy_connect/core/files/file_failure.dart';
