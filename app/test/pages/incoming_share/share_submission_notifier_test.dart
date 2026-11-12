@@ -8,7 +8,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/clipboard/clipboard_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/clipboard/remote_clipboard.dart';
 import 'package:scrcpy_connect/core/devices/device_readiness_provider.dart';
-import 'package:scrcpy_connect/core/devices/device_management.dart';
+import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/core/files/file_cancellation.dart';
@@ -47,7 +47,7 @@ void main() {
   const events = Stream<Map<String, dynamic>>.empty();
   sourceOverrides() => [
     appSessionProvider.overrideWithValue(dependencies),
-    deviceManagementProvider.overrideWithValue(dependencies.devices),
+    deviceReaderProvider.overrideWithValue(dependencies.devices),
     incomingSharesProvider.overrideWithValue(incoming),
     fileDirectoriesProvider.overrideWithValue(directories),
     fileTransfersProvider.overrideWithValue(transfers),
@@ -348,7 +348,7 @@ class _Shares implements IncomingShares {
 }
 
 class _Session implements AppSession {
-  final DeviceManagement devices = _Devices();
+  final DeviceReader devices = _Devices();
   @override
   final initialState = AppState(
     pendingShares: [_share],
@@ -372,7 +372,7 @@ class _Session implements AppSession {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class _Devices implements DeviceManagement {
+class _Devices implements DeviceReader {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

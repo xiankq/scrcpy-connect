@@ -57,4 +57,4 @@ final class RouteResourceResolverProvider
 }
 
 String _$routeResourceResolverHash() =>
-    r'0ed0aad06dd5c840b22b0203dc117e8bc8a0b824';
+    r'dbbe232eb91c5fc09c218022f56fa774c1872a26';

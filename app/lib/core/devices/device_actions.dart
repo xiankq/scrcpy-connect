@@ -323,13 +323,6 @@ final class DeviceActions
   }
 
   @override
-  Future<List<DeviceSnapshot>> readDevices() => _execute(_devices.readDevices);
-
-  @override
-  Future<DeviceSnapshot> readDevice(String id) =>
-      _execute(() => _devices.readDevice(id));
-
-  @override
   Future<void> renameDevice(String id, String name) =>
       _execute(() => _devices.renameDevice(id, name));
 

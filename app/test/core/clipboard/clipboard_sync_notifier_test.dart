@@ -10,7 +10,7 @@ import 'package:scrcpy_connect/core/clipboard/clipboard_focus_notifier.dart';
 import 'package:scrcpy_connect/core/clipboard/clipboard_sync_notifier.dart';
 import 'package:scrcpy_connect/core/clipboard/models/clipboard_sync_state.dart';
 import 'package:scrcpy_connect/core/clipboard/remote_clipboard.dart';
-import 'package:scrcpy_connect/core/devices/device_management.dart';
+import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
@@ -41,7 +41,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appSessionProvider.overrideWithValue(dependencies),
-        deviceManagementProvider.overrideWithValue(dependencies.devices),
+        deviceReaderProvider.overrideWithValue(dependencies.devices),
         settingsManagementProvider.overrideWithValue(dependencies.settings),
         remoteClipboardProvider.overrideWithValue(previous),
       ],
@@ -66,7 +66,7 @@ void main() {
     );
     container.updateOverrides([
       appSessionProvider.overrideWithValue(dependencies),
-      deviceManagementProvider.overrideWithValue(dependencies.devices),
+      deviceReaderProvider.overrideWithValue(dependencies.devices),
       settingsManagementProvider.overrideWithValue(dependencies.settings),
       remoteClipboardProvider.overrideWithValue(replacement),
     ]);
@@ -170,7 +170,7 @@ class _Session implements AppSession {
       deviceSettings: {'device': const DevicePreferences(clipboardSync: true)},
     ),
   );
-  final DeviceManagement devices = _Devices();
+  final DeviceReader devices = _Devices();
   final SettingsManagement settings = _Settings();
   @override
   bool get initialize => false;
@@ -180,7 +180,7 @@ class _Session implements AppSession {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class _Devices implements DeviceManagement {
+class _Devices implements DeviceReader {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

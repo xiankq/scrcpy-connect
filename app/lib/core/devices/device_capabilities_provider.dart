@@ -8,9 +8,13 @@ import 'device_inspection.dart';
 import 'device_management.dart';
 import 'device_notifications.dart';
 import 'device_observation.dart';
+import 'device_reader.dart';
 import 'device_setup.dart';
 
 /// 各入口借用启动装配的能力；查询和页面可独立替换，不接管共享资源。
+final deviceReaderProvider = Provider<DeviceReader>(
+  (ref) => throw StateError('此能力须由启动装配提供。'),
+);
 final deviceManagementProvider = Provider<DeviceManagement>(
   (ref) => throw StateError('此能力须由启动装配提供。'),
 );

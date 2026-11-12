@@ -4,8 +4,9 @@ import 'package:scrcpy_connect/core/devices/models/adb_discovery_endpoint.dart';
 
 /// 已保存 GUID 的候选读取与代次核验；广播只提供位置，不授予设备信任。
 abstract interface class DeviceReconnectionCandidates {
-  factory DeviceReconnectionCandidates.mdns(DeviceDiscovery discovery) =
-      _MdnsDeviceReconnectionCandidates;
+  factory DeviceReconnectionCandidates.mdns(
+    DeviceDiscovery Function() discovery,
+  ) = _MdnsDeviceReconnectionCandidates;
   Future<List<AdbDiscoveryEndpoint>> resolve(
     String guid, {
     required AdbCancellation cancellation,
@@ -17,15 +18,18 @@ abstract interface class DeviceReconnectionCandidates {
 /// 复用应用发现所有者，只保留同一 GUID 的 TLS 服务，精确实例优先。
 final class _MdnsDeviceReconnectionCandidates
     implements DeviceReconnectionCandidates {
-  _MdnsDeviceReconnectionCandidates(this.discovery);
+  _MdnsDeviceReconnectionCandidates(this._readDiscovery);
 
-  final DeviceDiscovery discovery;
+  final DeviceDiscovery Function() _readDiscovery;
+  DeviceDiscovery? _discovery;
 
   @override
   Future<List<AdbDiscoveryEndpoint>> resolve(
     String guid, {
     required AdbCancellation cancellation,
   }) async {
+    cancellation.check();
+    final discovery = _discovery ??= _readDiscovery();
     final found = await discovery.scan(cancellation: cancellation);
     cancellation.check();
     final matching =
@@ -59,5 +63,5 @@ final class _MdnsDeviceReconnectionCandidates
 
   @override
   bool isCurrent(AdbDiscoveryEndpoint endpoint) =>
-      discovery.isCurrent(endpoint);
+      _discovery?.isCurrent(endpoint) ?? false;
 }

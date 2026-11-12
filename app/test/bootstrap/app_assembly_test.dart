@@ -7,12 +7,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/bootstrap/app_bootstrap.dart';
+import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
 import 'package:scrcpy_connect/core/platform/bundled_server_files.dart';
 import 'package:scrcpy_connect/core/platform/native_host.dart';
 import 'package:scrcpy_connect/core/platform/native_host_dependencies.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_actions_provider.dart';
+import 'package:scrcpy_connect/router/route_resource_resolver_provider.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +27,13 @@ void main() {
     addTearDown(bootstrap.dispose);
     final container = ProviderContainer(overrides: bootstrap.overrides);
     addTearDown(container.dispose);
+    expect(await container.read(deviceReaderProvider).readDevices(), isEmpty);
+    await expectLater(
+      container
+          .read(routeResourceResolverProvider)
+          .device('00000000-0000-0000-0000-000000000001'),
+      throwsA(isA<RequestFailure>().having((e) => e.code, 'code', 'not_found')),
+    );
     container.read(appSnapshotProvider);
     await container.read(reconcileStateProvider)();
     await container.pump();

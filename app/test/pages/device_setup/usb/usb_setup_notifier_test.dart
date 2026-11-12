@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_management.dart';
+import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/device_setup.dart';
 import 'package:scrcpy_connect/core/devices/models/device_endpoint.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
@@ -25,6 +26,7 @@ void main() {
     appSessionProvider.overrideWithValue(session),
     deviceSetupProvider.overrideWithValue(setup),
     deviceManagementProvider.overrideWithValue(management),
+    deviceReaderProvider.overrideWithValue(management),
   ];
   setUp(() {
     setup = _Setup();
@@ -170,7 +172,7 @@ final class _Setup implements DeviceSetup {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-final class _Management implements DeviceManagement {
+final class _Management implements DeviceManagement, DeviceReader {
   final cancellations = <({String id, Completer<void> result})>[];
   @override
   Future<void> cancelConnectionAttempt(String attemptId) {

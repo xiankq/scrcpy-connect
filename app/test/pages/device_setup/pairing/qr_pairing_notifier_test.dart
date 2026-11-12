@@ -6,6 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_connection_control.dart';
 import 'package:scrcpy_connect/core/devices/device_management.dart';
+import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/device_setup.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/identity/models/setup_identity.dart';
@@ -29,6 +30,7 @@ void main() {
     appSessionProvider.overrideWithValue(session),
     deviceSetupProvider.overrideWithValue(setup),
     deviceManagementProvider.overrideWithValue(management),
+    deviceReaderProvider.overrideWithValue(management),
     deviceConnectionsProvider.overrideWithValue(connections),
   ];
   setUp(() {
@@ -235,7 +237,7 @@ final class _QrCall {
       );
 }
 
-final class _Management implements DeviceManagement {
+final class _Management implements DeviceManagement, DeviceReader {
   final cancellations = <({String id, Completer<void> result})>[];
   @override
   Future<void> cancelConnectionAttempt(String attemptId) {

@@ -63,6 +63,10 @@ void main() {
     expect(stopped, 1);
     await resources.close();
     expect(resources.devices, same(devices));
+    expect(
+      devices.readDevices,
+      throwsA(isA<RequestFailure>().having((e) => e.code, 'code', 'disposed')),
+    );
     _expectUnused(resources, devicesUsed: true);
   });
 

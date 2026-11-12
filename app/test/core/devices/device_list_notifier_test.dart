@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
-import 'package:scrcpy_connect/core/devices/device_management.dart';
+import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
@@ -23,7 +23,7 @@ void main() {
     container = ProviderContainer(
       overrides: [
         appSessionProvider.overrideWithValue(dependencies),
-        deviceManagementProvider.overrideWithValue(source),
+        deviceReaderProvider.overrideWithValue(source),
       ],
     );
     container.listen(deviceListProvider, (_, _) {});
@@ -40,7 +40,7 @@ void main() {
     final replacement = _Devices();
     container.updateOverrides([
       appSessionProvider.overrideWithValue(dependencies),
-      deviceManagementProvider.overrideWithValue(replacement),
+      deviceReaderProvider.overrideWithValue(replacement),
     ]);
     await container.pump();
     expect(container.read(deviceListProvider).devices, isEmpty);
@@ -96,7 +96,7 @@ void main() {
   });
 }
 
-class _Devices implements DeviceManagement {
+class _Devices implements DeviceReader {
   final reads = <Completer<List<DeviceSnapshot>>>[];
   @override
   Future<List<DeviceSnapshot>> readDevices() {

@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/devices/current_device_notifier.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
-import 'package:scrcpy_connect/core/devices/device_management.dart';
+import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
@@ -26,7 +26,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appSessionProvider.overrideWithValue(dependencies),
-        deviceManagementProvider.overrideWithValue(dependencies.devices),
+        deviceReaderProvider.overrideWithValue(dependencies.devices),
         settingsManagementProvider.overrideWithValue(dependencies.settings),
         incomingSharesProvider.overrideWithValue(dependencies.incomingShares),
       ],
@@ -85,7 +85,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appSessionProvider.overrideWithValue(previous),
-        deviceManagementProvider.overrideWithValue(previous.devices),
+        deviceReaderProvider.overrideWithValue(previous.devices),
         settingsManagementProvider.overrideWithValue(previous.settings),
         incomingSharesProvider.overrideWithValue(previous.incomingShares),
       ],
@@ -93,7 +93,7 @@ void main() {
     container.listen(appSnapshotProvider, (_, _) {});
     container.updateOverrides([
       appSessionProvider.overrideWithValue(replacement),
-      deviceManagementProvider.overrideWithValue(replacement.devices),
+      deviceReaderProvider.overrideWithValue(replacement.devices),
       settingsManagementProvider.overrideWithValue(replacement.settings),
       incomingSharesProvider.overrideWithValue(replacement.incomingShares),
     ]);
@@ -126,7 +126,7 @@ class _Session implements AppSession {
   int closes = 0;
   final SettingsManagement settings = _Settings();
   final IncomingShares incomingShares = _Shares();
-  final DeviceManagement devices = _Devices();
+  final DeviceReader devices = _Devices();
   @override
   final Stream<Json> events;
   @override
@@ -153,7 +153,7 @@ class _Shares implements IncomingShares {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class _Devices implements DeviceManagement {
+class _Devices implements DeviceReader {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

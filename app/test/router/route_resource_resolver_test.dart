@@ -5,7 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
 import 'package:scrcpy_connect/core/control/models/video_session.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
-import 'package:scrcpy_connect/core/devices/device_management.dart';
+import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
@@ -22,7 +22,7 @@ void main() {
     final previous = _Devices();
     final current = _Devices();
     final container = ProviderContainer(
-      overrides: [deviceManagementProvider.overrideWithValue(previous)],
+      overrides: [deviceReaderProvider.overrideWithValue(previous)],
     );
     addTearDown(container.dispose);
     final resources = container.read(routeResourceResolverProvider);
@@ -32,7 +32,7 @@ void main() {
       throwsA(_failure('route_source_changed')),
     );
     container.updateOverrides([
-      deviceManagementProvider.overrideWithValue(current),
+      deviceReaderProvider.overrideWithValue(current),
     ]);
     previous.reads.single.complete(
       const DeviceSnapshot(id: 'device', name: 'old'),
@@ -48,7 +48,7 @@ void main() {
   test('路由读取在 scope 释放后不能交付旧资源', () async {
     final devices = _Devices();
     final container = ProviderContainer(
-      overrides: [deviceManagementProvider.overrideWithValue(devices)],
+      overrides: [deviceReaderProvider.overrideWithValue(devices)],
     );
     final reading = container
         .read(routeResourceResolverProvider)
@@ -103,7 +103,7 @@ void main() {
 Matcher _failure(String code) =>
     isA<RequestFailure>().having((error) => error.code, 'code', code);
 
-class _Devices implements DeviceManagement {
+class _Devices implements DeviceReader {
   final reads = <Completer<DeviceSnapshot>>[];
   @override
   Future<DeviceSnapshot> readDevice(String id) {

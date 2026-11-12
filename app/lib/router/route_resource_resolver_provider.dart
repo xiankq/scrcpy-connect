@@ -29,7 +29,7 @@ RouteResourceResolver routeResourceResolver(Ref ref) {
 
   return RouteResourceResolver(
     readDevice: (id) => owned(
-      () => ref.read(deviceManagementProvider),
+      () => ref.read(deviceReaderProvider),
       (source) => source.readDevice(id),
     ),
     readTransfer: (id) => owned(

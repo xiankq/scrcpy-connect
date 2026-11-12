@@ -9,6 +9,7 @@ import 'package:scrcpy_connect/core/devices/device_discovery.dart';
 import 'package:scrcpy_connect/core/devices/device_inspection.dart';
 import 'package:scrcpy_connect/core/devices/device_management.dart';
 import 'package:scrcpy_connect/core/devices/device_probe.dart';
+import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/device_reconnection_candidates.dart';
 import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
 import 'package:scrcpy_connect/core/devices/models/adb_discovery_endpoint.dart';
@@ -41,7 +42,11 @@ String? _connectionErrorCode(Object error) => switch (error) {
 /// 设备记录、身份选择与实际连接的业务编排；不拥有 SDK 客户端或服务器。
 /// 事件回调交给应用统一排序；本模块不创建另一条事件序列或持久记录。
 final class DeviceService
-    implements DeviceManagement, DeviceInspection, DeviceConnectionControl {
+    implements
+        DeviceReader,
+        DeviceManagement,
+        DeviceInspection,
+        DeviceConnectionControl {
   DeviceService({
     required this.records,
     required this.identities,
@@ -377,9 +382,10 @@ final class DeviceService
 
   /// 只有本所有者实际交付的连接可以投影为已连接；磁盘缓存不能证明连接存活。
   @override
-  List<DeviceSnapshot> readDevices() => [
-    for (final record in records.current.devices) _snapshot(record),
-  ];
+  List<DeviceSnapshot> readDevices() {
+    _checkOpen();
+    return [for (final record in records.current.devices) _snapshot(record)];
+  }
 
   @override
   DeviceSnapshot readDevice(String id) {

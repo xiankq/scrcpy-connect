@@ -13,7 +13,7 @@ import 'package:scrcpy_connect/core/control/video_display.dart';
 import 'package:scrcpy_connect/core/devices/device_apps.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_inspection.dart';
-import 'package:scrcpy_connect/core/devices/device_management.dart';
+import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
@@ -42,7 +42,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appSessionProvider.overrideWithValue(dependencies),
-        deviceManagementProvider.overrideWithValue(dependencies.devices),
+        deviceReaderProvider.overrideWithValue(dependencies.devices),
         settingsManagementProvider.overrideWithValue(dependencies.settings),
         runtimeEventsProvider.overrideWithValue(events.stream),
         videoSessionsProvider.overrideWithValue(original),
@@ -79,7 +79,7 @@ void main() {
     expect(original.starts, 1);
     container.updateOverrides([
       appSessionProvider.overrideWithValue(dependencies),
-      deviceManagementProvider.overrideWithValue(dependencies.devices),
+      deviceReaderProvider.overrideWithValue(dependencies.devices),
       settingsManagementProvider.overrideWithValue(dependencies.settings),
       runtimeEventsProvider.overrideWithValue(events.stream),
       videoSessionsProvider.overrideWithValue(replacement),
@@ -137,7 +137,7 @@ class _Session implements AppSession {
       deviceSettings: {'device': const DevicePreferences(wakeOnConnect: false)},
     ),
   );
-  final DeviceManagement devices = _Devices();
+  final DeviceReader devices = _Devices();
   final SettingsManagement settings = _Settings();
   @override
   Stream<Map<String, dynamic>> get events => const Stream.empty();
@@ -217,7 +217,7 @@ class _Displays implements VideoDisplayControl {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class _Devices implements DeviceManagement {
+class _Devices implements DeviceReader {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:adb/adb.dart' show AdbCancellation;
 import 'package:scrcpy_connect/core/devices/device_connection_control.dart'
     show DeviceEndpoint;
@@ -9,7 +7,7 @@ import 'package:scrcpy_connect/core/identity/models/setup_identity.dart';
 
 export 'package:scrcpy_connect/core/devices/models/device_wake_receipt.dart';
 
-/// 本机设备记录及其实际交付的连接投影；读取不产生连接或重新执行操作。
+/// 设备记录及连接的修改操作；跨能力取消和清理由操作所有者协调。
 abstract interface class DeviceManagement {
   /// 创建手动连接记录并绑定本次身份；保存记录不代表已连接或已授权。
   Future<DeviceSnapshot> addDevice(
@@ -26,8 +24,6 @@ abstract interface class DeviceManagement {
     AdbCancellation? cancellation,
   });
 
-  FutureOr<List<DeviceSnapshot>> readDevices();
-  FutureOr<DeviceSnapshot> readDevice(String id);
   Future<void> renameDevice(String id, String name);
   Future<void> disconnectDevice(String id);
   Future<void> forgetDevice(String id);

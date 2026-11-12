@@ -9,7 +9,7 @@ import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 
 import 'device_capabilities_provider.dart';
-import 'device_management.dart';
+import 'device_reader.dart';
 
 part 'device_list_notifier.g.dart';
 
@@ -23,7 +23,7 @@ class DeviceListNotifier extends _$DeviceListNotifier {
     final previous = _owner;
     final owner = _owner = _DeviceListOwner(
       session,
-      ref.watch(deviceManagementProvider),
+      ref.watch(deviceReaderProvider),
     );
     final initial = session.session.initialState;
     final subscription = session.stateEvents.listen((event) {
@@ -70,7 +70,7 @@ class DeviceListNotifier extends _$DeviceListNotifier {
       ref.mounted &&
       !owner.disposed &&
       !owner.session.disposed &&
-      identical(ref.read(deviceManagementProvider), owner.source) &&
+      identical(ref.read(deviceReaderProvider), owner.source) &&
       identical(_owner, owner);
 
   Future<void> refresh() async {
@@ -98,7 +98,7 @@ class DeviceListNotifier extends _$DeviceListNotifier {
 final class _DeviceListOwner {
   _DeviceListOwner(this.session, this.source);
   final StateSubscription session;
-  final DeviceManagement source;
+  final DeviceReader source;
   int request = 0;
   bool disposed = false;
 }

@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_connection_control.dart';
 import 'package:scrcpy_connect/core/devices/device_management.dart';
+import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/device_setup.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
@@ -45,6 +46,7 @@ void main() {
     appSessionProvider.overrideWithValue(session),
     deviceSetupProvider.overrideWithValue(setup),
     deviceManagementProvider.overrideWithValue(management),
+    deviceReaderProvider.overrideWithValue(management),
     deviceConnectionsProvider.overrideWithValue(connections),
     reconcileStateProvider.overrideWithValue(reconcile),
   ];
@@ -371,7 +373,7 @@ final class _Setup implements DeviceSetup {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-final class _Management implements DeviceManagement {
+final class _Management implements DeviceManagement, DeviceReader {
   List<DeviceSnapshot> devices = [];
   final saves =
       <

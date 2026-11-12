@@ -209,7 +209,9 @@ final class DeviceResources {
     return _deviceInstance ??= DeviceService(
       records: _records,
       identities: _identities,
-      reconnectionCandidates: DeviceReconnectionCandidates.mdns(_discovery),
+      reconnectionCandidates: DeviceReconnectionCandidates.mdns(
+        () => _discovery,
+      ),
       clientForIdentity: _clientForIdentity,
       stopActivities: (id, connection) =>
           stopConnectionActivities(id, connection),

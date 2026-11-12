@@ -418,6 +418,7 @@ final class AppComposition {
     activityManagementProvider.overrideWith((ref) => _activities),
     reconcileStateProvider.overrideWith((ref) => lifecycle.reconcileState),
     backgroundControlProvider.overrideWith((ref) => _backgroundControl),
+    deviceReaderProvider.overrideWith((ref) => _connections.devices),
     deviceManagementProvider.overrideWith((ref) => _deviceActions),
     deviceConnectionsProvider.overrideWith((ref) => _deviceActions),
     deviceSetupProvider.overrideWith((ref) => _deviceActions),
