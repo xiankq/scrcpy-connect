@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:adb/adb.dart' show AdbCancellation;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/core/control/control_operations.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
@@ -149,11 +150,15 @@ void main() {
   test('设备观察在恢复期间允许读取，拒绝改变意图；关闭后拒绝读取', () async {
     final owner = _Device();
     var closed = false;
+    var borrows = 0;
     final operations = DeviceOperations(
-      capabilities: owner,
-      observation: owner,
-      calls: owner,
-      notifications: owner,
+      capabilities: () => throw StateError('观察不应取得能力评估'),
+      observation: () {
+        borrows++;
+        return owner;
+      },
+      calls: () => throw StateError('观察不应取得通话能力'),
+      notifications: () => throw StateError('观察不应取得通知能力'),
       wake: (id, {connectionId}) => throw StateError('不应唤醒设备'),
       isDisposed: () => closed,
       isStateUnverified: () => true,
@@ -161,6 +166,10 @@ void main() {
     );
     final DeviceObservation observation = operations;
     expect(await observation.readObservations(), isEmpty);
+    await expectLater(
+      observation.readObservations(cancellation: AdbCancellation()..cancel()),
+      failsWith('cancelled'),
+    );
     await expectLater(
       observation.startObservation('device'),
       failsWith('state_unverified'),
@@ -173,6 +182,7 @@ void main() {
     closed = true;
     await expectLater(observation.readObservations(), failsWith('disposed'));
     expect(owner.reads, 1);
+    expect(borrows, 1);
   });
 
   test('恢复期间媒体不能恢复播放，停止必须等待原输出关闭', () async {

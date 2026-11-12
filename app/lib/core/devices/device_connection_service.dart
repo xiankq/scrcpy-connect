@@ -25,6 +25,7 @@ class DeviceConnectionService implements DeviceSetup {
     required this.releaseIdentityClient,
     required this.policy,
     required this.emit,
+    required this.isStateUnverified,
     this.authorizeUsb,
     this.releaseUsb,
     this.cancelUsb,
@@ -44,6 +45,7 @@ class DeviceConnectionService implements DeviceSetup {
   final Future<void> Function(IdentitySelection) releaseIdentityClient;
   final ConnectionPolicy policy;
   final void Function(Json) emit;
+  final bool Function() isStateUnverified;
   final Future<Json> Function(Json)? authorizeUsb;
   final Future<void> Function(Json)? releaseUsb, cancelUsb;
   final Future<void> Function() Function(String)? holdDevice;
@@ -53,7 +55,7 @@ class DeviceConnectionService implements DeviceSetup {
   final bool Function() _burstMode;
   final _flows = <_SetupFlow>{};
   final _stops = <String, int>{};
-  bool _disposed = false, _recovering = false;
+  bool _disposed = false;
   int _next = 0, _revision = 0;
 
   /// 先同步撤准入，再等待真实任务；身份变更或删除记录不能越过迟到配对回执。
@@ -84,8 +86,6 @@ class DeviceConnectionService implements DeviceSetup {
     }
     await Future.wait(affected.map(_drain));
   }
-
-  void setStateVerified(bool verified) => _recovering = !verified;
 
   void handleEvent(Json event) {
     if (event['type'] == 'connections.stopped') {
@@ -862,7 +862,7 @@ class DeviceConnectionService implements DeviceSetup {
 
   Future<void> _ready(_SetupFlow flow) async {
     _check(flow);
-    while (_recovering) {
+    while (isStateUnverified()) {
       await _pause(flow, policy.setupPollInterval);
     }
   }

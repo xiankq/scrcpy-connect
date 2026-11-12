@@ -7,7 +7,10 @@ import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/core/control/display_recovery.dart';
 import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/core/devices/device_connection_service.dart';
+import 'package:scrcpy_connect/core/devices/device_discovery.dart';
 import 'package:scrcpy_connect/core/devices/device_resources.dart';
+import 'package:scrcpy_connect/core/devices/models/connection_change.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
@@ -31,6 +34,10 @@ void main() {
     );
     resources.handleEvent({'type': 'settings.changed'});
     resources.handleEvent({'type': 'devices.changed'});
+    await resources.prepareChange(
+      const ConnectionChange(.cancel, attemptId: 'unused'),
+    );
+    await resources.forgetObservation('unused');
     await resources.stopAdmission();
     await resources.close();
     await resources.close();
@@ -119,6 +126,61 @@ void main() {
     expect(() => resources.companion, throwsA(isA<RequestFailure>()));
     expect(() => resources.observations, throwsA(isA<RequestFailure>()));
     expect(() => resources.setup, throwsA(isA<RequestFailure>()));
+  });
+
+  test('能力评估和空唤醒不创建配对、清单部署或伴生观察', () async {
+    final resources = await _resources();
+    final operations = resources.operations;
+    const id = '00000000-0000-0000-0000-000000000001';
+    await expectLater(
+      operations.readCapabilities(id),
+      throwsA(
+        isA<RequestFailure>().having((e) => e.code, 'code', 'device_not_found'),
+      ),
+    );
+    await expectLater(
+      operations.wakeDevice(id),
+      throwsA(
+        isA<RequestFailure>().having((e) => e.code, 'code', 'disconnected'),
+      ),
+    );
+    await resources.close();
+    expect(resources.operations, same(operations));
+    _expectUnused(resources, devicesUsed: true, operationsUsed: true);
+  });
+
+  test('延迟创建的配对流程直接遵守当前恢复屏障，不依赖创建前收到事件', () async {
+    final resources = await _resources();
+    final discovery = DeviceDiscovery();
+    await discovery.close();
+    var unverified = true;
+    final waiting = Completer<void>();
+    final resume = Completer<void>();
+    final setup = DeviceConnectionService(
+      devices: resources.devices,
+      discovery: discovery,
+      clientForIdentity: (_) => _UnusedClient(),
+      releaseIdentityClient: (_) async {},
+      policy: const ConnectionPolicy(),
+      emit: (_) {},
+      isStateUnverified: () => unverified,
+      delay: (_) {
+        if (!waiting.isCompleted) waiting.complete();
+        return resume.future;
+      },
+    );
+    addTearDown(setup.dispose);
+    final handle = await setup.beginQrPairing(attemptId: 'late-setup');
+    await waiting.future;
+    var settled = false;
+    final blocked = expectLater(
+      handle.result,
+      throwsA(isA<RequestFailure>().having((e) => e.code, 'code', 'disposed')),
+    ).then((_) => settled = true);
+    expect(settled, isFalse);
+    unverified = false;
+    resume.complete();
+    await blocked;
   });
 
   test('设备模块持有失败的清单部署，关闭重试原上传与清理责任', () async {
@@ -361,6 +423,7 @@ void _expectUnused(
   DeviceResources resources, {
   bool devicesUsed = false,
   bool reconnectUsed = false,
+  bool operationsUsed = false,
 }) {
   final disposed = throwsA(
     isA<RequestFailure>().having((error) => error.code, 'code', 'disposed'),
@@ -372,7 +435,7 @@ void _expectUnused(
   expect(() => resources.serverQueries, disposed);
   expect(() => resources.observations, disposed);
   expect(() => resources.apps, disposed);
-  expect(() => resources.operations, disposed);
+  if (!operationsUsed) expect(() => resources.operations, disposed);
   expect(() => resources.identity, disposed);
 }
 

@@ -59,15 +59,32 @@ void main() {
     await actions.cancelConnectionAttempt('old');
     expect(devices.cancelled, ['old', 'old']);
   });
+
+  test('记录修改、空取消和已撤销发现不取得配对执行能力', () async {
+    final devices = _Devices();
+    final actions = _actions(
+      devices,
+      (_) async {},
+      setup: () => throw StateError('此操作不应取得配对执行能力'),
+    );
+    await actions.renameDevice('device', 'Phone');
+    await actions.cancelConnectionAttempt('unused');
+    await expectLater(
+      actions.discoverDevices(cancellation: AdbCancellation()..cancel()),
+      throwsA(isA<RequestFailure>().having((e) => e.code, 'code', 'cancelled')),
+    );
+    expect(devices.cancelled, ['unused']);
+  });
 }
 
 DeviceActions _actions(
   _Devices devices,
-  Future<void> Function(ConnectionChange) prepare,
-) => DeviceActions(
+  Future<void> Function(ConnectionChange) prepare, {
+  DeviceSetup Function()? setup,
+}) => DeviceActions(
   devices: devices,
   connections: devices,
-  setup: devices,
+  setup: setup ?? () => devices,
   isStateUnverified: () => false,
   prepareChange: prepare,
   beginChange: (_) => () async {},
@@ -87,6 +104,9 @@ final class _Devices
   final executed = <String>[];
   final cancelled = <String>[];
   Object? cancelFailure;
+
+  @override
+  Future<void> renameDevice(String id, String name) async {}
 
   @override
   Future<void> cancelConnectionAttempt(String attemptId) async {

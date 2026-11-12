@@ -69,19 +69,19 @@ final class AppComposition {
   late final _deviceActions = DeviceActions(
     devices: _connections.devices,
     connections: _connections.devices,
-    setup: _connections.setup,
+    setup: () => _connections.setup,
     isStateUnverified: () => _stateRecovery.pending,
-    prepareChange: _connections.setup.prepareChange,
-    beginChange: _connections.reconnections.beginChange,
+    prepareChange: _connections.prepareChange,
+    beginChange: (change) => _connections.reconnections.beginChange(change),
     cancelContent: _files.cancelContent,
     cancelUsbAttempt: (id) async {
       if (Platform.isAndroid) await _usbAuthorization.cancel({'attemptId': id});
     },
     cancelFiles: _files.cancelFiles,
-    forgetObservation: _connections.observations.forget,
-    forgetPreferences: _preferences.forgetDevicePreferences,
-    stopMediaIntent: _media.stopDeviceIntent,
-    finishMediaStop: _media.finishDeviceStop,
+    forgetObservation: _connections.forgetObservation,
+    forgetPreferences: (id) => _preferences.forgetDevicePreferences(id),
+    stopMediaIntent: (id) => _media.stopDeviceIntent(id),
+    finishMediaStop: (id) => _media.finishDeviceStop(id),
     isDisposed: () => _isDisposed,
     announceStop: (id) => _events.emit({
       'type': 'device.disconnect.requested',
@@ -94,7 +94,7 @@ final class AppComposition {
   late final _preferences = AppSettings(
     preferences: _host.preferences,
     isDisposed: () => _isDisposed,
-    prepareImport: () => _connections.setup.prepareChange(
+    prepareImport: () => _connections.prepareChange(
       const ConnectionChange(ConnectionChangeKind.replaceRecords),
     ),
     pauseReconnect: () => _connections.reconnections.beginChange(

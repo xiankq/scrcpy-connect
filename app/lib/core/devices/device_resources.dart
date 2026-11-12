@@ -112,6 +112,13 @@ final class DeviceResources {
   List<ObservedDeviceSnapshot> currentObservations() =>
       _observationInstance?.currentObservedDevices() ?? [];
 
+  /// 未创建的所有者没有待撤销的流程或观察；清理不取得新的执行能力。
+  Future<void> prepareChange(ConnectionChange change) async =>
+      await _setupInstance?.prepareChange(change);
+
+  Future<void> forgetObservation(String id) async =>
+      await _observationInstance?.forget(id);
+
   ScrcpyServerQueries? _queries;
   ScrcpyServerQueries get serverQueries {
     if (_queries == null) _checkCreation();
@@ -126,7 +133,7 @@ final class DeviceResources {
     if (_identityInstance == null) _checkCreation();
     return _identityInstance ??= IdentityManager(
       keys: _identities,
-      prepareChange: () => _setup.prepareChange(
+      prepareChange: () => prepareChange(
         const ConnectionChange(ConnectionChangeKind.defaultIdentity),
       ),
       pauseReconnect: () => _reconnections.beginChange(
@@ -185,6 +192,7 @@ final class DeviceResources {
       releaseIdentityClient: _releaseIdentityClient,
       policy: _connectionPolicy,
       emit: emit,
+      isStateUnverified: isStateUnverified,
       authorizeUsb: authorizeUsb,
       cancelUsb: cancelUsb,
       releaseUsb: releaseUsb,
@@ -297,11 +305,12 @@ final class DeviceResources {
   DeviceOperations get operations {
     if (_operationInstance == null) _checkCreation();
     return _operationInstance ??= DeviceOperations(
-      capabilities: _capabilities,
-      observation: _observations,
-      calls: _observations,
-      notifications: _observations,
-      wake: _power.wakeDevice,
+      capabilities: () => _capabilities,
+      observation: () => _observations,
+      calls: () => _observations,
+      notifications: () => _observations,
+      wake: (id, {connectionId}) =>
+          _power.wakeDevice(id, connectionId: connectionId),
       isDisposed: () => _isDisposed,
       isStateUnverified: () => isStateUnverified(),
       diagnostics: _diagnostics,
@@ -372,13 +381,11 @@ final class DeviceResources {
 
   void invalidateState() {
     if (_isDisposed) return;
-    _setupInstance?.setStateVerified(false);
     _reconnectionInstance?.handleEvent(const DeviceReconnectInvalidated());
   }
 
   void restoreState(DeviceReconnectSnapshot snapshot) {
     if (_isDisposed) return;
-    _setupInstance?.setStateVerified(true);
     _reconnectionInstance?.handleEvent(DeviceReconnectRecovered(snapshot));
   }
 

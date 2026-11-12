@@ -28,10 +28,10 @@ final class DeviceOperations
     required this._diagnostics,
   });
 
-  final DeviceAssessment _capabilities;
-  final DeviceObservation _observation;
-  final DeviceCalls _calls;
-  final DeviceNotifications _notifications;
+  final DeviceAssessment Function() _capabilities;
+  final DeviceObservation Function() _observation;
+  final DeviceCalls Function() _calls;
+  final DeviceNotifications Function() _notifications;
   final Future<DeviceWakeReceipt> Function(String, {String? connectionId}) wake;
   final bool Function() isDisposed;
   final bool Function() isStateUnverified;
@@ -43,7 +43,11 @@ final class DeviceOperations
     AdbCancellation? cancellation,
   }) {
     if (isDisposed()) throw const RequestFailure('disposed', '连接界面已关闭。');
-    return _capabilities.readCapabilities(deviceId, cancellation: cancellation);
+    cancellation?.check();
+    return _capabilities().readCapabilities(
+      deviceId,
+      cancellation: cancellation,
+    );
   }
 
   @override
@@ -52,7 +56,8 @@ final class DeviceOperations
     AdbCancellation? cancellation,
   }) {
     if (isDisposed()) throw const RequestFailure('disposed', '连接界面已关闭。');
-    return _capabilities.diagnoseDevice(deviceId, cancellation: cancellation);
+    cancellation?.check();
+    return _capabilities().diagnoseDevice(deviceId, cancellation: cancellation);
   }
 
   @override
@@ -61,9 +66,12 @@ final class DeviceOperations
     AdbCancellation? cancellation,
   }) => _observationOperation(
     'notifications.list',
-    () =>
-        _notifications.readNotifications(deviceId, cancellation: cancellation),
+    () => _notifications().readNotifications(
+      deviceId,
+      cancellation: cancellation,
+    ),
     deviceId: deviceId,
+    cancellation: cancellation,
   );
 
   @override
@@ -73,12 +81,13 @@ final class DeviceOperations
     AdbCancellation? cancellation,
   }) => _observationOperation(
     'notifications.open',
-    () => _notifications.openNotification(
+    () => _notifications().openNotification(
       deviceId,
       notificationId,
       cancellation: cancellation,
     ),
     deviceId: deviceId,
+    cancellation: cancellation,
     requiresVerifiedState: true,
   );
 
@@ -89,12 +98,13 @@ final class DeviceOperations
     AdbCancellation? cancellation,
   }) => _observationOperation(
     'notifications.dismiss',
-    () => _notifications.dismissNotification(
+    () => _notifications().dismissNotification(
       deviceId,
       notificationId,
       cancellation: cancellation,
     ),
     deviceId: deviceId,
+    cancellation: cancellation,
     requiresVerifiedState: true,
   );
 
@@ -104,8 +114,9 @@ final class DeviceOperations
     AdbCancellation? cancellation,
   }) => _observationOperation(
     'calls.list',
-    () => _calls.readCalls(deviceId, cancellation: cancellation),
+    () => _calls().readCalls(deviceId, cancellation: cancellation),
     deviceId: deviceId,
+    cancellation: cancellation,
   );
 
   @override
@@ -114,8 +125,9 @@ final class DeviceOperations
     AdbCancellation? cancellation,
   }) => _observationOperation(
     'calls.open',
-    () => _calls.requestCurrentCallUi(deviceId, cancellation: cancellation),
+    () => _calls().requestCurrentCallUi(deviceId, cancellation: cancellation),
     deviceId: deviceId,
+    cancellation: cancellation,
     requiresVerifiedState: true,
   );
 
@@ -125,8 +137,9 @@ final class DeviceOperations
     AdbCancellation? cancellation,
   }) => _observationOperation(
     'calls.openPhoneApp',
-    () => _calls.requestPhoneApp(deviceId, cancellation: cancellation),
+    () => _calls().requestPhoneApp(deviceId, cancellation: cancellation),
     deviceId: deviceId,
+    cancellation: cancellation,
     requiresVerifiedState: true,
   );
 
@@ -135,7 +148,8 @@ final class DeviceOperations
     AdbCancellation? cancellation,
   }) => _observationOperation(
     'observation.list',
-    () => _observation.readObservations(cancellation: cancellation),
+    () => _observation().readObservations(cancellation: cancellation),
+    cancellation: cancellation,
   );
 
   @override
@@ -144,8 +158,9 @@ final class DeviceOperations
     AdbCancellation? cancellation,
   }) => _observationOperation(
     'observation.status',
-    () => _observation.readObservation(deviceId, cancellation: cancellation),
+    () => _observation().readObservation(deviceId, cancellation: cancellation),
     deviceId: deviceId,
+    cancellation: cancellation,
   );
 
   @override
@@ -155,12 +170,13 @@ final class DeviceOperations
     AdbCancellation? cancellation,
   }) => _observationOperation(
     'observation.start',
-    () => _observation.startObservation(
+    () => _observation().startObservation(
       deviceId,
       allowStart: allowStart,
       cancellation: cancellation,
     ),
     deviceId: deviceId,
+    cancellation: cancellation,
     requiresVerifiedState: true,
   );
 
@@ -170,14 +186,16 @@ final class DeviceOperations
     AdbCancellation? cancellation,
   }) => _observationOperation(
     'observation.stop',
-    () => _observation.stopObservation(deviceId, cancellation: cancellation),
+    () => _observation().stopObservation(deviceId, cancellation: cancellation),
     deviceId: deviceId,
+    cancellation: cancellation,
   );
 
   Future<T> _observationOperation<T>(
     String diagnosticLabel,
     Future<T> Function() action, {
     String? deviceId,
+    AdbCancellation? cancellation,
     bool requiresVerifiedState = false,
   }) async {
     if (isDisposed()) throw const RequestFailure('disposed', '连接界面已关闭。');
@@ -190,6 +208,7 @@ final class DeviceOperations
     }
     final watch = Stopwatch()..start();
     try {
+      cancellation?.check();
       return await action();
     } catch (error, stack) {
       final failure = switch (error) {

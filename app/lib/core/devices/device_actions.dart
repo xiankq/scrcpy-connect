@@ -39,7 +39,7 @@ final class DeviceActions
 
   final DeviceManagement _devices;
   final DeviceConnectionControl _connections;
-  final DeviceSetup _setup;
+  final DeviceSetup Function() _setup;
   final bool Function() _isStateUnverified;
   final Future<void> Function(ConnectionChange change) _prepareChange;
   final Future<void> Function() Function(ConnectionChange change) _beginChange;
@@ -59,12 +59,13 @@ final class DeviceActions
   Future<List<DiscoveredDevice>> discoverDevices({
     String? attemptId,
     AdbCancellation? cancellation,
-  }) => _execute(
-    () => _setup.discoverDevices(
+  }) => _execute(() {
+    cancellation?.check();
+    return _setup().discoverDevices(
       attemptId: attemptId,
       cancellation: cancellation,
-    ),
-  );
+    );
+  });
 
   @override
   Future<PairingReceipt> pairDevice(
@@ -76,7 +77,7 @@ final class DeviceActions
     SetupIdentity? identity,
   }) => _setupAction(
     'devices.pair',
-    () => _setup.pairDevice(
+    () => _setup().pairDevice(
       address,
       port,
       code,
@@ -95,7 +96,7 @@ final class DeviceActions
     SetupIdentity? identity,
   }) => _setupAction(
     'devices.pair.qr',
-    () => _setup.beginQrPairing(
+    () => _setup().beginQrPairing(
       deviceId: deviceId,
       attemptId: attemptId,
       identity: identity,
@@ -114,7 +115,7 @@ final class DeviceActions
     SetupIdentity? identity,
   }) => _setupAction(
     'devices.usb',
-    () => _setup.connectUsb(
+    () => _setup().connectUsb(
       deviceId: deviceId,
       attemptId: attemptId,
       serial: serial,
@@ -134,7 +135,7 @@ final class DeviceActions
     String? attemptId,
   }) => _setupAction(
     'devices.wireless',
-    () => _setup.enableWireless(
+    () => _setup().enableWireless(
       deviceId,
       address,
       port: port,
