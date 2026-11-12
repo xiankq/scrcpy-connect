@@ -165,6 +165,7 @@ class VideoOutputService {
             sessionId: entry.id,
             deviceId: entry.device,
             generation: entry.generation,
+            captureGeneration: entry.captureGeneration,
             reason: event['reason'] as String? ?? '视频输入已结束。',
           ),
         );

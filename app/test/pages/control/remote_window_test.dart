@@ -14,6 +14,24 @@ import 'package:scrcpy_connect/widgets/models/device_audio_view_snapshot.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
 
 void main() {
+  test('输出失败保留类型化的未知打开身份，核对不重放原启动', () async {
+    final fixture = _Window();
+    final native = Completer<VideoSessionView>();
+    fixture.videos.starting = native.future;
+    final opening = fixture.open();
+    await fixture.videos.submitted.future;
+    native.completeError(VideoStartUncertain(_view().session));
+    expect(await opening, isNull);
+    expect(fixture.window.presentation.appLaunchUnknown, isTrue);
+    expect(fixture.window.presentation.sessionId, 'session');
+    expect(fixture.window.presentation.session!.textureId, isNull);
+    expect(fixture.window.view, isNull);
+    await fixture.window.checkAppLaunch('app');
+    expect(fixture.window.presentation.sessionId, 'session');
+    expect(fixture.videos.starts, 1);
+    expect(fixture.videos.reads, 2);
+  });
+
   test('未知打开只查询原记录，不准备新窗口或重放应用启动', () async {
     final fixture = _Window();
     fixture.videos.listed = [
@@ -119,7 +137,7 @@ void main() {
     expect(await opening, isNull);
     expect(fixture.window.presentation.sessionId, 'session');
     expect(fixture.window.presentation.stateUnverified, isTrue);
-    expect(fixture.window.presentation.session!['textureId'], isNull);
+    expect(fixture.window.presentation.session!.textureId, isNull);
     expect(fixture.window.view, isNull);
     expect(fixture.videos.stops, isEmpty);
     expect(await fixture.open(), isNull);

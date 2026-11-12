@@ -101,11 +101,15 @@ class VideoRecovery {
     outputs.remove(id);
     _dimensionFrames.remove(id);
     final closing = _close(id);
-    emit({
-      'type': 'session.failed',
-      'deviceId': output.deviceId,
-      'data': {'sessionId': id, 'reason': reason},
-    });
+    emit(
+      VideoOutputFailed(
+        sessionId: id,
+        deviceId: output.deviceId,
+        captureGeneration: output.captureGeneration,
+        generation: output.generation,
+        reason: reason,
+      ).toApplicationEvent(),
+    );
     await Future.wait([closing, _stop(id)]);
   }
 
@@ -160,21 +164,18 @@ class VideoRecovery {
       _dimensions(event);
       return;
     }
-    if (event is VideoOutputFailed &&
-        _reconfigurations.containsKey(event.sessionId)) {
-      return;
-    }
-    emit(event.toApplicationEvent());
     switch (event) {
       case VideoOutputFailed(
         :final sessionId,
         :final deviceId,
+        :final captureGeneration,
         :final generation,
         :final reason,
       ):
         final current = outputs[sessionId];
         if (current != null &&
             current.deviceId == deviceId &&
+            current.captureGeneration == captureGeneration &&
             current.generation == generation) {
           unawaited(fail(current, reason));
         }
@@ -182,16 +183,20 @@ class VideoRecovery {
         final current = outputs[output.sessionId];
         if (current == null ||
             current.deviceId != output.deviceId ||
-            output.generation <= current.generation) {
+            output.captureGeneration < current.captureGeneration ||
+            (output.captureGeneration == current.captureGeneration &&
+                output.generation <= current.generation)) {
           return;
         }
         outputs[output.sessionId] = output;
+        emit(event.toApplicationEvent());
         unawaited(
           readyCapture(output.rendererReceipt).catchError((Object _) {
-            /* 迟到回执不能恢复停止窗口。 */
+            // 迟到回执不能恢复停止窗口。
           }),
         );
       case VideoOutputReady():
+        emit(event.toApplicationEvent());
       case VideoOutputFrame():
         break;
     }

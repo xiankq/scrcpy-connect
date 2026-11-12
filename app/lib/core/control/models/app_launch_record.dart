@@ -1,4 +1,5 @@
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/control/models/video_session.dart';
 
 /// 副作用记录的阶段，不表示 Android 应用当前的生命周期。
 enum AppLaunchStatus { pending, unknown, observed, closed }
@@ -23,6 +24,21 @@ final class AppLaunchRecord {
   bool get unresolved =>
       status == AppLaunchStatus.pending || status == AppLaunchStatus.unknown;
 
+  VideoSessionSnapshot get snapshot => VideoSessionSnapshot(
+    sessionId: operationId,
+    deviceId: deviceId,
+    packageName: packageName,
+    name: packageName,
+    kind: .app,
+    status: .failed,
+    launchOperationId: operationId,
+    launchOutcome: .unknown,
+    recordOnly: true,
+    linkedSessionId: operationId == sessionId ? null : sessionId,
+    failureCode: failureCode,
+    reason: '应用打开请求可能已提交。请先核对手机并明确关闭本次记录，再选择重新打开。',
+  );
+
   Map<String, Object?> toJson() => {
     'operationId': operationId,
     'sessionId': sessionId,
@@ -31,21 +47,6 @@ final class AppLaunchRecord {
     'status': status.name,
     'failureCode': failureCode,
     'updatedAt': updatedAt,
-  };
-
-  Map<String, Object?> get projection => {
-    'sessionId': operationId,
-    'launchOperationId': operationId,
-    'linkedSessionId': operationId == sessionId ? null : sessionId,
-    'deviceId': deviceId,
-    'packageName': packageName,
-    'name': packageName,
-    'status': 'failed',
-    'kind': 'app',
-    'launchOutcome': 'unknown',
-    'recordOnly': true,
-    'failureCode': failureCode,
-    'reason': '应用打开请求可能已提交。请先核对手机并明确关闭本次记录，再选择重新打开。',
   };
 
   AppLaunchRecord withStatus(
@@ -65,6 +66,6 @@ final class AppLaunchRecord {
 
 final class AppLaunchUncertain extends RequestFailure {
   AppLaunchUncertain(this.record)
-    : super('app_launch_unknown', '应用打开结果尚待核对，不会再次提交打开请求。', record.projection);
+    : super('app_launch_unknown', '应用打开结果尚待核对，不会再次提交打开请求。');
   final AppLaunchRecord record;
 }

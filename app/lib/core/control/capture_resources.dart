@@ -15,6 +15,7 @@ import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/media/device_audio_service.dart';
 import 'package:scrcpy_connect/core/media/models/recovered_video_session.dart';
+import 'package:scrcpy_connect/core/media/models/video_session_view.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/core/settings/app_settings.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
@@ -89,6 +90,7 @@ final class CaptureResources {
       serverQueries: _readServerQueries,
       settings: () => _preferences.settings,
       emit: (type, device, data) => publishBusiness(type, device, data),
+      onSessionChanged: _publishSession,
       onAudioEligibilityChanged: (id) {
         // 同步撤准入后记录实际排空，回调不等待其他设备，也不丢弃失败所有者。
         if (_audio case final audio?) {
@@ -134,19 +136,7 @@ final class CaptureResources {
     for (final session in await readSessions())
       RecoveredVideoSession(
         session: session,
-        keepAwake:
-            _wake?.readWake(session.deviceId) ??
-            KeepAwakeSnapshot.withoutLease(
-              deviceId: session.deviceId,
-              enabled:
-                  _preferences
-                      .settings
-                      .deviceSettings[session.deviceId]
-                      ?.stayAwake ==
-                  true,
-              hasWindowOwner:
-                  _sessions?.hasAudioOwner(session.deviceId) ?? false,
-            ),
+        keepAwake: readWake(session.deviceId),
       ),
   ];
   Future<List<SessionActivity>> readActivitySessions({
@@ -154,8 +144,29 @@ final class CaptureResources {
   }) async => await _sessions?.readActivitySessions(deviceId: deviceId) ?? [];
   List<DeviceAudioSnapshot> audioSnapshots({bool activeOnly = false}) =>
       _audio?.snapshots(activeOnly: activeOnly) ?? [];
-  Map<String, Object?> projectSession(Map<String, Object?> state) =>
-      keepAwake.projectSession(state);
+  KeepAwakeSnapshot readWake(String deviceId) =>
+      _wake?.readWake(deviceId) ??
+      KeepAwakeSnapshot.withoutLease(
+        deviceId: deviceId,
+        enabled:
+            _preferences.settings.deviceSettings[deviceId]?.stayAwake == true,
+        hasWindowOwner: _sessions?.hasAudioOwner(deviceId) ?? false,
+      );
+
+  void _publishSession(
+    VideoSessionChange change,
+    VideoSessionSnapshot session,
+  ) {
+    if (_closed || isDisposed()) return;
+    publish({
+      'type': 'session.${change.name}',
+      'deviceId': session.deviceId,
+      'data': VideoSessionView(
+        session: session,
+        wake: readWake(session.deviceId),
+      ),
+    });
+  }
 
   void observeCleanup(Future<void> work) {
     _cleanup.add(work);
@@ -172,21 +183,12 @@ final class CaptureResources {
 
   void publishBusiness(String type, String? device, Map<String, Object?> data) {
     if (_closed || isDisposed()) return;
-    publish({
-      'type': type,
-      'deviceId': ?device,
-      'data':
-          type.startsWith('session.') &&
-              type != 'session.frame' &&
-              data['sessionId'] is String
-          ? projectSession(data)
-          : data,
-    });
+    publish({'type': type, 'deviceId': ?device, 'data': data});
     if (type == 'device.keep_active.updated' && device != null) {
       for (final session
           in _sessions?.currentSessions(deviceId: device) ??
               <VideoSessionSnapshot>[]) {
-        publishBusiness('session.updated', device, session.toSnapshot());
+        _publishSession(.updated, session);
       }
     }
   }

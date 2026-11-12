@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/core/control/models/app_launch_record.dart';
+import 'package:scrcpy_connect/core/media/models/video_output.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 
 import 'dart:async';
@@ -68,10 +70,8 @@ class ControlPage extends ConsumerStatefulWidget {
 class _ControlPageState extends ConsumerState<ControlPage>
     with WidgetsBindingObserver, RouteAware {
   bool ime = false;
-  bool sensitive = false;
   final inputFocus = FocusNode();
   final keyboardFocus = FocusNode();
-  bool adjustmentShown = false;
   SessionViewLease? get view => window.view;
   ModalRoute<dynamic>? observedRoute;
   late final RemoteWindow window;
@@ -299,7 +299,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
     eventSubscription = _events.listen(onEvent);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     if (ref.read(recoveryStateProvider).reconciliationPending) {
-      markStateUnknown(initialSession: widget.existingSession?.toSnapshot());
+      markStateUnknown(initialSession: widget.existingSession);
     } else {
       unawaited(start());
     }
@@ -356,7 +356,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
         requestImeFocus();
       }
       if (sessionId.isEmpty || opened.view.textureId == null) return;
-      notices.consume(opened.view.toSnapshot());
+      notices.consume(opened.view.wake);
       unawaited(screenState.refresh());
       if (!opened.retained) focusVisibleDevice();
       if (opened.retained) {
@@ -371,7 +371,6 @@ class _ControlPageState extends ConsumerState<ControlPage>
       if (widget.packageName == null && !presentation.appLaunchUnknown) {
         connectionRecovery.viewed();
       }
-      showResourceAdjustment();
       final lifecycle = WidgetsBinding.instance.lifecycleState;
       if (lifecycle != null && lifecycle != AppLifecycleState.resumed) {
         didChangeAppLifecycleState(lifecycle);
@@ -431,7 +430,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
     }
   }
 
-  void detachForUnknownAppLaunch(Json record) {
+  void detachForUnknownAppLaunch(AppLaunchRecord record) {
     setState(() => window.detachUnknownLaunch(record, releaseInputs));
   }
 
@@ -486,9 +485,6 @@ class _ControlPageState extends ConsumerState<ControlPage>
   }
 
   void onEvent(Json event) {
-    if (event['type'] == 'session.disconnected' && event['data'] is Map) {
-      trace('server.ended reason=${(event['data'] as Map)['reason']}');
-    }
     if (!_sourcesCurrent) return;
     final data = event['data'] is Map<Object?, Object?>
         ? jsonObject(event['data'])
@@ -540,83 +536,85 @@ class _ControlPageState extends ConsumerState<ControlPage>
         (presentation.reconcileOnly && view?.isCurrent != true)) {
       return;
     }
-    if (value(event, 'type').startsWith('session.')) {
-      trace(
-        'event type=${event['type']} status=${value(data, 'status')} bound=${sessionId.isNotEmpty} sessionMatches=${data['sessionId'] == null || data['sessionId'] == sessionId} deviceMatches=${event['deviceId'] == null || event['deviceId'] == widget.device.id} hasTexture=${data['textureId'] != null} pausedBefore=${presentation.paused}',
-      );
-    }
-    if (data['sessionId'] != null && data['sessionId'] != sessionId) return;
-    if (event['deviceId'] != null && event['deviceId'] != widget.device.id) {
-      return;
-    }
-    switch (event['type']) {
-      case 'session.frame':
-      case 'session.output.changed':
-      case 'session.output.resumed':
-        if (event['type'] != 'session.frame' &&
-            !hasDecodedFrameEvidence(data)) {
-          return;
-        }
-        showResourceAdjustment();
-        if (!presentation.output(
-          data,
-          verified: event['type'] != 'session.frame',
-        )) {
+    final payload = event['data'];
+    bool belongs(String id, String deviceId) =>
+        id == sessionId &&
+        deviceId == widget.device.id &&
+        (event['deviceId'] == null || event['deviceId'] == deviceId);
+    switch (payload) {
+      case VideoOutputReady(:final output) ||
+          VideoOutputChanged(:final output) ||
+          VideoOutputFrame(:final output):
+        if (!belongs(output.sessionId, output.deviceId) ||
+            !presentation.output(
+              output,
+              verified: payload is! VideoOutputFrame,
+            )) {
           return;
         }
         setState(() {});
         displaySizing.observeGeometry();
-        trace(
-          'frame.applied paused=${presentation.paused} hasTexture=${presentation.session?['textureId'] != null}',
-        );
-      case 'session.updated':
+      case VideoPlaybackReceipt(:final session, :final output):
+        if (!belongs(session.sessionId, session.deviceId) ||
+            !presentation.output(output, verified: true)) {
+          return;
+        }
+        setState(() {});
+        displaySizing.observeGeometry();
+      case VideoOutputFailed(
+        :final sessionId,
+        :final deviceId,
+        :final captureGeneration,
+        :final generation,
+        :final reason,
+      ):
+        if (!belongs(sessionId, deviceId) ||
+            !presentation.acceptsFailure(
+              captureGeneration: captureGeneration,
+              generation: generation,
+            )) {
+          return;
+        }
+        presentation.disconnect(reason);
+        unawaited(releaseInputs());
+        setState(() {});
+      case VideoSessionView(:final session, :final wake):
+        if (event['type'] == 'session.frame' ||
+            !belongs(session.sessionId, session.deviceId)) {
+          return;
+        }
         final outgoing = presentation.binding;
-        final current = presentation.session ?? {};
         final noticeIsCurrent =
             view?.isCurrent == true &&
-            event['deviceId'] == widget.device.id &&
-            (data['deviceId'] == null ||
-                data['deviceId'] == widget.device.id) &&
-            data['sessionId'] == sessionId &&
-            (current['captureGeneration'] == null ||
-                data['captureGeneration'] != null) &&
-            ((current['rendererGeneration'] ?? current['generation']) == null ||
-                (data['rendererGeneration'] ?? data['generation']) != null) &&
-            presentation.acceptsFailure(data);
-        if (presentation.updateSession(data)) {
+            presentation.acceptsFailure(
+              captureGeneration: session.captureGeneration,
+              generation: session.generation,
+            );
+        if (!session.live) {
+          if (!noticeIsCurrent) return;
+          presentation.updateSession(payload);
+          presentation.disconnect(
+            session.reason ??
+                presentation.error ??
+                '连接已中断，当前画面已暂停。恢复首帧后才能继续操作。',
+          );
+          unawaited(releaseInputs(binding: outgoing));
+        } else if (presentation.updateSession(payload)) {
           unawaited(
             releaseInputs(
               binding: outgoing != presentation.binding ? outgoing : null,
             ),
           );
         }
-        if (noticeIsCurrent) notices.consume(data);
+        if (noticeIsCurrent) notices.consume(wake);
         setState(() {});
-        trace('updated.applied paused=${presentation.paused}');
-      case 'session.disconnected':
-      case 'session.failed':
-        if (!presentation.acceptsFailure(data)) return;
-        presentation.disconnect(
-          value(data, 'reason', '连接已中断，当前画面已暂停。恢复首帧后才能继续操作。'),
-        );
-        unawaited(releaseInputs());
-        setState(() {});
-      case 'session.ime':
-        setState(() {
-          ime = data['visible'] == true;
-          sensitive = data['sensitive'] == true;
-        });
-        if (ime) {
-          requestImeFocus();
-        } else {
-          displaySizing.finishIme();
-          inputFocus.unfocus();
-        }
+      default:
+        break;
     }
     focusVisibleDevice();
   }
 
-  int markStateUnknown({String? reason, Json? initialSession}) {
+  int markStateUnknown({String? reason, VideoSessionView? initialSession}) {
     trace(
       'reconcile.unknown reason=$reason session=$sessionId visibility=${presentation.visibilityEpoch}',
     );
@@ -660,21 +658,6 @@ class _ControlPageState extends ConsumerState<ControlPage>
         setState(() => presentation.reportError(remoteFailure(failure)));
       }
     }
-  }
-
-  void showResourceAdjustment() {
-    final message = value(presentation.session ?? {}, 'resourceAdjustment');
-    if (adjustmentShown ||
-        message.isEmpty ||
-        presentation.session?['textureId'] is! int) {
-      return;
-    }
-    adjustmentShown = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !presentation.exiting) {
-        notices.show(message);
-      }
-    });
   }
 
   @override
@@ -880,7 +863,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
       windowSize: MediaQuery.sizeOf(context),
     );
     final valid =
-        int.tryParse('${presentation.session?['textureId']}') != null &&
+        presentation.session?.textureId != null &&
         presentation.imageWidth > 0 &&
         presentation.imageHeight > 0;
     final loadingBackdrop =
@@ -965,7 +948,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
               independent: widget.packageName != null,
               recovery: recovery,
               ime: ime,
-              sensitive: sensitive,
+              sensitive: false,
               inputFocus: inputFocus,
               needsWake:
                   screenState.screenOn == false ||

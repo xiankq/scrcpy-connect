@@ -52,11 +52,6 @@ final class DeviceWakeService {
             ],
           );
 
-  /// 事件和恢复快照适配，不改变共享租约。
-  Map<String, Object?> projectSession(Map<String, Object?> session) => {
-    ...session,
-    ...readWake(session['deviceId']! as String).sessionSnapshot,
-  };
   List<Map<String, Object?>> snapshots() => [
     for (final device in _last.keys) readWake(device).toSnapshot(),
   ];

@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/core/media/models/video_session_view.dart';
+
 import 'dart:async';
 
 import 'package:flutter/services.dart';
@@ -411,10 +413,11 @@ class _ClipboardCoordinator {
     final data = event['data'] is Map<Object?, Object?>
         ? jsonObject(event['data'])
         : <String, dynamic>{};
-    if (event['type'] == 'session.updated' &&
-        data['sessionId'] == _sessionId &&
-        (data['captureRef'] != _capture?.reference ||
-            data['captureGeneration'] != _capture?.generation)) {
+    if (event['data'] case VideoSessionView(:final session)
+        when session.sessionId == _sessionId &&
+            session.deviceId == _target &&
+            (session.captureRef != _capture?.reference ||
+                session.captureGeneration != _capture?.generation)) {
       _configuration = null;
       configure();
       return;

@@ -5,7 +5,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:scrcpy_connect/core/control/models/app_launch_record.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
-import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/pages/control/remote_input_queue.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
 import 'package:scrcpy_connect/pages/control/remote_window.dart';
@@ -37,7 +36,7 @@ class RemoteInputOwner {
   final bool Function() _foreground;
   final bool Function() _enabled;
   final void Function() _onChanged;
-  final void Function(Json) _onUnknownLaunch;
+  final void Function(AppLaunchRecord) _onUnknownLaunch;
   bool _disposed = false;
   static const inputSentinel = '\u200B';
   final text = TextEditingController(text: inputSentinel);
@@ -105,8 +104,8 @@ class RemoteInputOwner {
 
   Future<void> send(ControlAction action, {RemoteBinding? binding}) {
     final outgoing = binding ?? presentation.binding;
-    final currentCapture = presentation.session?['captureGeneration'];
-    if (outgoing == presentation.binding && currentCapture is int) {
+    final currentCapture = presentation.session?.session.captureGeneration;
+    if (outgoing == presentation.binding && currentCapture != null) {
       _bindingCaptures[outgoing] = currentCapture;
       while (_bindingCaptures.length > 32) {
         _bindingCaptures.remove(_bindingCaptures.keys.first);
@@ -164,7 +163,7 @@ class RemoteInputOwner {
               record.sessionId == target.sessionId &&
               record.deviceId == window.deviceId &&
               record.packageName == action.packageName) {
-            _onUnknownLaunch(Json.from(record.projection));
+            _onUnknownLaunch(record);
             return;
           }
         }

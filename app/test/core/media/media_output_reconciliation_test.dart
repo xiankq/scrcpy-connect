@@ -145,13 +145,12 @@ void main() {
       session: session('session', captureGeneration: 2).session,
       output: video('session'),
     );
-    final view = recovered.toViewSnapshot();
-    expect(view['captureGeneration'], 2);
-    expect(view['outputCaptureGeneration'], 1);
-    expect(view['textureId'], 1);
-    expect(view['outputRetained'], isTrue);
-    expect(view['firstFrameDecoded'], isFalse);
-    expect(view['evidence'], 'retained_previous_output');
+    final view = recovered.toView();
+    expect(view.session.captureGeneration, 2);
+    expect(view.output!.captureGeneration, 1);
+    expect(view.textureId, 1);
+    expect(view.outputRetained, isTrue);
+    expect(view.hasDecodedFrame, isFalse);
   });
 }
 

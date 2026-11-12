@@ -106,7 +106,7 @@ class RemoteStage extends StatelessWidget {
       children: [
         Positioned.fill(
           child: RemoteSurface(
-            textureId: int.tryParse('${presentation.session?['textureId']}'),
+            textureId: presentation.session?.textureId,
             sourceSize: Size(presentation.imageWidth, presentation.imageHeight),
             inputs: inputs,
             onViewport: onViewport,

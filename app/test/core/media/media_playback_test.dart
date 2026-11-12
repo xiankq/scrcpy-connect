@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/core/media/models/video_session_view.dart';
+import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
+
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -76,8 +79,17 @@ void main() {
     media.stopDeviceIntent('device');
     await media.finishDeviceStop('device');
     media.handleApplicationEvent({
-      'type': 'session.disconnected',
-      'data': {'sessionId': 'unowned'},
+      'type': 'session.stopped',
+      'data': const VideoSessionView(
+        session: VideoSessionSnapshot(
+          sessionId: 'unowned',
+          deviceId: 'device',
+          name: 'Phone',
+          kind: .screen,
+          status: .stopped,
+        ),
+        wake: KeepAwakeSnapshot(deviceId: 'device'),
+      ),
     });
     await media.dispose();
     await media.dispose();

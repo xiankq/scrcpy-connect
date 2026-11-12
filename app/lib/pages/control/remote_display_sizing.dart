@@ -166,8 +166,8 @@ class RemoteDisplaySizing {
   void observeGeometry() {
     if (!_auto || _viewport == null) return;
     final session = window.presentation.session;
-    final width = int.tryParse('${session?['width']}');
-    final height = int.tryParse('${session?['height']}');
+    final width = session?.session.width;
+    final height = session?.session.height;
     if (width == null || height == null || width <= 0 || height <= 0) return;
     final geometry = (width: width, height: height);
     if (geometry == _lastGeometry) return;

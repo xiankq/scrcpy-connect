@@ -9,7 +9,8 @@ import 'package:scrcpy_connect/core/media/video_sessions.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
 import 'package:scrcpy_connect/widgets/remote_failure.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/core/control/models/app_launch_record.dart';
+import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
 
 import 'models/remote_window_close.dart';
 
@@ -102,7 +103,7 @@ class RemoteWindow {
         }).firstOrNull;
       }
       if (retained?.session.launchOutcome == .unknown) {
-        presentation.showUnknownAppLaunch(retained!.toSnapshot());
+        presentation.showUnknownAppLaunch(retained);
         return null;
       }
       VideoSessionView result;
@@ -124,7 +125,7 @@ class RemoteWindow {
       if (!accepts()) {
         if (isCurrent && presentation.requiresVerification(attempt)) {
           // 状态中断后只保留已提交身份，不能重开或停止可能仍存活的真实任务。
-          presentation.retainUnverifiedStart(result.toSnapshot());
+          presentation.retainUnverifiedStart(result);
         } else if (retained == null &&
             result.sessionId.isNotEmpty &&
             result.sessionId != presentation.sessionId) {
@@ -142,7 +143,7 @@ class RemoteWindow {
       final submitted = submittedAppStart;
       submittedAppStart = false;
       presentation.bindStart(
-        result.toSnapshot(),
+        result,
         retained: retained != null,
         recoveringConnection: recoveringConnection,
         submittedAppStart: submitted,
@@ -157,7 +158,13 @@ class RemoteWindow {
           remoteFailure(failure),
           remoteFailureCode(failure),
           submittedAppStart: submittedAppStart,
-          details: failure is RequestFailure ? jsonObject(failure.details) : {},
+          uncertainSession: switch (failure) {
+            VideoStartUncertain(:final session) => _unverifiedView(session),
+            AppLaunchUncertain(:final record) => _unverifiedView(
+              record.snapshot,
+            ),
+            _ => null,
+          },
         );
       }
       return null;
@@ -165,6 +172,18 @@ class RemoteWindow {
       if (identical(_opening, opening)) _opening = null;
     }
   }
+
+  VideoSessionView _unverifiedView(VideoSessionSnapshot session) =>
+      VideoSessionView(
+        session: session,
+        wake:
+            presentation.session?.wake ??
+            KeepAwakeSnapshot.withoutLease(
+              deviceId: deviceId,
+              enabled: false,
+              hasWindowOwner: false,
+            ),
+      );
 
   void cancelRecovery() {
     if (!recoveringConnection) return;
@@ -186,9 +205,7 @@ class RemoteWindow {
                 ? session.sessionId == presentation.sessionId
                 : session.packageName == packageName);
       }).firstOrNull;
-      presentation.showUnknownAppLaunch(
-        record?.toSnapshot() ?? presentation.session ?? {},
-      );
+      presentation.showUnknownAppLaunch(record ?? presentation.session);
     } catch (failure) {
       if (isCurrent && presentation.acceptsStart(attempt)) {
         presentation.failOperation(remoteFailure(failure));
@@ -233,7 +250,10 @@ class RemoteWindow {
     _view = null;
   }
 
-  void detachUnknownLaunch(Json record, Future<void> Function() releaseInputs) {
+  void detachUnknownLaunch(
+    AppLaunchRecord record,
+    Future<void> Function() releaseInputs,
+  ) {
     final outgoing = presentation.permitDetachedCleanup();
     final releases = releaseInputs().whenComplete(() {
       presentation.finishDetachedCleanup(outgoing);
@@ -247,7 +267,7 @@ class RemoteWindow {
       );
     }
     // 操作记录的检查不依赖旧输入或捕获暂停的回执。
-    presentation.showUnknownAppLaunch(record);
+    presentation.showUnknownAppLaunch(_unverifiedView(record.snapshot));
   }
 
   Future<String?> convertToIndependent({
@@ -350,7 +370,7 @@ class RemoteWindow {
       if (!isCurrent) return RemoteResumeResult.stale;
       final outcome = presentation.completeResume(
         epoch,
-        receipt?.toSnapshot() ?? const {},
+        receipt,
         ownerCurrent: owned.isCurrent,
       );
       if (outcome == RemoteResumeResult.rendererNotReady) {
@@ -370,7 +390,7 @@ class RemoteWindow {
     presentation.leave();
     final owned = _view;
     final id = presentation.sessionId;
-    final captureGeneration = presentation.session?['captureGeneration'];
+    final captureGeneration = presentation.session?.session.captureGeneration;
     final lock =
         owned?.isCurrent == true &&
         presentation.controlAvailable &&
@@ -395,9 +415,7 @@ class RemoteWindow {
               await control.sendControl(
                 ControlTarget(
                   sessionId: id,
-                  captureGeneration: captureGeneration is int
-                      ? captureGeneration
-                      : null,
+                  captureGeneration: captureGeneration,
                 ),
                 ControlAction.key(223, action: action),
               );

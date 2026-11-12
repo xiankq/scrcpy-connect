@@ -19,17 +19,156 @@ import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
 import 'package:scrcpy_connect/core/media/media_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/media/models/video_output.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/core/media/video_sessions.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/settings/settings_management.dart';
 import 'package:scrcpy_connect/pages/control/control_page.dart';
+import 'package:scrcpy_connect/pages/control/widgets/remote_surface.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/models/device_audio_view_snapshot.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
 
 void main() {
+  testWidgets('控制页直接消费类型化输出及会话，丢弃旧捕获失败并等待画质双回执', (tester) async {
+    final videos = _Videos();
+    final events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
+    final dependencies = _Session();
+    final container = ProviderContainer(
+      overrides: [
+        appSessionProvider.overrideWithValue(dependencies),
+        deviceReaderProvider.overrideWithValue(dependencies.devices),
+        settingsManagementProvider.overrideWithValue(dependencies.settings),
+        runtimeEventsProvider.overrideWithValue(events.stream),
+        videoSessionsProvider.overrideWithValue(videos),
+        remoteControlProvider.overrideWithValue(_Control()),
+        deviceInspectionProvider.overrideWithValue(_Inspection()),
+        deviceAppsProvider.overrideWithValue(_Apps()),
+        videoDisplayProvider.overrideWithValue(_Displays()),
+      ],
+    );
+    final views = RemoteViews(
+      videos: videos,
+      audio: _Audio(),
+      events: events.stream,
+      current: () => true,
+      readSnapshot: () => const DeviceAudioViewSnapshot(
+        devices: [],
+        reconciliationPending: false,
+      ),
+      onAudioError: (_) {},
+    );
+    final originalOutput = _output();
+    final original = VideoSessionView(
+      session: const VideoSessionSnapshot(
+        sessionId: 'session',
+        deviceId: 'device',
+        name: 'Phone',
+        kind: .screen,
+        status: .streaming,
+        captureGeneration: 2,
+        generation: 3,
+        width: 100,
+        height: 200,
+      ),
+      wake: const KeepAwakeSnapshot(deviceId: 'device'),
+      output: originalOutput,
+    );
+    videos.starting.complete(original);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: ConnectTokens.theme(Brightness.light),
+          home: RemoteViewsScope(
+            views: views,
+            child: const ControlPage(device: _device),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final presentation = tester
+        .widget<RemoteStage>(find.byType(RemoteStage))
+        .presentation;
+    expect(
+      presentation.canSendInput(foreground: true, ownerCurrent: true),
+      isTrue,
+    );
+    events.add(
+      const VideoOutputFailed(
+        sessionId: 'session',
+        deviceId: 'device',
+        captureGeneration: 1,
+        generation: 3,
+        reason: 'old capture',
+      ).toApplicationEvent(),
+    );
+    await tester.pump();
+    expect(presentation.error, isNull);
+    expect(presentation.paused, isFalse);
+    events.add({
+      'type': 'session.updated',
+      'deviceId': 'device',
+      'data': original.copyWith(
+        session: original.session.copyWith(
+          qualityRebuilding: true,
+          qualityRebuildTarget: 3,
+        ),
+        output: null,
+      ),
+    });
+    await tester.pump();
+    expect(presentation.qualityRebuilding, isTrue);
+    expect(
+      presentation.canSendInput(foreground: true, ownerCurrent: true),
+      isFalse,
+    );
+    final replacement = _output().copyWith(
+      captureGeneration: 3,
+      generation: 4,
+      textureId: 4,
+      decodedWidth: 200,
+      decodedHeight: 100,
+    );
+    events.add(VideoOutputChanged(replacement).toApplicationEvent());
+    await tester.pump();
+    expect(presentation.qualityRebuilding, isTrue);
+    expect(presentation.session!.output, originalOutput);
+    events.add({
+      'type': 'session.updated',
+      'deviceId': 'device',
+      'data': original.copyWith(
+        session: original.session.copyWith(
+          captureGeneration: 3,
+          generation: 4,
+          width: 200,
+          height: 100,
+          qualityRebuildOutcome: .applied,
+        ),
+        output: null,
+      ),
+    });
+    await tester.pump();
+    expect(presentation.qualityRebuilding, isFalse);
+    expect(presentation.session!.output, replacement);
+    expect(
+      presentation.canSendInput(foreground: true, ownerCurrent: true),
+      isTrue,
+    );
+    expect(videos.starts, 1);
+    expect(videos.stops, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    views.dispose();
+    container.dispose();
+    await events.close();
+    expect(videos.stops, ['session']);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('控制页能力换源不重放打开，迟到启动只由原能力清理', (tester) async {
     final original = _Videos();
     final replacement = _Videos();
@@ -126,6 +265,21 @@ const _device = DeviceSnapshot(
   name: 'Phone',
   status: .connected,
   connectionId: 'connection',
+);
+
+VideoOutputReceipt _output() => const VideoOutputReceipt(
+  sessionId: 'session',
+  deviceId: 'device',
+  relayId: 'relay',
+  textureId: 3,
+  decodedWidth: 100,
+  decodedHeight: 200,
+  codec: 'h264',
+  generation: 3,
+  captureGeneration: 2,
+  paused: false,
+  decodedReceipts: 1,
+  snapshotReceipts: 1,
 );
 
 class _Session implements AppSession {

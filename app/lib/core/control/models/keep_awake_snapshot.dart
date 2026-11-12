@@ -101,16 +101,4 @@ abstract class KeepAwakeSnapshot with _$KeepAwakeSnapshot {
       for (final pending in pendingCleanup) pending.toSnapshot(),
     ],
   };
-
-  Map<String, dynamic> get sessionSnapshot => {
-    'keepActive': keepActive,
-    'keepActiveApplied': keepActiveApplied,
-    'keepActiveLeaseActive': keepActiveLeaseActive,
-    'keepActiveLeaseId': keepActiveLeaseId,
-    'keepActivePid': keepActivePid,
-    'keepActiveProcessStarted': keepActiveProcessStarted,
-    'keepActiveConnectionId': keepActiveConnectionId,
-    'keepActiveError': keepActiveError?.toSnapshot(),
-    'keepActiveCleanup': cleanupSnapshot,
-  };
 }

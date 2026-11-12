@@ -91,6 +91,7 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
     required this._launches,
     required this._serverQueries,
     required void Function(String, String, Map<String, Object?>) emit,
+    required this.onSessionChanged,
     Preferences Function()? settings,
     this.policy = const SessionPolicy(),
     DateTime Function()? now,
@@ -111,6 +112,8 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
   // 借用设备模块的清单查询所有者；窗口关闭只撤销自己的查询令牌。
   final ScrcpyServerQueries Function() _serverQueries;
   final void Function(String, String, Map<String, Object?>) _emitEvent;
+  final void Function(VideoSessionChange, VideoSessionSnapshot)
+  onSessionChanged;
   final Preferences Function() _settings;
   final DateTime Function() _now;
   final String Function() _newId;
@@ -467,7 +470,7 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
       receipt.decodedHeight,
     );
     if (geometryChanged) _changed(slot);
-    _changed(slot, 'session.frame');
+    _changed(slot, .frame);
     return true;
   });
 
@@ -618,24 +621,7 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
     final ids = active.map((value) => value.sessionId).toSet();
     for (final record in unresolved) {
       if (!ids.contains(record.operationId)) {
-        active.add(
-          VideoSessionSnapshot(
-            sessionId: record.operationId,
-            deviceId: record.deviceId,
-            packageName: record.packageName,
-            name: record.packageName,
-            kind: VideoSessionKind.app,
-            status: VideoSessionStatus.failed,
-            launchOperationId: record.operationId,
-            launchOutcome: VideoLaunchOutcome.unknown,
-            recordOnly: true,
-            linkedSessionId: record.operationId == record.sessionId
-                ? null
-                : record.sessionId,
-            failureCode: record.failureCode,
-            reason: '应用打开请求可能已提交。请先核对手机并明确关闭本次记录，再选择重新打开。',
-          ),
-        );
+        active.add(record.snapshot);
       }
     }
     return List.unmodifiable(active);
@@ -720,8 +706,12 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
     _checkConnection(slot);
   }
 
-  void _changed(_LogicalSession slot, [String type = 'session.updated']) {
-    _publishEvent(type, slot.deviceId, slot.state.toSnapshot());
+  void _changed(_LogicalSession slot, [VideoSessionChange change = .updated]) {
+    try {
+      onSessionChanged(change, slot.state);
+    } catch (_) {
+      // 观察者不能撤销已提交的捕获事实或中断原生控制。
+    }
   }
 
   void _publishEvent(String type, String device, Map<String, Object?> data) {
@@ -1048,7 +1038,7 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
     );
     slot.handoff?.cancel();
     slot.handoff = null;
-    _changed(slot, 'session.failed');
+    _changed(slot, .failed);
     final task = _stop(slot, keepLaunchRecord: true);
     unawaited(task.catchError((Object _, StackTrace _) {}));
   }
@@ -1101,7 +1091,7 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
       ),
     );
     _sessions[id] = slot;
-    _changed(slot, 'session.starting');
+    _changed(slot, .starting);
     final start = _track(slot, _begin(slot, plan, quality));
     slot.starting = start;
     return start;
@@ -1173,7 +1163,7 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
       } catch (error) {
         cleanup ??= error;
       }
-      _changed(slot, 'session.failed');
+      _changed(slot, .failed);
       if (cleanup != null) {
         _fail('session_cleanup_unconfirmed', '窗口启动失败，精确捕获尚未确认释放，请重试停止。');
       }
@@ -1458,7 +1448,7 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
       }
       if (identical(_sessions[slot.id], slot)) _sessions.remove(slot.id);
       slot.state = slot.state.copyWith(status: VideoSessionStatus.stopped);
-      _changed(slot, 'session.stopped');
+      _changed(slot, .stopped);
     }();
     return slot.stopping = result.catchError((Object error, StackTrace stack) {
       slot.stopping = null;
@@ -1594,7 +1584,7 @@ extension _SessionCommands on ControlSessionService {
             reason: '控制执行已撤销，远端动作结果需要核对。',
           );
           onAudioEligibilityChanged?.call(slot.deviceId);
-          _changed(slot, 'session.failed');
+          _changed(slot, .failed);
         }
         Error.throwWithStackTrace(error, stack);
       } finally {

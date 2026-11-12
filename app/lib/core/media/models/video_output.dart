@@ -1,7 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:scrcpy_connect/core/control/models/video_renderer_receipt.dart';
 import 'package:scrcpy_connect/core/control/models/video_session.dart';
-import 'package:scrcpy_connect/core/media/video_output_snapshot.dart';
 
 part 'video_output.freezed.dart';
 
@@ -17,16 +16,6 @@ abstract class VideoDecoderMetadata with _$VideoDecoderMetadata {
     int? presentedSequence,
     String? presentationPath,
   }) = _VideoDecoderMetadata;
-
-  Map<String, dynamic> toSnapshot() => {
-    'decoderName': decoderName,
-    'hardwareAccelerated': hardwareAccelerated,
-    'hardwareVerification': hardwareVerification,
-    'backendHardwareFrames': backendHardwareFrames,
-    'platformTexturePrepared': platformTexturePrepared,
-    'presentedSequence': presentedSequence,
-    'presentationPath': presentationPath,
-  };
 }
 
 /// 同一捕获与本机渲染代次的实际解码证据。
@@ -70,85 +59,50 @@ abstract class VideoOutputReceipt with _$VideoOutputReceipt {
       captureGeneration == other.captureGeneration &&
       relayId == other.relayId &&
       textureId == other.textureId;
-
-  Map<String, dynamic> toSnapshot() => {
-    ...decoder.toSnapshot(),
-    'sessionId': sessionId,
-    'deviceId': deviceId,
-    'relayId': relayId,
-    'textureId': textureId,
-    'decodedWidth': decodedWidth,
-    'decodedHeight': decodedHeight,
-    'codec': codec,
-    'generation': generation,
-    'captureGeneration': captureGeneration,
-    'paused': paused,
-    if (frameCount != null) 'frameCount': frameCount,
-    'backend': 'media_codec',
-    'firstFrameDecoded': true,
-    'evidence': 'media_codec.decodedFrame',
-    'decodedReceipts': decodedReceipts,
-    'snapshotReceipts': snapshotReceipts,
-    'presentedToWidget': false,
-    'continuousFrameTelemetry': false,
-    'outputStartupTimingMs': startupTimingMs,
-  };
 }
 
 sealed class VideoOutputEvent {
   const VideoOutputEvent();
-  Map<String, dynamic> toApplicationEvent() => switch (this) {
-    VideoOutputReady(:final output) => _event('session.output.ready', output),
-    VideoOutputChanged(:final output) => _event(
-      'session.output.changed',
-      output,
-    ),
-    VideoOutputFrame(:final output) => _event(
-      'session.frame',
-      output,
-      metadataOnly: true,
-    ),
-    VideoOutputFailed(
-      :final sessionId,
-      :final deviceId,
-      :final generation,
-      :final reason,
-    ) =>
-      {
-        'type': 'session.output.failed',
-        'deviceId': deviceId,
-        'data': {
-          'sessionId': sessionId,
-          'generation': generation,
-          'reason': reason,
-          'backend': 'media_codec',
-        },
-      },
-  };
-  static Map<String, dynamic> _event(
-    String type,
-    VideoOutputReceipt output, {
-    bool metadataOnly = false,
-  }) => {
-    'type': type,
-    'deviceId': output.deviceId,
-    'data': {...output.toSnapshot(), if (metadataOnly) 'metadataOnly': true},
+  String get sessionId;
+  String get deviceId;
+
+  Map<String, dynamic> toApplicationEvent() => {
+    'type': switch (this) {
+      VideoOutputReady() => 'session.output.ready',
+      VideoOutputChanged() => 'session.output.changed',
+      VideoOutputFrame() => 'session.frame',
+      VideoOutputFailed() => 'session.output.failed',
+    },
+    'deviceId': deviceId,
+    'data': this,
   };
 }
 
 final class VideoOutputReady extends VideoOutputEvent {
   const VideoOutputReady(this.output);
   final VideoOutputReceipt output;
+  @override
+  String get sessionId => output.sessionId;
+  @override
+  String get deviceId => output.deviceId;
 }
 
 final class VideoOutputChanged extends VideoOutputEvent {
   const VideoOutputChanged(this.output);
   final VideoOutputReceipt output;
+  @override
+  String get sessionId => output.sessionId;
+  @override
+  String get deviceId => output.deviceId;
 }
 
 final class VideoOutputFrame extends VideoOutputEvent {
   const VideoOutputFrame(this.output);
   final VideoOutputReceipt output;
+  @override
+  String get sessionId => output.sessionId;
+  @override
+  String get deviceId => output.deviceId;
 }
 
 final class VideoOutputFailed extends VideoOutputEvent {
@@ -156,10 +110,15 @@ final class VideoOutputFailed extends VideoOutputEvent {
     required this.sessionId,
     required this.deviceId,
     required this.generation,
+    required this.captureGeneration,
     required this.reason,
   });
-  final String sessionId, deviceId, reason;
-  final int generation;
+  @override
+  final String sessionId;
+  @override
+  final String deviceId;
+  final String reason;
+  final int generation, captureGeneration;
 }
 
 @freezed
@@ -169,9 +128,4 @@ abstract class VideoPlaybackReceipt with _$VideoPlaybackReceipt {
     required VideoSessionSnapshot session,
     required VideoOutputReceipt output,
   }) = _VideoPlaybackReceipt;
-
-  Map<String, dynamic> toSnapshot() => {
-    ...sessionWithVideoOutput(session.toSnapshot(), output.toSnapshot()),
-    'paused': output.paused,
-  };
 }

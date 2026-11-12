@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/core/media/models/video_session_view.dart';
+import 'package:scrcpy_connect/core/media/models/video_output.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
@@ -203,8 +205,42 @@ class DiagnosticReporter {
       return;
     }
     final type = event['type'];
+    if (event['data'] case VideoSessionView(:final session)
+        when !session.live) {
+      log?.record(
+        DiagnosticArea.runtime,
+        session.status == .failed ? 'session.failed' : 'session.stopped',
+        level: session.status == .failed ? LogLevel.error : LogLevel.info,
+        fields: {
+          if (log != null) 'scope': log!.scope(session.deviceId),
+          if (log != null) 'sessionScope': log!.scope(session.sessionId),
+          'status': session.status.name,
+          'captureGeneration': session.captureGeneration,
+          'generation': session.generation,
+        },
+      );
+      return;
+    }
+    if (event['data'] case VideoOutputFailed(
+      :final sessionId,
+      :final deviceId,
+      :final captureGeneration,
+      :final generation,
+    )) {
+      log?.record(
+        DiagnosticArea.runtime,
+        'session.output.failed',
+        level: LogLevel.error,
+        fields: {
+          if (log != null) 'scope': log!.scope(deviceId),
+          if (log != null) 'sessionScope': log!.scope(sessionId),
+          'captureGeneration': captureGeneration,
+          'generation': generation,
+        },
+      );
+      return;
+    }
     if (!const {
-      'session.disconnected',
       'audio.updated',
       'platform.failed',
       'connections.stopped',
@@ -228,42 +264,6 @@ class DiagnosticReporter {
       fields: {
         if (event['deviceId'] is String && log != null)
           'scope': log!.scope(event['deviceId'] as String),
-        if (type == 'session.disconnected' &&
-            data['sessionId'] is String &&
-            log != null)
-          'sessionScope': log!.scope(data['sessionId'] as String),
-        if (type == 'session.disconnected' &&
-            const {
-              'control_closed',
-              'control_read_failed',
-              'control_write_failed',
-              'control_write_timeout',
-              'control_protocol_error',
-              'server_process_closed',
-              'server_process_read_failed',
-              'video_read_failed',
-              'media_decoder',
-              'media_stall',
-              'media_protocol',
-              'media_ended',
-              'media_detached',
-              'renderer_timeout',
-              'video_timeout',
-              'video_protocol',
-              'video_renderer_timeout',
-              'media_source_closed',
-            }.contains(data['failureCode']))
-          'code': data['failureCode'],
-        if (type == 'session.disconnected' &&
-            const {
-              'control_read',
-              'control_write',
-              'control_protocol',
-              'server_process',
-              'video_read',
-              'video_output',
-            }.contains(data['failureStage']))
-          'stage': data['failureStage'],
         if (const {
           'connected',
           'connecting',

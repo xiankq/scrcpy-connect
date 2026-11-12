@@ -1,9 +1,8 @@
 import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
-import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart' show glassSnackBar;
 
 /// 提示的去重、排队和可见性由远控视图持有；会话只提供当前状态。
@@ -35,29 +34,24 @@ final class RemoteNotices {
     );
   }
 
-  void consume(Json receipt) {
-    if (_disposed ||
-        presentation.exiting ||
-        !receipt.containsKey('keepActiveError')) {
-      return;
-    }
+  void consume(KeepAwakeSnapshot receipt) {
+    if (_disposed || presentation.exiting) return;
     final binding = presentation.binding;
     if (_binding != binding) {
       _binding = binding;
       _errorKey = null;
       _pending = null;
     }
-    if (receipt['keepActiveError'] == null) {
+    final error = receipt.keepActiveError;
+    if (error == null) {
       _errorKey = null;
       _pending = null;
       return;
     }
-    final error = jsonObject(receipt['keepActiveError']);
-    final reason = value(error, 'reason', '保持唤醒服务未能确认。');
-    final key = (value(error, 'code'), reason);
+    final key = (error.code, error.reason);
     if (_errorKey == key) return;
     _errorKey = key;
-    _pending = '保持唤醒尚未确认：$reason';
+    _pending = '保持唤醒尚未确认：${error.reason}';
     flush();
   }
 

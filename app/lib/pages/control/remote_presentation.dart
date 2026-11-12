@@ -1,13 +1,10 @@
 import 'package:scrcpy_connect/core/control/remote_control.dart';
+import 'package:scrcpy_connect/core/control/models/video_session.dart';
+import 'package:scrcpy_connect/core/media/models/video_session_view.dart';
+import 'package:scrcpy_connect/core/media/models/video_output.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 
-typedef RemoteData = Map<String, dynamic>;
 typedef RemoteBinding = (String, int);
-
-// 会话首帧由视频输出协调器的解码回执确认；截图像素属于独立操作。
-bool hasDecodedFrameEvidence(RemoteData data) =>
-    data['firstFrameDecoded'] == true &&
-    data['evidence'] == 'media_codec.decodedFrame';
 
 enum RemoteResumeResult { stale, rendererNotReady, ready }
 
@@ -25,7 +22,7 @@ enum _Visibility { visible, hidden, resuming }
 
 /// 统一维护单路由的绑定、回执栅栏与输入许可；异步资源由窗口编排，控件生命周期由页面协调。
 class RemotePresentation {
-  RemoteData? _session;
+  VideoSessionView? _session;
   String? _error;
   String? _errorCode;
   bool _connecting = true;
@@ -38,9 +35,9 @@ class RemotePresentation {
   bool _controlAvailable = false;
   bool _qualityRebuilding = false;
   bool _qualityFailed = false;
-  RemoteData? _qualityOriginal;
-  RemoteData? _qualityOutput;
-  RemoteData? _qualityReady;
+  VideoSessionView? _qualityOriginal;
+  VideoOutputReceipt? _qualityOutput;
+  VideoSessionView? _qualityReady;
   int? _qualityTarget;
   int _bindingGeneration = 0;
   int _startAttempt = 0;
@@ -61,10 +58,8 @@ class RemotePresentation {
   bool get exiting => _exiting;
   bool get lifecyclePaused => _lifecyclePaused;
   bool get covered => _covered;
-  RemoteData? get session =>
-      _session == null ? null : Map.unmodifiable(_session!);
-  String get sessionId =>
-      (_session?['sessionId'] ?? _session?['id'] ?? '').toString();
+  VideoSessionView? get session => _session;
+  String get sessionId => _session?.sessionId ?? '';
   RemoteBinding get binding => (sessionId, _bindingGeneration);
   int get visibilityEpoch => _visibilityEpoch;
   bool get controlAvailable => _controlAvailable;
@@ -76,18 +71,22 @@ class RemotePresentation {
   bool get qualityRebuilding => _qualityRebuilding;
   bool get qualityRetryable => _qualityFailed;
 
-  double _dimension(String decoded, String capture) =>
-      (num.tryParse('${_session?[decoded]}') ??
-              num.tryParse('${_session?[capture]}') ??
+  double get imageWidth =>
+      (_session?.output?.decodedWidth ??
+              _session?.session.decodedWidth ??
+              _session?.session.width ??
+              0)
+          .toDouble();
+  double get imageHeight =>
+      (_session?.output?.decodedHeight ??
+              _session?.session.decodedHeight ??
+              _session?.session.height ??
               0)
           .toDouble();
 
-  double get imageWidth => _dimension('decodedWidth', 'width');
-  double get imageHeight => _dimension('decodedHeight', 'height');
-
   bool get imageGeometryReady {
-    final width = num.tryParse('${_session?['width']}') ?? 0;
-    final height = num.tryParse('${_session?['height']}') ?? 0;
+    final width = _session?.session.width ?? 0;
+    final height = _session?.session.height ?? 0;
     return width <= 0 ||
         height <= 0 ||
         imageWidth <= 0 ||
@@ -145,6 +144,7 @@ class RemotePresentation {
       _error == null &&
       ownerCurrent &&
       !_covered &&
+      !_lifecyclePaused &&
       _visibility == _Visibility.visible &&
       !stateUnverified &&
       !appLaunchUnknown &&
@@ -199,9 +199,12 @@ class RemotePresentation {
     _bindingGeneration++;
   }
 
-  void retainUnverifiedStart(RemoteData result) {
+  static VideoSessionView _withoutOutput(VideoSessionView view) => view
+      .copyWith(session: view.session.copyWith(textureId: null), output: null);
+
+  void retainUnverifiedStart(VideoSessionView result) {
     if (sessionId.isNotEmpty) return;
-    _session = {...result}..remove('textureId');
+    _session = _withoutOutput(result);
     _launch = _Launch.normal;
     _verification = _Verification.pending;
     _connecting = false;
@@ -209,46 +212,35 @@ class RemotePresentation {
   }
 
   void bindStart(
-    RemoteData result, {
+    VideoSessionView result, {
     required bool retained,
     required bool recoveringConnection,
     required bool submittedAppStart,
   }) {
-    _session = _retainedImage(result);
+    _session = result;
     _launch = _Launch.normal;
     if (recoveringConnection) _reconcileOnly = false;
-    _controlAvailable =
-        sessionId.isNotEmpty &&
-        result['textureId'] != null &&
-        result['outputRetained'] != true;
+    _controlAvailable = result.hasDecodedFrame;
     _visibility = _Visibility.visible;
     _lifecyclePaused = false;
-    _connecting = retained && result['textureId'] != null;
-    _paused = result['status'] == 'paused';
-    // 新捕获的 start 回执只在桥接确认解码后交付纹理；恢复快照的旧纹理仍须 resume 核验。
-    if (!retained &&
-        result['textureId'] != null &&
-        result['outputRetained'] != true &&
-        imageWidth > 0 &&
-        imageHeight > 0 &&
-        imageGeometryReady) {
+    _connecting = retained && result.textureId != null;
+    _paused = result.session.status == .paused;
+    // 新捕获只以对应解码回执确认首帧；恢复的旧纹理仍须 resume 核验。
+    if (!retained && result.hasDecodedFrame && imageGeometryReady) {
       _hasPresentedFrame = true;
     }
-    if (result['qualityRebuilding'] == true) _beginQuality(result);
-    if (result['outputRetained'] == true &&
-        result['captureGeneration'] is int) {
-      _beginQuality({
-        ...result,
-        'qualityRebuildTarget': result['captureGeneration'],
-      });
-      if (result['qualityRebuilding'] == false) updateSession(result);
+    if (result.session.qualityRebuilding) _beginQuality(result);
+    if (result.outputRetained &&
+        result.output!.captureGeneration != result.session.captureGeneration) {
+      _beginQuality(result, target: result.session.captureGeneration);
+      if (!result.session.qualityRebuilding) updateSession(result);
     }
-    if (result['status'] == 'failed' && result['qualityRetryable'] == true) {
+    if (result.session.status == .failed && result.session.qualityRetryable) {
       _failQuality(result);
     }
-    if (result['textureId'] == null) {
+    if (result.textureId == null) {
       if (submittedAppStart) _launch = _Launch.unknown;
-      _error = result['reason']?.toString() ?? '尚未获得设备的实时画面。请检查设备连接和视频能力。';
+      _error = result.session.reason ?? '尚未获得设备的实时画面。请检查设备连接和视频能力。';
     }
   }
 
@@ -256,14 +248,13 @@ class RemotePresentation {
     String reason,
     String? code, {
     required bool submittedAppStart,
-    required RemoteData details,
+    VideoSessionView? uncertainSession,
   }) {
     _connecting = false;
     _error = reason;
     _errorCode = code;
     // 只有提交前的明确拒绝才能证明重试安全。
     if (submittedAppStart &&
-        details['launchOutcome'] != 'not_submitted' &&
         !const {
           'invalid_argument',
           'unsupported',
@@ -276,12 +267,12 @@ class RemotePresentation {
           'authorization_required',
         }.contains(code)) {
       _launch = _Launch.unknown;
-      if (details['sessionId'] is String) _session = details;
+      if (uncertainSession != null) _session = _withoutOutput(uncertainSession);
     }
   }
 
-  void showUnknownAppLaunch(RemoteData record) {
-    _session = {...record}..remove('textureId');
+  void showUnknownAppLaunch(VideoSessionView? record) {
+    _session = record == null ? null : _withoutOutput(record);
     _launch = _Launch.unknown;
     _verification = _Verification.verified;
     _connecting = false;
@@ -318,7 +309,7 @@ class RemotePresentation {
     _error = '本次打开记录已关闭，手机上的应用任务已保留。可明确选择重新打开。';
   }
 
-  int beginReconciliation({RemoteData? initialSession, String? reason}) {
+  int beginReconciliation({VideoSessionView? initialSession, String? reason}) {
     if (initialSession != null) _session = initialSession;
     _stateEpoch++;
     _visibilityEpoch++;
@@ -365,7 +356,7 @@ class RemotePresentation {
               .firstOrNull;
     _visibilityEpoch++;
     if (unknownApp != null) {
-      showUnknownAppLaunch(unknownApp.toViewSnapshot());
+      showUnknownAppLaunch(unknownApp.toView());
       return true;
     }
     final recovered = sessions
@@ -378,27 +369,27 @@ class RemotePresentation {
     if (_visibility == _Visibility.resuming) _visibility = _Visibility.visible;
     _controlAvailable = false;
     if (recovered == null || !recovered.live) {
-      _session = {...?_session}..remove('textureId');
+      if (_session case final previous?) _session = _withoutOutput(previous);
       _verification = _Verification.ended;
       _error = '原会话已结束或无法核验。请检查当前活动，不会自动创建新窗口。';
     } else {
-      final existing = recovered.toViewSnapshot();
-      if (existing['status'] == 'failed' &&
-          existing['qualityRetryable'] == true) {
-        _failQuality(_retainedImage(existing));
-      } else if (_qualityRebuilding && existing['qualityRebuilding'] == false) {
+      final existing = recovered.toView();
+      if (existing.session.status == .failed &&
+          existing.session.qualityRetryable) {
+        _failQuality(existing);
+      } else if (_qualityRebuilding && !existing.session.qualityRebuilding) {
         updateSession(existing);
-        output(existing, verified: hasDecodedFrameEvidence(existing));
+        if (existing.output case final receipt?) {
+          output(receipt, verified: true);
+        }
       } else {
-        if (!_qualityRebuilding) _session = _retainedImage(existing);
-        if (existing['qualityRebuilding'] == true) {
+        if (!_qualityRebuilding) _session = existing;
+        if (existing.session.qualityRebuilding) {
           _beginQuality(existing);
-        } else if (existing['outputRetained'] == true &&
-            existing['captureGeneration'] is int) {
-          _beginQuality({
-            ...existing,
-            'qualityRebuildTarget': existing['captureGeneration'],
-          });
+        } else if (existing.outputRetained &&
+            existing.output!.captureGeneration !=
+                existing.session.captureGeneration) {
+          _beginQuality(existing, target: existing.session.captureGeneration);
           updateSession(existing);
         }
       }
@@ -411,75 +402,47 @@ class RemotePresentation {
     return true;
   }
 
-  static (int, int)? _generation(RemoteData? data) {
-    final capture = data?['captureGeneration'];
-    final renderer = data?['rendererGeneration'] ?? data?['generation'];
-    return capture is int && renderer is int ? (capture, renderer) : null;
+  static (int, int) _generation(VideoSessionView view) =>
+      (view.session.captureGeneration, view.session.generation);
+  static (int, int) _outputGeneration(VideoOutputReceipt receipt) =>
+      (receipt.captureGeneration, receipt.generation);
+  static bool _before((int, int) incoming, (int, int) current) =>
+      incoming.$1 < current.$1 ||
+      (incoming.$1 == current.$1 && incoming.$2 < current.$2);
+
+  bool _older((int, int) incoming) {
+    final current = _session;
+    return current != null &&
+        (_before(incoming, _generation(current)) ||
+            (current.output != null &&
+                _before(incoming, _outputGeneration(current.output!))));
   }
 
-  static (int, int)? _outputGeneration(RemoteData? data) {
-    final capture = data?['outputCaptureGeneration'];
-    final renderer = data?['outputGeneration'];
-    return capture is int && renderer is int
-        ? (capture, renderer)
-        : _generation(data);
-  }
-
-  static RemoteData _retainedImage(RemoteData data) {
-    if (data['outputRetained'] != true) return data;
-    // 输入保持禁用；占位按保留纹理尺寸显示，避免把旧像素拉伸到新捕获尺寸。
-    return {
-      ...data,
-      if (data['decodedWidth'] is num && (data['decodedWidth'] as num) > 0)
-        'width': data['decodedWidth'],
-      if (data['decodedHeight'] is num && (data['decodedHeight'] as num) > 0)
-        'height': data['decodedHeight'],
-    };
-  }
-
-  void _failQuality(RemoteData data) {
+  void _failQuality(VideoSessionView data) {
     final previous = _qualityOriginal ?? _session;
-    _session = data['textureId'] == null && previous?['textureId'] != null
-        ? _retainedImage({
-            ...data,
-            for (final key in ['textureId', 'decodedWidth', 'decodedHeight'])
-              if (previous!.containsKey(key)) key: previous[key],
-            'outputRetained': true,
-            'outputCaptureGeneration': _outputGeneration(previous)?.$1,
-            'outputGeneration': _outputGeneration(previous)?.$2,
-          })
-        : data;
+    _session = data.copyWith(output: data.output ?? previous?.output);
     _qualityRebuilding = false;
     _qualityFailed = true;
     _controlAvailable = false;
     _paused = true;
     _connecting = false;
-    _error = data['reason']?.toString() ?? '画面调整未完成，请在画面与控制中重试。';
+    _error = data.session.reason ?? '画面调整未完成，请在画面与控制中重试。';
     _errorCode = 'quality_rebuild_failed';
   }
 
-  bool _older(RemoteData data) {
-    final incoming = _generation(data);
-    final current = _generation(_session);
-    return incoming != null &&
-        current != null &&
-        (incoming.$1 < current.$1 ||
-            (incoming.$1 == current.$1 && incoming.$2 < current.$2));
-  }
+  /// 已退役捕获或渲染器的错误不能终止当前逻辑窗口。
+  bool acceptsFailure({
+    required int captureGeneration,
+    required int generation,
+  }) =>
+      !_older((captureGeneration, generation)) &&
+      (!_qualityRebuilding || captureGeneration >= (_qualityTarget ?? 0));
 
-  /// 已退役捕获的错误不能终止当前逻辑窗口。
-  bool acceptsFailure(RemoteData data) {
-    if (_older(data)) return false;
-    if (!_qualityRebuilding) return true;
-    final incoming = _generation(data);
-    return incoming != null && incoming.$1 >= (_qualityTarget ?? 0);
-  }
-
-  void _beginQuality(RemoteData data) {
+  void _beginQuality(VideoSessionView data, {int? target}) {
+    final proposed = target ?? data.session.qualityRebuildTarget;
     if (_qualityRebuilding) {
-      final target = data['qualityRebuildTarget'];
-      if (target is int && target > (_qualityTarget ?? 0)) {
-        _qualityTarget = target;
+      if (proposed != null && proposed > (_qualityTarget ?? 0)) {
+        _qualityTarget = proposed;
         _qualityOutput = null;
         _qualityReady = null;
         _visibilityEpoch++;
@@ -487,12 +450,11 @@ class RemotePresentation {
       }
       return;
     }
-    _qualityOriginal = {...?_session};
+    _qualityOriginal = _session;
     _qualityOutput = null;
     _qualityReady = null;
     _qualityTarget =
-        data['qualityRebuildTarget'] as int? ??
-        ((_generation(_session)?.$1 ?? 0) + 1);
+        proposed ?? ((_session?.session.captureGeneration ?? 0) + 1);
     _qualityRebuilding = true;
     _qualityFailed = false;
     _controlAvailable = false;
@@ -500,7 +462,7 @@ class RemotePresentation {
     _bindingGeneration++;
     if (_visibility == _Visibility.resuming) _visibility = _Visibility.visible;
     _paused =
-        _session?['status'] == 'paused' ||
+        _session?.session.status == .paused ||
         _visibility != _Visibility.visible ||
         _covered ||
         _lifecyclePaused;
@@ -508,181 +470,183 @@ class RemotePresentation {
     _errorCode = null;
   }
 
-  bool _completeQuality() {
-    final ready = _qualityReady;
-    final output = _qualityOutput;
-    if (ready == null ||
-        output == null ||
-        _generation(ready) != _outputGeneration(output)) {
-      return false;
-    }
-    _session = {
-      ...?_qualityOriginal,
-      ...ready,
-      ...output,
-      'qualityRebuilding': false,
-      'qualityRetryable': false,
-      'qualityRebuildOutcome': 'applied',
-      'captureGeneration': _generation(ready)!.$1,
-      'rendererGeneration': _generation(ready)!.$2,
-      'generation': _generation(ready)!.$2,
-      'status': ready['status'],
-      'outputRetained': false,
-    };
+  void _clearQuality() {
     _qualityRebuilding = false;
     _qualityFailed = false;
     _qualityOriginal = null;
     _qualityOutput = null;
     _qualityReady = null;
     _qualityTarget = null;
+  }
+
+  bool _completeQuality() {
+    final ready = _qualityReady, receipt = _qualityOutput;
+    if (ready == null ||
+        receipt == null ||
+        _generation(ready) != _outputGeneration(receipt)) {
+      return false;
+    }
+    _session = ready.copyWith(
+      session: ready.session.copyWith(
+        qualityRebuilding: false,
+        qualityRetryable: false,
+        qualityRebuildOutcome: .applied,
+      ),
+      output: receipt,
+    );
+    _clearQuality();
     _connecting = false;
     _paused =
-        ready['status'] == 'paused' ||
+        ready.session.status == .paused ||
         _visibility != _Visibility.visible ||
         _covered ||
         _lifecyclePaused;
     _controlAvailable =
-        _session?['textureId'] != null && ready['status'] == 'streaming';
-    _hasPresentedFrame = _hasPresentedFrame || _session?['textureId'] != null;
+        _session!.hasDecodedFrame && ready.session.status == .streaming;
+    _hasPresentedFrame = _hasPresentedFrame || _session!.hasDecodedFrame;
     _error = null;
     _errorCode = null;
     return true;
   }
 
-  bool output(RemoteData data, {bool verified = false}) {
-    if (_qualityFailed || _older(data)) return false;
-    if (_qualityRebuilding) {
-      final incoming = _outputGeneration(data);
-      if (!verified ||
-          !hasDecodedFrameEvidence(data) ||
-          data['textureId'] == null ||
-          data['outputRetained'] == true ||
-          incoming == null ||
-          incoming.$1 < (_qualityTarget ?? 0)) {
-        return false;
-      }
-      _qualityOutput = data;
-      return _completeQuality();
-    }
-    if (!_hasPresentedFrame && (!verified || !hasDecodedFrameEvidence(data))) {
+  bool output(VideoOutputReceipt receipt, {bool verified = false}) {
+    final current = _session;
+    if (current == null ||
+        receipt.sessionId != sessionId ||
+        receipt.deviceId != current.deviceId ||
+        _qualityFailed ||
+        _older(_outputGeneration(receipt)) ||
+        receipt.decodedReceipts < 1 ||
+        receipt.decodedWidth < 1 ||
+        receipt.decodedHeight < 1) {
       return false;
     }
-    final next = {...?_session, ...data};
-    final firstFrame =
-        !_hasPresentedFrame &&
-        verified &&
-        hasDecodedFrameEvidence(data) &&
-        next['textureId'] != null &&
-        next['outputRetained'] != true;
+    // 帧遥测只能更新已有绑定的尺寸，不能建立首帧或接管另一渲染器。
+    if (!verified &&
+        (!_hasPresentedFrame ||
+            current.output == null ||
+            !receipt.sameBinding(current.output!))) {
+      return false;
+    }
+    if (_qualityRebuilding) {
+      if (!verified ||
+          receipt.captureGeneration < (_qualityTarget ?? 0) ||
+          (_qualityOutput != null &&
+              _before(
+                _outputGeneration(receipt),
+                _outputGeneration(_qualityOutput!),
+              ))) {
+        return false;
+      }
+      _qualityOutput = receipt;
+      return _completeQuality();
+    }
+    if (receipt.captureGeneration != current.session.captureGeneration) {
+      return false;
+    }
+    final next = current.copyWith(output: receipt);
+    final firstFrame = !_hasPresentedFrame && verified && next.hasDecodedFrame;
     if (!_paused &&
         !firstFrame &&
         _error == null &&
-        _generation(next) == _generation(_session) &&
-        next['width'] == _session?['width'] &&
-        next['height'] == _session?['height'] &&
-        next['decodedWidth'] == _session?['decodedWidth'] &&
-        next['decodedHeight'] == _session?['decodedHeight'] &&
-        next['textureId'] == _session?['textureId']) {
+        receipt.sameBinding(current.output ?? receipt) &&
+        current.output != null &&
+        receipt.decodedWidth == current.output!.decodedWidth &&
+        receipt.decodedHeight == current.output!.decodedHeight) {
       return false;
     }
     _session = next;
+    _controlAvailable =
+        next.hasDecodedFrame && next.session.status == .streaming;
     if (firstFrame) {
       _hasPresentedFrame = true;
       _connecting = false;
     }
-    if (next['textureId'] != null &&
+    if (next.hasDecodedFrame &&
         _visibility == _Visibility.visible &&
-        !_covered) {
-      _paused = false;
+        !_covered &&
+        !_lifecyclePaused) {
+      _paused = next.session.status == .paused;
       _error = null;
     }
     return true;
   }
 
   /// 返回页面是否需要释放已持有的物理输入。
-  bool updateSession(RemoteData data) {
-    if (data['qualityRebuilding'] == true) {
-      if (_older(data)) return false;
+  bool updateSession(VideoSessionView data) {
+    if (data.sessionId != sessionId || data.deviceId != _session?.deviceId) {
+      return false;
+    }
+    final state = data.session, incoming = _generation(data);
+    if (state.qualityRebuilding) {
+      if (_older(incoming)) return false;
       final outgoing = binding;
       _beginQuality(data);
-      // 本机新 renderer 与核心 ready 回执的两层代际一致前，保留最后核验的图像和尺寸。
-      _session = {...?_session, 'qualityRebuilding': true};
+      // 新 renderer 与核心 ready 的两层代次一致前，保留最后核验的图像和尺寸。
       return outgoing != binding;
     }
     if (_qualityRebuilding) {
-      if (data['qualityRebuilding'] != false) return false;
-      final incoming = _generation(data);
-      final outcome = data['qualityRebuildOutcome'];
-      if (outcome == 'restored' &&
-          incoming != null &&
-          incoming == _outputGeneration(_qualityOriginal)) {
-        _session = {...?_qualityOriginal, ...data, 'qualityRetryable': false};
-        _qualityRebuilding = false;
-        _qualityFailed = false;
+      final outcome = state.qualityRebuildOutcome;
+      if (outcome == .restored &&
+          _qualityOriginal?.output != null &&
+          incoming == _outputGeneration(_qualityOriginal!.output!)) {
+        _session = data.copyWith(
+          output: data.output ?? _qualityOriginal!.output,
+        );
+        _clearQuality();
         _controlAvailable =
-            _session?['textureId'] != null && data['status'] == 'streaming';
+            _session!.hasDecodedFrame && state.status == .streaming;
         _paused =
-            data['status'] == 'paused' ||
+            state.status == .paused ||
             _visibility != _Visibility.visible ||
             _covered ||
             _lifecyclePaused;
-        _qualityOriginal = null;
-        _qualityOutput = null;
-        _qualityReady = null;
-        _qualityTarget = null;
         return false;
       }
-      if (outcome == 'failed' &&
-          data['status'] == 'failed' &&
-          data['qualityRetryable'] == true &&
-          (incoming == null ||
-              incoming.$1 >= (_generation(_qualityOriginal)?.$1 ?? 0))) {
-        _failQuality({...?_qualityOriginal, ...data});
+      if (outcome == .failed &&
+          state.status == .failed &&
+          state.qualityRetryable &&
+          state.captureGeneration >=
+              (_qualityOriginal?.session.captureGeneration ?? 0)) {
+        _failQuality(data);
         return false;
       }
-      if (outcome == 'applied' &&
-          incoming != null &&
-          incoming.$1 >= (_qualityTarget ?? 0) &&
-          const ['streaming', 'paused'].contains(data['status'])) {
-        _qualityReady = data;
-        _completeQuality();
+      if (outcome == .applied &&
+          state.captureGeneration >= (_qualityTarget ?? 0) &&
+          const {
+            VideoSessionStatus.streaming,
+            VideoSessionStatus.paused,
+          }.contains(state.status)) {
+        if (_qualityReady == null ||
+            !_before(incoming, _generation(_qualityReady!))) {
+          _qualityReady = data;
+          _completeQuality();
+        }
       }
       return false;
     }
-    if (_older(data)) return false;
-    if (data['status'] == 'failed' && data['qualityRetryable'] == true) {
-      _failQuality({...?_session, ...data});
+    if (_older(incoming)) return false;
+    if (state.status == .failed && state.qualityRetryable) {
+      _failQuality(data);
       return true;
     }
     if (_qualityFailed) return false;
     final previousGeometryReady = imageGeometryReady;
-    final previousWidth = _session?['width'];
-    final previousHeight = _session?['height'];
-    _session = {...?_session, ...data};
+    final previous = _session!;
+    _session = data.copyWith(output: data.output ?? previous.output);
     final geometryChanged =
         (previousGeometryReady && !imageGeometryReady) ||
-        (previousWidth != null && previousWidth != _session?['width']) ||
-        (previousHeight != null && previousHeight != _session?['height']);
+        (previous.session.width != null &&
+            previous.session.width != state.width) ||
+        (previous.session.height != null &&
+            previous.session.height != state.height);
     if (geometryChanged) _bindingGeneration++;
-    if (data['status'] == 'streaming' && data['connected'] != false) {
-      _controlAvailable = true;
+    _controlAvailable = state.status == .streaming && _session!.hasDecodedFrame;
+    if (_session!.hasDecodedFrame && imageGeometryReady && !state.paused) {
+      _hasPresentedFrame = true;
+      _connecting = false;
     }
-    if (const [
-          'connecting',
-          'reconnecting',
-          'stopped',
-        ].contains(data['status']) ||
-        data['connected'] == false) {
-      _controlAvailable = false;
-    }
-    final release =
-        const [
-          'paused',
-          'connecting',
-          'reconnecting',
-          'stopped',
-        ].contains(data['status']) ||
-        data['connected'] == false;
+    final release = state.status != .streaming;
     if (release) _paused = true;
     return release || geometryChanged;
   }
@@ -710,24 +674,41 @@ class RemotePresentation {
 
   RemoteResumeResult completeResume(
     int epoch,
-    RemoteData receipt, {
+    VideoPlaybackReceipt? receipt, {
     required bool ownerCurrent,
   }) {
     if (!_receiptCurrent(epoch, ownerCurrent: ownerCurrent)) {
       return RemoteResumeResult.stale;
     }
-    if (_qualityRebuilding || _qualityFailed || _older(receipt)) {
+    final current = _session;
+    if (current == null ||
+        _qualityRebuilding ||
+        _qualityFailed ||
+        (receipt != null &&
+            (receipt.session.sessionId != sessionId ||
+                receipt.session.deviceId != current.deviceId ||
+                _older((
+                  receipt.session.captureGeneration,
+                  receipt.session.generation,
+                ))))) {
       return RemoteResumeResult.stale;
     }
-    if (!hasDecodedFrameEvidence(receipt)) {
+    if (receipt == null) return RemoteResumeResult.rendererNotReady;
+    final next = current.copyWith(
+      session: receipt.session,
+      output: receipt.output,
+    );
+    if (!next.hasDecodedFrame ||
+        receipt.output.paused ||
+        receipt.session.status != .streaming) {
       return RemoteResumeResult.rendererNotReady;
     }
-    _session = {...?_session, ...receipt};
+    _session = next;
     _paused = false;
     _visibility = _Visibility.visible;
     _connecting = false;
-    _controlAvailable = _session?['textureId'] != null;
-    _hasPresentedFrame = _hasPresentedFrame || _session?['textureId'] != null;
+    _controlAvailable = true;
+    _hasPresentedFrame = true;
     _error = null;
     return RemoteResumeResult.ready;
   }

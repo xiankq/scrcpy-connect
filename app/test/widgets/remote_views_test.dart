@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/core/control/models/video_session.dart';
+import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
+
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -97,7 +100,16 @@ void main() {
       views: views,
     );
     window.presentation.bindStart(
-      {'sessionId': 'session', 'deviceId': 'device'},
+      const VideoSessionView(
+        session: VideoSessionSnapshot(
+          sessionId: 'session',
+          deviceId: 'device',
+          name: 'Phone',
+          kind: .screen,
+          status: .streaming,
+        ),
+        wake: KeepAwakeSnapshot(deviceId: 'device'),
+      ),
       retained: false,
       recoveringConnection: false,
       submittedAppStart: false,

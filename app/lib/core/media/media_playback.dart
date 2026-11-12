@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:scrcpy_connect/core/control/media_capture.dart';
 import 'package:scrcpy_connect/core/control/models/session_activity.dart';
 import 'package:scrcpy_connect/core/control/models/video_session.dart';
@@ -278,28 +277,26 @@ final class MediaPlayback
           if (device.status == .connected) device.id,
       });
     }
-    if (event['type'] == 'session.disconnected') {
-      final id = data['sessionId'];
-      if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
-        debugPrint(
-          '[connect.video] capture ended session=$id reason=${data['reason']}',
-        );
-      }
-      if (id is String && _videoLifecycleInstance != null) {
+    if (event['data'] case VideoSessionView(:final session)
+        when !session.live) {
+      final output = _textures[session.sessionId];
+      if (output != null &&
+          output.deviceId == session.deviceId &&
+          (output.captureGeneration < session.captureGeneration ||
+              (output.captureGeneration == session.captureGeneration &&
+                  output.generation <= session.generation))) {
         unawaited(
-          _videoLifecycleInstance!.close(
-            id,
-            failure: data['status'] == 'failed'
-                ? RequestFailure(
-                    data['failureCode'] is String
-                        ? data['failureCode'] as String
-                        : 'session_failed',
-                    data['reason'] is String
-                        ? data['reason'] as String
-                        : '被控端的画面连接意外结束，请重新打开。',
-                  )
-                : null,
-          ),
+          _videoLifecycleInstance
+              ?.close(
+                session.sessionId,
+                failure: session.status == .failed
+                    ? RequestFailure(
+                        session.failureCode ?? 'session_failed',
+                        session.reason ?? '被控端的画面连接意外结束，请重新打开。',
+                      )
+                    : null,
+              )
+              .catchError((Object _) {}),
         );
       }
     } else if (event['type'] == 'audio.updated' &&
@@ -374,14 +371,19 @@ final class MediaPlayback
     bool paused,
   ) async {
     _checkVideoOpen(verified: true);
-    final receipt = await _videoPresentation.setPaused(target, paused: paused);
-    final id = receipt.session.sessionId;
+    final playback = await _videoPresentation.setPaused(target, paused: paused);
+    final id = playback.session.sessionId;
+    // 等待播放器期间可能已切换 renderer；借用当前核心事实，不能退回请求开始时的代次。
+    final receipt = VideoPlaybackReceipt(
+      session: captures.session(id),
+      output: playback.output,
+    );
     if (!paused && !_disposed && _textures.containsKey(id)) {
       _textures[id] = _mergeOutput(_textures[id], receipt.output);
       emit({
         'type': 'session.output.resumed',
         'deviceId': receipt.session.deviceId,
-        'data': receipt.toSnapshot(),
+        'data': receipt,
       });
     }
     return receipt;
@@ -520,15 +522,16 @@ final class MediaPlayback
       }
       await _videoLifecycle.close(id);
       if (appLaunch) {
-        throw RequestFailure('app_launch_unknown', '应用可能已在手机上打开，请先核对本次记录。', {
-          'sessionId': id,
-          'deviceId': result.deviceId,
-          'packageName': result.packageName,
-          'launchOutcome': 'unknown',
-          'failureCode': error is RequestFailure
-              ? error.code
-              : 'video_output_failed',
-        });
+        throw VideoStartUncertain(
+          result.copyWith(
+            status: .failed,
+            launchOutcome: .unknown,
+            textureId: null,
+            failureCode: error is RequestFailure
+                ? error.code
+                : 'video_output_failed',
+          ),
+        );
       }
       rethrow;
     }
@@ -731,6 +734,12 @@ class _MediaIntentRegistry {
 VideoOutputReceipt _mergeOutput(
   VideoOutputReceipt? current,
   VideoOutputReceipt receipt,
-) => current != null && current.generation > receipt.generation
-    ? current
-    : receipt;
+) {
+  if (current != null &&
+      (current.captureGeneration > receipt.captureGeneration ||
+          (current.captureGeneration == receipt.captureGeneration &&
+              current.generation > receipt.generation))) {
+    return current;
+  }
+  return receipt;
+}
