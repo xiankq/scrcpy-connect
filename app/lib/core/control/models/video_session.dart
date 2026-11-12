@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:scrcpy_connect/core/control/models/session_activity.dart';
 import 'package:scrcpy_connect/core/control/models/video_capture.dart';
 import 'package:scrcpy_connect/core/control/models/video_display_size.dart';
 import 'package:scrcpy_connect/core/control/models/video_quality.dart';
@@ -91,6 +92,19 @@ abstract class VideoSessionSnapshot with _$VideoSessionSnapshot {
     @Default(false) bool recordOnly,
     String? linkedSessionId,
   }) = _VideoSessionSnapshot;
+
+  SessionActivity get activity => SessionActivity(
+    sessionId: sessionId,
+    deviceId: deviceId,
+    name: name,
+    status: status == VideoSessionStatus.awaitingRenderer
+        ? 'awaiting_renderer'
+        : status.name,
+    needsLaunchReview: launchOutcome == VideoLaunchOutcome.unknown,
+    recordOnly: recordOnly,
+    linkedSessionId: linkedSessionId,
+    reason: reason,
+  );
 
   bool get live => switch (status) {
     .stopped => false,

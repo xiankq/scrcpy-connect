@@ -160,7 +160,7 @@ final class CaptureResources {
     String? deviceId,
   }) async => List.unmodifiable([
     for (final session in await readSessions(deviceId: deviceId))
-      SessionActivity.fromSession(session),
+      session.activity,
   ]);
   List<DeviceAudioSnapshot> audioSnapshots({bool activeOnly = false}) =>
       _audio?.snapshots(activeOnly: activeOnly) ?? [];
