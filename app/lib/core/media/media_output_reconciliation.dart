@@ -1,13 +1,13 @@
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/media/models/recovered_video_session.dart';
 import 'package:scrcpy_connect/core/media/models/video_output.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
-import 'package:scrcpy_connect/core/media/video_output_snapshot.dart';
-import 'package:scrcpy_connect/core/recovery/state_recovery.dart';
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 
-/// 读取核心状态并回收已结束输出，再合成本机呈现状态。
-/// 读取前捕获本地所有者；该读取期间新建或替换的输出不能被旧快照释放。
-Future<StateJson> readAndReconcileMediaSnapshot({
-  required Future<StateJson> Function() read,
+/// 读取核心状态并回收已结束输出，再借用本机呈现证据。
+/// 读取前捕获本地所有者；读取期间新建或替换的输出不能被旧快照释放。
+Future<RuntimeSnapshot> readAndReconcileMediaSnapshot({
+  required Future<RuntimeSnapshot> Function() read,
   required Map<String, VideoOutputReceipt> videos,
   required Map<String, DeviceAudioSnapshot> audios,
   required Future<void> Function(String) closeVideo,
@@ -16,11 +16,14 @@ Future<StateJson> readAndReconcileMediaSnapshot({
 }) async {
   final capturedVideos = {...videos}, capturedAudios = {...audios};
   final snapshot = await read();
-  validateStateSnapshot(snapshot);
-  final sessions = _records(snapshot['sessions'], 'sessionId');
-  final sources = _records(snapshot['sources'], 'sourceId');
-  final liveSessions = _live(sessions, 'sessionId'),
-      liveSources = _live(sources, 'sourceId');
+  final liveSessions = {
+    for (final item in snapshot.sessions)
+      if (item.live) item.session.sessionId,
+  };
+  final liveSources = {
+    for (final source in snapshot.sources)
+      if (source.status != .stopped && source.status != .error) source.sourceId,
+  };
   void check() {
     if (!current()) {
       throw const RequestFailure('cancelled', '状态恢复已结束。');
@@ -43,44 +46,12 @@ Future<StateJson> readAndReconcileMediaSnapshot({
     }
   }
   check();
-  return {
-    ...snapshot,
-    'sessions': [
-      for (final session in sessions)
-        sessionWithVideoOutput(
-          session,
-          videos[session['sessionId']]?.toSnapshot(),
-        ),
-    ],
-  };
+  return snapshot.withSessions([
+    for (final item in snapshot.sessions)
+      RecoveredVideoSession(
+        session: item.session,
+        keepAwake: item.keepAwake,
+        output: videos[item.session.sessionId],
+      ),
+  ]);
 }
-
-List<StateJson> _records(dynamic values, String id) {
-  final records = <StateJson>[];
-  final ids = <String>{};
-  for (final Object? value in values as List) {
-    if (value is! Map<String, dynamic> ||
-        value[id] is! String ||
-        (value[id] as String).isEmpty ||
-        !ids.add(value[id] as String)) {
-      throw const RequestFailure('invalid_snapshot', '状态快照包含无效或重复的媒体标识。');
-    }
-    records.add(value);
-  }
-  return records;
-}
-
-Set<String> _live(List<StateJson> records, String id) => {
-  for (final record in records)
-    if (!const [
-          'stopped',
-          'error',
-          'failed',
-          'closed',
-          'disconnected',
-        ].contains(record['status']) ||
-        (id == 'sessionId' &&
-            record['status'] == 'failed' &&
-            record['qualityRetryable'] == true))
-      record[id] as String,
-};

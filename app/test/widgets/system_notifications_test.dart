@@ -1,7 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scrcpy_connect/core/devices/models/device_call.dart';
+import 'package:scrcpy_connect/core/devices/models/device_notification.dart';
+import 'package:scrcpy_connect/core/devices/models/device_observation_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/observed_device_snapshot.dart';
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/widgets/models/system_notification_snapshot.dart';
 import 'package:scrcpy_connect/widgets/system_notifications.dart';
@@ -102,6 +107,82 @@ void main() {
     await sink.activationsController.close();
     await newSink.activationsController.close();
   });
+  test('类型化恢复只建立通知和来电基线，同代重复更新不重放系统提醒', () async {
+    final events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
+    final sink = _Sink();
+    final settings = Preferences(notificationAlerts: true, callAlerts: true);
+    final devices = [const DeviceSnapshot(id: 'device', status: .connected)];
+    final notifications = SystemNotifications(
+      events: events.stream,
+      readSnapshot: () => SystemNotificationSnapshot(
+        devices: devices,
+        settings: settings,
+        loading: false,
+        reconciliationPending: false,
+      ),
+      current: () => true,
+      sink: sink,
+    );
+    await notifications.initialize();
+    notifications.setForeground(false);
+    events.add({'type': 'state.resync'});
+    events.add({
+      'type': 'state.resynced',
+      'data': RuntimeSnapshot(
+        sequence: 1,
+        settings: settings,
+        devices: devices,
+        observations: [
+          ObservedDeviceSnapshot(
+            observation: const DeviceObservationSnapshot(
+              deviceId: 'device',
+              wanted: true,
+              phase: .observing,
+              generation: 1,
+            ),
+            notifications: DeviceNotificationsSnapshot.fromJson({
+              ...notificationData('baseline'),
+              'deviceId': 'device',
+            }),
+            calls: DeviceCallsSnapshot.fromJson({
+              ...callData(1),
+              'deviceId': 'device',
+            }),
+          ),
+        ],
+      ),
+    });
+    events.add(notificationsChanged('baseline'));
+    events.add({
+      'type': 'calls.changed',
+      'deviceId': 'device',
+      'data': callData(1),
+    });
+    await notifications.drain();
+    expect(sink.shown, isEmpty);
+    events.add(notificationsChanged('new'));
+    events.add({
+      'type': 'calls.changed',
+      'deviceId': 'device',
+      'data': callData(2),
+    });
+    await notifications.drain();
+    expect(sink.shown.map((notice) => notice.kind), [
+      SystemNotificationKind.notification,
+      SystemNotificationKind.call,
+    ]);
+    events.add({
+      'type': 'notifications.changed',
+      'deviceId': 'device',
+      'data': {...notificationData('stale'), 'observationEpoch': 0},
+    });
+    await notifications.drain();
+    expect(sink.shown, hasLength(2));
+    notifications.dispose();
+    await notifications.drain();
+    await events.close();
+    await sink.activationsController.close();
+  });
 }
 
 Map<String, dynamic> observing() => {
@@ -178,3 +259,12 @@ class _Sink implements SystemNotificationSink {
     cancelled.add(id);
   }
 }
+
+Map<String, dynamic> callData(int generation) => {
+  'live': true,
+  'observationEnabled': true,
+  'observationEpoch': 1,
+  'calls': [
+    {'id': 'call', 'generation': generation, 'state': 'ringing'},
+  ],
+};

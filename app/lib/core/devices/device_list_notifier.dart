@@ -5,6 +5,7 @@ import 'package:scrcpy_connect/core/devices/models/device_list_state.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 
 import 'device_capabilities_provider.dart';
@@ -33,10 +34,7 @@ class DeviceListNotifier extends _$DeviceListNotifier {
       } else if (type == 'state.resynced') {
         owner.request++;
         state = state.copyWith(
-          devices: [
-            for (final item in objects(jsonObject(event['data'])['devices']))
-              DeviceSnapshot.fromJson(item),
-          ],
+          devices: (event['data'] as RuntimeSnapshot).devices,
           loading: false,
           error: null,
         );

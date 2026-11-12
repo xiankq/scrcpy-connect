@@ -27,14 +27,14 @@ $AppStateCopyWith<AppState> get copyWith => _$AppStateCopyWithImpl<AppState>(thi
 @override
 bool operator ==(Object other) {
   final _this = this as AppState;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppState&&const DeepCollectionEquality().equals(other.devices, _this.devices)&&(identical(other.settings, _this.settings) || other.settings == _this.settings)&&const DeepCollectionEquality().equals(other.pendingShares, _this.pendingShares)&&const DeepCollectionEquality().equals(other.lastEvent, _this.lastEvent)&&(identical(other.eventRevision, _this.eventRevision) || other.eventRevision == _this.eventRevision)&&(identical(other.loading, _this.loading) || other.loading == _this.loading)&&(identical(other.deviceError, _this.deviceError) || other.deviceError == _this.deviceError)&&(identical(other.settingsError, _this.settingsError) || other.settingsError == _this.settingsError)&&(identical(other.audioError, _this.audioError) || other.audioError == _this.audioError)&&(identical(other.focusedDeviceId, _this.focusedDeviceId) || other.focusedDeviceId == _this.focusedDeviceId)&&(identical(other.reconciliationPending, _this.reconciliationPending) || other.reconciliationPending == _this.reconciliationPending)&&(identical(other.reconciliationError, _this.reconciliationError) || other.reconciliationError == _this.reconciliationError)&&const DeepCollectionEquality().equals(other.reconciledSnapshot, _this.reconciledSnapshot));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppState&&const DeepCollectionEquality().equals(other.devices, _this.devices)&&(identical(other.settings, _this.settings) || other.settings == _this.settings)&&const DeepCollectionEquality().equals(other.pendingShares, _this.pendingShares)&&const DeepCollectionEquality().equals(other.lastEvent, _this.lastEvent)&&(identical(other.eventRevision, _this.eventRevision) || other.eventRevision == _this.eventRevision)&&(identical(other.loading, _this.loading) || other.loading == _this.loading)&&(identical(other.deviceError, _this.deviceError) || other.deviceError == _this.deviceError)&&(identical(other.settingsError, _this.settingsError) || other.settingsError == _this.settingsError)&&(identical(other.audioError, _this.audioError) || other.audioError == _this.audioError)&&(identical(other.focusedDeviceId, _this.focusedDeviceId) || other.focusedDeviceId == _this.focusedDeviceId)&&(identical(other.reconciliationPending, _this.reconciliationPending) || other.reconciliationPending == _this.reconciliationPending)&&(identical(other.reconciliationError, _this.reconciliationError) || other.reconciliationError == _this.reconciliationError)&&(identical(other.reconciledSnapshot, _this.reconciledSnapshot) || other.reconciledSnapshot == _this.reconciledSnapshot));
 }
 
 
 @override
 int get hashCode {
   final _this = this as AppState;
-  return Object.hash(runtimeType,const DeepCollectionEquality().hash(_this.devices),_this.settings,const DeepCollectionEquality().hash(_this.pendingShares),const DeepCollectionEquality().hash(_this.lastEvent),_this.eventRevision,_this.loading,_this.deviceError,_this.settingsError,_this.audioError,_this.focusedDeviceId,_this.reconciliationPending,_this.reconciliationError,const DeepCollectionEquality().hash(_this.reconciledSnapshot));
+  return Object.hash(runtimeType,const DeepCollectionEquality().hash(_this.devices),_this.settings,const DeepCollectionEquality().hash(_this.pendingShares),const DeepCollectionEquality().hash(_this.lastEvent),_this.eventRevision,_this.loading,_this.deviceError,_this.settingsError,_this.audioError,_this.focusedDeviceId,_this.reconciliationPending,_this.reconciliationError,_this.reconciledSnapshot);
 }
 
 @override
@@ -51,7 +51,7 @@ abstract mixin class $AppStateCopyWith<$Res>  {
   factory $AppStateCopyWith(AppState value, $Res Function(AppState) _then) = _$AppStateCopyWithImpl;
 @useResult
 $Res call({
- List<DeviceSnapshot> devices, Preferences? settings, List<IncomingShare> pendingShares, Json? lastEvent, int eventRevision, bool loading, String? deviceError, String? settingsError, String? audioError, String? focusedDeviceId, bool reconciliationPending, String? reconciliationError, Json? reconciledSnapshot
+ List<DeviceSnapshot> devices, Preferences? settings, List<IncomingShare> pendingShares, Json? lastEvent, int eventRevision, bool loading, String? deviceError, String? settingsError, String? audioError, String? focusedDeviceId, bool reconciliationPending, String? reconciliationError, RuntimeSnapshot? reconciledSnapshot
 });
 
 
@@ -83,7 +83,7 @@ as String?,focusedDeviceId: freezed == focusedDeviceId ? _self.focusedDeviceId :
 as String?,reconciliationPending: null == reconciliationPending ? _self.reconciliationPending : reconciliationPending // ignore: cast_nullable_to_non_nullable
 as bool,reconciliationError: freezed == reconciliationError ? _self.reconciliationError : reconciliationError // ignore: cast_nullable_to_non_nullable
 as String?,reconciledSnapshot: freezed == reconciledSnapshot ? _self.reconciledSnapshot : reconciledSnapshot // ignore: cast_nullable_to_non_nullable
-as Json?,
+as RuntimeSnapshot?,
   ));
 }
 /// Create a copy of AppState

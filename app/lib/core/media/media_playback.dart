@@ -23,6 +23,7 @@ import 'package:scrcpy_connect/core/media/video_quality_service.dart';
 import 'package:scrcpy_connect/core/media/video_recovery.dart';
 import 'package:scrcpy_connect/core/media/video_screenshots.dart';
 import 'package:scrcpy_connect/core/media/video_sessions.dart';
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 
@@ -53,7 +54,7 @@ final class MediaPlayback
   MediaCapture? _capture;
   MediaCapture get captures => _capture ??= _createCapture();
   final Future<List<DeviceAudioSnapshot>> Function() readCapturedAudio;
-  final Future<Map<String, dynamic>> Function() readSnapshot;
+  final Future<RuntimeSnapshot> Function() readSnapshot;
   final Future<Preferences> Function() readSettings;
 
   final AudioPlatformRequest platform;
@@ -256,7 +257,7 @@ final class MediaPlayback
     return _videoOutputs.screenshot(sessionId, directory: directory.path);
   }
 
-  Future<Map<String, dynamic>> snapshot(bool Function() current) =>
+  Future<RuntimeSnapshot> snapshot(bool Function() current) =>
       readAndReconcileMediaSnapshot(
         read: readSnapshot,
         videos: _textures,

@@ -16,6 +16,7 @@ import 'package:scrcpy_connect/core/files/file_resources.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_lifecycle.dart';
 import 'package:scrcpy_connect/core/media/media_playback.dart';
 import 'package:scrcpy_connect/core/platform/background_policy.dart';
+import 'package:scrcpy_connect/core/devices/models/device_reconnect_snapshot.dart';
 import 'package:scrcpy_connect/core/recovery/state_recovery.dart';
 import 'package:scrcpy_connect/core/settings/app_settings.dart';
 
@@ -77,21 +78,21 @@ void main() {
         return false;
       },
     );
+    expect(resources.currentObservations(), isEmpty);
     await resources.reconnections.start();
     resources.handleEvent({
       'type': 'devices.changed',
       'sequence': 1,
       'data': {'devices': <Map<String, dynamic>>[]},
     });
-    resources.handleEvent({'type': 'state.resync'});
-    resources.handleEvent({
-      'type': 'state.resynced',
-      'data': {
-        'sequence': 2,
-        'devices': <Map<String, dynamic>>[],
-        'settings': {'backgroundKeepAlive': false},
-      },
-    });
+    resources.invalidateState();
+    resources.restoreState(
+      DeviceReconnectSnapshot(
+        sequence: 2,
+        devices: [],
+        backgroundKeepAlive: false,
+      ),
+    );
     await resources.close();
     expect(sequenceReads, 1);
     expect(settingsReads, 1);

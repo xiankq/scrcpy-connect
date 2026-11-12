@@ -3,17 +3,21 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/core/devices/models/device_call.dart';
+import 'package:scrcpy_connect/core/devices/models/device_notification.dart';
+import 'package:scrcpy_connect/core/devices/models/device_observation_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/observed_device_snapshot.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
-
-import 'models/system_notification_snapshot.dart';
-import 'models/system_notification_target.dart';
-
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/system_notification_sink.dart';
 import 'package:scrcpy_connect/widgets/system_notification_sink_provider.dart';
+
+import 'models/system_notification_snapshot.dart';
+import 'models/system_notification_target.dart';
 
 export 'models/system_notification_target.dart';
 
@@ -297,13 +301,10 @@ class SystemNotifications {
       _clear();
       _reconciling = false;
       _restoring = true;
-      _connectionLifecycle(objects(data['devices']));
-      for (final observation in objects(data['observations'])) {
-        _event({
-          'type': 'observation.changed',
-          'deviceId': observation['deviceId'],
-          'data': observation,
-        });
+      final snapshot = event['data'] as RuntimeSnapshot;
+      _connectionLifecycle(snapshot.devices);
+      for (final observed in snapshot.observations) {
+        _observe(observed);
       }
       _restoring = false;
       if (_pending.isNotEmpty) _changed();
@@ -318,7 +319,7 @@ class SystemNotifications {
     }
     if (event['type'] == 'device.changed') {
       _connectionLifecycle([
-        {...data, 'id': deviceId},
+        DeviceSnapshot.fromJson({...data, 'id': deviceId}),
       ]);
       return;
     }
@@ -328,11 +329,15 @@ class SystemNotifications {
       return;
     }
     if (event['type'] == 'devices.changed') {
-      _connectionLifecycle(objects(data['devices']), complete: true);
-      final connected = objects(data['devices'])
-          .where((d) => d['status'] == 'connected')
-          .map((d) => value(d, 'id'))
-          .toSet();
+      final devices = [
+        for (final device in objects(data['devices']))
+          DeviceSnapshot.fromJson(device),
+      ];
+      _connectionLifecycle(devices, complete: true);
+      final connected = {
+        for (final device in devices)
+          if (device.status == .connected) device.id,
+      };
       for (final entry in _owners.entries.toList()) {
         if (!connected.contains(entry.key)) {
           _invalidate(entry.key, entry.value.generation);
@@ -342,29 +347,30 @@ class SystemNotifications {
     }
     if (_reconciling || _readSnapshot().reconciliationPending) return;
     if (event['type'] == 'observation.changed') {
-      final generation = data['generation'];
-      if (generation is! int || !_connected(deviceId)) return;
-      final previous = _owners[deviceId];
-      if (previous != null && generation < previous.generation) return;
-      if (data['wanted'] != true ||
-          !['observing', 'limited'].contains(data['phase'])) {
-        _invalidate(
-          deviceId,
-          data['wanted'] == false ? generation : generation - 1,
-        );
-        return;
-      }
-      if (generation <= (_invalidThrough[deviceId] ?? -1)) return;
-      if (previous != null && generation != previous.generation) {
-        _invalidate(deviceId, previous.generation);
-      }
-      final owner = _owners.putIfAbsent(deviceId, () => _Owner(generation));
-      _notifications(deviceId, owner, jsonObject(data['notifications']));
-      _calls(deviceId, owner, jsonObject(data['calls']));
+      _observe(
+        ObservedDeviceSnapshot(
+          observation: DeviceObservationSnapshot.fromJson({
+            ...data,
+            'deviceId': deviceId,
+          }),
+          notifications: DeviceNotificationsSnapshot.fromJson({
+            ...jsonObject(data['notifications']),
+            'deviceId': deviceId,
+          }),
+          calls: DeviceCallsSnapshot.fromJson({
+            ...jsonObject(data['calls']),
+            'deviceId': deviceId,
+          }),
+        ),
+      );
     } else if (event['type'] == 'notifications.changed') {
       final owner = _owners[deviceId];
       if (owner != null && _connected(deviceId)) {
-        _notifications(deviceId, owner, data);
+        _notifications(
+          deviceId,
+          owner,
+          DeviceNotificationsSnapshot.fromJson({...data, 'deviceId': deviceId}),
+        );
       }
     } else if ([
       'calls.incoming',
@@ -372,16 +378,48 @@ class SystemNotifications {
       'calls.changed',
     ].contains(event['type'])) {
       final owner = _owners[deviceId];
-      if (owner != null && _connected(deviceId)) _calls(deviceId, owner, data);
+      if (owner != null && _connected(deviceId)) {
+        _calls(
+          deviceId,
+          owner,
+          DeviceCallsSnapshot.fromJson({...data, 'deviceId': deviceId}),
+        );
+      }
     }
     if (_pending.isNotEmpty) _changed();
   }
 
-  void _connectionLifecycle(List<Json> devices, {bool complete = false}) {
+  void _observe(ObservedDeviceSnapshot observed) {
+    final observation = observed.observation;
+    final deviceId = observation.deviceId, generation = observation.generation;
+    if (!_connected(deviceId)) return;
+    final previous = _owners[deviceId];
+    if (previous != null && generation < previous.generation) return;
+    if (!observation.wanted ||
+        !{
+          DeviceObservationPhase.observing,
+          DeviceObservationPhase.limited,
+        }.contains(observation.phase)) {
+      _invalidate(deviceId, !observation.wanted ? generation : generation - 1);
+      return;
+    }
+    if (generation <= (_invalidThrough[deviceId] ?? -1)) return;
+    if (previous != null && generation != previous.generation) {
+      _invalidate(deviceId, previous.generation);
+    }
+    final owner = _owners.putIfAbsent(deviceId, () => _Owner(generation));
+    _notifications(deviceId, owner, observed.notifications);
+    _calls(deviceId, owner, observed.calls);
+  }
+
+  void _connectionLifecycle(
+    List<DeviceSnapshot> devices, {
+    bool complete = false,
+  }) {
     for (final deviceId in _nativeStopped.toList()) {
-      final device = devices.where((d) => d['id'] == deviceId).firstOrNull;
+      final device = devices.where((d) => d.id == deviceId).firstOrNull;
       if (device == null && !complete) continue;
-      if (device?['status'] != 'connected') {
+      if (device?.status != .connected) {
         _disconnectedAfterStop.add(deviceId);
       } else if (_disconnectedAfterStop.remove(deviceId)) {
         _nativeStopped.remove(deviceId);
@@ -491,34 +529,31 @@ class SystemNotifications {
   void _notifications(
     String deviceId,
     _Owner owner,
-    Json data, {
+    DeviceNotificationsSnapshot data, {
     bool baseline = false,
   }) {
-    final epoch = data['observationEpoch'];
-    if (epoch is int && epoch != owner.generation) return;
-    if (data['live'] != true ||
-        data['observationEnabled'] != true ||
-        epoch != owner.generation ||
-        data['notifications'] is! List<Object?>) {
+    final epoch = data.observationEpoch;
+    if (epoch != null && epoch != owner.generation) return;
+    if (!data.live || !data.observationEnabled || epoch != owner.generation) {
       _clearSection(deviceId, owner, SystemNotificationKind.notification);
       return;
     }
     baseline = baseline || !owner.notificationLive;
     owner.notificationLive = true;
     final next = <String, String>{};
-    for (final item in objects(data['notifications']).take(1000)) {
-      final id = value(item, 'id');
-      final key = value(item, 'key', id);
+    for (final item in data.notifications.take(1000)) {
+      final id = item.id;
+      final key = item.key ?? id;
       if (id.isEmpty || id.length > 512 || key.isEmpty || key.length > 1024) {
         continue;
       }
       if (!next.containsKey(key) && next.length >= 1000) break;
-      final revision = value(item, 'revision', id);
+      final revision = item.revision ?? id;
       if (revision.isEmpty || revision.length > 512) continue;
       next[key] = id;
       final localKey = '$deviceId:${owner.generation}:notification:$key';
       // 摘要仍显示在远端列表中，不与分组内的独立通知重复触发系统提醒。
-      if (item['groupSummary'] == true) {
+      if (item.groupSummary) {
         _cancel(localKey);
         continue;
       }
@@ -563,7 +598,7 @@ class SystemNotifications {
         });
       }
     }
-    if (data['truncated'] != true) {
+    if (!data.truncated) {
       for (final key in owner.notifications.keys.where(
         (key) => !next.containsKey(key),
       )) {
@@ -579,28 +614,25 @@ class SystemNotifications {
     }
     final ids = owner.notifications.values.toSet();
     owner.revisions.removeWhere((id, _) => !ids.contains(id));
-    for (final item in objects(data['notifications']).take(1000)) {
-      final id = value(item, 'id');
-      if (ids.contains(id)) owner.revisions[id] = value(item, 'revision', id);
+    for (final item in data.notifications.take(1000)) {
+      final id = item.id;
+      if (ids.contains(id)) owner.revisions[id] = item.revision ?? id;
     }
   }
 
-  void _calls(String deviceId, _Owner owner, Json data) {
-    final epoch = data['observationEpoch'];
-    if (epoch is int && epoch != owner.generation) return;
-    if (data['live'] != true ||
-        data['observationEnabled'] != true ||
-        epoch != owner.generation ||
-        data['calls'] is! List<Object?>) {
+  void _calls(String deviceId, _Owner owner, DeviceCallsSnapshot data) {
+    final epoch = data.observationEpoch;
+    if (epoch != null && epoch != owner.generation) return;
+    if (!data.live || !data.observationEnabled || epoch != owner.generation) {
       _clearSection(deviceId, owner, SystemNotificationKind.call);
       return;
     }
     final next = <String>{};
-    for (final item in objects(data['calls']).take(32)) {
-      final id = value(item, 'id');
-      if (id.isEmpty || id.length > 512 || item['state'] != 'ringing') continue;
+    for (final item in data.calls.take(32)) {
+      final id = item.id ?? '';
+      if (id.isEmpty || id.length > 512 || item.state != .ringing) continue;
       next.add(id);
-      final revision = value(item, 'generation', id);
+      final revision = item.generation?.toString() ?? id;
       if (revision.isEmpty || revision.length > 512) continue;
       final changed = owner.callRevisions[id] != revision;
       final localKey = '$deviceId:${owner.generation}:call:$id';
@@ -650,10 +682,10 @@ class SystemNotifications {
       ..clear()
       ..addAll(next);
     owner.callRevisions.clear();
-    for (final item in objects(data['calls']).take(32)) {
-      final id = value(item, 'id');
+    for (final item in data.calls.take(32)) {
+      final id = item.id ?? '';
       if (next.contains(id)) {
-        owner.callRevisions[id] = value(item, 'generation', id);
+        owner.callRevisions[id] = item.generation?.toString() ?? id;
       }
     }
   }

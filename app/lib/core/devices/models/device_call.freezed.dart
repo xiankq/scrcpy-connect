@@ -16,7 +16,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$DeviceCall {
 
- String? get id;@JsonKey(unknownEnumValue: DeviceCallState.unknown) DeviceCallState get state; String? get name; String? get number; String? get deviceName; bool get aggregate;
+ String? get id; int? get generation;@JsonKey(unknownEnumValue: DeviceCallState.unknown) DeviceCallState get state; String? get name; String? get number; String? get deviceName; bool get aggregate;
 /// Create a copy of DeviceCall
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -30,20 +30,20 @@ $DeviceCallCopyWith<DeviceCall> get copyWith => _$DeviceCallCopyWithImpl<DeviceC
 @override
 bool operator ==(Object other) {
   final _this = this as DeviceCall;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is DeviceCall&&(identical(other.id, _this.id) || other.id == _this.id)&&(identical(other.state, _this.state) || other.state == _this.state)&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.number, _this.number) || other.number == _this.number)&&(identical(other.deviceName, _this.deviceName) || other.deviceName == _this.deviceName)&&(identical(other.aggregate, _this.aggregate) || other.aggregate == _this.aggregate));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is DeviceCall&&(identical(other.id, _this.id) || other.id == _this.id)&&(identical(other.generation, _this.generation) || other.generation == _this.generation)&&(identical(other.state, _this.state) || other.state == _this.state)&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.number, _this.number) || other.number == _this.number)&&(identical(other.deviceName, _this.deviceName) || other.deviceName == _this.deviceName)&&(identical(other.aggregate, _this.aggregate) || other.aggregate == _this.aggregate));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
   final _this = this as DeviceCall;
-  return Object.hash(runtimeType,_this.id,_this.state,_this.name,_this.number,_this.deviceName,_this.aggregate);
+  return Object.hash(runtimeType,_this.id,_this.generation,_this.state,_this.name,_this.number,_this.deviceName,_this.aggregate);
 }
 
 @override
 String toString() {
   final _this = this as DeviceCall;
-  return 'DeviceCall(id: ${_this.id}, state: ${_this.state}, name: ${_this.name}, number: ${_this.number}, deviceName: ${_this.deviceName}, aggregate: ${_this.aggregate})';
+  return 'DeviceCall(id: ${_this.id}, generation: ${_this.generation}, state: ${_this.state}, name: ${_this.name}, number: ${_this.number}, deviceName: ${_this.deviceName}, aggregate: ${_this.aggregate})';
 }
 
 
@@ -54,7 +54,7 @@ abstract mixin class $DeviceCallCopyWith<$Res>  {
   factory $DeviceCallCopyWith(DeviceCall value, $Res Function(DeviceCall) _then) = _$DeviceCallCopyWithImpl;
 @useResult
 $Res call({
- String? id,@JsonKey(unknownEnumValue: DeviceCallState.unknown) DeviceCallState state, String? name, String? number, String? deviceName, bool aggregate
+ String? id, int? generation,@JsonKey(unknownEnumValue: DeviceCallState.unknown) DeviceCallState state, String? name, String? number, String? deviceName, bool aggregate
 });
 
 
@@ -71,10 +71,11 @@ class _$DeviceCallCopyWithImpl<$Res>
 
 /// Create a copy of DeviceCall
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = freezed,Object? state = null,Object? name = freezed,Object? number = freezed,Object? deviceName = freezed,Object? aggregate = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = freezed,Object? generation = freezed,Object? state = null,Object? name = freezed,Object? number = freezed,Object? deviceName = freezed,Object? aggregate = null,}) {
   return _then(DeviceCall(
 id: freezed == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
-as String?,state: null == state ? _self.state : state // ignore: cast_nullable_to_non_nullable
+as String?,generation: freezed == generation ? _self.generation : generation // ignore: cast_nullable_to_non_nullable
+as int?,state: null == state ? _self.state : state // ignore: cast_nullable_to_non_nullable
 as DeviceCallState,name: freezed == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String?,number: freezed == number ? _self.number : number // ignore: cast_nullable_to_non_nullable
 as String?,deviceName: freezed == deviceName ? _self.deviceName : deviceName // ignore: cast_nullable_to_non_nullable
@@ -164,10 +165,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? id, @JsonKey(unknownEnumValue: DeviceCallState.unknown)  DeviceCallState state,  String? name,  String? number,  String? deviceName,  bool aggregate)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? id,  int? generation, @JsonKey(unknownEnumValue: DeviceCallState.unknown)  DeviceCallState state,  String? name,  String? number,  String? deviceName,  bool aggregate)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _DeviceCall() when $default != null:
-return $default(_that.id,_that.state,_that.name,_that.number,_that.deviceName,_that.aggregate);case _:
+return $default(_that.id,_that.generation,_that.state,_that.name,_that.number,_that.deviceName,_that.aggregate);case _:
   return orElse();
 
 }
@@ -185,10 +186,10 @@ return $default(_that.id,_that.state,_that.name,_that.number,_that.deviceName,_t
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? id, @JsonKey(unknownEnumValue: DeviceCallState.unknown)  DeviceCallState state,  String? name,  String? number,  String? deviceName,  bool aggregate)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? id,  int? generation, @JsonKey(unknownEnumValue: DeviceCallState.unknown)  DeviceCallState state,  String? name,  String? number,  String? deviceName,  bool aggregate)  $default,) {final _that = this;
 switch (_that) {
 case _DeviceCall():
-return $default(_that.id,_that.state,_that.name,_that.number,_that.deviceName,_that.aggregate);case _:
+return $default(_that.id,_that.generation,_that.state,_that.name,_that.number,_that.deviceName,_that.aggregate);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -205,10 +206,10 @@ return $default(_that.id,_that.state,_that.name,_that.number,_that.deviceName,_t
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? id, @JsonKey(unknownEnumValue: DeviceCallState.unknown)  DeviceCallState state,  String? name,  String? number,  String? deviceName,  bool aggregate)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? id,  int? generation, @JsonKey(unknownEnumValue: DeviceCallState.unknown)  DeviceCallState state,  String? name,  String? number,  String? deviceName,  bool aggregate)?  $default,) {final _that = this;
 switch (_that) {
 case _DeviceCall() when $default != null:
-return $default(_that.id,_that.state,_that.name,_that.number,_that.deviceName,_that.aggregate);case _:
+return $default(_that.id,_that.generation,_that.state,_that.name,_that.number,_that.deviceName,_that.aggregate);case _:
   return null;
 
 }
@@ -220,10 +221,11 @@ return $default(_that.id,_that.state,_that.name,_that.number,_that.deviceName,_t
 @JsonSerializable()
 
 class _DeviceCall implements DeviceCall {
-  const _DeviceCall({this.id, @JsonKey(unknownEnumValue: DeviceCallState.unknown) this.state = DeviceCallState.unknown, this.name, this.number, this.deviceName, this.aggregate = false});
+  const _DeviceCall({this.id, this.generation, @JsonKey(unknownEnumValue: DeviceCallState.unknown) this.state = DeviceCallState.unknown, this.name, this.number, this.deviceName, this.aggregate = false});
   factory _DeviceCall.fromJson(Map<String, dynamic> json) => _$DeviceCallFromJson(json);
 
 @override final  String? id;
+@override final  int? generation;
 @override@JsonKey(unknownEnumValue: DeviceCallState.unknown) final  DeviceCallState state;
 @override final  String? name;
 @override final  String? number;
@@ -243,18 +245,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _DeviceCall&&(identical(other.id, id) || other.id == id)&&(identical(other.state, state) || other.state == state)&&(identical(other.name, name) || other.name == name)&&(identical(other.number, number) || other.number == number)&&(identical(other.deviceName, deviceName) || other.deviceName == deviceName)&&(identical(other.aggregate, aggregate) || other.aggregate == aggregate));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _DeviceCall&&(identical(other.id, id) || other.id == id)&&(identical(other.generation, generation) || other.generation == generation)&&(identical(other.state, state) || other.state == state)&&(identical(other.name, name) || other.name == name)&&(identical(other.number, number) || other.number == number)&&(identical(other.deviceName, deviceName) || other.deviceName == deviceName)&&(identical(other.aggregate, aggregate) || other.aggregate == aggregate));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
-    return Object.hash(runtimeType,id,state,name,number,deviceName,aggregate);
+    return Object.hash(runtimeType,id,generation,state,name,number,deviceName,aggregate);
 }
 
 @override
 String toString() {
-    return 'DeviceCall(id: $id, state: $state, name: $name, number: $number, deviceName: $deviceName, aggregate: $aggregate)';
+    return 'DeviceCall(id: $id, generation: $generation, state: $state, name: $name, number: $number, deviceName: $deviceName, aggregate: $aggregate)';
 }
 
 
@@ -265,7 +267,7 @@ abstract mixin class _$DeviceCallCopyWith<$Res> implements $DeviceCallCopyWith<$
   factory _$DeviceCallCopyWith(_DeviceCall value, $Res Function(_DeviceCall) _then) = __$DeviceCallCopyWithImpl;
 @override @useResult
 $Res call({
- String? id,@JsonKey(unknownEnumValue: DeviceCallState.unknown) DeviceCallState state, String? name, String? number, String? deviceName, bool aggregate
+ String? id, int? generation,@JsonKey(unknownEnumValue: DeviceCallState.unknown) DeviceCallState state, String? name, String? number, String? deviceName, bool aggregate
 });
 
 
@@ -282,10 +284,11 @@ class __$DeviceCallCopyWithImpl<$Res>
 
 /// Create a copy of DeviceCall
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = freezed,Object? state = null,Object? name = freezed,Object? number = freezed,Object? deviceName = freezed,Object? aggregate = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = freezed,Object? generation = freezed,Object? state = null,Object? name = freezed,Object? number = freezed,Object? deviceName = freezed,Object? aggregate = null,}) {
   return _then(_DeviceCall(
 id: freezed == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
-as String?,state: null == state ? _self.state : state // ignore: cast_nullable_to_non_nullable
+as String?,generation: freezed == generation ? _self.generation : generation // ignore: cast_nullable_to_non_nullable
+as int?,state: null == state ? _self.state : state // ignore: cast_nullable_to_non_nullable
 as DeviceCallState,name: freezed == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String?,number: freezed == number ? _self.number : number // ignore: cast_nullable_to_non_nullable
 as String?,deviceName: freezed == deviceName ? _self.deviceName : deviceName // ignore: cast_nullable_to_non_nullable
@@ -301,7 +304,7 @@ as bool,
 /// @nodoc
 mixin _$DeviceCallsSnapshot {
 
- String get deviceId;@JsonKey(unknownEnumValue: DeviceCallAvailability.unknown) DeviceCallAvailability get status; bool get live; List<DeviceCall> get calls; String? get reason; bool get canOpenSystemCallUi; bool get canRetrySystemCallUi;
+ String get deviceId;@JsonKey(unknownEnumValue: DeviceCallAvailability.unknown) DeviceCallAvailability get status; bool get live; int? get observationEpoch; bool get observationEnabled; List<DeviceCall> get calls; String? get reason; bool get canOpenSystemCallUi; bool get canRetrySystemCallUi;
 /// Create a copy of DeviceCallsSnapshot
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -315,20 +318,20 @@ $DeviceCallsSnapshotCopyWith<DeviceCallsSnapshot> get copyWith => _$DeviceCallsS
 @override
 bool operator ==(Object other) {
   final _this = this as DeviceCallsSnapshot;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is DeviceCallsSnapshot&&(identical(other.deviceId, _this.deviceId) || other.deviceId == _this.deviceId)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.live, _this.live) || other.live == _this.live)&&const DeepCollectionEquality().equals(other.calls, _this.calls)&&(identical(other.reason, _this.reason) || other.reason == _this.reason)&&(identical(other.canOpenSystemCallUi, _this.canOpenSystemCallUi) || other.canOpenSystemCallUi == _this.canOpenSystemCallUi)&&(identical(other.canRetrySystemCallUi, _this.canRetrySystemCallUi) || other.canRetrySystemCallUi == _this.canRetrySystemCallUi));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is DeviceCallsSnapshot&&(identical(other.deviceId, _this.deviceId) || other.deviceId == _this.deviceId)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.live, _this.live) || other.live == _this.live)&&(identical(other.observationEpoch, _this.observationEpoch) || other.observationEpoch == _this.observationEpoch)&&(identical(other.observationEnabled, _this.observationEnabled) || other.observationEnabled == _this.observationEnabled)&&const DeepCollectionEquality().equals(other.calls, _this.calls)&&(identical(other.reason, _this.reason) || other.reason == _this.reason)&&(identical(other.canOpenSystemCallUi, _this.canOpenSystemCallUi) || other.canOpenSystemCallUi == _this.canOpenSystemCallUi)&&(identical(other.canRetrySystemCallUi, _this.canRetrySystemCallUi) || other.canRetrySystemCallUi == _this.canRetrySystemCallUi));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
   final _this = this as DeviceCallsSnapshot;
-  return Object.hash(runtimeType,_this.deviceId,_this.status,_this.live,const DeepCollectionEquality().hash(_this.calls),_this.reason,_this.canOpenSystemCallUi,_this.canRetrySystemCallUi);
+  return Object.hash(runtimeType,_this.deviceId,_this.status,_this.live,_this.observationEpoch,_this.observationEnabled,const DeepCollectionEquality().hash(_this.calls),_this.reason,_this.canOpenSystemCallUi,_this.canRetrySystemCallUi);
 }
 
 @override
 String toString() {
   final _this = this as DeviceCallsSnapshot;
-  return 'DeviceCallsSnapshot(deviceId: ${_this.deviceId}, status: ${_this.status}, live: ${_this.live}, calls: ${_this.calls}, reason: ${_this.reason}, canOpenSystemCallUi: ${_this.canOpenSystemCallUi}, canRetrySystemCallUi: ${_this.canRetrySystemCallUi})';
+  return 'DeviceCallsSnapshot(deviceId: ${_this.deviceId}, status: ${_this.status}, live: ${_this.live}, observationEpoch: ${_this.observationEpoch}, observationEnabled: ${_this.observationEnabled}, calls: ${_this.calls}, reason: ${_this.reason}, canOpenSystemCallUi: ${_this.canOpenSystemCallUi}, canRetrySystemCallUi: ${_this.canRetrySystemCallUi})';
 }
 
 
@@ -339,7 +342,7 @@ abstract mixin class $DeviceCallsSnapshotCopyWith<$Res>  {
   factory $DeviceCallsSnapshotCopyWith(DeviceCallsSnapshot value, $Res Function(DeviceCallsSnapshot) _then) = _$DeviceCallsSnapshotCopyWithImpl;
 @useResult
 $Res call({
- String deviceId,@JsonKey(unknownEnumValue: DeviceCallAvailability.unknown) DeviceCallAvailability status, bool live, List<DeviceCall> calls, String? reason, bool canOpenSystemCallUi, bool canRetrySystemCallUi
+ String deviceId,@JsonKey(unknownEnumValue: DeviceCallAvailability.unknown) DeviceCallAvailability status, bool live, int? observationEpoch, bool observationEnabled, List<DeviceCall> calls, String? reason, bool canOpenSystemCallUi, bool canRetrySystemCallUi
 });
 
 
@@ -356,11 +359,13 @@ class _$DeviceCallsSnapshotCopyWithImpl<$Res>
 
 /// Create a copy of DeviceCallsSnapshot
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? deviceId = null,Object? status = null,Object? live = null,Object? calls = null,Object? reason = freezed,Object? canOpenSystemCallUi = null,Object? canRetrySystemCallUi = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? deviceId = null,Object? status = null,Object? live = null,Object? observationEpoch = freezed,Object? observationEnabled = null,Object? calls = null,Object? reason = freezed,Object? canOpenSystemCallUi = null,Object? canRetrySystemCallUi = null,}) {
   return _then(DeviceCallsSnapshot(
 deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
 as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as DeviceCallAvailability,live: null == live ? _self.live : live // ignore: cast_nullable_to_non_nullable
+as bool,observationEpoch: freezed == observationEpoch ? _self.observationEpoch : observationEpoch // ignore: cast_nullable_to_non_nullable
+as int?,observationEnabled: null == observationEnabled ? _self.observationEnabled : observationEnabled // ignore: cast_nullable_to_non_nullable
 as bool,calls: null == calls ? _self.calls : calls // ignore: cast_nullable_to_non_nullable
 as List<DeviceCall>,reason: freezed == reason ? _self.reason : reason // ignore: cast_nullable_to_non_nullable
 as String?,canOpenSystemCallUi: null == canOpenSystemCallUi ? _self.canOpenSystemCallUi : canOpenSystemCallUi // ignore: cast_nullable_to_non_nullable
@@ -450,10 +455,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String deviceId, @JsonKey(unknownEnumValue: DeviceCallAvailability.unknown)  DeviceCallAvailability status,  bool live,  List<DeviceCall> calls,  String? reason,  bool canOpenSystemCallUi,  bool canRetrySystemCallUi)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String deviceId, @JsonKey(unknownEnumValue: DeviceCallAvailability.unknown)  DeviceCallAvailability status,  bool live,  int? observationEpoch,  bool observationEnabled,  List<DeviceCall> calls,  String? reason,  bool canOpenSystemCallUi,  bool canRetrySystemCallUi)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _DeviceCallsSnapshot() when $default != null:
-return $default(_that.deviceId,_that.status,_that.live,_that.calls,_that.reason,_that.canOpenSystemCallUi,_that.canRetrySystemCallUi);case _:
+return $default(_that.deviceId,_that.status,_that.live,_that.observationEpoch,_that.observationEnabled,_that.calls,_that.reason,_that.canOpenSystemCallUi,_that.canRetrySystemCallUi);case _:
   return orElse();
 
 }
@@ -471,10 +476,10 @@ return $default(_that.deviceId,_that.status,_that.live,_that.calls,_that.reason,
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String deviceId, @JsonKey(unknownEnumValue: DeviceCallAvailability.unknown)  DeviceCallAvailability status,  bool live,  List<DeviceCall> calls,  String? reason,  bool canOpenSystemCallUi,  bool canRetrySystemCallUi)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String deviceId, @JsonKey(unknownEnumValue: DeviceCallAvailability.unknown)  DeviceCallAvailability status,  bool live,  int? observationEpoch,  bool observationEnabled,  List<DeviceCall> calls,  String? reason,  bool canOpenSystemCallUi,  bool canRetrySystemCallUi)  $default,) {final _that = this;
 switch (_that) {
 case _DeviceCallsSnapshot():
-return $default(_that.deviceId,_that.status,_that.live,_that.calls,_that.reason,_that.canOpenSystemCallUi,_that.canRetrySystemCallUi);case _:
+return $default(_that.deviceId,_that.status,_that.live,_that.observationEpoch,_that.observationEnabled,_that.calls,_that.reason,_that.canOpenSystemCallUi,_that.canRetrySystemCallUi);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -491,10 +496,10 @@ return $default(_that.deviceId,_that.status,_that.live,_that.calls,_that.reason,
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String deviceId, @JsonKey(unknownEnumValue: DeviceCallAvailability.unknown)  DeviceCallAvailability status,  bool live,  List<DeviceCall> calls,  String? reason,  bool canOpenSystemCallUi,  bool canRetrySystemCallUi)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String deviceId, @JsonKey(unknownEnumValue: DeviceCallAvailability.unknown)  DeviceCallAvailability status,  bool live,  int? observationEpoch,  bool observationEnabled,  List<DeviceCall> calls,  String? reason,  bool canOpenSystemCallUi,  bool canRetrySystemCallUi)?  $default,) {final _that = this;
 switch (_that) {
 case _DeviceCallsSnapshot() when $default != null:
-return $default(_that.deviceId,_that.status,_that.live,_that.calls,_that.reason,_that.canOpenSystemCallUi,_that.canRetrySystemCallUi);case _:
+return $default(_that.deviceId,_that.status,_that.live,_that.observationEpoch,_that.observationEnabled,_that.calls,_that.reason,_that.canOpenSystemCallUi,_that.canRetrySystemCallUi);case _:
   return null;
 
 }
@@ -506,12 +511,14 @@ return $default(_that.deviceId,_that.status,_that.live,_that.calls,_that.reason,
 @JsonSerializable()
 
 class _DeviceCallsSnapshot extends DeviceCallsSnapshot {
-  const _DeviceCallsSnapshot({required this.deviceId, @JsonKey(unknownEnumValue: DeviceCallAvailability.unknown) this.status = DeviceCallAvailability.unknown, this.live = false,  List<DeviceCall> calls = const [], this.reason, this.canOpenSystemCallUi = false, this.canRetrySystemCallUi = false}): _calls = calls,super._();
+  const _DeviceCallsSnapshot({required this.deviceId, @JsonKey(unknownEnumValue: DeviceCallAvailability.unknown) this.status = DeviceCallAvailability.unknown, this.live = false, this.observationEpoch, this.observationEnabled = false,  List<DeviceCall> calls = const [], this.reason, this.canOpenSystemCallUi = false, this.canRetrySystemCallUi = false}): _calls = calls,super._();
   factory _DeviceCallsSnapshot.fromJson(Map<String, dynamic> json) => _$DeviceCallsSnapshotFromJson(json);
 
 @override final  String deviceId;
 @override@JsonKey(unknownEnumValue: DeviceCallAvailability.unknown) final  DeviceCallAvailability status;
 @override@JsonKey() final  bool live;
+@override final  int? observationEpoch;
+@override@JsonKey() final  bool observationEnabled;
  final  List<DeviceCall> _calls;
 @override@JsonKey() List<DeviceCall> get calls {
   if (_calls is EqualUnmodifiableListView) return _calls;
@@ -536,18 +543,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _DeviceCallsSnapshot&&(identical(other.deviceId, deviceId) || other.deviceId == deviceId)&&(identical(other.status, status) || other.status == status)&&(identical(other.live, live) || other.live == live)&&const DeepCollectionEquality().equals(other.calls, _calls)&&(identical(other.reason, reason) || other.reason == reason)&&(identical(other.canOpenSystemCallUi, canOpenSystemCallUi) || other.canOpenSystemCallUi == canOpenSystemCallUi)&&(identical(other.canRetrySystemCallUi, canRetrySystemCallUi) || other.canRetrySystemCallUi == canRetrySystemCallUi));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _DeviceCallsSnapshot&&(identical(other.deviceId, deviceId) || other.deviceId == deviceId)&&(identical(other.status, status) || other.status == status)&&(identical(other.live, live) || other.live == live)&&(identical(other.observationEpoch, observationEpoch) || other.observationEpoch == observationEpoch)&&(identical(other.observationEnabled, observationEnabled) || other.observationEnabled == observationEnabled)&&const DeepCollectionEquality().equals(other.calls, _calls)&&(identical(other.reason, reason) || other.reason == reason)&&(identical(other.canOpenSystemCallUi, canOpenSystemCallUi) || other.canOpenSystemCallUi == canOpenSystemCallUi)&&(identical(other.canRetrySystemCallUi, canRetrySystemCallUi) || other.canRetrySystemCallUi == canRetrySystemCallUi));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
-    return Object.hash(runtimeType,deviceId,status,live,const DeepCollectionEquality().hash(_calls),reason,canOpenSystemCallUi,canRetrySystemCallUi);
+    return Object.hash(runtimeType,deviceId,status,live,observationEpoch,observationEnabled,const DeepCollectionEquality().hash(_calls),reason,canOpenSystemCallUi,canRetrySystemCallUi);
 }
 
 @override
 String toString() {
-    return 'DeviceCallsSnapshot(deviceId: $deviceId, status: $status, live: $live, calls: $calls, reason: $reason, canOpenSystemCallUi: $canOpenSystemCallUi, canRetrySystemCallUi: $canRetrySystemCallUi)';
+    return 'DeviceCallsSnapshot(deviceId: $deviceId, status: $status, live: $live, observationEpoch: $observationEpoch, observationEnabled: $observationEnabled, calls: $calls, reason: $reason, canOpenSystemCallUi: $canOpenSystemCallUi, canRetrySystemCallUi: $canRetrySystemCallUi)';
 }
 
 
@@ -558,7 +565,7 @@ abstract mixin class _$DeviceCallsSnapshotCopyWith<$Res> implements $DeviceCalls
   factory _$DeviceCallsSnapshotCopyWith(_DeviceCallsSnapshot value, $Res Function(_DeviceCallsSnapshot) _then) = __$DeviceCallsSnapshotCopyWithImpl;
 @override @useResult
 $Res call({
- String deviceId,@JsonKey(unknownEnumValue: DeviceCallAvailability.unknown) DeviceCallAvailability status, bool live, List<DeviceCall> calls, String? reason, bool canOpenSystemCallUi, bool canRetrySystemCallUi
+ String deviceId,@JsonKey(unknownEnumValue: DeviceCallAvailability.unknown) DeviceCallAvailability status, bool live, int? observationEpoch, bool observationEnabled, List<DeviceCall> calls, String? reason, bool canOpenSystemCallUi, bool canRetrySystemCallUi
 });
 
 
@@ -575,11 +582,13 @@ class __$DeviceCallsSnapshotCopyWithImpl<$Res>
 
 /// Create a copy of DeviceCallsSnapshot
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? deviceId = null,Object? status = null,Object? live = null,Object? calls = null,Object? reason = freezed,Object? canOpenSystemCallUi = null,Object? canRetrySystemCallUi = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? deviceId = null,Object? status = null,Object? live = null,Object? observationEpoch = freezed,Object? observationEnabled = null,Object? calls = null,Object? reason = freezed,Object? canOpenSystemCallUi = null,Object? canRetrySystemCallUi = null,}) {
   return _then(_DeviceCallsSnapshot(
 deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
 as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as DeviceCallAvailability,live: null == live ? _self.live : live // ignore: cast_nullable_to_non_nullable
+as bool,observationEpoch: freezed == observationEpoch ? _self.observationEpoch : observationEpoch // ignore: cast_nullable_to_non_nullable
+as int?,observationEnabled: null == observationEnabled ? _self.observationEnabled : observationEnabled // ignore: cast_nullable_to_non_nullable
 as bool,calls: null == calls ? _self._calls : calls // ignore: cast_nullable_to_non_nullable
 as List<DeviceCall>,reason: freezed == reason ? _self.reason : reason // ignore: cast_nullable_to_non_nullable
 as String?,canOpenSystemCallUi: null == canOpenSystemCallUi ? _self.canOpenSystemCallUi : canOpenSystemCallUi // ignore: cast_nullable_to_non_nullable

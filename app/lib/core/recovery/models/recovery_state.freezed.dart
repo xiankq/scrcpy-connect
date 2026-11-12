@@ -27,14 +27,14 @@ $RecoveryStateCopyWith<RecoveryState> get copyWith => _$RecoveryStateCopyWithImp
 @override
 bool operator ==(Object other) {
   final _this = this as RecoveryState;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is RecoveryState&&const DeepCollectionEquality().equals(other.lastEvent, _this.lastEvent)&&const DeepCollectionEquality().equals(other.reconciledSnapshot, _this.reconciledSnapshot)&&(identical(other.eventRevision, _this.eventRevision) || other.eventRevision == _this.eventRevision)&&(identical(other.reconciliationError, _this.reconciliationError) || other.reconciliationError == _this.reconciliationError)&&(identical(other.reconciliationPending, _this.reconciliationPending) || other.reconciliationPending == _this.reconciliationPending));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is RecoveryState&&const DeepCollectionEquality().equals(other.lastEvent, _this.lastEvent)&&(identical(other.reconciledSnapshot, _this.reconciledSnapshot) || other.reconciledSnapshot == _this.reconciledSnapshot)&&(identical(other.eventRevision, _this.eventRevision) || other.eventRevision == _this.eventRevision)&&(identical(other.reconciliationError, _this.reconciliationError) || other.reconciliationError == _this.reconciliationError)&&(identical(other.reconciliationPending, _this.reconciliationPending) || other.reconciliationPending == _this.reconciliationPending));
 }
 
 
 @override
 int get hashCode {
   final _this = this as RecoveryState;
-  return Object.hash(runtimeType,const DeepCollectionEquality().hash(_this.lastEvent),const DeepCollectionEquality().hash(_this.reconciledSnapshot),_this.eventRevision,_this.reconciliationError,_this.reconciliationPending);
+  return Object.hash(runtimeType,const DeepCollectionEquality().hash(_this.lastEvent),_this.reconciledSnapshot,_this.eventRevision,_this.reconciliationError,_this.reconciliationPending);
 }
 
 @override
@@ -51,7 +51,7 @@ abstract mixin class $RecoveryStateCopyWith<$Res>  {
   factory $RecoveryStateCopyWith(RecoveryState value, $Res Function(RecoveryState) _then) = _$RecoveryStateCopyWithImpl;
 @useResult
 $Res call({
- Json? lastEvent, int eventRevision, bool reconciliationPending, String? reconciliationError, Json? reconciledSnapshot
+ Json? lastEvent, int eventRevision, bool reconciliationPending, String? reconciliationError, RuntimeSnapshot? reconciledSnapshot
 });
 
 
@@ -75,7 +75,7 @@ as Json?,eventRevision: null == eventRevision ? _self.eventRevision : eventRevis
 as int,reconciliationPending: null == reconciliationPending ? _self.reconciliationPending : reconciliationPending // ignore: cast_nullable_to_non_nullable
 as bool,reconciliationError: freezed == reconciliationError ? _self.reconciliationError : reconciliationError // ignore: cast_nullable_to_non_nullable
 as String?,reconciledSnapshot: freezed == reconciledSnapshot ? _self.reconciledSnapshot : reconciledSnapshot // ignore: cast_nullable_to_non_nullable
-as Json?,
+as RuntimeSnapshot?,
   ));
 }
 

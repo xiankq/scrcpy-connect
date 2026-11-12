@@ -1,20 +1,22 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
-import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
-import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
+import 'package:scrcpy_connect/core/devices/current_device_notifier.dart';
+import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_management.dart';
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
+import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/files/incoming_shares.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
-import 'package:scrcpy_connect/core/devices/current_device_notifier.dart';
-import 'package:scrcpy_connect/core/media/audio_error_notifier.dart';
-import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
+import 'package:scrcpy_connect/core/media/audio_error_notifier.dart';
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
+import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/settings/settings_management.dart';
 
 void main() {
@@ -40,16 +42,18 @@ void main() {
     });
     events.add({
       'type': 'state.resynced',
-      'data': {
-        'sequence': 1,
-        'devices': [
-          {'id': 'device', 'name': 'updated', 'status': 'connected'},
+      'data': RuntimeSnapshot(
+        sequence: 1,
+        devices: [
+          const DeviceSnapshot(
+            id: 'device',
+            name: 'updated',
+            status: .connected,
+          ),
         ],
-        'settings': {'appearance': 'dark'},
-        'shares': [
-          {'shareId': 'share', 'status': 'ready'},
-        ],
-      },
+        settings: Preferences(appearance: .dark),
+        shares: [const IncomingShare(shareId: 'share', status: .ready)],
+      ),
     });
     expect(projections, hasLength(1));
     final snapshot = observed.single;
@@ -63,7 +67,7 @@ void main() {
     // 相同水位在没有恢复请求时是重复回执，不重复交付状态或事件。
     events.add({
       'type': 'state.resynced',
-      'data': {'sequence': 1},
+      'data': RuntimeSnapshot(sequence: 1, settings: Preferences()),
     });
     expect(observed, hasLength(1));
     expect(projections, hasLength(1));

@@ -39,11 +39,10 @@ final class DeviceWakeService {
 
   KeepAwakeSnapshot readWake(String deviceId) =>
       (_last[deviceId] ??
-              KeepAwakeSnapshot(
+              KeepAwakeSnapshot.withoutLease(
                 deviceId: deviceId,
-                keepActiveApplied:
-                    !(_enabled(deviceId) && hasWindowOwner(deviceId)),
-                localCleanupConfirmed: true,
+                enabled: _enabled(deviceId),
+                hasWindowOwner: hasWindowOwner(deviceId),
               ))
           .copyWith(
             keepActive: _enabled(deviceId),

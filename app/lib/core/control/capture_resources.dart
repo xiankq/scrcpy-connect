@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:scrcpy/scrcpy.dart';
-
 import 'package:scrcpy_connect/core/control/app_launch_journal.dart';
 import 'package:scrcpy_connect/core/control/control_session_service.dart';
 import 'package:scrcpy_connect/core/control/device_wake_service.dart';
 import 'package:scrcpy_connect/core/control/media_capture.dart';
+import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
 import 'package:scrcpy_connect/core/control/models/session_activity.dart';
 import 'package:scrcpy_connect/core/control/models/video_session.dart';
 import 'package:scrcpy_connect/core/devices/device_connection.dart';
@@ -15,6 +15,7 @@ import 'package:scrcpy_connect/core/devices/scrcpy_server_queries.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/media/device_audio_service.dart';
+import 'package:scrcpy_connect/core/media/models/recovered_video_session.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/core/settings/app_settings.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
@@ -139,6 +140,25 @@ final class CaptureResources {
       _sessions?.currentSessions() ?? [];
   Future<List<VideoSessionSnapshot>> readSessions() async =>
       await _sessions?.readSessions() ?? [];
+  Future<List<RecoveredVideoSession>> readRecoverySessions() async => [
+    for (final session in await readSessions())
+      RecoveredVideoSession(
+        session: session,
+        keepAwake:
+            _wake?.readWake(session.deviceId) ??
+            KeepAwakeSnapshot.withoutLease(
+              deviceId: session.deviceId,
+              enabled:
+                  _preferences
+                      .settings
+                      .deviceSettings[session.deviceId]
+                      ?.stayAwake ==
+                  true,
+              hasWindowOwner:
+                  _sessions?.hasAudioOwner(session.deviceId) ?? false,
+            ),
+      ),
+  ];
   Future<List<SessionActivity>> readActivitySessions({
     String? deviceId,
   }) async => await _sessions?.readActivitySessions(deviceId: deviceId) ?? [];

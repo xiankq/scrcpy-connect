@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_state.dart';
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 
 part 'recovery_state_notifier.g.dart';
@@ -31,7 +32,7 @@ class RecoveryStateNotifier extends _$RecoveryStateNotifier {
             ? null
             : state.reconciliationError,
         reconciledSnapshot: type == 'state.resynced'
-            ? data
+            ? event['data'] as RuntimeSnapshot
             : state.reconciledSnapshot,
       );
     });

@@ -5,6 +5,7 @@ import 'package:scrcpy_connect/core/files/incoming_shares.dart';
 import 'package:scrcpy_connect/core/files/models/share_inbox_state.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 
 import 'file_capabilities_provider.dart';
@@ -32,8 +33,7 @@ class ShareInboxNotifier extends _$ShareInboxNotifier {
       } else if (type == 'state.resynced') {
         owner.request++;
         state = ShareInboxState(
-          shares: objects(data['shares'])
-              .map(IncomingShare.fromJson)
+          shares: (event['data'] as RuntimeSnapshot).shares
               .where((share) => !owner.consumed.contains(share.shareId))
               .toList(),
         );

@@ -319,7 +319,7 @@ as bool?,
 /// @nodoc
 mixin _$DeviceNotificationsSnapshot {
 
- String get deviceId;@JsonKey(unknownEnumValue: DeviceNotificationAvailability.unknown) DeviceNotificationAvailability get status; bool get live; List<DeviceNotification> get notifications; String? get reason;
+ String get deviceId;@JsonKey(unknownEnumValue: DeviceNotificationAvailability.unknown) DeviceNotificationAvailability get status; bool get live; int? get observationEpoch; bool get observationEnabled; bool get truncated; List<DeviceNotification> get notifications; String? get reason;
 /// Create a copy of DeviceNotificationsSnapshot
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -333,20 +333,20 @@ $DeviceNotificationsSnapshotCopyWith<DeviceNotificationsSnapshot> get copyWith =
 @override
 bool operator ==(Object other) {
   final _this = this as DeviceNotificationsSnapshot;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is DeviceNotificationsSnapshot&&(identical(other.deviceId, _this.deviceId) || other.deviceId == _this.deviceId)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.live, _this.live) || other.live == _this.live)&&const DeepCollectionEquality().equals(other.notifications, _this.notifications)&&(identical(other.reason, _this.reason) || other.reason == _this.reason));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is DeviceNotificationsSnapshot&&(identical(other.deviceId, _this.deviceId) || other.deviceId == _this.deviceId)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.live, _this.live) || other.live == _this.live)&&(identical(other.observationEpoch, _this.observationEpoch) || other.observationEpoch == _this.observationEpoch)&&(identical(other.observationEnabled, _this.observationEnabled) || other.observationEnabled == _this.observationEnabled)&&(identical(other.truncated, _this.truncated) || other.truncated == _this.truncated)&&const DeepCollectionEquality().equals(other.notifications, _this.notifications)&&(identical(other.reason, _this.reason) || other.reason == _this.reason));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
   final _this = this as DeviceNotificationsSnapshot;
-  return Object.hash(runtimeType,_this.deviceId,_this.status,_this.live,const DeepCollectionEquality().hash(_this.notifications),_this.reason);
+  return Object.hash(runtimeType,_this.deviceId,_this.status,_this.live,_this.observationEpoch,_this.observationEnabled,_this.truncated,const DeepCollectionEquality().hash(_this.notifications),_this.reason);
 }
 
 @override
 String toString() {
   final _this = this as DeviceNotificationsSnapshot;
-  return 'DeviceNotificationsSnapshot(deviceId: ${_this.deviceId}, status: ${_this.status}, live: ${_this.live}, notifications: ${_this.notifications}, reason: ${_this.reason})';
+  return 'DeviceNotificationsSnapshot(deviceId: ${_this.deviceId}, status: ${_this.status}, live: ${_this.live}, observationEpoch: ${_this.observationEpoch}, observationEnabled: ${_this.observationEnabled}, truncated: ${_this.truncated}, notifications: ${_this.notifications}, reason: ${_this.reason})';
 }
 
 
@@ -357,7 +357,7 @@ abstract mixin class $DeviceNotificationsSnapshotCopyWith<$Res>  {
   factory $DeviceNotificationsSnapshotCopyWith(DeviceNotificationsSnapshot value, $Res Function(DeviceNotificationsSnapshot) _then) = _$DeviceNotificationsSnapshotCopyWithImpl;
 @useResult
 $Res call({
- String deviceId,@JsonKey(unknownEnumValue: DeviceNotificationAvailability.unknown) DeviceNotificationAvailability status, bool live, List<DeviceNotification> notifications, String? reason
+ String deviceId,@JsonKey(unknownEnumValue: DeviceNotificationAvailability.unknown) DeviceNotificationAvailability status, bool live, int? observationEpoch, bool observationEnabled, bool truncated, List<DeviceNotification> notifications, String? reason
 });
 
 
@@ -374,11 +374,14 @@ class _$DeviceNotificationsSnapshotCopyWithImpl<$Res>
 
 /// Create a copy of DeviceNotificationsSnapshot
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? deviceId = null,Object? status = null,Object? live = null,Object? notifications = null,Object? reason = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? deviceId = null,Object? status = null,Object? live = null,Object? observationEpoch = freezed,Object? observationEnabled = null,Object? truncated = null,Object? notifications = null,Object? reason = freezed,}) {
   return _then(DeviceNotificationsSnapshot(
 deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
 as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as DeviceNotificationAvailability,live: null == live ? _self.live : live // ignore: cast_nullable_to_non_nullable
+as bool,observationEpoch: freezed == observationEpoch ? _self.observationEpoch : observationEpoch // ignore: cast_nullable_to_non_nullable
+as int?,observationEnabled: null == observationEnabled ? _self.observationEnabled : observationEnabled // ignore: cast_nullable_to_non_nullable
+as bool,truncated: null == truncated ? _self.truncated : truncated // ignore: cast_nullable_to_non_nullable
 as bool,notifications: null == notifications ? _self.notifications : notifications // ignore: cast_nullable_to_non_nullable
 as List<DeviceNotification>,reason: freezed == reason ? _self.reason : reason // ignore: cast_nullable_to_non_nullable
 as String?,
@@ -466,10 +469,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String deviceId, @JsonKey(unknownEnumValue: DeviceNotificationAvailability.unknown)  DeviceNotificationAvailability status,  bool live,  List<DeviceNotification> notifications,  String? reason)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String deviceId, @JsonKey(unknownEnumValue: DeviceNotificationAvailability.unknown)  DeviceNotificationAvailability status,  bool live,  int? observationEpoch,  bool observationEnabled,  bool truncated,  List<DeviceNotification> notifications,  String? reason)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _DeviceNotificationsSnapshot() when $default != null:
-return $default(_that.deviceId,_that.status,_that.live,_that.notifications,_that.reason);case _:
+return $default(_that.deviceId,_that.status,_that.live,_that.observationEpoch,_that.observationEnabled,_that.truncated,_that.notifications,_that.reason);case _:
   return orElse();
 
 }
@@ -487,10 +490,10 @@ return $default(_that.deviceId,_that.status,_that.live,_that.notifications,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String deviceId, @JsonKey(unknownEnumValue: DeviceNotificationAvailability.unknown)  DeviceNotificationAvailability status,  bool live,  List<DeviceNotification> notifications,  String? reason)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String deviceId, @JsonKey(unknownEnumValue: DeviceNotificationAvailability.unknown)  DeviceNotificationAvailability status,  bool live,  int? observationEpoch,  bool observationEnabled,  bool truncated,  List<DeviceNotification> notifications,  String? reason)  $default,) {final _that = this;
 switch (_that) {
 case _DeviceNotificationsSnapshot():
-return $default(_that.deviceId,_that.status,_that.live,_that.notifications,_that.reason);case _:
+return $default(_that.deviceId,_that.status,_that.live,_that.observationEpoch,_that.observationEnabled,_that.truncated,_that.notifications,_that.reason);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -507,10 +510,10 @@ return $default(_that.deviceId,_that.status,_that.live,_that.notifications,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String deviceId, @JsonKey(unknownEnumValue: DeviceNotificationAvailability.unknown)  DeviceNotificationAvailability status,  bool live,  List<DeviceNotification> notifications,  String? reason)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String deviceId, @JsonKey(unknownEnumValue: DeviceNotificationAvailability.unknown)  DeviceNotificationAvailability status,  bool live,  int? observationEpoch,  bool observationEnabled,  bool truncated,  List<DeviceNotification> notifications,  String? reason)?  $default,) {final _that = this;
 switch (_that) {
 case _DeviceNotificationsSnapshot() when $default != null:
-return $default(_that.deviceId,_that.status,_that.live,_that.notifications,_that.reason);case _:
+return $default(_that.deviceId,_that.status,_that.live,_that.observationEpoch,_that.observationEnabled,_that.truncated,_that.notifications,_that.reason);case _:
   return null;
 
 }
@@ -522,12 +525,15 @@ return $default(_that.deviceId,_that.status,_that.live,_that.notifications,_that
 @JsonSerializable()
 
 class _DeviceNotificationsSnapshot implements DeviceNotificationsSnapshot {
-  const _DeviceNotificationsSnapshot({required this.deviceId, @JsonKey(unknownEnumValue: DeviceNotificationAvailability.unknown) this.status = DeviceNotificationAvailability.unknown, this.live = false,  List<DeviceNotification> notifications = const [], this.reason}): _notifications = notifications;
+  const _DeviceNotificationsSnapshot({required this.deviceId, @JsonKey(unknownEnumValue: DeviceNotificationAvailability.unknown) this.status = DeviceNotificationAvailability.unknown, this.live = false, this.observationEpoch, this.observationEnabled = false, this.truncated = false,  List<DeviceNotification> notifications = const [], this.reason}): _notifications = notifications;
   factory _DeviceNotificationsSnapshot.fromJson(Map<String, dynamic> json) => _$DeviceNotificationsSnapshotFromJson(json);
 
 @override final  String deviceId;
 @override@JsonKey(unknownEnumValue: DeviceNotificationAvailability.unknown) final  DeviceNotificationAvailability status;
 @override@JsonKey() final  bool live;
+@override final  int? observationEpoch;
+@override@JsonKey() final  bool observationEnabled;
+@override@JsonKey() final  bool truncated;
  final  List<DeviceNotification> _notifications;
 @override@JsonKey() List<DeviceNotification> get notifications {
   if (_notifications is EqualUnmodifiableListView) return _notifications;
@@ -550,18 +556,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _DeviceNotificationsSnapshot&&(identical(other.deviceId, deviceId) || other.deviceId == deviceId)&&(identical(other.status, status) || other.status == status)&&(identical(other.live, live) || other.live == live)&&const DeepCollectionEquality().equals(other.notifications, _notifications)&&(identical(other.reason, reason) || other.reason == reason));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _DeviceNotificationsSnapshot&&(identical(other.deviceId, deviceId) || other.deviceId == deviceId)&&(identical(other.status, status) || other.status == status)&&(identical(other.live, live) || other.live == live)&&(identical(other.observationEpoch, observationEpoch) || other.observationEpoch == observationEpoch)&&(identical(other.observationEnabled, observationEnabled) || other.observationEnabled == observationEnabled)&&(identical(other.truncated, truncated) || other.truncated == truncated)&&const DeepCollectionEquality().equals(other.notifications, _notifications)&&(identical(other.reason, reason) || other.reason == reason));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
-    return Object.hash(runtimeType,deviceId,status,live,const DeepCollectionEquality().hash(_notifications),reason);
+    return Object.hash(runtimeType,deviceId,status,live,observationEpoch,observationEnabled,truncated,const DeepCollectionEquality().hash(_notifications),reason);
 }
 
 @override
 String toString() {
-    return 'DeviceNotificationsSnapshot(deviceId: $deviceId, status: $status, live: $live, notifications: $notifications, reason: $reason)';
+    return 'DeviceNotificationsSnapshot(deviceId: $deviceId, status: $status, live: $live, observationEpoch: $observationEpoch, observationEnabled: $observationEnabled, truncated: $truncated, notifications: $notifications, reason: $reason)';
 }
 
 
@@ -572,7 +578,7 @@ abstract mixin class _$DeviceNotificationsSnapshotCopyWith<$Res> implements $Dev
   factory _$DeviceNotificationsSnapshotCopyWith(_DeviceNotificationsSnapshot value, $Res Function(_DeviceNotificationsSnapshot) _then) = __$DeviceNotificationsSnapshotCopyWithImpl;
 @override @useResult
 $Res call({
- String deviceId,@JsonKey(unknownEnumValue: DeviceNotificationAvailability.unknown) DeviceNotificationAvailability status, bool live, List<DeviceNotification> notifications, String? reason
+ String deviceId,@JsonKey(unknownEnumValue: DeviceNotificationAvailability.unknown) DeviceNotificationAvailability status, bool live, int? observationEpoch, bool observationEnabled, bool truncated, List<DeviceNotification> notifications, String? reason
 });
 
 
@@ -589,11 +595,14 @@ class __$DeviceNotificationsSnapshotCopyWithImpl<$Res>
 
 /// Create a copy of DeviceNotificationsSnapshot
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? deviceId = null,Object? status = null,Object? live = null,Object? notifications = null,Object? reason = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? deviceId = null,Object? status = null,Object? live = null,Object? observationEpoch = freezed,Object? observationEnabled = null,Object? truncated = null,Object? notifications = null,Object? reason = freezed,}) {
   return _then(_DeviceNotificationsSnapshot(
 deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
 as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as DeviceNotificationAvailability,live: null == live ? _self.live : live // ignore: cast_nullable_to_non_nullable
+as bool,observationEpoch: freezed == observationEpoch ? _self.observationEpoch : observationEpoch // ignore: cast_nullable_to_non_nullable
+as int?,observationEnabled: null == observationEnabled ? _self.observationEnabled : observationEnabled // ignore: cast_nullable_to_non_nullable
+as bool,truncated: null == truncated ? _self.truncated : truncated // ignore: cast_nullable_to_non_nullable
 as bool,notifications: null == notifications ? _self._notifications : notifications // ignore: cast_nullable_to_non_nullable
 as List<DeviceNotification>,reason: freezed == reason ? _self.reason : reason // ignore: cast_nullable_to_non_nullable
 as String?,

@@ -11,6 +11,7 @@ enum DeviceCallState { unknown, ringing, active, dialing, connecting }
 abstract class DeviceCall with _$DeviceCall {
   const factory DeviceCall({
     String? id,
+    int? generation,
     @JsonKey(unknownEnumValue: DeviceCallState.unknown)
     @Default(DeviceCallState.unknown)
     DeviceCallState state,
@@ -32,6 +33,8 @@ abstract class DeviceCallsSnapshot with _$DeviceCallsSnapshot {
     @Default(DeviceCallAvailability.unknown)
     DeviceCallAvailability status,
     @Default(false) bool live,
+    int? observationEpoch,
+    @Default(false) bool observationEnabled,
     @Default([]) List<DeviceCall> calls,
     String? reason,
     @Default(false) bool canOpenSystemCallUi,

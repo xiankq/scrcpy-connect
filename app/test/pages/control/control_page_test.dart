@@ -1,11 +1,9 @@
 import 'dart:async';
 
 import 'package:adb/adb.dart' show AdbCancellation;
-import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
-import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/control/control_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
 import 'package:scrcpy_connect/core/control/models/session_activity.dart';
@@ -13,6 +11,7 @@ import 'package:scrcpy_connect/core/control/models/video_session.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/control/video_display.dart';
 import 'package:scrcpy_connect/core/devices/device_apps.dart';
+import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_inspection.dart';
 import 'package:scrcpy_connect/core/devices/device_management.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
@@ -22,6 +21,8 @@ import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
 import 'package:scrcpy_connect/core/media/media_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/core/media/video_sessions.dart';
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
+import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/settings/settings_management.dart';
 import 'package:scrcpy_connect/pages/control/control_page.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
@@ -108,7 +109,7 @@ void main() {
     expect(replacement.stops, isEmpty);
     events.add({
       'type': 'state.resynced',
-      'data': {'sequence': 1},
+      'data': RuntimeSnapshot(sequence: 1, settings: Preferences()),
     });
     await tester.pump();
     expect(replacement.starts, 0);

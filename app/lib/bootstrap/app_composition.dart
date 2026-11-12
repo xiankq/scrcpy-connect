@@ -18,12 +18,15 @@ import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_resources.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_change.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
+import 'package:scrcpy_connect/core/devices/models/device_reconnect_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/usb_authorization.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log_provider.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/events/runtime_events.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/files/file_document_platform.dart';
 import 'package:scrcpy_connect/core/files/file_resources.dart';
 import 'package:scrcpy_connect/core/files/file_share_service.dart';
 import 'package:scrcpy_connect/core/gallery/gallery_scanner_provider.dart';
@@ -33,17 +36,16 @@ import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/media/media_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/media/media_operations.dart';
 import 'package:scrcpy_connect/core/media/media_playback.dart';
-import 'package:scrcpy_connect/core/platform/app_info.dart';
-import 'package:scrcpy_connect/core/platform/platform_channels.dart';
-import 'package:scrcpy_connect/core/platform/platform_background_control.dart';
-import 'package:scrcpy_connect/core/devices/usb_authorization.dart';
-import 'package:scrcpy_connect/core/files/file_document_platform.dart';
 import 'package:scrcpy_connect/core/media/platform_audio.dart';
+import 'package:scrcpy_connect/core/platform/app_info.dart';
 import 'package:scrcpy_connect/core/platform/background_policy.dart';
 import 'package:scrcpy_connect/core/platform/native_host.dart';
+import 'package:scrcpy_connect/core/platform/platform_background_control.dart';
 import 'package:scrcpy_connect/core/platform/platform_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/platform/platform_channels.dart';
 import 'package:scrcpy_connect/core/platform/platform_event_handler.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_actions_provider.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/recovery/runtime_snapshot_reader.dart';
 import 'package:scrcpy_connect/core/recovery/state_recovery.dart';
 import 'package:scrcpy_connect/core/settings/app_settings.dart';
@@ -194,7 +196,19 @@ final class AppComposition {
     handleMedia: _media.handlePlatformEvent,
   );
   late final RuntimeEvents _events = RuntimeEvents(
-    acceptState: (event) => _stateRecovery.accept(event),
+    acceptState: (event) {
+      final type = event['type'];
+      if (type == 'runtime.heartbeat') return false;
+      if (type == 'state.resync') {
+        _stateRecovery.reportGap();
+        return false;
+      }
+      final sequence = event['sequence'];
+      return _stateRecovery.accept(
+        sequence: sequence is int ? sequence : null,
+        telemetry: type == 'session.frame',
+      );
+    },
     onState: (event) => _diagnostics.applicationEvent(event),
     onLocalStateChanged: () => _stateRecovery.noteLocalStateChange(),
     beforePublish: (event) => _connections.handleEvent(event),
@@ -204,7 +218,7 @@ final class AppComposition {
   );
   late final MediaPlayback _media = MediaPlayback(
     captures: () => _captureResources.capture,
-    readCapturedAudio: () async => _captureResources.audioSnapshots(),
+    readCapturedAudio: () async => _captureInstance?.audioSnapshots() ?? [],
     readSnapshot: () => _state.readSnapshot(),
     readSettings: _preferences.read,
     platform: (command, params) => _audioPlatform.request(command, params),
@@ -221,8 +235,31 @@ final class AppComposition {
     read: (current) => _media.snapshot(current),
     emit: (event) {
       // 恢复回执不是业务变更；直接通知策略，不能重新进入序列核验。
-      _connections.handleEvent(event);
-      _events.emit(event);
+      if (event case RecoveryCompleted(:final snapshot)) {
+        _connections.restoreState(
+          DeviceReconnectSnapshot(
+            sequence: snapshot.sequence,
+            devices: snapshot.devices,
+            backgroundKeepAlive: snapshot.settings.backgroundKeepAlive,
+          ),
+        );
+      } else {
+        _connections.invalidateState();
+      }
+      _events.emit(switch (event) {
+        RecoveryStarted() => {
+          'type': 'state.resync',
+          'data': <String, dynamic>{},
+        },
+        RecoveryCompleted(:final snapshot) => {
+          'type': 'state.resynced',
+          'data': snapshot,
+        },
+        RecoveryFailed(:final reason) => {
+          'type': 'state.resync.failed',
+          'data': {'reason': reason},
+        },
+      });
     },
     isDisposed: () => _isDisposed,
   );
@@ -230,15 +267,14 @@ final class AppComposition {
       _files.documents.completeSelection(id, result);
 
   late final RuntimeSnapshotReader _state = RuntimeSnapshotReader(
-    events: _events,
-    captures: _captureResources,
-    devices: _connections.devices,
-    observations: _connections.observations,
-    companion: _connections.companion,
-    transfers: _files.transfers,
-    preferences: _host.preferences,
-    sharing: _files.sharing,
-    activities: _activities,
+    readCursor: () => _events.cursor,
+    readSessions: () async =>
+        await _captureInstance?.readRecoverySessions() ?? [],
+    readDevices: () => _connections.devices.readDevices(),
+    readAudio: () => _captureInstance?.audioSnapshots() ?? [],
+    readShares: () async => await _files.sharing?.readIncomingShares() ?? [],
+    readObservations: () => _connections.currentObservations(),
+    readSettings: () => _host.preferences.current.values,
   );
 
   static Future<AppComposition> open(

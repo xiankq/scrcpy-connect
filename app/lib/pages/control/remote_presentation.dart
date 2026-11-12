@@ -1,4 +1,5 @@
 import 'package:scrcpy_connect/core/control/remote_control.dart';
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 
 typedef RemoteData = Map<String, dynamic>;
 typedef RemoteBinding = (String, int);
@@ -341,54 +342,47 @@ class RemotePresentation {
 
   /// 返回 false 表示重复快照，不应再触发捕获或焦点副作用。
   bool reconcile(
-    RemoteData snapshot, {
+    RuntimeSnapshot snapshot, {
     required String? packageName,
-    required Object? deviceId,
+    required String deviceId,
   }) {
-    final sequence = snapshot['sequence'];
-    if (!stateUnverified &&
-        sequence is int &&
-        sequence == _reconciledSequence) {
+    final sequence = snapshot.sequence;
+    if (!stateUnverified && sequence == _reconciledSequence) {
       return false;
     }
-    _reconciledSequence = sequence is int ? sequence : null;
+    _reconciledSequence = sequence;
     _reconcileOnly = true;
-    final sessions = (snapshot['sessions'] as List? ?? const [])
-        .whereType<Map<String, dynamic>>();
+    final sessions = snapshot.sessions;
     final unknownApp = packageName == null
         ? null
         : sessions
               .where(
                 (item) =>
-                    item['deviceId'] == deviceId &&
-                    item['packageName'] == packageName &&
-                    item['launchOutcome'] == 'unknown',
+                    item.session.deviceId == deviceId &&
+                    item.session.packageName == packageName &&
+                    item.session.launchOutcome == .unknown,
               )
               .firstOrNull;
     _visibilityEpoch++;
     if (unknownApp != null) {
-      showUnknownAppLaunch(unknownApp);
+      showUnknownAppLaunch(unknownApp.toViewSnapshot());
       return true;
     }
-    final existing = sessions
+    final recovered = sessions
         .where(
-          (item) =>
-              (item['sessionId'] ?? item['id'] ?? '').toString() == sessionId &&
-              sessionId.isNotEmpty,
+          (item) => item.session.sessionId == sessionId && sessionId.isNotEmpty,
         )
         .firstOrNull;
     _connecting = false;
     _paused = true;
     if (_visibility == _Visibility.resuming) _visibility = _Visibility.visible;
     _controlAvailable = false;
-    if (existing == null ||
-        (const ['stopped', 'failed', 'error'].contains(existing['status']) &&
-            !(existing['status'] == 'failed' &&
-                existing['qualityRetryable'] == true))) {
+    if (recovered == null || !recovered.live) {
       _session = {...?_session}..remove('textureId');
       _verification = _Verification.ended;
       _error = '原会话已结束或无法核验。请检查当前活动，不会自动创建新窗口。';
     } else {
+      final existing = recovered.toViewSnapshot();
       if (existing['status'] == 'failed' &&
           existing['qualityRetryable'] == true) {
         _failQuality(_retainedImage(existing));

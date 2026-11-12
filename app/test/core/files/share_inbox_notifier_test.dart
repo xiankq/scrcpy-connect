@@ -7,6 +7,8 @@ import 'package:scrcpy_connect/core/files/incoming_shares.dart';
 import 'package:scrcpy_connect/core/files/share_inbox_notifier.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
+import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 
 void main() {
   late StreamController<Map<String, dynamic>> events;
@@ -78,12 +80,11 @@ void main() {
     await late;
     events.add({
       'type': 'state.resynced',
-      'data': {
-        'sequence': 1,
-        'shares': [
-          {'shareId': 'share', 'status': 'ready'},
-        ],
-      },
+      'data': RuntimeSnapshot(
+        sequence: 1,
+        settings: Preferences(),
+        shares: [const IncomingShare(shareId: 'share', status: .ready)],
+      ),
     });
     expect(container.read(shareInboxProvider).shares, isEmpty);
   });

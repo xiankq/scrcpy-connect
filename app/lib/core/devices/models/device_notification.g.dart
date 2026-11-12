@@ -52,6 +52,9 @@ _DeviceNotificationsSnapshot _$DeviceNotificationsSnapshotFromJson(
       ) ??
       DeviceNotificationAvailability.unknown,
   live: json['live'] as bool? ?? false,
+  observationEpoch: (json['observationEpoch'] as num?)?.toInt(),
+  observationEnabled: json['observationEnabled'] as bool? ?? false,
+  truncated: json['truncated'] as bool? ?? false,
   notifications:
       (json['notifications'] as List<dynamic>?)
           ?.map((e) => DeviceNotification.fromJson(e as Map<String, dynamic>))
@@ -66,6 +69,9 @@ Map<String, dynamic> _$DeviceNotificationsSnapshotToJson(
   'deviceId': instance.deviceId,
   'status': _$DeviceNotificationAvailabilityEnumMap[instance.status]!,
   'live': instance.live,
+  'observationEpoch': instance.observationEpoch,
+  'observationEnabled': instance.observationEnabled,
+  'truncated': instance.truncated,
   'notifications': instance.notifications,
   'reason': instance.reason,
 };

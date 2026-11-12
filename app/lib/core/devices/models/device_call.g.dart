@@ -10,6 +10,7 @@ part of 'device_call.dart';
 
 _DeviceCall _$DeviceCallFromJson(Map<String, dynamic> json) => _DeviceCall(
   id: json['id'] as String?,
+  generation: (json['generation'] as num?)?.toInt(),
   state:
       $enumDecodeNullable(
         _$DeviceCallStateEnumMap,
@@ -26,6 +27,7 @@ _DeviceCall _$DeviceCallFromJson(Map<String, dynamic> json) => _DeviceCall(
 Map<String, dynamic> _$DeviceCallToJson(_DeviceCall instance) =>
     <String, dynamic>{
       'id': instance.id,
+      'generation': instance.generation,
       'state': _$DeviceCallStateEnumMap[instance.state]!,
       'name': instance.name,
       'number': instance.number,
@@ -52,6 +54,8 @@ _DeviceCallsSnapshot _$DeviceCallsSnapshotFromJson(Map<String, dynamic> json) =>
           ) ??
           DeviceCallAvailability.unknown,
       live: json['live'] as bool? ?? false,
+      observationEpoch: (json['observationEpoch'] as num?)?.toInt(),
+      observationEnabled: json['observationEnabled'] as bool? ?? false,
       calls:
           (json['calls'] as List<dynamic>?)
               ?.map((e) => DeviceCall.fromJson(e as Map<String, dynamic>))
@@ -68,6 +72,8 @@ Map<String, dynamic> _$DeviceCallsSnapshotToJson(
   'deviceId': instance.deviceId,
   'status': _$DeviceCallAvailabilityEnumMap[instance.status]!,
   'live': instance.live,
+  'observationEpoch': instance.observationEpoch,
+  'observationEnabled': instance.observationEnabled,
   'calls': instance.calls,
   'reason': instance.reason,
   'canOpenSystemCallUi': instance.canOpenSystemCallUi,

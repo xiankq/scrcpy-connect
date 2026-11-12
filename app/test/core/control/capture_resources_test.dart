@@ -15,6 +15,7 @@ void main() {
     final captures = await _resources();
     expect(captures.currentSessions(), isEmpty);
     expect(await captures.readSessions(), isEmpty);
+    expect(await captures.readRecoverySessions(), isEmpty);
     expect(await captures.readActivitySessions(), isEmpty);
     expect(captures.audioSnapshots(), isEmpty);
     captures.settingsChanged();
@@ -23,6 +24,7 @@ void main() {
     expect(() => captures.capture, throwsA(isA<RequestFailure>()));
     expect(() => captures.sessions, throwsA(isA<RequestFailure>()));
     expect(() => captures.serverQueries, throwsA(isA<RequestFailure>()));
+    expect(() => captures.keepAwake, throwsA(isA<RequestFailure>()));
   });
 
   test('只创建剪贴板会话后关闭，不创建新的捕获或唤醒能力', () async {
@@ -33,6 +35,7 @@ void main() {
     expect(() => captures.audio, throwsA(isA<RequestFailure>()));
     expect(() => captures.keepAwake, throwsA(isA<RequestFailure>()));
     expect(await captures.readSessions(), isEmpty);
+    expect(await captures.readRecoverySessions(), isEmpty);
   });
 }
 

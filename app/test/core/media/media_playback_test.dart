@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scrcpy_connect/core/control/models/video_session.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/media/media_playback.dart';
-import 'package:scrcpy_connect/core/control/models/video_session.dart';
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
+import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 
 void main() {
   test('空快照、设备收尾和退出不创建捕获或播放器', () async {
@@ -19,7 +21,7 @@ void main() {
     );
     expect(await media.readAudioSources(), isEmpty);
     await media.retireUnownedAudio();
-    expect((await media.snapshot(() => true))['sessions'], isEmpty);
+    expect((await media.snapshot(() => true)).sessions, isEmpty);
     media.stopDeviceIntent('device');
     await media.finishDeviceStop('device');
     media.handleApplicationEvent({
@@ -57,14 +59,4 @@ void main() {
   });
 }
 
-const _snapshot = <String, dynamic>{
-  'sequence': 0,
-  'settings': <String, dynamic>{},
-  'devices': <Map<String, dynamic>>[],
-  'sessions': <Map<String, dynamic>>[],
-  'sources': <Map<String, dynamic>>[],
-  'transfers': <Map<String, dynamic>>[],
-  'activities': <Map<String, dynamic>>[],
-  'shares': <Map<String, dynamic>>[],
-  'companions': <Map<String, dynamic>>[],
-};
+final _snapshot = RuntimeSnapshot(sequence: 0, settings: Preferences());

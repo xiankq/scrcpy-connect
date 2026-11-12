@@ -4,9 +4,11 @@ import 'package:flutter/widgets.dart';
 import 'package:scrcpy_connect/core/control/models/session_activity.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/media/models/recovered_video_session.dart';
 import 'package:scrcpy_connect/core/media/models/video_output.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/core/media/video_sessions.dart';
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/remote_audio_views.dart';
 
@@ -50,7 +52,7 @@ class RemoteViews {
       _sessionViewRegistry.markUncertain();
     } else if (event['type'] == 'state.resynced') {
       _sessionViewRegistry.reconcile(
-        objects(jsonObject(event['data'])['sessions']),
+        (event['data'] as RuntimeSnapshot).sessions,
       );
     }
     _deviceAudio.handleEvent(event);
@@ -174,20 +176,17 @@ class SessionViewRegistry {
     }
   }
 
-  void reconcile(List<SessionJson> sessions) {
-    final current = <String, SessionJson>{
-      for (final session in sessions)
-        if (!['stopped', 'failed', 'error'].contains(session['status']) ||
-            (session['status'] == 'failed' &&
-                session['qualityRetryable'] == true))
-          (session['sessionId'] ?? session['id']).toString(): session,
+  void reconcile(List<RecoveredVideoSession> sessions) {
+    final current = {
+      for (final item in sessions)
+        if (item.live) item.session.sessionId: item.session,
     };
     _uncertain = false;
     _owners.removeWhere((id, _) => !current.containsKey(id));
     for (final entry in _owners.entries) {
       final session = current[entry.key]!;
       entry.value._revision++;
-      entry.value._visible = session['status'] != 'paused';
+      entry.value._visible = session.status != .paused;
     }
   }
 

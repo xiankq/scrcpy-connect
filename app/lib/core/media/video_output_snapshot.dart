@@ -1,8 +1,9 @@
-import 'package:scrcpy_connect/core/media/video_player.dart';
-
 /// 合并核心会话状态与最新渲染输出。
 /// 播放器回执可能携带恢复请求时的旧核心状态，因此只有渲染证据可覆盖当前会话快照。
-VideoJson sessionWithVideoOutput(VideoJson session, VideoJson? output) {
+Map<String, dynamic> sessionWithVideoOutput(
+  Map<String, dynamic> session,
+  Map<String, dynamic>? output,
+) {
   final capture = session['captureGeneration'];
   final outputCapture = output?['captureGeneration'];
   final renderer = session['rendererGeneration'];

@@ -85,13 +85,10 @@ class DeviceConnectionService implements DeviceSetup {
     await Future.wait(affected.map(_drain));
   }
 
+  void setStateVerified(bool verified) => _recovering = !verified;
+
   void handleEvent(Json event) {
-    if (event['type'] == 'state.resync' ||
-        event['type'] == 'state.resync.failed') {
-      _recovering = true;
-    } else if (event['type'] == 'state.resynced') {
-      _recovering = false;
-    } else if (event['type'] == 'connections.stopped') {
+    if (event['type'] == 'connections.stopped') {
       for (final flow in _flows.toList()) {
         _cancel(flow);
       }

@@ -3,10 +3,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
-
 import 'package:scrcpy_connect/core/companion/companion_recovery.dart';
 import 'package:scrcpy_connect/core/companion/companion_service.dart';
 import 'package:scrcpy_connect/core/companion/models/companion_config.dart';
+import 'package:scrcpy_connect/core/control/display_recovery.dart';
 import 'package:scrcpy_connect/core/control/models/video_session.dart';
 import 'package:scrcpy_connect/core/devices/device_apps.dart';
 import 'package:scrcpy_connect/core/devices/device_apps_reader.dart';
@@ -26,6 +26,7 @@ import 'package:scrcpy_connect/core/devices/device_service.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_change.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/observed_device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/scrcpy_server_queries.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
@@ -33,9 +34,8 @@ import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/identity/adb_identity_service.dart';
 import 'package:scrcpy_connect/core/identity/identity_manager.dart';
-import 'package:scrcpy_connect/core/media/remote_audio.dart';
-import 'package:scrcpy_connect/core/control/display_recovery.dart';
 import 'package:scrcpy_connect/core/identity/models/identity_selection.dart';
+import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 
 /// 设备记录、身份、连接策略与伴生观察的所有者。
@@ -109,6 +109,8 @@ final class DeviceResources {
   DeviceReconnectService get reconnections => _reconnections;
   CompanionService get companion => _companion;
   DeviceObservationService get observations => _observations;
+  List<ObservedDeviceSnapshot> currentObservations() =>
+      _observationInstance?.currentObservedDevices() ?? [];
 
   IdentityManagement? _identityInstance;
   IdentityManagement get identity {
@@ -357,6 +359,18 @@ final class DeviceResources {
     return owner;
   }
 
+  void invalidateState() {
+    if (_isDisposed) return;
+    _setupInstance?.setStateVerified(false);
+    _reconnectionInstance?.handleEvent(const DeviceReconnectInvalidated());
+  }
+
+  void restoreState(DeviceReconnectSnapshot snapshot) {
+    if (_isDisposed) return;
+    _setupInstance?.setStateVerified(true);
+    _reconnectionInstance?.handleEvent(DeviceReconnectRecovered(snapshot));
+  }
+
   void handleEvent(Map<String, dynamic> event) {
     if (_isDisposed) return;
     _setupInstance?.handleEvent(event);
@@ -473,9 +487,6 @@ final class _DeviceReconnectHost implements DeviceReconnectHost {
 DeviceReconnectEvent? _reconnectEvent(Map<String, dynamic> event) {
   final type = event['type'];
   if (type == 'session.frame' || type == 'runtime.heartbeat') return null;
-  if (type == 'state.resync' || type == 'state.resync.failed') {
-    return const DeviceReconnectInvalidated();
-  }
   final raw = event['data'];
   final data = raw is Map
       ? Map<String, dynamic>.from(raw)
@@ -486,19 +497,6 @@ DeviceReconnectEvent? _reconnectEvent(Map<String, dynamic> event) {
             DeviceSnapshot.fromJson(Map<String, dynamic>.from(device as Map)),
         ]
       : null;
-  if (type == 'state.resynced') {
-    final sequence = data['sequence'];
-    if (sequence is! int || sequence < 0) return null;
-    final settings = data['settings'];
-    return DeviceReconnectRecovered(
-      DeviceReconnectSnapshot(
-        sequence: sequence,
-        devices: devices() ?? [],
-        backgroundKeepAlive:
-            settings is Map && settings['backgroundKeepAlive'] == true,
-      ),
-    );
-  }
   final sequence = event['sequence'];
   if (sequence is! int || sequence < 0) return null;
   return switch (type) {

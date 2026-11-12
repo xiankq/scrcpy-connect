@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences_state.dart';
 import 'package:scrcpy_connect/core/settings/preference_codec.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
@@ -36,9 +37,9 @@ class PreferencesNotifier extends _$PreferencesNotifier {
         owner.epoch++;
         final data = jsonObject(event['data']);
         state = state.copyWith(
-          values: PreferenceCodec.decode(
-            type == 'state.resynced' ? jsonObject(data['settings']) : data,
-          ),
+          values: type == 'state.resynced'
+              ? (event['data'] as RuntimeSnapshot).settings
+              : PreferenceCodec.decode(data),
           error: null,
         );
       }

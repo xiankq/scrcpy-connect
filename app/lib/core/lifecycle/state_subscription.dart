@@ -3,13 +3,14 @@ import 'dart:async';
 import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session.dart';
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 
 /// Scope 的传输与事件所有者。先同步交付状态，再向页面和查询发布事件。
 final class StateSubscription {
   StateSubscription(this.session) : generation = ++_nextGeneration {
     _reconciling = session.initialState.reconciliationPending;
-    _snapshotSequence = session.initialState.reconciledSnapshot?['sequence'];
+    _snapshotSequence = session.initialState.reconciledSnapshot?.sequence;
     _subscription = session.events.listen(
       _accept,
       onError: _connectionErrors.add,
@@ -27,7 +28,7 @@ final class StateSubscription {
   bool disposed = false;
   bool applyingState = false;
   bool _reconciling = false;
-  Object? _snapshotSequence;
+  int? _snapshotSequence;
 
   Stream<Object> get connectionErrors => _connectionErrors.stream;
   Stream<void> get stateCommits => _stateCommits.stream;
@@ -38,14 +39,12 @@ final class StateSubscription {
     if (disposed) return;
     final frozen = immutableJson(event);
     final type = event['type'];
-    final data = jsonObject(event['data']);
     if (type == 'state.resynced') {
-      if (!_reconciling &&
-          data['sequence'] != null &&
-          data['sequence'] == _snapshotSequence) {
+      final snapshot = event['data'] as RuntimeSnapshot;
+      if (!_reconciling && snapshot.sequence == _snapshotSequence) {
         return;
       }
-      _snapshotSequence = data['sequence'];
+      _snapshotSequence = snapshot.sequence;
       _reconciling = false;
     } else if (type == 'state.resync' || type == 'state.resync.failed') {
       _reconciling = true;

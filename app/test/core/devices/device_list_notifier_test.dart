@@ -8,6 +8,8 @@ import 'package:scrcpy_connect/core/devices/device_management.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
+import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 
 void main() {
   late StreamController<Map<String, dynamic>> events;
@@ -68,12 +70,17 @@ void main() {
     events.add({'type': 'state.resync'});
     events.add({
       'type': 'state.resynced',
-      'data': {
-        'sequence': 1,
-        'devices': [
-          {'id': 'verified', 'name': 'Verified', 'status': 'connected'},
+      'data': RuntimeSnapshot(
+        sequence: 1,
+        settings: Preferences(),
+        devices: [
+          const DeviceSnapshot(
+            id: 'verified',
+            name: 'Verified',
+            status: .connected,
+          ),
         ],
-      },
+      ),
     });
     source.reads.single.complete([
       const DeviceSnapshot(id: 'old', name: 'Old'),

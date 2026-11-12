@@ -43,6 +43,17 @@ abstract class KeepAwakeSnapshot with _$KeepAwakeSnapshot {
     @Default([]) List<KeepAwakeSnapshot> pendingCleanup,
   }) = _KeepAwakeSnapshot;
 
+  static KeepAwakeSnapshot withoutLease({
+    required String deviceId,
+    required bool enabled,
+    required bool hasWindowOwner,
+  }) => KeepAwakeSnapshot(
+    deviceId: deviceId,
+    keepActive: enabled,
+    keepActiveApplied: !(enabled && hasWindowOwner),
+    localCleanupConfirmed: true,
+  );
+
   bool get hasCleanupEvidence =>
       keepActiveLeaseId != null ||
       keepActiveError != null ||

@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
-
-typedef StateJson = Map<String, dynamic>;
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 
 /// 精确的 UP/CANCEL 仅清理已有输入租约；状态未知时仍允许释放。
 bool needsVerifiedControl(ControlTarget target, ControlAction action) =>
@@ -18,11 +18,11 @@ class StateRecovery {
     this.timeout = const Duration(seconds: 12),
   });
 
-  final Future<StateJson> Function(bool Function() current) read;
-  final void Function(StateJson event) emit;
+  final Future<RuntimeSnapshot> Function(bool Function() current) read;
+  final void Function(RecoveryEvent event) emit;
   final bool Function() isDisposed;
   final Duration timeout;
-  Future<StateJson>? _running;
+  Future<RuntimeSnapshot>? _running;
   int _epoch = 0, _watermark = -1, _observed = -1, _gaps = 0;
   int _localRevision = 0;
   bool _pending = false, _disposed = false;
@@ -35,49 +35,44 @@ class StateRecovery {
     if (!_disposed && !isDisposed()) _localRevision++;
   }
 
-  /// 仅在普通事件可安全转发时返回 true。
-  bool accept(StateJson event) {
+  /// 事件缺口作废在途读取；重复报告共用同一恢复任务。
+  void reportGap() {
+    if (_disposed || isDisposed()) return;
+    _gaps++;
+    unawaited(
+      refresh().then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+    );
+  }
+
+  /// 只接受越过已核验水位的事件；呈现帧不推进业务水位。
+  bool accept({required int? sequence, bool telemetry = false}) {
     if (_disposed || isDisposed()) return false;
-    final type = event['type'];
-    if (type == 'runtime.heartbeat') return false;
-    if (type == 'state.resync') {
-      _gaps++;
-      unawaited(
-        refresh().then<void>((_) {}, onError: (Object _, StackTrace _) {}),
-      );
+    if (sequence == null || sequence < 0) {
+      reportGap();
       return false;
     }
-    final sequence = event['sequence'];
-    if (sequence is! int || sequence < 0) {
-      // 缺失栅栏表示协议缺口，不能据此应用旧数据。
-      _gaps++;
-      unawaited(
-        refresh().then<void>((_) {}, onError: (Object _, StackTrace _) {}),
-      );
-      return false;
-    }
-    if (type != 'session.frame' && sequence > _observed) _observed = sequence;
+    if (!telemetry && sequence > _observed) _observed = sequence;
     return !_pending && sequence > _watermark;
   }
 
-  Future<StateJson> refresh() {
+  Future<RuntimeSnapshot> refresh() {
     if (_disposed || isDisposed()) {
       return Future.error(const RequestFailure('cancelled', '状态恢复已结束。'));
     }
     if (_running case final existing?) return existing;
     _pending = true;
     final epoch = ++_epoch;
-    final result = Completer<StateJson>();
+    final result = Completer<RuntimeSnapshot>();
     _running = result.future;
     // 先保存操作再发布事件，同步监听者可能立即重试。
     unawaited(_recover(epoch, result));
     return result.future;
   }
 
-  Future<void> _recover(int epoch, Completer<StateJson> result) async {
+  Future<void> _recover(int epoch, Completer<RuntimeSnapshot> result) async {
     bool current() => !_disposed && !isDisposed() && _epoch == epoch;
     try {
-      emit({'type': 'state.resync', 'data': <String, dynamic>{}});
+      emit(const RecoveryStarted());
       if (!current()) {
         throw const RequestFailure('cancelled', '状态恢复已结束。');
       }
@@ -88,7 +83,7 @@ class StateRecovery {
         if (!current()) {
           throw const RequestFailure('cancelled', '状态恢复已结束。');
         }
-        final sequence = validateStateSnapshot(snapshot);
+        final sequence = snapshot.sequence;
         if (sequence < _watermark) {
           throw const RequestFailure('invalid_snapshot', '状态快照版本已过期。');
         }
@@ -102,7 +97,7 @@ class StateRecovery {
         _pending = false;
         // 监听者此时可恢复仍持有的可见呈现；核验过程中不能准入恢复。
         try {
-          emit({'type': 'state.resynced', 'data': snapshot});
+          emit(RecoveryCompleted(snapshot));
         } catch (_) {
           // 回执未完成交付不能视为核验成功，亦不能推进快照水位。
           _watermark = previousWatermark;
@@ -120,10 +115,7 @@ class StateRecovery {
         _pending = true;
         _running = null;
         try {
-          emit({
-            'type': 'state.resync.failed',
-            'data': {'reason': '$error'},
-          });
+          emit(RecoveryFailed('$error'));
         } catch (_) {
           // 失败通知再次抛错时仍须以原始失败结算，不能留下悬空操作。
         }
@@ -137,26 +129,4 @@ class StateRecovery {
     _disposed = true;
     _epoch++;
   }
-}
-
-/// 授权任何所有权清理前先核验传输信封。
-int validateStateSnapshot(StateJson snapshot) {
-  final sequence = snapshot['sequence'];
-  if (sequence is! int || sequence < 0 || snapshot['settings'] is! Map) {
-    throw const RequestFailure('invalid_snapshot', '状态快照缺少版本或设置。');
-  }
-  for (final key in const [
-    'devices',
-    'sessions',
-    'sources',
-    'transfers',
-    'activities',
-    'shares',
-    'companions',
-  ]) {
-    if (snapshot[key] is! List) {
-      throw RequestFailure('invalid_snapshot', '状态快照缺少$key。');
-    }
-  }
-  return sequence;
 }

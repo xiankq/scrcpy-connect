@@ -10,6 +10,7 @@ import 'package:scrcpy_connect/core/devices/device_connection.dart';
 import 'package:scrcpy_connect/core/devices/device_notifications.dart';
 import 'package:scrcpy_connect/core/devices/device_observation.dart';
 import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
+import 'package:scrcpy_connect/core/devices/models/observed_device_snapshot.dart';
 
 Map<String, Object?> _unknown(
   String section,
@@ -142,6 +143,21 @@ final class DeviceObservationService
 
   List<DeviceObservationSnapshot> currentSnapshots() => [
     for (final record in records.current.devices) currentSnapshot(record.id),
+  ];
+
+  List<ObservedDeviceSnapshot> currentObservedDevices() => [
+    for (final observation in currentSnapshots())
+      ObservedDeviceSnapshot(
+        observation: observation,
+        notifications: DeviceNotificationsSnapshot.fromJson({
+          ..._currentSection(observation, 'notifications'),
+          'deviceId': observation.deviceId,
+        }),
+        calls: DeviceCallsSnapshot.fromJson({
+          ..._currentSection(observation, 'calls'),
+          'deviceId': observation.deviceId,
+        }),
+      ),
   ];
 
   Map<String, Object?> _currentSection(

@@ -41,6 +41,9 @@ abstract class DeviceNotificationsSnapshot with _$DeviceNotificationsSnapshot {
     @Default(DeviceNotificationAvailability.unknown)
     DeviceNotificationAvailability status,
     @Default(false) bool live,
+    int? observationEpoch,
+    @Default(false) bool observationEnabled,
+    @Default(false) bool truncated,
     @Default([]) List<DeviceNotification> notifications,
     String? reason,
   }) = _DeviceNotificationsSnapshot;

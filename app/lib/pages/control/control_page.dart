@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
+
 import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
@@ -639,7 +641,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
       return;
     }
     if (event['type'] == 'state.resynced') {
-      applyReconciledState(data);
+      applyReconciledState(event['data'] as RuntimeSnapshot);
       return;
     }
     if (presentation.appLaunchUnknown ||
@@ -738,7 +740,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
     return epoch;
   }
 
-  void applyReconciledState(Json snapshot) {
+  void applyReconciledState(RuntimeSnapshot snapshot) {
     final changed = presentation.reconcile(
       snapshot,
       packageName: widget.packageName,
