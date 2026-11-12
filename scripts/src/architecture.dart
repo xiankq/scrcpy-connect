@@ -355,6 +355,13 @@ List<String> checkArchitecture(
                 problems.add(
                   '${relative(source)}: core 不得反向依赖应用启动装配 ${relative(normalized)}',
                 );
+              } else if (fromLayer != 'bootstrap' &&
+                  !p.isWithin(p.join(appLib, 'core', 'platform'), source) &&
+                  normalized ==
+                      p.join(appLib, 'core', 'platform', 'native_host.dart')) {
+                problems.add(
+                  '${relative(source)}: 功能模块借用明确能力，不持有整套 NativeHost ${relative(normalized)}',
+                );
               } else if (fromLayer == 'core' &&
                   !p.isWithin(p.join(appLib, 'core', 'lifecycle'), source) &&
                   !RegExp(r'_(provider|notifier)\.dart$').hasMatch(source) &&

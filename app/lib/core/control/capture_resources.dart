@@ -11,7 +11,6 @@ import 'package:scrcpy_connect/core/control/models/session_activity.dart';
 import 'package:scrcpy_connect/core/control/models/video_session.dart';
 import 'package:scrcpy_connect/core/devices/device_connection.dart';
 import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
-import 'package:scrcpy_connect/core/control/display_recovery.dart';
 import 'package:scrcpy_connect/core/devices/scrcpy_server_queries.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
@@ -26,7 +25,6 @@ final class CaptureResources {
   CaptureResources({
     required this._scrcpy,
     required this._serverBytes,
-    required this._displays,
     required this.requireConnection,
     required this.connectionForDevice,
     required this._records,
@@ -41,7 +39,6 @@ final class CaptureResources {
 
   final ScrcpyClient _scrcpy;
   final Uint8List _serverBytes;
-  final DisplayRecovery _displays;
   final DeviceConnection Function(String) requireConnection;
   final DeviceConnection? Function(String) connectionForDevice;
   final DeviceRecordStorage _records;
@@ -206,25 +203,6 @@ final class CaptureResources {
       if (_wake case final wake?) wake.stopForConnection(deviceId, connection),
       if (_queries case final queries?) queries.stopForConnection(connection),
     ], eagerError: true);
-  }
-
-  Future<void> stopDisplays(DeviceConnection connection) async {
-    final displays = _displays;
-    if ((await connection.client.services.connectionFacts(connection.device))
-        .closed) {
-      await displays.detachClosedConnection(connection);
-    } else {
-      try {
-        await displays.stopForConnection(connection);
-      } catch (_) {
-        if (!(await connection.client.services.connectionFacts(
-          connection.device,
-        )).closed) {
-          rethrow;
-        }
-        await displays.detachClosedConnection(connection);
-      }
-    }
   }
 
   OrderedDisposal? _disposal;

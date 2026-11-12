@@ -141,6 +141,28 @@ final class DisplayRecovery {
     });
   }
 
+  /// 捕获排空后退休精确连接的恢复责任；已断开的连接只释放本机命令。
+  Future<void> retireConnection(DeviceConnection connection) async {
+    final entry = _entries[connection];
+    if (entry == null) return;
+    entry.stopping = true;
+    entry.active?.cancel();
+    if ((await connection.client.services.connectionFacts(connection.device))
+        .closed) {
+      await detachClosedConnection(connection);
+      return;
+    }
+    try {
+      await stopForConnection(connection);
+    } catch (_) {
+      if (!(await connection.client.services.connectionFacts(connection.device))
+          .closed) {
+        rethrow;
+      }
+      await detachClosedConnection(connection);
+    }
+  }
+
   /// 仅在调用方已核验精确物理连接 closed 且捕获排空后使用。
   ///
   /// 本方法不发恢复或 ACK，也不宣称远端恢复；持久 current 必须由下一条

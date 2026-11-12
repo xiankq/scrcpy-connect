@@ -111,7 +111,6 @@ final class AppComposition {
       _captureInstance ??= CaptureResources(
         scrcpy: _host.scrcpy,
         serverBytes: _host.scrcpyBytes,
-        displays: _host.physicalDisplays,
         requireConnection: _connections.devices.requireConnection,
         connectionForDevice: _connections.devices.current,
         records: _connections.records,
@@ -255,8 +254,21 @@ final class AppComposition {
       diagnostics: diagnostics,
     );
     final connections = session._connections = await DeviceResources.open(
-      host: host,
-      dataDirectory: dataDirectory,
+      directory: host.directory,
+      identities: host.identities,
+      recoverConnections: host.recoverConnections,
+      drainConnections: host.drainConnections,
+      clientForIdentity: (identity) => host.clientForIdentity(
+        identityPath: identity.path,
+        fingerprint: identity.fingerprint,
+      ),
+      releaseIdentityClient: (identity) => host.releaseIdentityClient(
+        identityPath: identity.path,
+        fingerprint: identity.fingerprint,
+      ),
+      displays: host.physicalDisplays,
+      companionBytes: host.companionBytes,
+      burstMode: () => host.preferences.current.values.adbBurstMode,
       policy: policy,
       diagnostics: diagnostics,
       isDisposed: () => session._isDisposed,
@@ -279,11 +291,10 @@ final class AppComposition {
       publish: (type, device, data) =>
           session._events.publishBusiness(type, device, data),
       stopWork: (id, connection, accepted) => Future.wait([
-        session._captureResources.stopForConnection(id, connection),
+        if (session._captureInstance case final captures?)
+          captures.stopForConnection(id, connection),
         session._files.stopForConnection(id, connection, accepted: accepted),
       ], eagerError: true),
-      stopDisplays: (connection) =>
-          session._captureResources.stopDisplays(connection),
     );
     final identity = await connections.identities.selectForDevice();
     final defaultClient = await host.clientForIdentity(
@@ -311,8 +322,6 @@ final class AppComposition {
       attachCatalogEvents: (source) => session._events.attachFileEvents(source),
       onSharingOpened: onSharingOpened,
     );
-    // 事件可能由 helper 同步交付，先建立观察所有者后再附着界面。
-    session._connections.observations;
     // 先完成依赖图，构造失败时仍由启动门禁持有宿主与分享的清理责任。
     session.lifecycle;
     return session;
@@ -339,9 +348,9 @@ final class AppComposition {
   AppLifecycle? _lifecycle;
   bool get _isDisposed => _lifecycle?.isDisposed ?? false;
   AppLifecycle get lifecycle => _lifecycle ??= AppLifecycle(
-    host: _host,
+    closeHost: _host.close,
     connections: _connections,
-    captures: _captureResources,
+    readCaptures: () => _captureInstance,
     files: _files,
     events: _events,
     stateRecovery: _stateRecovery,

@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:adb/adb.dart';
 
 import 'package:scrcpy_connect/core/companion/companion_recovery.dart';
 import 'package:scrcpy_connect/core/companion/companion_service.dart';
@@ -30,20 +33,24 @@ import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/identity/adb_identity_service.dart';
 import 'package:scrcpy_connect/core/identity/identity_manager.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
-import 'package:scrcpy_connect/core/platform/native_host.dart';
+import 'package:scrcpy_connect/core/control/display_recovery.dart';
+import 'package:scrcpy_connect/core/identity/models/identity_selection.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 
 /// 设备记录、身份、连接策略与伴生观察的所有者。
 /// 其他能力在连接退休时交回精确连接的清理回执。
 final class DeviceResources {
   DeviceResources._({
-    required this._host,
+    required this._directory,
+    required this._clientForIdentity,
+    required this._releaseIdentityClient,
+    required this._displays,
+    required this._companionBytes,
+    required this._burstMode,
     required this._records,
-    required this._identities,
-    required this._dataDirectory,
     required ConnectionPolicy policy,
     required this.diagnostics,
-    required this.isDisposed,
+    required bool Function() isDisposed,
     required this.isStateUnverified,
     required this.readSnapshot,
     required this.readSessions,
@@ -55,19 +62,31 @@ final class DeviceResources {
     required this.emit,
     required this.publish,
     required this.stopWork,
-    required this.stopDisplays,
-  }) : _connectionPolicy = policy;
+  }) : _connectionPolicy = policy,
+       _isAppDisposed = isDisposed;
 
-  final NativeHost _host;
+  final Directory _directory;
+  final FutureOr<AdbClient> Function(IdentitySelection) _clientForIdentity;
+  final Future<void> Function(IdentitySelection) _releaseIdentityClient;
+  final DisplayRecovery _displays;
+  final Uint8List _companionBytes;
+  final bool Function() _burstMode;
   final DeviceRecordStorage _records;
   DeviceRecordStorage get records => _records;
-  final AdbIdentityService _identities;
+  late final AdbIdentityService _identities;
   AdbIdentityService get identities => _identities;
-  final String _dataDirectory;
   final ConnectionPolicy _connectionPolicy;
   final DiagnosticLog? diagnostics;
   late final _diagnostics = DiagnosticReporter(diagnostics);
-  final bool Function() isDisposed;
+  final bool Function() _isAppDisposed;
+  bool _closed = false;
+  bool get _isDisposed => _closed || _isAppDisposed();
+  void _checkCreation() {
+    if (_isDisposed) {
+      throw const RequestFailure('disposed', '设备能力已关闭。');
+    }
+  }
+
   final bool Function() isStateUnverified;
   final Future<Map<String, dynamic>> Function() readSnapshot;
   final List<VideoSessionSnapshot> Function() readSessions;
@@ -78,7 +97,6 @@ final class DeviceResources {
   final void Function(Map<String, dynamic>) emit;
   final void Function(String, String?, Map<String, Object?>) publish;
   final Future<void> Function(String, DeviceConnection, bool) stopWork;
-  final Future<void> Function(DeviceConnection) stopDisplays;
   final _observedConnections = <String, DeviceConnection>{};
   final _deviceTaskConnections = <DeviceConnection>{};
   final _cleanup = <Future<void>>{};
@@ -89,145 +107,197 @@ final class DeviceResources {
   CompanionService get companion => _companion;
   DeviceObservationService get observations => _observations;
 
-  late final IdentityManagement identity = IdentityManager(
-    keys: _identities,
-    prepareChange: () => _setup.prepareChange(
-      const ConnectionChange(ConnectionChangeKind.defaultIdentity),
-    ),
-    pauseReconnect: () => _reconnections.beginChange(
-      const ConnectionChange(ConnectionChangeKind.defaultIdentity),
-    ),
-    publishDevices: () => publish('devices.changed', null, {
-      'devices': _devices.projectDevices(),
-    }),
-    isDisposed: () => isDisposed(),
-  );
+  IdentityManagement? _identityInstance;
+  IdentityManagement get identity {
+    if (_identityInstance == null) _checkCreation();
+    return _identityInstance ??= IdentityManager(
+      keys: _identities,
+      prepareChange: () => _setup.prepareChange(
+        const ConnectionChange(ConnectionChangeKind.defaultIdentity),
+      ),
+      pauseReconnect: () => _reconnections.beginChange(
+        const ConnectionChange(ConnectionChangeKind.defaultIdentity),
+      ),
+      publishDevices: () => publish('devices.changed', null, {
+        'devices': _devices.projectDevices(),
+      }),
+      isDisposed: () => _isDisposed,
+    );
+  }
 
-  late final DeviceApps apps = DeviceAppsReader(
-    requireConnection: _devices.requireConnection,
-    currentConnection: _devices.current,
-    connectionId: (id) => _devices.readDevice(id).connectionId,
-    serverQueries: serverQueries(),
-    companion: _companion,
-    isDisposed: () => isDisposed(),
-    onFailure: _diagnostics.appCatalogFailed,
-  );
+  DeviceApps? _appsInstance;
+  DeviceApps get apps {
+    if (_appsInstance == null) _checkCreation();
+    return _appsInstance ??= DeviceAppsReader(
+      requireConnection: _devices.requireConnection,
+      currentConnection: _devices.current,
+      connectionId: (id) => _devices.readDevice(id).connectionId,
+      serverQueries: serverQueries(),
+      companion: _companion,
+      isDisposed: () => _isDisposed,
+      onFailure: _diagnostics.appCatalogFailed,
+    );
+  }
 
-  late final _reconnections = DeviceReconnectService(
-    host: _RuntimeReconnectHost(_devices, readSnapshot),
-    policy: _connectionPolicy,
-  );
-  late final _discovery = DeviceDiscovery(
-    timeout: _connectionPolicy.discoveryTimeout,
-  );
-  late final _setup = DeviceConnectionService(
-    devices: _devices,
-    discovery: _discovery,
-    burstMode: () => _host.preferences.current.values.adbBurstMode,
-    clientForIdentity: (identity) => _host.clientForIdentity(
-      identityPath: identity.path,
-      fingerprint: identity.fingerprint,
-    ),
-    releaseIdentityClient: (identity) => _host.releaseIdentityClient(
-      identityPath: identity.path,
-      fingerprint: identity.fingerprint,
-    ),
-    policy: _connectionPolicy,
-    emit: emit,
-    authorizeUsb: authorizeUsb,
-    cancelUsb: cancelUsb,
-    releaseUsb: releaseUsb,
-    holdDevice: (id) => _reconnections.beginChange(
-      ConnectionChange(ConnectionChangeKind.connect, deviceId: id),
-    ),
-  );
-  late final _capabilities = DeviceCapabilityPolicy(
-    facts: DeviceCapabilityFactsReader(
-      records: _records,
-      identities: _identities,
-      connectionForDevice: _devices.current,
+  DeviceReconnectService? _reconnectionInstance;
+  DeviceReconnectService get _reconnections {
+    if (_reconnectionInstance == null) _checkCreation();
+    return _reconnectionInstance ??= DeviceReconnectService(
+      host: _RuntimeReconnectHost(_devices, readSnapshot),
       policy: _connectionPolicy,
-      observationCapabilities: _observations.currentCapabilities,
-      sessions: () => readSessions(),
-      audioSources: () => readAudio(),
-    ),
-    burstRequested: () => _host.preferences.current.values.adbBurstMode,
-  );
+    );
+  }
+
+  DeviceDiscovery? _discoveryInstance;
+  DeviceDiscovery get _discovery {
+    if (_discoveryInstance == null) _checkCreation();
+    return _discoveryInstance ??= DeviceDiscovery(
+      timeout: _connectionPolicy.discoveryTimeout,
+    );
+  }
+
+  DeviceConnectionService? _setupInstance;
+  DeviceConnectionService get _setup {
+    if (_setupInstance == null) _checkCreation();
+    return _setupInstance ??= DeviceConnectionService(
+      devices: _devices,
+      discovery: _discovery,
+      burstMode: _burstMode,
+      clientForIdentity: _clientForIdentity,
+      releaseIdentityClient: _releaseIdentityClient,
+      policy: _connectionPolicy,
+      emit: emit,
+      authorizeUsb: authorizeUsb,
+      cancelUsb: cancelUsb,
+      releaseUsb: releaseUsb,
+      holdDevice: (id) => _reconnections.beginChange(
+        ConnectionChange(ConnectionChangeKind.connect, deviceId: id),
+      ),
+    );
+  }
+
+  DeviceCapabilityPolicy? _capabilityInstance;
+  DeviceCapabilityPolicy get _capabilities {
+    if (_capabilityInstance == null) _checkCreation();
+    return _capabilityInstance ??= DeviceCapabilityPolicy(
+      facts: DeviceCapabilityFactsReader(
+        records: _records,
+        identities: _identities,
+        connectionForDevice: _devices.current,
+        policy: _connectionPolicy,
+        observationCapabilities: (id) =>
+            _observationInstance?.currentCapabilities(id) ?? [],
+        sessions: () => readSessions(),
+        audioSources: () => readAudio(),
+      ),
+      burstRequested: _burstMode,
+    );
+  }
 
   DeviceService? _deviceInstance;
-  DeviceService get _devices => _deviceInstance ??= DeviceService(
-    records: _records,
-    identities: _identities,
-    reconnectionCandidates: DeviceReconnectionCandidates.mdns(_discovery),
-    clientForIdentity: (identity) => _host.clientForIdentity(
-      identityPath: identity.path,
-      fingerprint: identity.fingerprint,
-    ),
-    stopActivities: (id, connection) =>
-        stopConnectionActivities(id, connection),
-    prepareConnection: (id, connection, serial, cancellation) async {
-      await _companion.prepareConnection(id, connection, serial, cancellation);
-      await _host.physicalDisplays.recover(
-        connection,
-        cancellation: cancellation,
-      );
-    },
-    onConnected: (id, connection) => _health.start(id, connection),
-    policy: _connectionPolicy,
-    burstMode: () => _host.preferences.current.values.adbBurstMode,
-    emit: (type, data) => publish(type, null, data),
-  );
+  DeviceService get _devices {
+    if (_deviceInstance == null) _checkCreation();
+    return _deviceInstance ??= DeviceService(
+      records: _records,
+      identities: _identities,
+      reconnectionCandidates: DeviceReconnectionCandidates.mdns(_discovery),
+      clientForIdentity: _clientForIdentity,
+      stopActivities: (id, connection) =>
+          stopConnectionActivities(id, connection),
+      prepareConnection: (id, connection, serial, cancellation) async {
+        await _companion.prepareConnection(
+          id,
+          connection,
+          serial,
+          cancellation,
+        );
+        await _displays.recover(connection, cancellation: cancellation);
+      },
+      onConnected: (id, connection) => _health.start(id, connection),
+      policy: _connectionPolicy,
+      burstMode: _burstMode,
+      emit: (type, data) => publish(type, null, data),
+    );
+  }
+
   DeviceHealthService? _healthInstance;
-  DeviceHealthService get _health => _healthInstance ??= DeviceHealthService(
-    current: _devices.current,
-    retire: _devices.retireUnhealthy,
-    policy: _connectionPolicy,
-    onError: (error, stack) => diagnostics?.record(
-      DiagnosticArea.connection,
-      'health.check.failed',
-      level: LogLevel.error,
-      fields: {'errorType': error.runtimeType.toString()},
-    ),
-  );
+  DeviceHealthService get _health {
+    if (_healthInstance == null) _checkCreation();
+    return _healthInstance ??= DeviceHealthService(
+      current: _devices.current,
+      retire: _devices.retireUnhealthy,
+      policy: _connectionPolicy,
+      onError: (error, stack) => diagnostics?.record(
+        DiagnosticArea.connection,
+        'health.check.failed',
+        level: LogLevel.error,
+        fields: {'errorType': error.runtimeType.toString()},
+      ),
+    );
+  }
+
   DevicePowerService? _powerInstance;
-  DevicePowerService get _power => _powerInstance ??= DevicePowerService(
-    requireConnection: _devices.requireConnection,
-    timeout: _connectionPolicy.probeTimeout,
-  );
+  DevicePowerService get _power {
+    if (_powerInstance == null) _checkCreation();
+    return _powerInstance ??= DevicePowerService(
+      requireConnection: _devices.requireConnection,
+      timeout: _connectionPolicy.probeTimeout,
+    );
+  }
 
-  late final CompanionService _companion = CompanionService(
-    requireConnection: _devices.requireConnection,
-    recovery: CompanionRecovery(Directory(_dataDirectory)),
-    deviceSerial: (id) => _records.current.find(id)?.serial,
-    serverBytes: _host.companionBytes,
-    config: const CompanionConfig(
-      startupTimeout: Duration(seconds: 15),
-      requestTimeout: Duration(seconds: 10),
-      cleanupTimeout: Duration(seconds: 5),
-      sessionTimeout: Duration(hours: 24),
-    ),
-    emit: (type, device, data) => publish(type, device, data),
-  );
-  late final DeviceObservationService _observations = DeviceObservationService(
-    companion: _companion,
-    records: _records,
-    emit: (type, device, data) => publish(type, device, data),
-  );
+  CompanionService? _companionInstance;
+  CompanionService get _companion {
+    if (_companionInstance == null) _checkCreation();
+    return _companionInstance ??= CompanionService(
+      requireConnection: _devices.requireConnection,
+      recovery: CompanionRecovery(_directory),
+      deviceSerial: (id) => _records.current.find(id)?.serial,
+      serverBytes: _companionBytes,
+      config: const CompanionConfig(
+        startupTimeout: Duration(seconds: 15),
+        requestTimeout: Duration(seconds: 10),
+        cleanupTimeout: Duration(seconds: 5),
+        sessionTimeout: Duration(hours: 24),
+      ),
+      emit: (type, device, data) => publish(type, device, data),
+    );
+  }
 
-  late final operations = DeviceOperations(
-    capabilities: _capabilities,
-    observation: _observations,
-    calls: _observations,
-    notifications: _observations,
-    wake: _power.wakeDevice,
-    isDisposed: () => isDisposed(),
-    isStateUnverified: () => isStateUnverified(),
-    diagnostics: _diagnostics,
-  );
+  DeviceObservationService? _observationInstance;
+  DeviceObservationService get _observations {
+    if (_observationInstance == null) _checkCreation();
+    return _observationInstance ??= DeviceObservationService(
+      companion: _companion,
+      records: _records,
+      emit: (type, device, data) => publish(type, device, data),
+    );
+  }
+
+  DeviceOperations? _operationInstance;
+  DeviceOperations get operations {
+    if (_operationInstance == null) _checkCreation();
+    return _operationInstance ??= DeviceOperations(
+      capabilities: _capabilities,
+      observation: _observations,
+      calls: _observations,
+      notifications: _observations,
+      wake: _power.wakeDevice,
+      isDisposed: () => _isDisposed,
+      isStateUnverified: () => isStateUnverified(),
+      diagnostics: _diagnostics,
+    );
+  }
 
   static Future<DeviceResources> open({
-    required NativeHost host,
-    required String dataDirectory,
+    required Directory directory,
+    required AdbIdentities identities,
+    required Future<void> Function() recoverConnections,
+    required Future<void> Function() drainConnections,
+    required FutureOr<AdbClient> Function(IdentitySelection) clientForIdentity,
+    required Future<void> Function(IdentitySelection) releaseIdentityClient,
+    required DisplayRecovery displays,
+    required Uint8List companionBytes,
+    required bool Function() burstMode,
     required ConnectionPolicy policy,
     required DiagnosticLog? diagnostics,
     required bool Function() isDisposed,
@@ -242,23 +312,17 @@ final class DeviceResources {
     required void Function(Map<String, dynamic>) emit,
     required void Function(String, String?, Map<String, Object?>) publish,
     required Future<void> Function(String, DeviceConnection, bool) stopWork,
-    required Future<void> Function(DeviceConnection) stopDisplays,
   }) async {
-    await host.recoverConnections();
-    final records = await DeviceRecordStorage.open(directory: host.directory);
-    DeviceResources? owner;
-    final identities = await AdbIdentityService.open(
-      directory: host.directory,
+    await recoverConnections();
+    final records = await DeviceRecordStorage.open(directory: directory);
+    final owner = DeviceResources._(
+      directory: directory,
+      clientForIdentity: clientForIdentity,
+      releaseIdentityClient: releaseIdentityClient,
+      displays: displays,
+      companionBytes: companionBytes,
+      burstMode: burstMode,
       records: records,
-      identities: host.identities,
-      invalidate: (ids, {required global}) =>
-          owner?._deviceInstance?.invalidate(ids) ?? host.drainConnections(),
-    );
-    return owner = DeviceResources._(
-      host: host,
-      records: records,
-      identities: identities,
-      dataDirectory: dataDirectory,
       policy: policy,
       diagnostics: diagnostics,
       isDisposed: isDisposed,
@@ -273,21 +337,28 @@ final class DeviceResources {
       emit: emit,
       publish: publish,
       stopWork: stopWork,
-      stopDisplays: stopDisplays,
     );
+    owner._identities = await AdbIdentityService.open(
+      directory: directory,
+      records: records,
+      identities: identities,
+      invalidate: (ids, {required global}) =>
+          owner._deviceInstance?.invalidate(ids) ?? drainConnections(),
+    );
+    return owner;
   }
 
   void handleEvent(Map<String, dynamic> event) {
-    if (isDisposed()) return;
-    _setup.handleEvent(event);
-    _reconnections.handleEvent(event);
+    if (_isDisposed) return;
+    _setupInstance?.handleEvent(event);
+    _reconnectionInstance?.handleEvent(event);
     if (event['type'] != 'devices.changed') return;
     final ids = {
       ..._observedConnections.keys,
       ..._records.current.devices.map((record) => record.id),
     };
     for (final id in ids) {
-      final connection = _devices.current(id);
+      final connection = _deviceInstance?.current(id);
       if (identical(_observedConnections[id], connection)) continue;
       if (connection == null) {
         _observedConnections.remove(id);
@@ -323,31 +394,38 @@ final class DeviceResources {
         power.stopConnection(id, connection),
       stopWork(id, connection, _deviceTaskConnections.contains(connection)),
     ], eagerError: true);
-    await stopDisplays(connection);
-    await _observations.stopForConnection(id, connection);
-    await _companion.stopForConnection(id, connection);
+    await _displays.retireConnection(connection);
+    await _observationInstance?.stopForConnection(id, connection);
+    await _companionInstance?.stopForConnection(id, connection);
     _deviceTaskConnections.remove(connection);
   }
 
-  Future<void> stopAdmission() async =>
-      await Future.wait([_reconnections.dispose(), _setup.dispose()]);
-  OrderedDisposal? _connectionsClose, _servicesClose;
-  Future<void> closeConnections() {
-    _connectionsClose ??= OrderedDisposal([
-      () async => await _healthInstance?.close(),
-      () async => await _powerInstance?.close(),
-      _devices.close,
+  Future<void> stopAdmission() {
+    _closed = true;
+    return Future.wait([
+      if (_reconnectionInstance case final reconnect?) reconnect.dispose(),
+      if (_setupInstance case final setup?) setup.dispose(),
     ]);
-    return _connectionsClose!.run();
   }
 
-  Future<void> closeServices() {
-    _servicesClose ??= OrderedDisposal([
-      _observations.close,
-      _companion.close,
-      () async => await Future.wait(_cleanup.toList()),
+  OrderedDisposal? _disposal;
+
+  /// 连接退休依赖观察与伴生；前一阶段未确认时保留后续执行能力，供原连接重试。
+  Future<void> close() {
+    _closed = true;
+    _disposal ??= OrderedDisposal([
+      () async => await _healthInstance?.close(),
+      () async => await _powerInstance?.close(),
+      () async {
+        await stopAdmission();
+        await _deviceInstance?.close();
+        await _observationInstance?.close();
+        await _companionInstance?.close();
+        await _discoveryInstance?.close();
+        await Future.wait(_cleanup.toList());
+      },
     ]);
-    return _servicesClose!.run();
+    return _disposal!.run();
   }
 }
 

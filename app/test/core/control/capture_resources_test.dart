@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/core/control/app_launch_journal.dart';
 import 'package:scrcpy_connect/core/control/capture_resources.dart';
-import 'package:scrcpy_connect/core/control/display_recovery.dart';
 import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
@@ -50,7 +49,6 @@ Future<CaptureResources> _resources() async {
   return CaptureResources(
     scrcpy: ScrcpyClient(_UnusedScrcpy()),
     serverBytes: Uint8List(0),
-    displays: DisplayRecovery(timeout: const Duration(seconds: 1)),
     requireConnection: (_) => throw StateError('不应取得连接'),
     connectionForDevice: (_) => throw StateError('不应读取连接'),
     records: records,
