@@ -3,12 +3,16 @@ import 'dart:math';
 
 import 'package:scrcpy_connect/core/devices/models/connection_change.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_reconnect_event.dart';
+import 'package:scrcpy_connect/core/devices/models/device_reconnect_snapshot.dart';
 
-typedef ReconnectJson = Map<String, dynamic>;
+export 'package:scrcpy_connect/core/devices/models/device_reconnect_event.dart';
+export 'package:scrcpy_connect/core/devices/models/device_reconnect_snapshot.dart';
 
 /// 自动重连只需要快照和精确尝试租约，不具有执行任意应用命令的权限。
 abstract interface class DeviceReconnectHost {
-  Future<ReconnectJson> readSnapshot();
+  Future<DeviceReconnectSnapshot> readSnapshot();
   Future<void> setOwner(String ownerId, bool active);
   Future<void> connect(String deviceId, String attemptId, String ownerId);
   Future<void> cancel(String attemptId);
@@ -30,7 +34,7 @@ class DeviceReconnectService {
   final ConnectionPolicy policy;
   final ReconnectTimer _schedule;
   final String _ownerPrefix;
-  final _devices = <String, ReconnectJson>{};
+  final _devices = <String, DeviceSnapshot>{};
   final _work = <String, _ReconnectWork>{};
   final _stopped = <String>{};
   bool _hostStopped = false;
@@ -61,7 +65,7 @@ class DeviceReconnectService {
     return _starting ??= refresh();
   }
 
-  /// 初次附着、非事件命令回执与缺口恢复共用应用快照；旧回复不能覆盖新设备事件。
+  /// 初次附着、非事件命令回执与缺口恢复共用设备快照；旧回复不能覆盖新设备事件。
   Future<void> refresh() {
     if (_disposed) return Future<void>.value();
     return _refreshing ??= _readSnapshot().whenComplete(
@@ -73,8 +77,8 @@ class DeviceReconnectService {
     for (var attempt = 0; attempt < 4 && !_disposed; attempt++) {
       final snapshot = await host.readSnapshot();
       if (_disposed) return;
-      final sequence = snapshot['sequence'];
-      if (sequence is! int || sequence < _sequence) continue;
+      final sequence = snapshot.sequence;
+      if (sequence < _sequence) continue;
       _snapshot(snapshot);
       return;
     }
@@ -83,64 +87,63 @@ class DeviceReconnectService {
     }
   }
 
-  void _snapshot(ReconnectJson snapshot) {
-    final sequence = snapshot['sequence'];
-    if (_disposed || sequence is! int || sequence < _sequence) return;
-    _sequence = sequence;
-    _backgroundKeepAlive =
-        _object(snapshot['settings'])['backgroundKeepAlive'] == true;
-    _replaceDevices(snapshot['devices']);
+  void _snapshot(DeviceReconnectSnapshot snapshot) {
+    if (_disposed || snapshot.sequence < _sequence) return;
+    _sequence = snapshot.sequence;
+    _backgroundKeepAlive = snapshot.backgroundKeepAlive;
+    _replaceDevices(snapshot.devices);
     _known = true;
     _uncertain = _recovering;
     _sync();
   }
 
-  void handleEvent(ReconnectJson event) {
+  void handleEvent(DeviceReconnectEvent event) {
     if (_disposed) return;
-    final type = event['type'];
-    if (type == 'session.frame' || type == 'runtime.heartbeat') return;
-    if (type == 'state.resync' || type == 'state.resync.failed') {
+    if (event is DeviceReconnectInvalidated) {
       _recovering = true;
       _uncertain = true;
       if (!_refreshInterrupted.isCompleted) _refreshInterrupted.complete();
       _sync();
       return;
     }
-    final data = _object(event['data']);
-    if (type == 'state.resynced') {
+    if (event is DeviceReconnectRecovered) {
       if (_recovering) _refreshInterrupted = Completer<void>();
       _recovering = false;
-      _snapshot(data);
+      _snapshot(event.snapshot);
       return;
     }
-    final sequence = event['sequence'];
-    if (sequence is! int || sequence <= _sequence) return;
+    final sequence = event.sequence;
+    if (sequence == null || sequence <= _sequence) return;
     _sequence = sequence;
-    if (type == 'devices.changed') {
-      if (data['devices'] is List) {
-        _replaceDevices(data['devices']);
-      } else {
-        _quiet(refresh());
-      }
-    } else if (type == 'device.changed') {
-      final id = data['id'];
-      if (id is String && _devices.containsKey(id)) _devices[id] = data;
-    } else if (type == 'settings.changed') {
-      _backgroundKeepAlive = data['backgroundKeepAlive'] == true;
-    } else if (type == 'adb.discovery.changed') {
-      // 新 DNS 结果可重置重试延迟，但不能改变授权意图。
-      for (final entry in _devices.entries) {
-        if (entry.value['guid'] == data['guid']) {
-          final pending = _work[entry.key];
-          if (pending != null && !pending.running) {
-            pending.timer?.cancel();
-            _work.remove(entry.key);
+    switch (event) {
+      case DeviceReconnectDevicesChanged(:final devices):
+        if (devices != null) {
+          _replaceDevices(devices);
+        } else {
+          _quiet(refresh());
+        }
+      case DeviceReconnectDeviceChanged(:final device):
+        if (_devices.containsKey(device.id)) _devices[device.id] = device;
+      case DeviceReconnectSettingsChanged(:final backgroundKeepAlive):
+        _backgroundKeepAlive = backgroundKeepAlive;
+      case DeviceReconnectDiscoveryChanged(:final guid):
+        // 新 DNS 结果只重置匹配设备的退避，不改变授权意图。
+        for (final entry in _devices.entries) {
+          if (entry.value.guid == guid) {
+            final pending = _work[entry.key];
+            if (pending != null && !pending.running) {
+              pending.timer?.cancel();
+              _work.remove(entry.key);
+            }
           }
         }
-      }
-    } else if (type == 'connections.stopped') {
-      stopAutomaticConnections();
-      _quiet(refresh());
+      case DeviceReconnectStopped():
+        stopAutomaticConnections();
+        _quiet(refresh());
+      case DeviceReconnectWatermark():
+        break;
+      case DeviceReconnectInvalidated() || DeviceReconnectRecovered():
+        break;
     }
     _sync();
   }
@@ -174,7 +177,7 @@ class DeviceReconnectService {
   }
 
   /// 用户命令前调用，防止迟到快照重放停止状态。
-  /// 即使命令结果未知也执行返回的完成函数，下次重试始终重新读取应用投影。
+  /// 即使命令结果未知也执行返回的完成函数，下次重试始终重新读取设备投影。
   Future<void> Function() beginChange(ConnectionChange change) {
     final id = change.deviceId;
     final stop = change.stop;
@@ -230,21 +233,17 @@ class DeviceReconnectService {
       policy.reconnectEnabled &&
       (_visible || _backgroundKeepAlive);
 
-  bool _eligible(String id, ReconnectJson device) =>
+  bool _eligible(String id, DeviceSnapshot? device) =>
       !_stopped.contains(id) &&
       !_commands.containsKey(id) &&
-      device['autoReconnect'] == true &&
-      device['transport'] != 'usb' &&
-      device['status'] == 'offline';
+      device?.autoReconnect == true &&
+      device?.transport != DeviceTransport.usb &&
+      device?.status == DeviceConnectionStatus.offline;
 
-  void _replaceDevices(Object? value) {
-    if (value is! List) return;
-    _devices.clear();
-    for (final entry in value) {
-      final device = _object(entry);
-      final id = device['id'];
-      if (id is String) _devices[id] = device;
-    }
+  void _replaceDevices(List<DeviceSnapshot> devices) {
+    _devices
+      ..clear()
+      ..addEntries(devices.map((device) => MapEntry(device.id, device)));
     if (_hostStopped) {
       _stopped.addAll(
         _devices.keys.where((id) => !_manuallyResumed.contains(id)),
@@ -271,7 +270,7 @@ class DeviceReconnectService {
       final work = _work[id]!;
       // 连接会在命令 Future 返回前同步发布成功；此时只结束调度责任。
       // 再发送同一 attemptId 的取消会反向撤回已经实际交付的连接。
-      if (device?['status'] == 'connected' &&
+      if (device?.status == DeviceConnectionStatus.connected &&
           !_stopped.contains(id) &&
           !_commands.containsKey(id)) {
         _work.remove(id);
@@ -281,8 +280,8 @@ class DeviceReconnectService {
       // 本模块的在途连接会在完成前发布 connecting。
       final ownsConnecting =
           work.running &&
-          device?['status'] == 'connecting' &&
-          device?['autoReconnect'] == true &&
+          device?.status == DeviceConnectionStatus.connecting &&
+          device?.autoReconnect == true &&
           !_stopped.contains(id) &&
           !_commands.containsKey(id);
       if (device == null || (!_eligible(id, device) && !ownsConnecting)) {
@@ -340,7 +339,7 @@ class DeviceReconnectService {
       if (!_allowed ||
           !_ownerReady ||
           !identical(_work[id], work) ||
-          !_eligible(id, _devices[id] ?? {})) {
+          !_eligible(id, _devices[id])) {
         return;
       }
       work.running = true;
@@ -364,7 +363,7 @@ class DeviceReconnectService {
     }
     if (_disposed || !identical(_work[id], work) || _owner != owner) return;
     _work.remove(id);
-    if (_allowed && _eligible(id, _devices[id] ?? {})) {
+    if (_allowed && _eligible(id, _devices[id])) {
       _scheduleAttempt(id, work.failures + 1);
     }
     _sync();
@@ -400,8 +399,6 @@ class DeviceReconnectService {
     }
   }
 
-  static ReconnectJson _object(Object? value) =>
-      value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
   static void _quiet(Future<dynamic> operation) {
     unawaited(
       operation.then<void>((_) {}, onError: (Object _, StackTrace _) {}),

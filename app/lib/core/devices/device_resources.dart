@@ -25,6 +25,7 @@ import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
 import 'package:scrcpy_connect/core/devices/device_service.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_change.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/scrcpy_server_queries.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
@@ -52,7 +53,8 @@ final class DeviceResources {
     required this.diagnostics,
     required bool Function() isDisposed,
     required this.isStateUnverified,
-    required this.readSnapshot,
+    required this.readEventSequence,
+    required this.readBackgroundKeepAlive,
     required this.readSessions,
     required this.readAudio,
     required this.serverQueries,
@@ -88,7 +90,8 @@ final class DeviceResources {
   }
 
   final bool Function() isStateUnverified;
-  final Future<Map<String, dynamic>> Function() readSnapshot;
+  final int Function() readEventSequence;
+  final bool Function() readBackgroundKeepAlive;
   final List<VideoSessionSnapshot> Function() readSessions;
   final List<DeviceAudioSnapshot> Function() readAudio;
   final ScrcpyServerQueries Function() serverQueries;
@@ -143,7 +146,11 @@ final class DeviceResources {
   DeviceReconnectService get _reconnections {
     if (_reconnectionInstance == null) _checkCreation();
     return _reconnectionInstance ??= DeviceReconnectService(
-      host: _RuntimeReconnectHost(_devices, readSnapshot),
+      host: _DeviceReconnectHost(
+        devices: _devices,
+        readSequence: readEventSequence,
+        readBackgroundKeepAlive: readBackgroundKeepAlive,
+      ),
       policy: _connectionPolicy,
     );
   }
@@ -302,7 +309,8 @@ final class DeviceResources {
     required DiagnosticLog? diagnostics,
     required bool Function() isDisposed,
     required bool Function() isStateUnverified,
-    required Future<Map<String, dynamic>> Function() readSnapshot,
+    required int Function() readEventSequence,
+    required bool Function() readBackgroundKeepAlive,
     required List<VideoSessionSnapshot> Function() readSessions,
     required List<DeviceAudioSnapshot> Function() readAudio,
     required ScrcpyServerQueries Function() serverQueries,
@@ -327,7 +335,8 @@ final class DeviceResources {
       diagnostics: diagnostics,
       isDisposed: isDisposed,
       isStateUnverified: isStateUnverified,
-      readSnapshot: readSnapshot,
+      readEventSequence: readEventSequence,
+      readBackgroundKeepAlive: readBackgroundKeepAlive,
       readSessions: readSessions,
       readAudio: readAudio,
       serverQueries: serverQueries,
@@ -351,7 +360,11 @@ final class DeviceResources {
   void handleEvent(Map<String, dynamic> event) {
     if (_isDisposed) return;
     _setupInstance?.handleEvent(event);
-    _reconnectionInstance?.handleEvent(event);
+    if (_reconnectionInstance case final reconnect?) {
+      if (_reconnectEvent(event) case final update?) {
+        reconnect.handleEvent(update);
+      }
+    }
     if (event['type'] != 'devices.changed') return;
     final ids = {
       ..._observedConnections.keys,
@@ -429,12 +442,22 @@ final class DeviceResources {
   }
 }
 
-final class _RuntimeReconnectHost implements DeviceReconnectHost {
-  _RuntimeReconnectHost(this.devices, this.state);
+final class _DeviceReconnectHost implements DeviceReconnectHost {
+  _DeviceReconnectHost({
+    required this.devices,
+    required this.readSequence,
+    required this.readBackgroundKeepAlive,
+  });
   final DeviceService devices;
-  final Future<Map<String, dynamic>> Function() state;
+  final int Function() readSequence;
+  final bool Function() readBackgroundKeepAlive;
   @override
-  Future<ReconnectJson> readSnapshot() => state();
+  Future<DeviceReconnectSnapshot> readSnapshot() async =>
+      DeviceReconnectSnapshot(
+        sequence: readSequence(),
+        devices: devices.readDevices(),
+        backgroundKeepAlive: readBackgroundKeepAlive(),
+      );
   @override
   Future<void> connect(String deviceId, String attemptId, String ownerId) =>
       devices.connectAutomatically(deviceId, attemptId, ownerId);
@@ -444,4 +467,58 @@ final class _RuntimeReconnectHost implements DeviceReconnectHost {
   @override
   Future<void> setOwner(String ownerId, bool active) async =>
       devices.setReconnectOwner(ownerId, active);
+}
+
+// 应用事件信封在此转换为设备事实；重连规则不解析全应用协议字段。
+DeviceReconnectEvent? _reconnectEvent(Map<String, dynamic> event) {
+  final type = event['type'];
+  if (type == 'session.frame' || type == 'runtime.heartbeat') return null;
+  if (type == 'state.resync' || type == 'state.resync.failed') {
+    return const DeviceReconnectInvalidated();
+  }
+  final raw = event['data'];
+  final data = raw is Map
+      ? Map<String, dynamic>.from(raw)
+      : <String, dynamic>{};
+  List<DeviceSnapshot>? devices() => data['devices'] is List
+      ? [
+          for (final device in data['devices'] as List)
+            DeviceSnapshot.fromJson(Map<String, dynamic>.from(device as Map)),
+        ]
+      : null;
+  if (type == 'state.resynced') {
+    final sequence = data['sequence'];
+    if (sequence is! int || sequence < 0) return null;
+    final settings = data['settings'];
+    return DeviceReconnectRecovered(
+      DeviceReconnectSnapshot(
+        sequence: sequence,
+        devices: devices() ?? [],
+        backgroundKeepAlive:
+            settings is Map && settings['backgroundKeepAlive'] == true,
+      ),
+    );
+  }
+  final sequence = event['sequence'];
+  if (sequence is! int || sequence < 0) return null;
+  return switch (type) {
+    'devices.changed' => DeviceReconnectDevicesChanged(
+      devices(),
+      sequence: sequence,
+    ),
+    'device.changed' when data['id'] is String => DeviceReconnectDeviceChanged(
+      DeviceSnapshot.fromJson(data),
+      sequence: sequence,
+    ),
+    'settings.changed' => DeviceReconnectSettingsChanged(
+      data['backgroundKeepAlive'] == true,
+      sequence: sequence,
+    ),
+    'adb.discovery.changed' => DeviceReconnectDiscoveryChanged(
+      data['guid'] as String?,
+      sequence: sequence,
+    ),
+    'connections.stopped' => DeviceReconnectStopped(sequence: sequence),
+    _ => DeviceReconnectWatermark(sequence: sequence),
+  };
 }

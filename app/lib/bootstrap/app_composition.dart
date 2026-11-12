@@ -273,7 +273,9 @@ final class AppComposition {
       diagnostics: diagnostics,
       isDisposed: () => session._isDisposed,
       isStateUnverified: () => session._stateRecovery.pending,
-      readSnapshot: () => session._state.readSnapshot(),
+      readEventSequence: () => session._events.cursor.sequence,
+      readBackgroundKeepAlive: () =>
+          host.preferences.current.values.backgroundKeepAlive,
       readSessions: () => session._captureInstance?.currentSessions() ?? [],
       readAudio: () =>
           session._captureInstance?.audioSnapshots(activeOnly: true) ?? [],

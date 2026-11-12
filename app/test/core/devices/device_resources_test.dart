@@ -65,6 +65,39 @@ void main() {
     _expectUnused(resources, devicesUsed: true);
   });
 
+  test('重连刷新与恢复事件只读取设备投影，不装配其他能力', () async {
+    var sequenceReads = 0, settingsReads = 0;
+    final resources = await _resources(
+      readEventSequence: () {
+        sequenceReads++;
+        return 0;
+      },
+      readBackgroundKeepAlive: () {
+        settingsReads++;
+        return false;
+      },
+    );
+    await resources.reconnections.start();
+    resources.handleEvent({
+      'type': 'devices.changed',
+      'sequence': 1,
+      'data': {'devices': <Map<String, dynamic>>[]},
+    });
+    resources.handleEvent({'type': 'state.resync'});
+    resources.handleEvent({
+      'type': 'state.resynced',
+      'data': {
+        'sequence': 2,
+        'devices': <Map<String, dynamic>>[],
+        'settings': {'backgroundKeepAlive': false},
+      },
+    });
+    await resources.close();
+    expect(sequenceReads, 1);
+    expect(settingsReads, 1);
+    _expectUnused(resources, devicesUsed: true, reconnectUsed: true);
+  });
+
   test('应用退出等待迟到 USB 租约，重试原资源后最后释放宿主', () async {
     final authorizing = Completer<void>();
     final authorized = Completer<Map<String, dynamic>>();
@@ -255,13 +288,17 @@ class _RecoveryFiles implements NativeLocalFilesApi {
       throw StateError('空恢复不应复制文件：${invocation.memberName}');
 }
 
-void _expectUnused(DeviceResources resources, {bool devicesUsed = false}) {
+void _expectUnused(
+  DeviceResources resources, {
+  bool devicesUsed = false,
+  bool reconnectUsed = false,
+}) {
   final disposed = throwsA(
     isA<RequestFailure>().having((error) => error.code, 'code', 'disposed'),
   );
   if (!devicesUsed) expect(() => resources.devices, disposed);
   expect(() => resources.setup, disposed);
-  expect(() => resources.reconnections, disposed);
+  if (!reconnectUsed) expect(() => resources.reconnections, disposed);
   expect(() => resources.companion, disposed);
   expect(() => resources.observations, disposed);
   expect(() => resources.apps, disposed);
@@ -274,6 +311,8 @@ Future<DeviceResources> _resources({
   Future<void> Function(Map<String, dynamic>)? cancelUsb,
   Future<void> Function(Map<String, dynamic>)? releaseUsb,
   Future<void> Function(String, DeviceConnection, bool)? stopWork,
+  int Function()? readEventSequence,
+  bool Function()? readBackgroundKeepAlive,
 }) async {
   final temporary = await Directory.systemTemp.createTemp('device-resources-');
   final directory = Directory(await temporary.resolveSymbolicLinks());
@@ -292,9 +331,12 @@ Future<DeviceResources> _resources({
     diagnostics: null,
     isDisposed: () => false,
     isStateUnverified: () => false,
-    readSnapshot: () async => throw StateError('不应通过空操作启动自动重连'),
-    readSessions: () => [],
-    readAudio: () => [],
+    readEventSequence:
+        readEventSequence ?? () => throw StateError('不应通过空操作读取事件水位'),
+    readBackgroundKeepAlive:
+        readBackgroundKeepAlive ?? () => throw StateError('不应通过空操作读取重连偏好'),
+    readSessions: () => throw StateError('重连不应读取捕获会话'),
+    readAudio: () => throw StateError('重连不应读取设备音源'),
     serverQueries: () => throw StateError('不应创建捕获查询器'),
     authorizeUsb: authorizeUsb,
     cancelUsb: cancelUsb,
