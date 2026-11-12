@@ -12,6 +12,7 @@ import 'package:scrcpy_connect/core/files/file_source_tree.dart';
 import 'package:scrcpy_connect/core/files/file_transfers.dart';
 import 'package:scrcpy_connect/core/files/incoming_shares.dart';
 import 'package:scrcpy_connect/core/files/models/shared_source_file.dart';
+import 'package:scrcpy_connect/core/files/models/share_inbox_event.dart';
 import 'package:scrcpy_connect/core/files/share_limits.dart';
 import 'package:uuid/uuid.dart';
 
@@ -33,7 +34,7 @@ final class FileShareLedger implements FilePublicationLeases {
   );
   final Directory root;
   final ShareLimits limits;
-  final void Function(Map<String, dynamic>)? _onChanged;
+  final void Function(ShareInboxEvent)? _onChanged;
   final Future<void> Function(String)? _beforeRemove;
   final FileShareStorage _storage;
   final DateTime Function() _now;
@@ -48,7 +49,7 @@ final class FileShareLedger implements FilePublicationLeases {
   static Future<FileShareLedger> open({
     required Directory cacheDirectory,
     ShareLimits limits = const ShareLimits(),
-    void Function(Map<String, dynamic>)? onChanged,
+    void Function(ShareInboxEvent)? onChanged,
     Future<void> Function(String)? beforeRemove,
     ShareStoreCommit? commitFile,
     DateTime Function()? now,
@@ -156,11 +157,8 @@ final class FileShareLedger implements FilePublicationLeases {
   void _changed(String id) {
     final batch = _batches[id];
     final event = batch != null && batch['visible'] == true
-        ? {'type': 'share.received', 'data': _view(batch).toJson()}
-        : <String, dynamic>{
-            'type': 'share.consumed',
-            'data': {'shareId': id},
-          };
+        ? ShareReceived(_view(batch))
+        : ShareConsumed(id);
     // 监听器只得到不可与账本共享的投影，不参与磁盘提交结果。
     try {
       _onChanged?.call(event);

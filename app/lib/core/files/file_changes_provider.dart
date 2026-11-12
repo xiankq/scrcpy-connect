@@ -1,5 +1,6 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
+import 'package:scrcpy_connect/core/files/models/file_transfer_event.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 
 import 'models/file_change.dart';
@@ -13,7 +14,7 @@ final fileChangesProvider = Provider<Stream<FileChange>>((ref) {
         final type = event['type'];
         if (type is! String) return null;
         final data = event['data'];
-        final kind = type.startsWith('transfers.')
+        final kind = data is FileTransferEvent
             ? FileChangeKind.transfer
             : data is RecoveryEvent
             ? FileChangeKind.recovery

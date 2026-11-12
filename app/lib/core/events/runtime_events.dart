@@ -30,8 +30,8 @@ final class RuntimeEvents {
   final _events = StreamController<RuntimeEvent>.broadcast();
   final _pending =
       ListQueue<({RuntimeEvent event, int sequence, bool telemetry})>();
-  final _files = <StreamSubscription<RuntimeEvent>>[];
-  StreamSubscription<RuntimeEvent>? _sharing;
+  final _files = <StreamSubscription<AppEvent>>[];
+  StreamSubscription<AppEvent>? _sharing;
   StreamSubscription<dynamic>? _platform;
   OrderedDisposal? _detaching;
   int _sequence = 0, _revision = 0;
@@ -42,8 +42,8 @@ final class RuntimeEvents {
   Stream<RuntimeEvent> get stream => _events.stream;
 
   Future<void> attach({
-    required Iterable<Stream<RuntimeEvent>> files,
-    Stream<RuntimeEvent>? sharing,
+    required Iterable<Stream<AppEvent>> files,
+    Stream<AppEvent>? sharing,
     Stream<dynamic>? platform,
   }) async {
     if (_attached || !_active) throw StateError('应用观察者不能重复附着。');
@@ -51,7 +51,7 @@ final class RuntimeEvents {
     for (final source in files) {
       attachFileEvents(source);
     }
-    _sharing = sharing?.listen(publish, onError: _error);
+    _sharing = sharing?.listen(publishEvent, onError: _error);
     _platform = platform?.listen((event) {
       if (!_active || event is! Map) return;
       unawaited(
@@ -63,16 +63,9 @@ final class RuntimeEvents {
   }
 
   /// 按需创建的文件查询在开始工作前附着，仍使用唯一的事件序列与关闭所有者。
-  void attachFileEvents(Stream<RuntimeEvent> source) {
+  void attachFileEvents(Stream<AppEvent> source) {
     if (!_active || _detaching != null) throw StateError('应用事件所有者已关闭。');
-    _files.add(
-      source.listen((event) {
-        publish({
-          ...event,
-          'data': {...event}..remove('type'),
-        });
-      }, onError: _error),
-    );
+    _files.add(source.listen(publishEvent, onError: _error));
   }
 
   void publishBusiness(

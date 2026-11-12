@@ -14,18 +14,18 @@ import 'package:scrcpy_connect/core/files/file_share_recovery.dart';
 import 'package:scrcpy_connect/core/files/incoming_shares.dart';
 import 'package:scrcpy_connect/core/files/models/file_transfer_plan.dart';
 import 'package:scrcpy_connect/core/files/models/shared_source_file.dart';
+import 'package:scrcpy_connect/core/files/models/share_inbox_event.dart';
 import 'package:uuid/uuid.dart';
 
 export 'package:scrcpy_connect/core/files/share_limits.dart';
 
 /// 分享来源只有这一个持久所有者；平台借出授权，SDK 持有复制件，应用决定发布和回收。
 final class FileShareService implements FilePublicationLeases, IncomingShares {
-  FileShareService._(this._files, this._platform, this.limits, this._emit);
+  FileShareService._(this._files, this._platform, this.limits);
   final Future<LocalFiles> Function() _files;
   final SharePlatformRequest _platform;
   final ShareLimits limits;
-  final void Function(Map<String, dynamic>)? _emit;
-  final _events = StreamController<Map<String, dynamic>>.broadcast();
+  final _events = StreamController<ShareInboxEvent>.broadcast();
   final _jobs = <String, _ImportJob>{};
   final _intents = <String, _ImportIntent>{};
   final _stoppingShares = <String>{};
@@ -40,14 +40,13 @@ final class FileShareService implements FilePublicationLeases, IncomingShares {
     required Future<LocalFiles> Function() files,
     required SharePlatformRequest platform,
     ShareLimits limits = const ShareLimits(),
-    void Function(Map<String, dynamic>)? emit,
   }) async {
-    final owner = FileShareService._(files, platform, limits, emit);
+    final owner = FileShareService._(files, platform, limits);
     await owner.configure();
     return owner;
   }
 
-  Stream<Map<String, dynamic>> get events => _events.stream;
+  Stream<ShareInboxEvent> get events => _events.stream;
 
   void _checkOpen() {
     if (_closed) throw const FileFailure('cancelled', '分享来源服务已关闭。');
@@ -73,9 +72,8 @@ final class FileShareService implements FilePublicationLeases, IncomingShares {
     }
   }
 
-  void _changed(Map<String, dynamic> event) {
+  void _changed(ShareInboxEvent event) {
     if (!_events.isClosed) _events.add(event);
-    if (!_closed) _emit?.call(event);
   }
 
   Future<Map<String, dynamic>> _request(

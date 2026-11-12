@@ -5,6 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/files/incoming_shares.dart';
 import 'package:scrcpy_connect/core/files/share_inbox_notifier.dart';
+import 'package:scrcpy_connect/core/files/models/share_inbox_event.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
@@ -61,20 +62,21 @@ void main() {
   test('迟到导入快照不覆盖终态，已消费记录也不会由读取或恢复重新加入', () async {
     final actions = container.read(shareInboxProvider.notifier);
     final loading = actions.load();
-    events.add({
-      'type': 'share.received',
-      'data': {'shareId': 'share', 'status': 'ready', 'text': 'complete'},
-    });
+    const received = ShareReceived(
+      IncomingShare(shareId: 'share', status: .ready, text: 'complete'),
+    );
+    events.add(received.toApplicationEvent());
     source.reads.single.complete([
       const IncomingShare(shareId: 'share', status: .importing),
     ]);
     await loading;
+    expect(
+      container.read(shareInboxProvider).shares.single,
+      same(received.share),
+    );
     expect(container.read(shareInboxProvider).shares.single.text, 'complete');
     final late = actions.load();
-    events.add({
-      'type': 'share.consumed',
-      'data': {'shareId': 'share'},
-    });
+    events.add(const ShareConsumed('share').toApplicationEvent());
     source.reads.last.complete([
       const IncomingShare(shareId: 'share', status: .ready),
     ]);

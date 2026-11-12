@@ -16,6 +16,7 @@ import 'package:scrcpy_connect/core/files/file_publication_leases.dart';
 import 'package:scrcpy_connect/core/files/file_transfer_journal.dart';
 import 'package:scrcpy_connect/core/files/file_transfers.dart';
 import 'package:scrcpy_connect/core/files/models/file_stamp.dart';
+import 'package:scrcpy_connect/core/files/models/file_transfer_event.dart';
 import 'package:uuid/uuid.dart';
 
 /// 持有传输任务、日志、来源租约与精确执行回收；目录快照和文件变更各自独立。
@@ -53,7 +54,7 @@ class FileTransferService implements FileTransfers {
 
   final FileTransferJournal _journal;
   final Map<String, Map<String, Object?>> _tasks;
-  final _events = StreamController<Map<String, Object?>>.broadcast(sync: true);
+  final _events = StreamController<FileTransferEvent>.broadcast(sync: true);
   // worker 结算不等于执行资源退出；精确句柄只在 close 确认后撤销。
   final _transferCleanups = <String, _TransferCleanup>{};
   final _batchStates = <String, _TransferBatch>{};
@@ -63,7 +64,7 @@ class FileTransferService implements FileTransfers {
   Future<void>? _closing;
   int _activeBatches = 0;
   Future<void> _writes = Future.value();
-  Stream<Map<String, Object?>> get events => _events.stream;
+  Stream<FileTransferEvent> get events => _events.stream;
 
   static Future<FileTransferService> open({
     required FileExecutor executor,
@@ -215,7 +216,7 @@ class FileTransferService implements FileTransfers {
     _writes = result;
     return result.then((_) {
       if (!_events.isClosed) {
-        _events.add({'type': 'transfers.changed', 'transferId': task['id']});
+        _events.add(FileTransferChanged(snapshot['id']! as String));
       }
     });
   }
@@ -1196,11 +1197,7 @@ class FileTransferService implements FileTransfers {
           state.worker = null;
           _forgetIdleBatch(batch, state);
           if (!_events.isClosed) {
-            _events.add({
-              'type': 'transfers.failed',
-              'batchId': batch,
-              'error': '$error',
-            });
+            _events.add(FileTransferFailed(batch, error));
           }
         },
       ),
@@ -1468,11 +1465,7 @@ class FileTransferService implements FileTransfers {
         onProgress: (bytes) {
           task['transferred'] = bytes;
           if (!_events.isClosed) {
-            _events.add({
-              'type': 'transfers.progress',
-              'transferId': task['id'],
-              'transferred': bytes,
-            });
+            _events.add(FileTransferProgress(task['id']! as String, bytes));
           }
         },
       );

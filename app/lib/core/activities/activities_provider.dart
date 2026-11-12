@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/devices/device_readiness_provider.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
+import 'package:scrcpy_connect/core/files/models/file_transfer_event.dart';
 import 'package:scrcpy_connect/core/queries/coalesced_query.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 
@@ -35,7 +36,7 @@ final _readProvider = Provider.autoDispose
             type.startsWith('session.') ||
             type.startsWith('observation.') ||
             type.startsWith('activities.') ||
-            type.startsWith('transfers.') ||
+            data is FileTransferEvent ||
             type.startsWith('calls.') ||
             type == 'companion.stopped' ||
             type == 'call.incoming';

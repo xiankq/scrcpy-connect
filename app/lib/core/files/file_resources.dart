@@ -12,6 +12,7 @@ import 'package:scrcpy_connect/core/devices/device_connection.dart';
 import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:scrcpy_connect/core/files/adb_file_executor.dart';
 import 'package:scrcpy_connect/core/files/file_catalog.dart';
 import 'package:scrcpy_connect/core/files/file_delivery_journal.dart';
@@ -62,7 +63,7 @@ final class FileResources {
   final DeviceConnection Function(String) requireConnection;
   final ThumbnailJobRequest Function() request;
   final void Function(Map<String, dynamic>) emit;
-  final void Function(Stream<Map<String, dynamic>>) attachCatalogEvents;
+  final void Function(Stream<AppEvent>) attachCatalogEvents;
   bool _closed = false;
   FileCatalog? _catalog;
   FileMutationService? _mutations;
@@ -132,7 +133,7 @@ final class FileResources {
     required bool Function() isStateUnverified,
     required DiagnosticReporter diagnostics,
     required void Function(Map<String, dynamic>) emit,
-    required void Function(Stream<Map<String, dynamic>>) attachCatalogEvents,
+    required void Function(Stream<AppEvent>) attachCatalogEvents,
     required void Function(FileShareService?) onSharingOpened,
   }) async {
     // 读取或清理缓存前先排空旧 isolate 的文档复制，避免与恢复产生并发写入。

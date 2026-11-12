@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:path/path.dart' as p;
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:scrcpy_connect/core/files/file_cancellation.dart';
 import 'package:scrcpy_connect/core/files/file_directories.dart';
 import 'package:scrcpy_connect/core/files/file_executor.dart';
@@ -13,15 +14,17 @@ import 'package:scrcpy_connect/core/files/file_search.dart';
 import 'package:scrcpy_connect/core/files/models/file_catalog_entry.dart';
 import 'package:scrcpy_connect/core/files/models/file_directory_facts.dart';
 import 'package:scrcpy_connect/core/files/models/file_entry_fact.dart';
+import 'package:scrcpy_connect/core/files/models/file_search_changed.dart';
 import 'package:scrcpy_connect/core/gallery/gallery_scanner.dart';
+import 'package:scrcpy_connect/core/gallery/models/gallery_scan_changed.dart';
 import 'package:uuid/uuid.dart';
 
 /// 拥有目录浏览、搜索与图库快照；不持有持久传输状态。
 final class FileCatalog implements FileSearch, GalleryScanner, FileDirectories {
   FileCatalog(this.executor);
   final FileExecutor executor;
-  final _events = StreamController<Map<String, Object?>>.broadcast(sync: true);
-  Stream<Map<String, Object?>> get events => _events.stream;
+  final _events = StreamController<AppEvent>.broadcast(sync: true);
+  Stream<AppEvent> get events => _events.stream;
   final Map<String, _Scan> _scans = {};
   bool _closed = false;
   void _check() {
@@ -337,14 +340,7 @@ final class FileCatalog implements FileSearch, GalleryScanner, FileDirectories {
             DateTime.now().difference(scan.lastProgress).inMilliseconds >=
                 200) {
           scan.lastProgress = DateTime.now();
-          _events.add({
-            'type': scan.gallery
-                ? 'media.scan.changed'
-                : 'files.search.changed',
-            'deviceId': scan.device,
-            'scanId': scan.id,
-            'searchId': scan.id,
-          });
+          _changed(scan);
         }
         if (scan.visited > 50000 ||
             scan.entries.length >= (scan.gallery ? 25000 : 500) ||
@@ -375,15 +371,20 @@ final class FileCatalog implements FileSearch, GalleryScanner, FileDirectories {
         });
       }
       if (!_closed) {
-        _events.add({
-          'type': scan.gallery ? 'media.scan.changed' : 'files.search.changed',
-          'deviceId': scan.device,
-          'scanId': scan.id,
-          'searchId': scan.id,
-        });
+        _changed(scan);
       }
     }
   }
+
+  void _changed(_Scan scan) => _events.add(
+    scan.gallery
+        ? GalleryScanChanged((deviceId: scan.device, scanId: scan.id))
+        : FileSearchChanged((
+            deviceId: scan.device,
+            searchId: scan.id,
+            path: scan.root,
+          )),
+  );
 
   _Scan _findScan(String device, String id) {
     final scan = _scans[id];

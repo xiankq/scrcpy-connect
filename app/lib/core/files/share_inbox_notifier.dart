@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/files/incoming_shares.dart';
 import 'package:scrcpy_connect/core/files/models/share_inbox_state.dart';
+import 'package:scrcpy_connect/core/files/models/share_inbox_event.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
 
 import 'file_capabilities_provider.dart';
 
@@ -26,8 +26,6 @@ class ShareInboxNotifier extends _$ShareInboxNotifier {
     );
     final subscription = session.stateEvents.listen((event) {
       if (!_current(owner)) return;
-      final type = event['type'];
-      final data = jsonObject(event['data']);
       if (event['data'] is RecoveryStarted || event['data'] is RecoveryFailed) {
         owner.request++;
       } else if (event['data'] case RecoveryCompleted(:final snapshot)) {
@@ -37,16 +35,15 @@ class ShareInboxNotifier extends _$ShareInboxNotifier {
               .where((share) => !owner.consumed.contains(share.shareId))
               .toList(),
         );
-      } else if (type == 'share.consumed') {
-        final id = value(data, 'shareId');
+      } else if (event['data'] case ShareConsumed(shareId: final id)) {
         if (id.isEmpty) return;
         owner.request++;
         owner.consumed.add(id);
         state = state.copyWith(
           shares: state.shares.where((share) => share.shareId != id).toList(),
         );
-      } else if (type == 'share.received' && event['data'] is Map) {
-        state = _withShare(owner, state, IncomingShare.fromJson(data));
+      } else if (event['data'] case ShareReceived(:final share)) {
+        state = _withShare(owner, state, share);
       }
     });
     ref.onDispose(() {

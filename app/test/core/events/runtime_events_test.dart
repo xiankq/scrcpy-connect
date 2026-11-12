@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/core/events/runtime_events.dart';
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
+import 'package:scrcpy_connect/core/files/models/file_search_changed.dart';
+import 'package:scrcpy_connect/core/files/models/share_inbox_event.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
@@ -71,22 +74,39 @@ void main() {
       handlePlatform: (_) async {},
       isDisposed: () => false,
     );
-    await events.attach(files: []);
-    final source = StreamController<RuntimeEvent>.broadcast(sync: true);
+    final sharing = StreamController<ShareInboxEvent>.broadcast(sync: true);
+    await events.attach(files: [], sharing: sharing.stream);
+    final source = StreamController<AppEvent>.broadcast(sync: true);
     events.attachFileEvents(source.stream);
     final received = events.stream.first;
-    source.add({'type': 'files.changed', 'path': '/sdcard'});
+    const change = FileSearchChanged((
+      deviceId: 'device',
+      searchId: 'search',
+      path: '/sdcard',
+    ));
+    source.add(change);
     expect(await received, {
-      'type': 'files.changed',
-      'path': '/sdcard',
-      'data': {'path': '/sdcard'},
+      'type': 'files.search.changed',
+      'deviceId': 'device',
+      'data': same(change),
       'sequence': 1,
     });
     expect(events.cursor, (sequence: 1, revision: 1));
+    final consumed = events.stream.first;
+    const consumption = ShareConsumed('share');
+    sharing.add(consumption);
+    expect(await consumed, {
+      'type': 'share.consumed',
+      'data': same(consumption),
+      'sequence': 2,
+    });
+    expect(events.cursor, (sequence: 2, revision: 2));
     await events.detach();
     expect(source.hasListener, isFalse);
+    expect(sharing.hasListener, isFalse);
     expect(() => events.attachFileEvents(source.stream), throwsStateError);
     await source.close();
+    await sharing.close();
     await events.close();
   });
 }
