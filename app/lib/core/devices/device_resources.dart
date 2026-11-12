@@ -30,6 +30,7 @@ import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/devices/models/observed_device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/scrcpy_server_queries.dart';
+import 'package:scrcpy_connect/core/devices/usb_authorization.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
@@ -64,7 +65,6 @@ final class DeviceResources {
     required this.readAudio,
     required this.authorizeUsb,
     required this.cancelUsb,
-    required this.releaseUsb,
     required this.emit,
     required this.publish,
     required this.onDevicesChanged,
@@ -100,8 +100,8 @@ final class DeviceResources {
   final bool Function() readBackgroundKeepAlive;
   final List<VideoSessionSnapshot> Function() readSessions;
   final List<DeviceAudioSnapshot> Function() readAudio;
-  final Future<Json> Function(Json)? authorizeUsb;
-  final Future<void> Function(Json)? cancelUsb, releaseUsb;
+  final Future<UsbAccess> Function(UsbAuthorizationRequest)? authorizeUsb;
+  final Future<void> Function(String attemptId)? cancelUsb;
   final void Function(Map<String, dynamic>) emit;
   final void Function(String, String?, Map<String, Object?>) publish;
   final void Function(DeviceListChanged) onDevicesChanged;
@@ -228,7 +228,6 @@ final class DeviceResources {
       isStateUnverified: isStateUnverified,
       authorizeUsb: authorizeUsb,
       cancelUsb: cancelUsb,
-      releaseUsb: releaseUsb,
       holdDevice: (id) => _reconnections.beginChange(
         ConnectionChange(ConnectionChangeKind.connect, deviceId: id),
       ),
@@ -369,9 +368,8 @@ final class DeviceResources {
     required bool Function() readBackgroundKeepAlive,
     required List<VideoSessionSnapshot> Function() readSessions,
     required List<DeviceAudioSnapshot> Function() readAudio,
-    required Future<Json> Function(Json)? authorizeUsb,
-    required Future<void> Function(Json)? cancelUsb,
-    required Future<void> Function(Json)? releaseUsb,
+    required Future<UsbAccess> Function(UsbAuthorizationRequest)? authorizeUsb,
+    required Future<void> Function(String attemptId)? cancelUsb,
     required void Function(Map<String, dynamic>) emit,
     required void Function(String, String?, Map<String, Object?>) publish,
     required void Function(DeviceListChanged) onDevicesChanged,
@@ -398,7 +396,6 @@ final class DeviceResources {
       readAudio: readAudio,
       authorizeUsb: authorizeUsb,
       cancelUsb: cancelUsb,
-      releaseUsb: releaseUsb,
       emit: emit,
       publish: publish,
       onDevicesChanged: onDevicesChanged,

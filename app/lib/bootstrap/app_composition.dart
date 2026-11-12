@@ -76,7 +76,7 @@ final class AppComposition {
     beginChange: (change) => _connections.reconnections.beginChange(change),
     cancelContent: _files.cancelContent,
     cancelUsbAttempt: (id) async {
-      if (Platform.isAndroid) await _usbAuthorization.cancel({'attemptId': id});
+      if (Platform.isAndroid) await _usbAuthorization.cancel(id);
     },
     cancelFiles: _files.cancelFiles,
     forgetObservation: _connections.forgetObservation,
@@ -246,14 +246,9 @@ final class AppComposition {
       readAudio: () =>
           session._captureInstance?.audioSnapshots(activeOnly: true) ?? [],
       authorizeUsb: Platform.isAndroid
-          ? (params) => session._usbAuthorization.authorize(params)
+          ? session._usbAuthorization.authorize
           : null,
-      cancelUsb: Platform.isAndroid
-          ? (params) => session._usbAuthorization.cancel(params)
-          : null,
-      releaseUsb: Platform.isAndroid
-          ? (params) => session._usbAuthorization.release(params)
-          : null,
+      cancelUsb: Platform.isAndroid ? session._usbAuthorization.cancel : null,
       emit: (event) => session._events.emit(event),
       publish: (type, device, data) =>
           session._events.publishBusiness(type, device, data),

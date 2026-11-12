@@ -10,6 +10,8 @@ import 'package:scrcpy_connect/core/devices/device_connection.dart';
 import 'package:scrcpy_connect/core/devices/device_connection_service.dart';
 import 'package:scrcpy_connect/core/devices/device_discovery.dart';
 import 'package:scrcpy_connect/core/devices/device_resources.dart';
+import 'package:scrcpy_connect/core/devices/device_setup.dart';
+import 'package:scrcpy_connect/core/devices/usb_authorization.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_change.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
@@ -285,20 +287,32 @@ void main() {
     final released = {for (final id in ids) id: Completer<void>()};
     final cancellations = <String>[];
     final leases = <String>[];
+    final usb = UsbAuthorization(
+      ownerLeaseId: 'owner',
+      isDisposed: () => false,
+      request: (command, params) async {
+        expect(params['ownerLeaseId'], 'owner');
+        if (command == 'usb.authorize') {
+          final id = params['attemptId'] as String;
+          authorizing[id]!.complete();
+          return {'ownerLeaseId': 'owner', ...await authorized[id]!.future};
+        }
+        if (command == 'usb.cancel') {
+          cancellations.add(params['attemptId'] as String);
+        } else if (command == 'usb.release') {
+          final id = params['usbLeaseId'] as String;
+          leases.add(id);
+          releasing[id]!.complete();
+          await released[id]!.future;
+        } else {
+          throw StateError('不应执行 $command');
+        }
+        return {'ownerLeaseId': 'owner', 'cancelled': true, 'released': true};
+      },
+    );
     final resources = await _resources(
-      authorizeUsb: (params) {
-        final id = params['attemptId'] as String;
-        authorizing[id]!.complete();
-        return authorized[id]!.future;
-      },
-      cancelUsb: (params) async =>
-          cancellations.add(params['attemptId'] as String),
-      releaseUsb: (params) async {
-        final id = params['usbLeaseId'] as String;
-        leases.add(id);
-        releasing[id]!.complete();
-        await released[id]!.future;
-      },
+      authorizeUsb: usb.authorize,
+      cancelUsb: usb.cancel,
       onDevicesChanged: (_) {},
     );
     addTearDown(() {
@@ -334,6 +348,61 @@ void main() {
     expect(() => resources.serverQueries, throwsA(isA<RequestFailure>()));
   });
 
+  test('无效 USB 描述符的回收失败仍由原设置流程持有并重试', () async {
+    var authorizations = 0;
+    var releaseAllowed = false;
+    final releases = <String>[];
+    final usb = UsbAuthorization(
+      ownerLeaseId: 'owner',
+      isDisposed: () => false,
+      request: (command, params) async {
+        expect(params['ownerLeaseId'], 'owner');
+        if (command == 'usb.authorize') {
+          authorizations++;
+          return {
+            'ownerLeaseId': 'owner',
+            'usbLeaseId': 'original-lease',
+            'fd': 'invalid',
+          };
+        }
+        if (command == 'usb.cancel') {
+          expect(params['attemptId'], 'original');
+          return {'ownerLeaseId': 'owner', 'cancelled': true};
+        }
+        expect(command, 'usb.release');
+        releases.add(params['usbLeaseId'] as String);
+        return {'ownerLeaseId': 'owner', 'released': releaseAllowed};
+      },
+    );
+    final resources = await _resources(
+      authorizeUsb: usb.authorize,
+      cancelUsb: usb.cancel,
+    );
+    addTearDown(() => releaseAllowed = true);
+    final setup = resources.setup;
+    await expectLater(
+      setup.connectUsb(attemptId: 'original'),
+      throwsA(
+        isA<DeviceSetupFailure>().having(
+          (error) => error.code,
+          'code',
+          'setup_cleanup_unconfirmed',
+        ),
+      ),
+    );
+    await expectLater(resources.close(), throwsA(isA<RequestFailure>()));
+    expect(resources.setup, same(setup));
+    expect(authorizations, 1);
+    expect(releases, isNotEmpty);
+    releaseAllowed = true;
+    await resources.close();
+    final closed = releases.length;
+    await resources.close();
+    expect(releases, hasLength(closed));
+    expect(releases.every((lease) => lease == 'original-lease'), isTrue);
+    expect(authorizations, 1);
+  });
+
   test('应用退出等待迟到 USB 租约，重试原资源后最后释放宿主', () async {
     final authorizing = Completer<void>();
     final authorized = Completer<Map<String, dynamic>>();
@@ -342,21 +411,32 @@ void main() {
     final cancellations = <String>[];
     final leases = <String>[];
     var releaseAllowed = false;
+    final usb = UsbAuthorization(
+      ownerLeaseId: 'owner',
+      isDisposed: () => false,
+      request: (command, params) async {
+        expect(params['ownerLeaseId'], 'owner');
+        if (command == 'usb.authorize') {
+          expect(params['attemptId'], 'usb-original');
+          authorizing.complete();
+          return {'ownerLeaseId': 'owner', ...await authorized.future};
+        }
+        if (command == 'usb.cancel') {
+          cancellations.add(params['attemptId'] as String);
+        } else if (command == 'usb.release') {
+          leases.add(params['usbLeaseId'] as String);
+          if (!releaseAllowed) throw StateError('USB release unconfirmed');
+          releasing.complete();
+          await released.future;
+        } else {
+          throw StateError('不应执行 $command');
+        }
+        return {'ownerLeaseId': 'owner', 'cancelled': true, 'released': true};
+      },
+    );
     final resources = await _resources(
-      authorizeUsb: (params) {
-        expect(params['attemptId'], 'usb-original');
-        authorizing.complete();
-        return authorized.future;
-      },
-      cancelUsb: (params) async {
-        cancellations.add(params['attemptId'] as String);
-      },
-      releaseUsb: (params) async {
-        leases.add(params['usbLeaseId'] as String);
-        if (!releaseAllowed) throw StateError('USB release unconfirmed');
-        releasing.complete();
-        await released.future;
-      },
+      authorizeUsb: usb.authorize,
+      cancelUsb: usb.cancel,
     );
     final observations = resources.observations;
     final companion = resources.companion;
@@ -545,9 +625,8 @@ void _expectUnused(
 }
 
 Future<DeviceResources> _resources({
-  Future<Map<String, dynamic>> Function(Map<String, dynamic>)? authorizeUsb,
-  Future<void> Function(Map<String, dynamic>)? cancelUsb,
-  Future<void> Function(Map<String, dynamic>)? releaseUsb,
+  Future<UsbAccess> Function(UsbAuthorizationRequest)? authorizeUsb,
+  Future<void> Function(String)? cancelUsb,
   Future<void> Function(String, DeviceConnection, bool)? stopWork,
   int Function()? readEventSequence,
   bool Function()? readBackgroundKeepAlive,
@@ -580,7 +659,6 @@ Future<DeviceResources> _resources({
     readAudio: () => throw StateError('重连不应读取设备音源'),
     authorizeUsb: authorizeUsb,
     cancelUsb: cancelUsb,
-    releaseUsb: releaseUsb,
     emit: (_) => throw StateError('此流程不应发布事件'),
     publish: (_, _, _) => throw StateError('此流程不应发布事件'),
     onDevicesChanged:

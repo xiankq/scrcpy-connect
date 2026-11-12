@@ -10,6 +10,7 @@ import 'package:scrcpy_connect/core/devices/models/adb_discovery_endpoint.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_change.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
 import 'package:scrcpy_connect/core/devices/models/device_record.dart';
+import 'package:scrcpy_connect/core/devices/usb_authorization.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/identity/adb_identity_service.dart';
 import 'package:scrcpy_connect/core/identity/models/identity_selection.dart';
@@ -27,7 +28,6 @@ class DeviceConnectionService implements DeviceSetup {
     required this.emit,
     required this.isStateUnverified,
     this.authorizeUsb,
-    this.releaseUsb,
     this.cancelUsb,
     this.holdDevice,
     bool Function()? burstMode,
@@ -46,8 +46,8 @@ class DeviceConnectionService implements DeviceSetup {
   final ConnectionPolicy policy;
   final void Function(Json) emit;
   final bool Function() isStateUnverified;
-  final Future<Json> Function(Json)? authorizeUsb;
-  final Future<void> Function(Json)? releaseUsb, cancelUsb;
+  final Future<UsbAccess> Function(UsbAuthorizationRequest)? authorizeUsb;
+  final Future<void> Function(String attemptId)? cancelUsb;
   final Future<void> Function() Function(String)? holdDevice;
   final Future<void> Function(Duration) _delay;
   final DateTime Function() _now;
@@ -602,30 +602,26 @@ class DeviceConnectionService implements DeviceSetup {
     bool connect,
   ) async {
     await _identity(flow, identity);
-    final authorized = authorizeUsb == null
-        ? const <String, dynamic>{}
-        : await authorizeUsb!({
-            'attemptId': flow.attempt,
-            'deviceId': ?flow.deviceId,
-            'serial': ?requestedSerial,
-            'usbDeviceId': ?usbDeviceId,
-            if (connect) 'connect': true,
-          });
-    if (authorized['usbLeaseId'] case final String lease) flow.usbLease = lease;
+    final authorized = flow.usbAccess = authorizeUsb == null
+        ? null
+        : await authorizeUsb!(
+            UsbAuthorizationRequest(
+              attemptId: flow.attempt,
+              deviceId: flow.deviceId,
+              serial: requestedSerial,
+              usbDeviceId: usbDeviceId,
+              connect: connect,
+            ),
+          );
     _check(flow);
-    final usbSerial = authorized['serial'] ?? requestedSerial;
+    final usbSerial = authorized?.serial ?? requestedSerial;
     if (usbSerial != null &&
-        (usbSerial is! String ||
-            usbSerial.length > 256 ||
+        (usbSerial.length > 256 ||
             usbSerial.contains(RegExp(r'[\x00-\x1f]')))) {
       throw const RequestFailure('invalid_argument', 'USB 候选序列号无效。');
     }
     String? selector;
-    final fd = authorized['fd'];
-    if (fd != null && flow.usbLease == null ||
-        fd == null && flow.usbLease != null) {
-      throw const RequestFailure('invalid_argument', 'USB 描述符与平台租约必须同时交付。');
-    }
+    final fd = authorized?.fd;
     if (fd == null) {
       final client = await _client(flow);
       if (client is! AdbTransportDiscovery) {
@@ -656,12 +652,10 @@ class DeviceConnectionService implements DeviceSetup {
         ]);
       }
       selector = selected.serial;
-    } else if (fd is! int || fd < 0) {
-      throw const RequestFailure('invalid_argument', 'USB 授权描述符无效。');
     }
     _check(flow);
     final serial = selector ?? usbSerial;
-    if (flow.deviceId == null && serial is String && serial.isNotEmpty) {
+    if (flow.deviceId == null && serial != null && serial.isNotEmpty) {
       final matches = devices.records.current.devices
           .where((record) => record.serial == serial)
           .toList();
@@ -690,17 +684,11 @@ class DeviceConnectionService implements DeviceSetup {
       }
     }
     _check(flow);
-    final platformLease = flow.usbLease;
-    if (platformLease != null && releaseUsb == null) {
-      throw const RequestFailure('usb_cleanup_unavailable', '缺少平台 USB 连接回收入口。');
-    }
     final receipt = await devices.admitSetupCandidate(
       deviceId: flow.deviceId,
       identity: flow.identity!,
       transport: DeviceTransport.usb,
-      releasePlatformResources: platformLease == null
-          ? null
-          : () => releaseUsb!({'usbLeaseId': platformLease}),
+      releasePlatformResources: authorized?.close,
       attemptId: flow.attempt,
       cancellation: flow.stop,
       open: (client, stop) async {
@@ -712,8 +700,8 @@ class DeviceConnectionService implements DeviceSetup {
             );
           }
           final attempt = flow.usbAttempt = client.beginUsbFdConnection(
-            fd as int,
-            usbSerial as String? ?? '',
+            fd,
+            usbSerial ?? '',
             authorize: policy.requestAuthorization,
             timeout: policy.connectTimeout,
             options: policy.directConnectOptions(burstMode: _burstMode()),
@@ -721,7 +709,7 @@ class DeviceConnectionService implements DeviceSetup {
           );
           final device = await attempt.result;
           // 返回设备后由 DeviceConnectionPool 持有平台连接，失败候选也按同一退休流程回收。
-          flow.usbLease = null;
+          flow.usbAccess = null;
           return device;
         }
         return client.connect(
@@ -898,7 +886,7 @@ class DeviceConnectionService implements DeviceSetup {
   }
 
   Future<void> _cancelPlatformUsb(_SetupFlow flow) async {
-    await cancelUsb!({'attemptId': flow.attempt});
+    await cancelUsb!(flow.attempt);
   }
 
   Future<void> _drain(_SetupFlow flow) async {
@@ -925,10 +913,9 @@ class DeviceConnectionService implements DeviceSetup {
       }
       await flow.usbAttempt?.close();
       flow.usbAttempt = null;
-      if (flow.usbLease case final lease?) {
-        if (releaseUsb == null) throw StateError('缺少 USB 授权回收入口。');
-        await releaseUsb!({'usbLeaseId': lease});
-        flow.usbLease = null;
+      if (flow.usbAccess case final access?) {
+        await access.close();
+        flow.usbAccess = null;
       }
       if (flow.ephemeralIdentity case final identity?) {
         await releaseIdentityClient(identity);
@@ -990,7 +977,8 @@ final class _SetupFlow {
   final DateTime deadline;
   bool dedicatedIdentity;
   final stop = AdbCancellation();
-  String? deviceId, usbLease;
+  String? deviceId;
+  UsbAccess? usbAccess;
   IdentityAttempt? identity;
   IdentitySelection? ephemeralIdentity;
   DeviceSetupReceipt? receipt;
