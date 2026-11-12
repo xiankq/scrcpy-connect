@@ -20,17 +20,22 @@ import 'package:scrcpy_connect/core/settings/app_settings.dart';
 /// 设备设置与共享唤醒租约在捕获边界协调。
 class MediaCapture {
   MediaCapture({
-    required this._sessions,
-    required this._audio,
-    required this._keepAwake,
+    required ControlSessionService Function() sessions,
+    required DeviceAudioService Function() audio,
+    required this._currentWake,
+    required this._readWake,
     required this._connectionForDevice,
     required this._preferences,
     required this._scrcpy,
-  });
+  }) : _readSessions = sessions,
+       _readAudio = audio;
 
-  final ControlSessionService _sessions;
-  final DeviceAudioService _audio;
-  final DeviceWakeService _keepAwake;
+  final ControlSessionService Function() _readSessions;
+  final DeviceAudioService Function() _readAudio;
+  final DeviceWakeService? Function() _currentWake;
+  final KeepAwakeSnapshot Function(String) _readWake;
+  ControlSessionService get _sessions => _readSessions();
+  DeviceAudioService get _audio => _readAudio();
   final DeviceConnection? Function(String) _connectionForDevice;
   final AppSettings _preferences;
   final ScrcpyClient _scrcpy;
@@ -86,7 +91,7 @@ class MediaCapture {
 
   Future<List<VideoSessionSnapshot>> readVideoSessions({String? deviceId}) =>
       _sessions.readSessions(deviceId: deviceId);
-  KeepAwakeSnapshot readWake(String deviceId) => _keepAwake.readWake(deviceId);
+  KeepAwakeSnapshot readWake(String deviceId) => _readWake(deviceId);
 
   Future<VideoStopReceipt> stopVideo(
     ControlTarget target, {
@@ -98,11 +103,11 @@ class MediaCapture {
     );
     if (receipt.deviceId case final device?) {
       try {
-        await _keepAwake.sync(device);
+        await _currentWake()?.sync(device);
       } catch (_) {
         // 窗口捕获已关闭，设备共享租约仍由原所有者持有清理责任。
       }
-      final wake = _keepAwake.readWake(device);
+      final wake = readWake(device);
       final healthySharedLease =
           _sessions.hasAudioOwner(device) &&
           wake.keepActiveLeaseActive &&

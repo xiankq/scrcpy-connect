@@ -62,9 +62,10 @@ final class CaptureResources {
   MediaCapture get capture {
     if (_capture == null) _checkCreation();
     return _capture ??= MediaCapture(
-      sessions: sessions,
-      audio: audio,
-      keepAwake: keepAwake,
+      sessions: () => sessions,
+      audio: () => audio,
+      currentWake: () => _wake,
+      readWake: readWake,
       connectionForDevice: connectionForDevice,
       preferences: _preferences,
       scrcpy: _scrcpy,
@@ -96,7 +97,13 @@ final class CaptureResources {
         if (_audio case final audio?) {
           observeCleanup(audio.eligibilityChanged(id));
         }
-        final wake = _wake ?? (!_closed && !isDisposed() ? keepAwake : null);
+        // 关闭最后窗口或未启用偏好时，只排空已有租约，不为通知创建新执行者。
+        final needsWake =
+            !_closed &&
+            !isDisposed() &&
+            _preferences.settings.deviceSettings[id]?.stayAwake == true &&
+            (_sessions?.hasAudioOwner(id) ?? false);
+        final wake = _wake ?? (needsWake ? keepAwake : null);
         if (wake != null) observeCleanup(wake.windowsChanged(id));
       },
     );
@@ -108,7 +115,7 @@ final class CaptureResources {
     return _audio ??= DeviceAudioService(
       scrcpy: _scrcpy,
       requireConnection: requireConnection,
-      hasAudioOwner: sessions.hasAudioOwner,
+      hasAudioOwner: (id) => _sessions?.hasAudioOwner(id) ?? false,
       deviceName: (id) => _records.current.find(id)?.name ?? 'Android 设备',
       apiLevel: (id) => _records.current.find(id)?.apiLevel,
       emit: (type, device, data) => publishBusiness(type, device, data),
@@ -121,7 +128,7 @@ final class CaptureResources {
     return _wake ??= DeviceWakeService(
       scrcpy: _scrcpy,
       requireConnection: requireConnection,
-      hasWindowOwner: sessions.hasAudioOwner,
+      hasWindowOwner: (id) => _sessions?.hasAudioOwner(id) ?? false,
       keepAwakeEnabled: (deviceId) =>
           _preferences.settings.deviceSettings[deviceId]?.stayAwake == true,
       emit: (type, device, data) => publishBusiness(type, device, data),
