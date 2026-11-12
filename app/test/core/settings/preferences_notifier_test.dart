@@ -72,12 +72,12 @@ void main() {
     await _flush(container);
     events.add({
       'type': 'settings.changed',
-      'data': {
-        'appearance': 'dark',
-        'deviceSettings': {
-          'device': {'showNavigationBar': false},
+      'data': Preferences(
+        appearance: .dark,
+        deviceSettings: const {
+          'device': DevicePreferences(showNavigationBar: false),
         },
-      },
+      ),
     });
     settings.writes[0].result.complete(
       Preferences(appearance: Appearance.light),

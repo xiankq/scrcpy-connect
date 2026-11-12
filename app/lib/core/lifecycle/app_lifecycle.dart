@@ -12,7 +12,6 @@ import 'package:scrcpy_connect/core/platform/background_policy.dart';
 import 'package:scrcpy_connect/core/recovery/state_recovery.dart';
 import 'package:scrcpy_connect/core/settings/app_settings.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
-import 'package:scrcpy_connect/core/settings/preference_codec.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 
 /// 协调应用启停、连接退休与有序关闭；依赖由 bootstrap 装配。
@@ -55,11 +54,10 @@ final class AppLifecycle {
   bool get isDisposed => _disposed;
   void settingsChanged(Preferences preferences) {
     if (_disposed) return;
-    final settings = PreferenceCodec.encode(preferences);
     _connections.reconnections.updateBackgroundKeepAlive(
       preferences.backgroundKeepAlive,
     );
-    _events.publish({'type': 'settings.changed', 'data': settings});
+    _events.publish({'type': 'settings.changed', 'data': preferences});
     _readCaptures()?.settingsChanged();
   }
 

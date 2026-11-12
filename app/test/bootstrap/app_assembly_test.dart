@@ -19,6 +19,8 @@ import 'package:scrcpy_connect/core/platform/bundled_server_files.dart';
 import 'package:scrcpy_connect/core/platform/native_host.dart';
 import 'package:scrcpy_connect/core/platform/native_host_dependencies.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_actions_provider.dart';
+import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/settings/settings_management.dart';
 import 'package:scrcpy_connect/router/route_resource_resolver_provider.dart';
 
 void main() {
@@ -101,6 +103,14 @@ void main() {
         .read(activityManagementProvider)
         .readActivities();
     expect(activities.activities, isEmpty);
+    final preferencesChanged = container
+        .read(runtimeEventsProvider)
+        .firstWhere((event) => event['type'] == 'settings.changed');
+    final preferences = await container
+        .read(settingsManagementProvider)
+        .update(PreferenceChanges(appearance: .dark));
+    expect((await preferencesChanged)['data'], same(preferences));
+    expect(container.read(appSnapshotProvider).settings, same(preferences));
     final changed = container
         .read(runtimeEventsProvider)
         .firstWhere((event) => event['data'] is DeviceListChanged);

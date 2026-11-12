@@ -5,8 +5,6 @@ import 'package:scrcpy_connect/core/lifecycle/state_subscription.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences_state.dart';
-import 'package:scrcpy_connect/core/settings/preference_codec.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
 
 import 'settings_capabilities_provider.dart';
 import 'settings_management.dart';
@@ -35,11 +33,10 @@ class PreferencesNotifier extends _$PreferencesNotifier {
       } else if (type == 'state.resynced' || type == 'settings.changed') {
         owner.request++;
         owner.epoch++;
-        final data = jsonObject(event['data']);
         state = state.copyWith(
           values: type == 'state.resynced'
               ? (event['data'] as RuntimeSnapshot).settings
-              : PreferenceCodec.decode(data),
+              : event['data'] as Preferences,
           error: null,
         );
       }

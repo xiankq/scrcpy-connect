@@ -42,7 +42,7 @@ void main() {
     );
     final reading = reader.readSnapshot();
     settings = Preferences(appearance: .dark);
-    events.publishBusiness('settings.changed', null, {});
+    events.publish({'type': 'settings.changed', 'data': settings});
     first.complete([]);
     final snapshot = await reading;
     expect(reads, 2);

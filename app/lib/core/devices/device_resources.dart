@@ -36,6 +36,7 @@ import 'package:scrcpy_connect/core/identity/adb_identity_service.dart';
 import 'package:scrcpy_connect/core/identity/identity_manager.dart';
 import 'package:scrcpy_connect/core/identity/models/identity_selection.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
+import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 
 /// 设备记录、身份、连接策略与伴生观察的所有者。
@@ -529,10 +530,11 @@ DeviceReconnectEvent? _reconnectEvent(Map<String, dynamic> event) {
   return switch (type) {
     'devices.changed' when raw is DeviceListChanged =>
       DeviceReconnectDevicesChanged(raw.devices, sequence: sequence),
-    'settings.changed' => DeviceReconnectSettingsChanged(
-      data['backgroundKeepAlive'] == true,
-      sequence: sequence,
-    ),
+    'settings.changed' when raw is Preferences =>
+      DeviceReconnectSettingsChanged(
+        raw.backgroundKeepAlive,
+        sequence: sequence,
+      ),
     'adb.discovery.changed' => DeviceReconnectDiscoveryChanged(
       data['guid'] as String?,
       sequence: sequence,
