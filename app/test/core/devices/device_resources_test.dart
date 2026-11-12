@@ -657,6 +657,7 @@ Future<DeviceResources> _resources({
     publish: (_, _, _) => throw StateError('此流程不应发布事件'),
     onDevicesChanged:
         onDevicesChanged ?? (_) => throw StateError('此流程不应修改设备投影'),
+    onObservationChanged: (_) => throw StateError('此流程不应发布观察事件'),
     stopWork: stopWork ?? (_, _, _) async => throw StateError('没有设备活动需要停止'),
   );
   addTearDown(resources.close);

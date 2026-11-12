@@ -6,6 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/devices/models/device_call.dart';
 import 'package:scrcpy_connect/core/devices/models/device_notification.dart';
 import 'package:scrcpy_connect/core/devices/models/device_observation_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_observation_event.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/devices/models/observed_device_snapshot.dart';
@@ -292,7 +293,6 @@ class SystemNotifications {
   void _event(Json event) {
     if (_disposed || !_current()) return;
     final deviceId = value(event, 'deviceId');
-    final data = jsonObject(event['data']);
     final payload = event['data'];
     if (payload is RecoveryStarted || payload is RecoveryFailed) {
       _suspend();
@@ -336,44 +336,17 @@ class SystemNotifications {
       return;
     }
     if (_reconciling || _readSnapshot().reconciliationPending) return;
-    if (event['type'] == 'observation.changed') {
-      _observe(
-        ObservedDeviceSnapshot(
-          observation: DeviceObservationSnapshot.fromJson({
-            ...data,
-            'deviceId': deviceId,
-          }),
-          notifications: DeviceNotificationsSnapshot.fromJson({
-            ...jsonObject(data['notifications']),
-            'deviceId': deviceId,
-          }),
-          calls: DeviceCallsSnapshot.fromJson({
-            ...jsonObject(data['calls']),
-            'deviceId': deviceId,
-          }),
-        ),
-      );
-    } else if (event['type'] == 'notifications.changed') {
-      final owner = _owners[deviceId];
-      if (owner != null && _connected(deviceId)) {
-        _notifications(
-          deviceId,
-          owner,
-          DeviceNotificationsSnapshot.fromJson({...data, 'deviceId': deviceId}),
-        );
+    if (payload case DeviceObservationChanged(:final snapshot)) {
+      _observe(snapshot);
+    } else if (payload case DeviceNotificationsChanged(:final snapshot)) {
+      final owner = _owners[snapshot.deviceId];
+      if (owner != null && _connected(snapshot.deviceId)) {
+        _notifications(snapshot.deviceId, owner, snapshot);
       }
-    } else if ([
-      'calls.incoming',
-      'call.incoming',
-      'calls.changed',
-    ].contains(event['type'])) {
-      final owner = _owners[deviceId];
-      if (owner != null && _connected(deviceId)) {
-        _calls(
-          deviceId,
-          owner,
-          DeviceCallsSnapshot.fromJson({...data, 'deviceId': deviceId}),
-        );
+    } else if (payload case DeviceCallsChanged(:final snapshot)) {
+      final owner = _owners[snapshot.deviceId];
+      if (owner != null && _connected(snapshot.deviceId)) {
+        _calls(snapshot.deviceId, owner, snapshot);
       }
     }
     if (_pending.isNotEmpty) _changed();

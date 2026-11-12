@@ -28,6 +28,7 @@ import 'package:scrcpy_connect/core/devices/device_service.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_change.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
+import 'package:scrcpy_connect/core/devices/models/device_observation_event.dart';
 import 'package:scrcpy_connect/core/devices/models/observed_device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/scrcpy_server_queries.dart';
 import 'package:scrcpy_connect/core/devices/usb_authorization.dart';
@@ -68,6 +69,7 @@ final class DeviceResources {
     required this.emit,
     required this.publish,
     required this.onDevicesChanged,
+    required this.onObservationChanged,
     required this.stopWork,
   }) : _connectionPolicy = policy,
        _isAppDisposed = isDisposed;
@@ -105,6 +107,7 @@ final class DeviceResources {
   final void Function(Map<String, dynamic>) emit;
   final void Function(String, String?, Map<String, Object?>) publish;
   final void Function(DeviceListChanged) onDevicesChanged;
+  final void Function(DeviceObservationEvent) onObservationChanged;
   final Future<void> Function(String, DeviceConnection, bool) stopWork;
   final _observedConnections = <String, DeviceConnection>{};
   final _deviceTaskConnections = <DeviceConnection>{};
@@ -329,7 +332,7 @@ final class DeviceResources {
     return _observationInstance ??= DeviceObservationService(
       companion: _companion,
       records: _records,
-      emit: (type, device, data) => publish(type, device, data),
+      onChanged: onObservationChanged,
     );
   }
 
@@ -373,6 +376,7 @@ final class DeviceResources {
     required void Function(Map<String, dynamic>) emit,
     required void Function(String, String?, Map<String, Object?>) publish,
     required void Function(DeviceListChanged) onDevicesChanged,
+    required void Function(DeviceObservationEvent) onObservationChanged,
     required Future<void> Function(String, DeviceConnection, bool) stopWork,
   }) async {
     await recoverConnections();
@@ -399,6 +403,7 @@ final class DeviceResources {
       emit: emit,
       publish: publish,
       onDevicesChanged: onDevicesChanged,
+      onObservationChanged: onObservationChanged,
       stopWork: stopWork,
     );
     owner._identities = await AdbIdentityService.open(

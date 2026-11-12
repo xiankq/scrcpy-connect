@@ -5,6 +5,7 @@ import 'package:scrcpy_connect/core/devices/models/device_call.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/devices/models/device_notification.dart';
 import 'package:scrcpy_connect/core/devices/models/device_observation_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_observation_event.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/models/observed_device_snapshot.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
@@ -168,14 +169,8 @@ void main() {
                 phase: .observing,
                 generation: 1,
               ),
-              notifications: DeviceNotificationsSnapshot.fromJson({
-                ...notificationData('baseline'),
-                'deviceId': 'device',
-              }),
-              calls: DeviceCallsSnapshot.fromJson({
-                ...callData(1),
-                'deviceId': 'device',
-              }),
+              notifications: notificationData('baseline'),
+              calls: callData(1),
             ),
           ],
         ),
@@ -185,7 +180,7 @@ void main() {
     events.add({
       'type': 'calls.changed',
       'deviceId': 'device',
-      'data': callData(1),
+      'data': DeviceCallsChanged(callData(1)),
     });
     await notifications.drain();
     expect(sink.shown, isEmpty);
@@ -193,7 +188,7 @@ void main() {
     events.add({
       'type': 'calls.changed',
       'deviceId': 'device',
-      'data': callData(2),
+      'data': DeviceCallsChanged(callData(2)),
     });
     await notifications.drain();
     expect(sink.shown.map((notice) => notice.kind), [
@@ -203,7 +198,9 @@ void main() {
     events.add({
       'type': 'notifications.changed',
       'deviceId': 'device',
-      'data': {...notificationData('stale'), 'observationEpoch': 0},
+      'data': DeviceNotificationsChanged(
+        notificationData('stale').copyWith(observationEpoch: 0),
+      ),
     });
     await notifications.drain();
     expect(sink.shown, hasLength(2));
@@ -217,32 +214,40 @@ void main() {
 Map<String, dynamic> observing() => {
   'type': 'observation.changed',
   'deviceId': 'device',
-  'data': {
-    'wanted': true,
-    'phase': 'observing',
-    'generation': 1,
-    'notifications': notificationData(null),
-  },
+  'data': DeviceObservationChanged(
+    ObservedDeviceSnapshot(
+      observation: const DeviceObservationSnapshot(
+        deviceId: 'device',
+        wanted: true,
+        phase: .observing,
+        generation: 1,
+      ),
+      notifications: notificationData(null),
+      calls: const DeviceCallsSnapshot(deviceId: 'device'),
+    ),
+  ),
 };
 Map<String, dynamic> notificationsChanged(String id) => {
   'type': 'notifications.changed',
   'deviceId': 'device',
-  'data': notificationData(id),
+  'data': DeviceNotificationsChanged(notificationData(id)),
 };
-Map<String, dynamic> notificationData(String? id) => {
-  'live': true,
-  'observationEnabled': true,
-  'observationEpoch': 1,
-  'notifications': [
-    if (id != null)
-      {
-        'id': id,
-        'key': id,
-        'revision': 'revision',
-        'body': 'sensitive message',
-      },
-  ],
-};
+DeviceNotificationsSnapshot notificationData(String? id) =>
+    DeviceNotificationsSnapshot(
+      deviceId: 'device',
+      live: true,
+      observationEnabled: true,
+      observationEpoch: 1,
+      notifications: [
+        if (id != null)
+          DeviceNotification(
+            id: id,
+            key: id,
+            revision: 'revision',
+            body: 'sensitive message',
+          ),
+      ],
+    );
 
 class _Sink implements SystemNotificationSink {
   final activationsController = StreamController<String>.broadcast(sync: true);
@@ -289,11 +294,10 @@ class _Sink implements SystemNotificationSink {
   }
 }
 
-Map<String, dynamic> callData(int generation) => {
-  'live': true,
-  'observationEnabled': true,
-  'observationEpoch': 1,
-  'calls': [
-    {'id': 'call', 'generation': generation, 'state': 'ringing'},
-  ],
-};
+DeviceCallsSnapshot callData(int generation) => DeviceCallsSnapshot(
+  deviceId: 'device',
+  live: true,
+  observationEnabled: true,
+  observationEpoch: 1,
+  calls: [DeviceCall(id: 'call', generation: generation, state: .ringing)],
+);

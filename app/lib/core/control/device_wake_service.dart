@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:adb/adb.dart';
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
+import 'package:scrcpy_connect/core/control/models/device_keep_awake_changed.dart';
 import 'package:scrcpy_connect/core/devices/device_connection.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
@@ -14,7 +15,7 @@ final class DeviceWakeService {
     required this.requireConnection,
     required this.hasWindowOwner,
     required this.keepAwakeEnabled,
-    required this.emit,
+    required this.onChanged,
     this.startupTimeout = const Duration(seconds: 12),
   }) {
     if (startupTimeout <= Duration.zero) {
@@ -26,7 +27,7 @@ final class DeviceWakeService {
   final DeviceConnection Function(String) requireConnection;
   final bool Function(String) hasWindowOwner;
   final bool Function(String deviceId) keepAwakeEnabled;
-  final void Function(String, String, Map<String, Object?>) emit;
+  final void Function(DeviceKeepAwakeChanged) onChanged;
   final Duration startupTimeout;
   final _current = <String, _KeepAwakeLease>{};
   final _leases = <_KeepAwakeLease>[];
@@ -51,10 +52,6 @@ final class DeviceWakeService {
                 if (entry.deviceId == deviceId && entry.retired) entry.state,
             ],
           );
-
-  List<Map<String, Object?>> snapshots() => [
-    for (final device in _last.keys) readWake(device).toSnapshot(),
-  ];
 
   /// 设置或窗口资格改变后调用；首个等待点前撤销旧准入。
   /// 关闭失败保留精确捕获，下一次通知先重试旧清理，再允许同设备启动。
@@ -102,11 +99,11 @@ final class DeviceWakeService {
           await _close(entry);
         } catch (cleanup, trace) {
           Error.throwWithStackTrace(
-            RequestFailure('keep_active_cleanup', '保持唤醒服务尚未确认停止，请重试。', {
-              'cause': '$error',
-              'cleanupReason': '$cleanup',
-              ...entry.state.toSnapshot(),
-            }),
+            RequestFailure('keep_active_cleanup', '保持唤醒服务尚未确认停止，请重试。', (
+              cause: error,
+              cleanup: cleanup,
+              snapshot: entry.state,
+            )),
             trace,
           );
         }
@@ -120,23 +117,23 @@ final class DeviceWakeService {
   Future<void> windowsChanged(String deviceId) async => sync(deviceId);
 
   Future<void> settingsChanged(Iterable<String> deviceIds) async {
-    final failures = <Map<String, Object?>>[];
+    final failures = <({String deviceId, Object cause})>[];
     await Future.wait([
       for (final device in deviceIds.toSet())
         () async {
           try {
             await sync(device);
           } catch (error) {
-            failures.add({'deviceId': device, 'reason': '$error'});
+            failures.add((deviceId: device, cause: error));
           }
         }(),
     ]);
     if (failures.isNotEmpty) {
-      throw RequestFailure('keep_active_partial', '设置已保存，部分保持唤醒服务尚未应用。', {
-        'saved': true,
-        'action': 'keep_active',
-        'failures': failures,
-      });
+      throw RequestFailure(
+        'keep_active_partial',
+        '设置已保存，部分保持唤醒服务尚未应用。',
+        List<({String deviceId, Object cause})>.unmodifiable(failures),
+      );
     }
   }
 
@@ -317,10 +314,10 @@ final class DeviceWakeService {
         );
         _publish(entry);
         Error.throwWithStackTrace(
-          RequestFailure('keep_active_cleanup', '保持唤醒服务尚未确认停止。', {
-            ...entry.state.toSnapshot(),
-            'cause': '$error',
-          }),
+          RequestFailure('keep_active_cleanup', '保持唤醒服务尚未确认停止。', (
+            snapshot: entry.state,
+            cause: error,
+          )),
           stack,
         );
       }
@@ -381,11 +378,7 @@ final class DeviceWakeService {
       _last[entry.deviceId] = entry.state;
     }
     try {
-      emit(
-        'device.keep_active.updated',
-        entry.deviceId,
-        entry.state.toSnapshot(),
-      );
+      onChanged(DeviceKeepAwakeChanged(entry.state));
     } catch (_) {
       // 观察者失败不转移或丢弃捕获的关闭责任。
     }

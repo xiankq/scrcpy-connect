@@ -11,6 +11,7 @@ import 'package:scrcpy_connect/core/devices/device_notifications.dart';
 import 'package:scrcpy_connect/core/devices/device_observation.dart';
 import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
 import 'package:scrcpy_connect/core/devices/models/observed_device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_observation_event.dart';
 
 Map<String, Object?> _unknown(
   String section,
@@ -64,13 +65,13 @@ final class DeviceObservationService
   DeviceObservationService({
     required this.companion,
     required this.records,
-    required this.emit,
+    required this.onChanged,
   }) {
     _subscription = companion.updates.listen(_update);
   }
   final CompanionService companion;
   final DeviceRecordStorage records;
-  final CompanionEmitter emit;
+  final void Function(DeviceObservationEvent) onChanged;
   late final StreamSubscription<CompanionUpdate> _subscription;
   final _observations = <String, _Observation>{};
   final _tails = <String, Future<void>>{};
@@ -146,19 +147,22 @@ final class DeviceObservationService
   ];
 
   List<ObservedDeviceSnapshot> currentObservedDevices() => [
-    for (final observation in currentSnapshots())
-      ObservedDeviceSnapshot(
-        observation: observation,
-        notifications: DeviceNotificationsSnapshot.fromJson({
-          ..._currentSection(observation, 'notifications'),
-          'deviceId': observation.deviceId,
-        }),
-        calls: DeviceCallsSnapshot.fromJson({
-          ..._currentSection(observation, 'calls'),
-          'deviceId': observation.deviceId,
-        }),
-      ),
+    for (final observation in currentSnapshots()) _observedDevice(observation),
   ];
+
+  ObservedDeviceSnapshot _observedDevice(
+    DeviceObservationSnapshot observation,
+  ) => ObservedDeviceSnapshot(
+    observation: observation,
+    notifications: DeviceNotificationsSnapshot.fromJson({
+      ..._currentSection(observation, 'notifications'),
+      'deviceId': observation.deviceId,
+    }),
+    calls: DeviceCallsSnapshot.fromJson({
+      ..._currentSection(observation, 'calls'),
+      'deviceId': observation.deviceId,
+    }),
+  );
 
   Map<String, Object?> _currentSection(
     DeviceObservationSnapshot snapshot,
@@ -195,16 +199,6 @@ final class DeviceObservationService
               ? '当前连接已核验此功能的实时状态。'
               : '当前没有可核验的实时状态，请在对应功能页检查。'),
     );
-  }
-
-  /// 应用事件和恢复快照的明确适配；内容仍来自本次伴生协议缓存。
-  Map<String, Object?> statusProjection(String device) {
-    final snapshot = currentSnapshot(device);
-    return {
-      ...snapshot.toJson(),
-      for (final section in _state(device).sections.keys)
-        section: _currentSection(snapshot, section),
-    };
   }
 
   void _admit({String? device, AdbCancellation? cancellation}) {
@@ -317,7 +311,9 @@ final class DeviceObservationService
 
   void _publish(String device) {
     if (records.current.find(device) != null) {
-      _emitEvent('observation.changed', device, statusProjection(device));
+      _emitEvent(
+        DeviceObservationChanged(_observedDevice(currentSnapshot(device))),
+      );
     }
   }
 
@@ -526,7 +522,7 @@ final class DeviceObservationService
         )) {
       throw const CompanionException('protocol_error', '观察分区不是有效的实时快照。');
     }
-    return Map.unmodifiable({
+    final decorated = Map<String, Object?>.unmodifiable({
       ...raw,
       'deviceId': device,
       if (section == 'calls' && raw['calls'] is List<Object?>)
@@ -536,6 +532,16 @@ final class DeviceObservationService
               {...call, 'deviceId': device, 'deviceName': _record(device).name},
         ],
     });
+    try {
+      if (section == 'notifications') {
+        DeviceNotificationsSnapshot.fromJson(decorated);
+      } else {
+        DeviceCallsSnapshot.fromJson(decorated);
+      }
+    } on TypeError {
+      throw const CompanionException('protocol_error', '观察分区字段类型无效。');
+    }
+    return decorated;
   }
 
   Future<Map<String, Object?>> _content(
@@ -548,11 +554,14 @@ final class DeviceObservationService
     final section = name.startsWith('notifications.')
         ? 'notifications'
         : 'calls';
-    final view = statusProjection(device);
-    final sectionView = view[section]! as Map<String, Object?>;
+    final snapshot = currentSnapshot(device);
+    final sectionView = _currentSection(snapshot, section);
     if (name.endsWith('.list') &&
         (!state.wanted ||
-            !const {'observing', 'limited'}.contains(view['phase']))) {
+            !{
+              DeviceObservationPhase.observing,
+              DeviceObservationPhase.limited,
+            }.contains(snapshot.phase))) {
       return {...sectionView, 'deviceId': device};
     }
     if (_paused || !state.wanted || sectionView['live'] != true) {
@@ -644,13 +653,21 @@ final class DeviceObservationService
           ? .limited
           : .observing;
     }
-    _emitEvent(update.type, update.device, state.sections[section]!);
+    final observed = _observedDevice(currentSnapshot(update.device));
+    _emitEvent(
+      section == 'notifications'
+          ? DeviceNotificationsChanged(observed.notifications)
+          : DeviceCallsChanged(
+              observed.calls,
+              incoming: update.type == 'calls.incoming',
+            ),
+    );
     _publish(update.device);
   }
 
-  void _emitEvent(String type, String device, Map<String, Object?> data) {
+  void _emitEvent(DeviceObservationEvent event) {
     try {
-      emit(type, device, data);
+      onChanged(event);
     } catch (_) {
       // 观察事实已提交；仅隔离通知消费者，不能让它夺走监听的精确关闭权。
     }

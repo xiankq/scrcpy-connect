@@ -12,7 +12,6 @@ part of 'device_observation_snapshot.dart';
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
-
 /// @nodoc
 mixin _$DeviceObservationSnapshot {
 
@@ -23,8 +22,6 @@ mixin _$DeviceObservationSnapshot {
 @pragma('vm:prefer-inline')
 $DeviceObservationSnapshotCopyWith<DeviceObservationSnapshot> get copyWith => _$DeviceObservationSnapshotCopyWithImpl<DeviceObservationSnapshot>(this as DeviceObservationSnapshot, _$identity);
 
-  /// Serializes this DeviceObservationSnapshot to a JSON map.
-  Map<String, dynamic> toJson();
 
 
 @override
@@ -33,7 +30,7 @@ bool operator ==(Object other) {
   return identical(this, other) || (other.runtimeType == runtimeType&&other is DeviceObservationSnapshot&&(identical(other.deviceId, _this.deviceId) || other.deviceId == _this.deviceId)&&(identical(other.wanted, _this.wanted) || other.wanted == _this.wanted)&&(identical(other.phase, _this.phase) || other.phase == _this.phase)&&(identical(other.generation, _this.generation) || other.generation == _this.generation)&&(identical(other.notificationsLive, _this.notificationsLive) || other.notificationsLive == _this.notificationsLive)&&(identical(other.callsLive, _this.callsLive) || other.callsLive == _this.callsLive));
 }
 
-@JsonKey(includeFromJson: false, includeToJson: false)
+
 @override
 int get hashCode {
   final _this = this as DeviceObservationSnapshot;
@@ -217,11 +214,11 @@ return $default(_that.deviceId,_that.wanted,_that.phase,_that.generation,_that.n
 }
 
 /// @nodoc
-@JsonSerializable()
+
 
 class _DeviceObservationSnapshot implements DeviceObservationSnapshot {
   const _DeviceObservationSnapshot({required this.deviceId, required this.wanted, required this.phase, required this.generation, this.notificationsLive = false, this.callsLive = false});
-  factory _DeviceObservationSnapshot.fromJson(Map<String, dynamic> json) => _$DeviceObservationSnapshotFromJson(json);
+  
 
 @override final  String deviceId;
 @override final  bool wanted;
@@ -236,17 +233,14 @@ class _DeviceObservationSnapshot implements DeviceObservationSnapshot {
 @pragma('vm:prefer-inline')
 _$DeviceObservationSnapshotCopyWith<_DeviceObservationSnapshot> get copyWith => __$DeviceObservationSnapshotCopyWithImpl<_DeviceObservationSnapshot>(this, _$identity);
 
-@override
-Map<String, dynamic> toJson() {
-  return _$DeviceObservationSnapshotToJson(this, );
-}
+
 
 @override
 bool operator ==(Object other) {
     return identical(this, other) || (other.runtimeType == runtimeType&&other is _DeviceObservationSnapshot&&(identical(other.deviceId, deviceId) || other.deviceId == deviceId)&&(identical(other.wanted, wanted) || other.wanted == wanted)&&(identical(other.phase, phase) || other.phase == phase)&&(identical(other.generation, generation) || other.generation == generation)&&(identical(other.notificationsLive, notificationsLive) || other.notificationsLive == notificationsLive)&&(identical(other.callsLive, callsLive) || other.callsLive == callsLive));
 }
 
-@JsonKey(includeFromJson: false, includeToJson: false)
+
 @override
 int get hashCode {
     return Object.hash(runtimeType,deviceId,wanted,phase,generation,notificationsLive,callsLive);

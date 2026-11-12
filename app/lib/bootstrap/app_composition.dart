@@ -253,6 +253,7 @@ final class AppComposition {
       publish: (type, device, data) =>
           session._events.publishBusiness(type, device, data),
       onDevicesChanged: session._events.publishEvent,
+      onObservationChanged: session._events.publishEvent,
       stopWork: (id, connection, accepted) => Future.wait([
         if (session._captureInstance case final captures?)
           captures.stopForConnection(id, connection),

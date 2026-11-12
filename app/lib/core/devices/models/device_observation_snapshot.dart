@@ -1,10 +1,8 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'device_observation_snapshot.freezed.dart';
-part 'device_observation_snapshot.g.dart';
 
 enum DeviceObservationPhase {
-  @JsonValue('waiting_connection')
   waitingConnection,
   stopped,
   starting,
@@ -24,7 +22,4 @@ abstract class DeviceObservationSnapshot with _$DeviceObservationSnapshot {
     @Default(false) bool notificationsLive,
     @Default(false) bool callsLive,
   }) = _DeviceObservationSnapshot;
-
-  factory DeviceObservationSnapshot.fromJson(Map<String, dynamic> json) =>
-      _$DeviceObservationSnapshotFromJson(json);
 }

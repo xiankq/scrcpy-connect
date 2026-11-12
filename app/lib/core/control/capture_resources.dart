@@ -7,6 +7,7 @@ import 'package:scrcpy_connect/core/control/control_session_service.dart';
 import 'package:scrcpy_connect/core/control/device_wake_service.dart';
 import 'package:scrcpy_connect/core/control/media_capture.dart';
 import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
+import 'package:scrcpy_connect/core/control/models/device_keep_awake_changed.dart';
 import 'package:scrcpy_connect/core/control/models/session_activity.dart';
 import 'package:scrcpy_connect/core/control/models/video_session.dart';
 import 'package:scrcpy_connect/core/devices/device_connection.dart';
@@ -137,7 +138,7 @@ final class CaptureResources {
       hasWindowOwner: (id) => _sessions?.hasAudioOwner(id) ?? false,
       keepAwakeEnabled: (deviceId) =>
           _preferences.settings.deviceSettings[deviceId]?.stayAwake == true,
-      emit: (type, device, data) => publishBusiness(type, device, data),
+      onChanged: _wakeChanged,
     );
   }
 
@@ -210,12 +211,15 @@ final class CaptureResources {
   void publishBusiness(String type, String? device, Map<String, Object?> data) {
     if (_closed || isDisposed()) return;
     publish({'type': type, 'deviceId': ?device, 'data': data});
-    if (type == 'device.keep_active.updated' && device != null) {
-      for (final session
-          in _sessions?.currentSessions(deviceId: device) ??
-              <VideoSessionSnapshot>[]) {
-        _publishSession(.updated, session);
-      }
+  }
+
+  void _wakeChanged(DeviceKeepAwakeChanged change) {
+    if (_closed || isDisposed()) return;
+    publish(change.toApplicationEvent());
+    for (final session
+        in _sessions?.currentSessions(deviceId: change.deviceId) ??
+            <VideoSessionSnapshot>[]) {
+      _publishSession(.updated, session);
     }
   }
 
