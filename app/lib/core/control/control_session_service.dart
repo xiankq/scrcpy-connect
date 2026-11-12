@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:adb/adb.dart';
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/core/clipboard/remote_clipboard.dart';
+import 'package:scrcpy_connect/core/clipboard/models/remote_clipboard_changed.dart';
 import 'package:scrcpy_connect/core/control/app_launch_journal.dart';
 import 'package:scrcpy_connect/core/control/app_launch_permit.dart';
 import 'package:scrcpy_connect/core/control/display_lease.dart';
@@ -90,7 +91,7 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
     required this._requireConnection,
     required this._launches,
     required this._serverQueries,
-    required void Function(String, String, Map<String, Object?>) emit,
+    required this.onClipboardChanged,
     required this.onSessionChanged,
     Preferences Function()? settings,
     this.policy = const SessionPolicy(),
@@ -99,8 +100,7 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
     this.onAudioEligibilityChanged,
     this.onClipboardFailure,
     required this._requireClipboardAccess,
-  }) : _emitEvent = emit,
-       _settings = settings ?? Preferences.new,
+  }) : _settings = settings ?? Preferences.new,
        _now = now ?? DateTime.now,
        _newId = newId ?? const Uuid().v4 {
     policy.validate();
@@ -111,7 +111,7 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
   final AppLaunchJournal _launches;
   // 借用设备模块的清单查询所有者；窗口关闭只撤销自己的查询令牌。
   final ScrcpyServerQueries Function() _serverQueries;
-  final void Function(String, String, Map<String, Object?>) _emitEvent;
+  final void Function(RemoteClipboardChanged) onClipboardChanged;
   final void Function(VideoSessionChange, VideoSessionSnapshot)
   onSessionChanged;
   final Preferences Function() _settings;
@@ -698,9 +698,9 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
     }
   }
 
-  void _publishEvent(String type, String device, Map<String, Object?> data) {
+  void _publishClipboard(RemoteClipboardChanged event) {
     try {
-      _emitEvent(type, device, data);
+      onClipboardChanged(event);
     } catch (_) {
       // 观察者失败不能中断捕获启动或回收；真实执行错误仍由命令 Future 报告。
     }
@@ -992,14 +992,18 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
         }
         switch (event) {
           case ScrcpyClipboardChanged(:final text):
-            _publishEvent('clipboard.changed', slot.deviceId, {
-              'sessionId': slot.id,
-              'captureRef': capture.sdk.id,
-              'captureGeneration': capture.generation,
-              'text': text,
-              'connectionId': slot.connection.device.id,
-              'source': 'scrcpy',
-            });
+            _publishClipboard(
+              RemoteClipboardChanged(
+                deviceId: slot.deviceId,
+                sessionId: slot.id,
+                capture: ClipboardCapture(
+                  reference: capture.sdk.id,
+                  generation: capture.generation,
+                ),
+                text: text,
+                connectionId: slot.connection.device.id,
+              ),
+            );
           case ScrcpyStopped(:final reason):
             if (!capture.expectedStop) {
               _failedCapture(slot, reason ?? 'capture_stopped');

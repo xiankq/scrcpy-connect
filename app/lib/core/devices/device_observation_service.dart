@@ -614,7 +614,7 @@ final class DeviceObservationService
     if (state == null || !identical(state.connection, update.connection)) {
       return;
     }
-    if (update.type == 'companion.stopped') {
+    if (update is CompanionConnectionLost) {
       if (!_closed) {
         _failed(
           update.device,
@@ -625,6 +625,7 @@ final class DeviceObservationService
       }
       return;
     }
+    if (update is! CompanionObservationUpdate) return;
     if (!_valid(update.device, state, state.epoch, update.connection) ||
         !state.wanted ||
         !{
@@ -637,9 +638,7 @@ final class DeviceObservationService
         update.data['observationEnabled'] != true) {
       return;
     }
-    final section = update.type.startsWith('notifications.')
-        ? 'notifications'
-        : 'calls';
+    final section = update.section.name;
     state.revisions[section] = state.revisions[section]! + 1;
     try {
       state.sections[section] = _decorate(update.device, section, update.data);
@@ -657,10 +656,7 @@ final class DeviceObservationService
     _emitEvent(
       section == 'notifications'
           ? DeviceNotificationsChanged(observed.notifications)
-          : DeviceCallsChanged(
-              observed.calls,
-              incoming: update.type == 'calls.incoming',
-            ),
+          : DeviceCallsChanged(observed.calls, incoming: update.incoming),
     );
     _publish(update.device);
   }

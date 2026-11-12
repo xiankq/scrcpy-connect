@@ -200,7 +200,7 @@ Future<CaptureResources> _resources({
     diagnostics: DiagnosticReporter(null),
     isDisposed: () => false,
     isStateUnverified: () => false,
-    publish: (_) => throw StateError('空模块不应发布业务变化'),
+    onChanged: (_) => throw StateError('空模块不应发布业务变化'),
     onCleanupFailure: (error) => fail('未确认清理：$error'),
   );
 }

@@ -7,6 +7,7 @@ import 'package:scrcpy_connect/core/devices/models/device_call.dart';
 import 'package:scrcpy_connect/core/devices/models/device_notification.dart';
 import 'package:scrcpy_connect/core/devices/models/device_observation_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/models/device_observation_event.dart';
+import 'package:scrcpy_connect/core/companion/models/companion_event.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/devices/models/observed_device_snapshot.dart';
@@ -14,7 +15,6 @@ import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/system_notification_sink.dart';
 import 'package:scrcpy_connect/widgets/system_notification_sink_provider.dart';
 
@@ -292,7 +292,6 @@ class SystemNotifications {
 
   void _event(Json event) {
     if (_disposed || !_current()) return;
-    final deviceId = value(event, 'deviceId');
     final payload = event['data'];
     if (payload is RecoveryStarted || payload is RecoveryFailed) {
       _suspend();
@@ -317,9 +316,14 @@ class SystemNotifications {
       }
       return;
     }
-    if (event['type'] == 'companion.stopped') {
+    if (payload case CompanionStopped(:final deviceId, :final connectionId)) {
       final owner = _owners[deviceId];
-      if (owner != null) _invalidate(deviceId, owner.generation);
+      final connected = _readSnapshot().devices
+          .where((d) => d.id == deviceId)
+          .firstOrNull;
+      if (owner != null && connected?.connectionId == connectionId) {
+        _invalidate(deviceId, owner.generation);
+      }
       return;
     }
     if (event['data'] case DeviceListChanged(:final devices)) {

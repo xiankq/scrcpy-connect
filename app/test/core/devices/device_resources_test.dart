@@ -210,7 +210,6 @@ void main() {
       clientForIdentity: (_) => _UnusedClient(),
       releaseIdentityClient: (_) async {},
       policy: const ConnectionPolicy(),
-      emit: (_) {},
       isStateUnverified: () => unverified,
       delay: (_) {
         if (!waiting.isCompleted) waiting.complete();
@@ -653,8 +652,8 @@ Future<DeviceResources> _resources({
     readAudio: () => throw StateError('重连不应读取设备音源'),
     authorizeUsb: authorizeUsb,
     cancelUsb: cancelUsb,
-    emit: (_) => throw StateError('此流程不应发布事件'),
-    publish: (_, _, _) => throw StateError('此流程不应发布事件'),
+    onCleanupFailure: (_) => throw StateError('此流程不应发布回收失败'),
+    onCompanionChanged: (_) => throw StateError('此流程不应发布伴生事件'),
     onDevicesChanged:
         onDevicesChanged ?? (_) => throw StateError('此流程不应修改设备投影'),
     onObservationChanged: (_) => throw StateError('此流程不应发布观察事件'),

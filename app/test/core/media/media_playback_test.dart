@@ -10,6 +10,7 @@ import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/media/media_playback.dart';
+import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
 import 'package:scrcpy_connect/core/media/models/device_audio_snapshot.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
@@ -78,19 +79,21 @@ void main() {
     expect((await media.snapshot(() => true)).sessions, isEmpty);
     media.stopDeviceIntent('device');
     await media.finishDeviceStop('device');
-    media.handleApplicationEvent({
-      'type': 'session.stopped',
-      'data': const VideoSessionView(
-        session: VideoSessionSnapshot(
-          sessionId: 'unowned',
-          deviceId: 'device',
-          name: 'Phone',
-          kind: .screen,
-          status: .stopped,
+    media.handleApplicationEvent(
+      const VideoSessionChanged(
+        .stopped,
+        VideoSessionView(
+          session: VideoSessionSnapshot(
+            sessionId: 'unowned',
+            deviceId: 'device',
+            name: 'Phone',
+            kind: .screen,
+            status: .stopped,
+          ),
+          wake: KeepAwakeSnapshot(deviceId: 'device'),
         ),
-        wake: KeepAwakeSnapshot(deviceId: 'device'),
-      ),
-    });
+      ).toApplicationEvent(),
+    );
     await media.dispose();
     await media.dispose();
   });

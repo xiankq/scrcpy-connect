@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
+
 import 'dart:async';
 
 import 'package:adb/adb.dart' show AdbCancellation;
@@ -110,17 +112,18 @@ void main() {
     await tester.pump();
     expect(presentation.error, isNull);
     expect(presentation.paused, isFalse);
-    events.add({
-      'type': 'session.updated',
-      'deviceId': 'device',
-      'data': original.copyWith(
-        session: original.session.copyWith(
-          qualityRebuilding: true,
-          qualityRebuildTarget: 3,
+    events.add(
+      VideoSessionChanged(
+        .updated,
+        original.copyWith(
+          session: original.session.copyWith(
+            qualityRebuilding: true,
+            qualityRebuildTarget: 3,
+          ),
+          output: null,
         ),
-        output: null,
-      ),
-    });
+      ).toApplicationEvent(),
+    );
     await tester.pump();
     expect(presentation.qualityRebuilding, isTrue);
     expect(
@@ -138,20 +141,21 @@ void main() {
     await tester.pump();
     expect(presentation.qualityRebuilding, isTrue);
     expect(presentation.session!.output, originalOutput);
-    events.add({
-      'type': 'session.updated',
-      'deviceId': 'device',
-      'data': original.copyWith(
-        session: original.session.copyWith(
-          captureGeneration: 3,
-          generation: 4,
-          width: 200,
-          height: 100,
-          qualityRebuildOutcome: .applied,
+    events.add(
+      VideoSessionChanged(
+        .updated,
+        original.copyWith(
+          session: original.session.copyWith(
+            captureGeneration: 3,
+            generation: 4,
+            width: 200,
+            height: 100,
+            qualityRebuildOutcome: .applied,
+          ),
+          output: null,
         ),
-        output: null,
-      ),
-    });
+      ).toApplicationEvent(),
+    );
     await tester.pump();
     expect(presentation.qualityRebuilding, isFalse);
     expect(presentation.session!.output, replacement);

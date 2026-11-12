@@ -9,6 +9,7 @@ import 'package:scrcpy_connect/core/clipboard/clipboard_capabilities_provider.da
 import 'package:scrcpy_connect/core/clipboard/clipboard_focus_notifier.dart';
 import 'package:scrcpy_connect/core/clipboard/clipboard_sync_notifier.dart';
 import 'package:scrcpy_connect/core/clipboard/models/clipboard_sync_state.dart';
+import 'package:scrcpy_connect/core/clipboard/models/remote_clipboard_changed.dart';
 import 'package:scrcpy_connect/core/clipboard/remote_clipboard.dart';
 import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
@@ -97,19 +98,42 @@ void main() {
       ClipboardSyncStatus.watching,
     );
     expect(writes, isEmpty);
-    events.add({
-      'type': 'clipboard.changed',
-      'deviceId': 'device',
-      'data': {
-        'connectionId': 'connection',
-        'sessionId': 'session',
-        'captureRef': 'capture',
-        'captureGeneration': 2,
-        'text': 'new copy',
-        'live': true,
-        'available': true,
-      },
-    });
+    for (final stale in [
+      const RemoteClipboardChanged(
+        deviceId: 'device',
+        connectionId: 'previous-connection',
+        sessionId: 'session',
+        capture: ClipboardCapture(reference: 'capture', generation: 2),
+        text: 'old connection',
+      ),
+      const RemoteClipboardChanged(
+        deviceId: 'device',
+        connectionId: 'connection',
+        sessionId: 'session',
+        capture: ClipboardCapture(reference: 'capture', generation: 1),
+        text: 'old capture',
+      ),
+      const RemoteClipboardChanged(
+        deviceId: 'device',
+        connectionId: 'connection',
+        sessionId: 'previous-session',
+        capture: ClipboardCapture(reference: 'capture', generation: 2),
+        text: 'old session',
+      ),
+    ]) {
+      events.add(stale.toApplicationEvent());
+    }
+    await flush(container);
+    expect(writes, isEmpty);
+    events.add(
+      const RemoteClipboardChanged(
+        deviceId: 'device',
+        connectionId: 'connection',
+        sessionId: 'session',
+        capture: ClipboardCapture(reference: 'capture', generation: 2),
+        text: 'new copy',
+      ).toApplicationEvent(),
+    );
     await flush(container);
     expect(writes, ['new copy']);
     expect(container.read(clipboardSyncProvider).writeCount, 1);

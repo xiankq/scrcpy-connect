@@ -159,7 +159,7 @@ class _Audio {
       'audio.platform.background' => {'supported': false, 'ready': false},
       _ => throw StateError('非声音平台操作 $command'),
     },
-    emit: (event) => events.add(event['data'] as AudioOutputEvent),
+    emit: (event) => events.add(event as AudioOutputEvent),
     isDisposed: () => false,
     requireVerifiedState: () {},
     dataDirectory: '/unused',

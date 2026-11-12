@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scrcpy_connect/core/companion/models/companion_event.dart';
 import 'package:scrcpy_connect/core/devices/models/device_call.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/devices/models/device_notification.dart';
@@ -36,6 +37,47 @@ void main() {
     await notifications.drain();
     expect(sink.shown, hasLength(1));
     events.add({'type': 'devices.changed', 'data': DeviceListChanged([])});
+    events.add(notificationsChanged('late'));
+    await notifications.drain();
+    expect(sink.cancelled, [sink.shown.single.id]);
+    expect(sink.shown, hasLength(1));
+    notifications.dispose();
+    await notifications.drain();
+    await events.close();
+    await sink.activationsController.close();
+  });
+
+  test('旧伴生连接的停止不撤回当前提醒，当前连接停止后迟到内容不能复活', () async {
+    final events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
+    final sink = _Sink();
+    final notifications = SystemNotifications(
+      events: events.stream,
+      readSnapshot: () => SystemNotificationSnapshot(
+        devices: [
+          const DeviceSnapshot(
+            id: 'device',
+            status: .connected,
+            connectionId: 'current',
+          ),
+        ],
+        settings: snapshot.settings,
+        loading: false,
+        reconciliationPending: false,
+      ),
+      current: () => true,
+      sink: sink,
+    );
+    await notifications.initialize();
+    events.add(observing());
+    events.add(notificationsChanged('current'));
+    await notifications.drain();
+    expect(sink.shown, hasLength(1));
+    events.add(const CompanionStopped('device', 'old').toApplicationEvent());
+    await notifications.drain();
+    expect(sink.cancelled, isEmpty);
+    events.add(
+      const CompanionStopped('device', 'current').toApplicationEvent(),
+    );
     events.add(notificationsChanged('late'));
     await notifications.drain();
     expect(sink.cancelled, [sink.shown.single.id]);

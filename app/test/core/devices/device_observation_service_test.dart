@@ -158,7 +158,7 @@ final class _Observation {
         cleanupTimeout: Duration(seconds: 5),
         sessionTimeout: Duration(seconds: 60),
       ),
-      emit: (_, _, _) {},
+      onChanged: (_) {},
     );
     final changes = <DeviceObservationEvent>[];
     final owner = DeviceObservationService(

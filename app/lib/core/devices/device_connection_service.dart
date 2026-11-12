@@ -25,7 +25,6 @@ class DeviceConnectionService implements DeviceSetup {
     required this.clientForIdentity,
     required this.releaseIdentityClient,
     required this.policy,
-    required this.emit,
     required this.isStateUnverified,
     this.authorizeUsb,
     this.cancelUsb,
@@ -44,7 +43,6 @@ class DeviceConnectionService implements DeviceSetup {
   final FutureOr<AdbClient> Function(IdentitySelection) clientForIdentity;
   final Future<void> Function(IdentitySelection) releaseIdentityClient;
   final ConnectionPolicy policy;
-  final void Function(Json) emit;
   final bool Function() isStateUnverified;
   final Future<UsbAccess> Function(UsbAuthorizationRequest)? authorizeUsb;
   final Future<void> Function(String attemptId)? cancelUsb;
@@ -87,14 +85,6 @@ class DeviceConnectionService implements DeviceSetup {
     await Future.wait(affected.map(_drain));
   }
 
-  void handleEvent(Json event) {
-    if (event['type'] == 'connections.stopped') {
-      for (final flow in _flows.toList()) {
-        _cancel(flow);
-      }
-    }
-  }
-
   @override
   Future<List<DiscoveredDevice>> discoverDevices({
     String? attemptId,
@@ -135,7 +125,6 @@ class DeviceConnectionService implements DeviceSetup {
       timeout: policy.qrPairingTimeout,
       action: (flow) => _qr(flow, identity, instance, password),
     );
-    unawaited(_publishQr(started.flow, started.result));
     return QrPairingSession(
       attemptId: started.flow.attempt,
       payload: 'WIFI:T:ADB;S:$instance;P:$password;;',
@@ -287,44 +276,6 @@ class DeviceConnectionService implements DeviceSetup {
   String _secret(int bytes) =>
       base64UrlEncode(List.generate(bytes, (_) => _random.nextInt(256)))
           .replaceAll('=', '');
-
-  Future<void> _publishQr(
-    _SetupFlow flow,
-    Future<PairingReceipt> resultFuture,
-  ) async {
-    Json data;
-    try {
-      final result = await resultFuture;
-      data = {'status': 'paired', 'result': _pairingEvent(result)};
-    } catch (error) {
-      final known = flow.receipt;
-      final recordedPairing = known is PairingReceipt && known.recorded;
-      data = {
-        'status': recordedPairing
-            ? 'paired'
-            : flow.expired
-            ? 'expired'
-            : flow.cancelled
-            ? 'cancelled'
-            : 'failed',
-        'code': _code(error),
-        'message': '$error',
-        if (known is PairingReceipt)
-          'result': {
-            ..._pairingEvent(known),
-            if (recordedPairing)
-              'cleanupFailure': {'code': _code(error), 'message': '$error'},
-          },
-      };
-    }
-    if (!_disposed) {
-      emit({
-        'type': 'pairing.changed',
-        'deviceId': ?flow.deviceId,
-        'data': {'attemptId': flow.attempt, ...data},
-      });
-    }
-  }
 
   Future<List<DiscoveredDevice>> _discover(_SetupFlow flow) async {
     final endpoints = await discovery.scan(cancellation: flow.stop);
@@ -992,19 +943,3 @@ final class _SetupFlow {
   bool get cancelled => stop.isCancelled;
   bool expired = false, settled = false, cleaned = false;
 }
-
-// 应用事件传输的唯一序列化出口；设置流程与页面通过具名类型交付结果。
-Json _pairingEvent(PairingReceipt receipt) => {
-  'paired': true,
-  'connected': receipt.connected,
-  'guid': receipt.guid,
-  'address': receipt.address,
-  'deviceId': ?receipt.deviceId,
-  if (receipt.device case final device?) 'device': device.toJson(),
-  if (receipt.connection case final connection?)
-    'adbBurstActive': connection.adbBurstActive,
-  if (receipt.cancelled) 'cancelled': true,
-  if (receipt.connectionPortRequired) 'connectionPortRequired': true,
-  if (receipt.connectionFailure case final failure?)
-    'connectionFailure': {'code': failure.code, 'message': failure.message},
-};

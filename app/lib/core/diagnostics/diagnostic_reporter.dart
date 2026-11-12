@@ -1,4 +1,5 @@
 import 'package:scrcpy_connect/core/media/models/video_session_view.dart';
+import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
 import 'package:scrcpy_connect/core/media/models/video_output.dart';
 import 'package:scrcpy_connect/core/media/models/device_audio_changed.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
@@ -219,7 +220,8 @@ class DiagnosticReporter {
       return;
     }
     final type = event['type'];
-    if (event['data'] case VideoSessionView(:final session)
+    if (event['data']
+        case VideoSessionChanged(view: VideoSessionView(:final session))
         when !session.live) {
       log?.record(
         DiagnosticArea.runtime,

@@ -24,7 +24,7 @@ class VideoRecovery {
   final Future<void> Function(VideoRendererReceipt) readyCapture;
   final Future<bool> Function(VideoRendererReceipt) recordFrame;
   final Future<void> Function(String, {RequestFailure? failure}) closeOutput;
-  final void Function(Map<String, dynamic>) emit;
+  final void Function(VideoOutputEvent) emit;
   final bool Function() isDisposed;
 
   final _monitors = <String, Timer>{};
@@ -108,7 +108,7 @@ class VideoRecovery {
         captureGeneration: output.captureGeneration,
         generation: output.generation,
         reason: reason,
-      ).toApplicationEvent(),
+      ),
     );
     await Future.wait([closing, _stop(id)]);
   }
@@ -152,7 +152,7 @@ class VideoRecovery {
     }
     _dimensionFrames[id] = (generation: data.generation, frames: frames);
     outputs[id] = data;
-    emit(event.toApplicationEvent());
+    emit(event);
     unawaited(
       recordFrame(data.rendererReceipt).catchError((Object _) => false),
     );
@@ -190,14 +190,14 @@ class VideoRecovery {
         }
         outputs[output.sessionId] = output;
         _dimensionFrames.remove(output.sessionId);
-        emit(event.toApplicationEvent());
+        emit(event);
         unawaited(
           readyCapture(output.rendererReceipt).catchError((Object _) {
             // 迟到回执不能恢复停止窗口。
           }),
         );
       case VideoOutputReady():
-        emit(event.toApplicationEvent());
+        emit(event);
       case VideoOutputFrame():
         break;
     }

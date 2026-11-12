@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
+import 'package:scrcpy_connect/core/media/models/video_playback_resumed.dart';
 import 'package:scrcpy_connect/core/control/models/app_launch_record.dart';
 import 'package:scrcpy_connect/core/media/models/video_output.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
@@ -552,7 +554,9 @@ class _ControlPageState extends ConsumerState<ControlPage>
         }
         setState(() {});
         displaySizing.observeGeometry();
-      case VideoPlaybackReceipt(:final session, :final output):
+      case VideoPlaybackResumed(
+        receipt: VideoPlaybackReceipt(:final session, :final output),
+      ):
         if (!belongs(session.sessionId, session.deviceId) ||
             !presentation.output(output, verified: true)) {
           return;
@@ -576,7 +580,8 @@ class _ControlPageState extends ConsumerState<ControlPage>
         presentation.disconnect(reason);
         unawaited(releaseInputs());
         setState(() {});
-      case VideoSessionView(:final session, :final wake):
+      case VideoSessionChanged(view: final sessionView):
+        final session = sessionView.session, wake = sessionView.wake;
         if (event['type'] == 'session.frame' ||
             !belongs(session.sessionId, session.deviceId)) {
           return;
@@ -590,14 +595,14 @@ class _ControlPageState extends ConsumerState<ControlPage>
             );
         if (!session.live) {
           if (!noticeIsCurrent) return;
-          presentation.updateSession(payload);
+          presentation.updateSession(sessionView);
           presentation.disconnect(
             session.reason ??
                 presentation.error ??
                 '连接已中断，当前画面已暂停。恢复首帧后才能继续操作。',
           );
           unawaited(releaseInputs(binding: outgoing));
-        } else if (presentation.updateSession(payload)) {
+        } else if (presentation.updateSession(sessionView)) {
           unawaited(
             releaseInputs(
               binding: outgoing != presentation.binding ? outgoing : null,

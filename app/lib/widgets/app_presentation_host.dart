@@ -6,12 +6,12 @@ import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/clipboard/clipboard_sync_notifier.dart';
+import 'package:scrcpy_connect/core/devices/models/device_observation_event.dart';
 import 'package:scrcpy_connect/core/files/share_inbox_notifier.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/clipboard_visibility.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
@@ -173,25 +173,27 @@ class AppPresentationHost extends HookConsumerWidget {
     useEffect(() {
       var active = true;
       final subscription = events.listen((event) {
-        if (!['calls.incoming', 'call.incoming'].contains(event['type']) ||
+        final change = event['data'];
+        if (change is! DeviceCallsChanged ||
+            !change.incoming ||
             WidgetsBinding.instance.lifecycleState !=
                 AppLifecycleState.resumed) {
           return;
         }
-        final data = jsonObject(event['data']);
-        final call = data['id'] != null
-            ? data
-            : objects(data['calls'])
-                  .where((call) => call['state'] == 'ringing')
-                  .firstOrNull;
-        if (call == null || data['live'] == false) return;
-        final id = value(call, 'id');
-        final key = '${event['deviceId']}:$id';
+        final data = change.snapshot;
+        final call = data.calls
+            .where((call) => call.state == .ringing)
+            .firstOrNull;
+        if (call == null || !data.verified || !data.observationEnabled) return;
+        final id = call.id ?? '';
+        final key =
+            '${data.deviceId}:${data.observationEpoch}:$id:${call.generation}';
         if (id.isEmpty || presentedCall.value == key) return;
-        final matches = ref
-            .read(appSnapshotProvider)
-            .devices
-            .where((d) => d.id == event['deviceId']);
+        final snapshot = ref.read(appSnapshotProvider);
+        if (snapshot.loading || snapshot.reconciliationPending) return;
+        final matches = snapshot.devices.where(
+          (d) => d.id == data.deviceId && d.status == .connected,
+        );
         if (matches.isEmpty) return;
         presentedCall.value = key;
         final epoch = callPresentationEpoch.value;
@@ -229,7 +231,7 @@ class AppPresentationHost extends HookConsumerWidget {
                     const SizedBox(width: DesignTokens.spacingSm),
                     Expanded(
                       child: Text(
-                        '${deviceName(device)} · ${value(call, 'name', value(call, 'number', '当前来电'))}\n声音仍在手机',
+                        '${deviceName(device)} · ${call.name ?? call.number ?? '当前来电'}\n声音仍在手机',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ),

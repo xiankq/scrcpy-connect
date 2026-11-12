@@ -1,4 +1,6 @@
 import 'package:scrcpy_connect/core/media/models/video_session_view.dart';
+import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
+import 'package:scrcpy_connect/core/clipboard/models/remote_clipboard_changed.dart';
 
 import 'dart:async';
 
@@ -18,7 +20,6 @@ import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
 
 part 'clipboard_sync_notifier.g.dart';
 
@@ -416,10 +417,7 @@ class _ClipboardCoordinator {
         event['deviceId'] != _target) {
       return;
     }
-    final data = event['data'] is Map<Object?, Object?>
-        ? jsonObject(event['data'])
-        : <String, dynamic>{};
-    if (event['data'] case VideoSessionView(:final session)
+    if (payload case VideoSessionChanged(view: VideoSessionView(:final session))
         when session.sessionId == _sessionId &&
             session.deviceId == _target &&
             (session.captureRef != _capture?.reference ||
@@ -428,22 +426,12 @@ class _ClipboardCoordinator {
       configure();
       return;
     }
-    if (event['type'] == 'clipboard.changed' &&
-        (data['sessionId'] != _sessionId ||
-            data['captureRef'] != _capture?.reference ||
-            data['captureGeneration'] != _capture?.generation)) {
-      return;
-    }
-    final connectionId = data['connectionId'] ?? event['connectionId'];
-    if (connectionId != null && connectionId != _connectionId) return;
-    if (event['type'] == 'clipboard.unavailable') {
-      _failed(StateError(value(data, 'reason', '设备当前不允许访问剪贴板。')));
-    } else if (event['type'] == 'clipboard.changed' &&
-        _initialized &&
-        data['text'] is String &&
-        data['available'] != false &&
-        data['live'] != false) {
-      _pendingRemote = data['text'] as String;
+    if (payload is RemoteClipboardChanged &&
+        payload.sessionId == _sessionId &&
+        payload.capture == _capture &&
+        payload.connectionId == _connectionId &&
+        _initialized) {
+      _pendingRemote = payload.text;
       _scheduleRemote();
     }
   }

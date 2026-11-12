@@ -6,6 +6,7 @@ import 'package:adb/adb.dart';
 import 'package:scrcpy_connect/core/activities/models/activity_cleanup_failed.dart';
 import 'package:scrcpy_connect/core/companion/companion_recovery.dart';
 import 'package:scrcpy_connect/core/companion/companion_service.dart';
+import 'package:scrcpy_connect/core/companion/models/companion_event.dart';
 import 'package:scrcpy_connect/core/companion/models/companion_config.dart';
 import 'package:scrcpy_connect/core/control/display_recovery.dart';
 import 'package:scrcpy_connect/core/control/models/video_session.dart';
@@ -41,7 +42,7 @@ import 'package:scrcpy_connect/core/identity/identity_manager.dart';
 import 'package:scrcpy_connect/core/identity/models/identity_selection.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
-import 'package:scrcpy_connect/core/settings/models/preferences.dart';
+import 'package:scrcpy_connect/core/settings/models/settings_changed.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 
 /// 设备记录、身份、连接策略与伴生观察的所有者。
@@ -66,8 +67,8 @@ final class DeviceResources {
     required this.readAudio,
     required this.authorizeUsb,
     required this.cancelUsb,
-    required this.emit,
-    required this.publish,
+    required this.onCleanupFailure,
+    required this.onCompanionChanged,
     required this.onDevicesChanged,
     required this.onObservationChanged,
     required this.stopWork,
@@ -104,8 +105,8 @@ final class DeviceResources {
   final List<DeviceAudioSnapshot> Function() readAudio;
   final Future<UsbAccess> Function(UsbAuthorizationRequest)? authorizeUsb;
   final Future<void> Function(String attemptId)? cancelUsb;
-  final void Function(Map<String, dynamic>) emit;
-  final void Function(String, String?, Map<String, Object?>) publish;
+  final void Function(ActivityCleanupFailed) onCleanupFailure;
+  final void Function(CompanionEvent) onCompanionChanged;
   final void Function(DeviceListChanged) onDevicesChanged;
   final void Function(DeviceObservationEvent) onObservationChanged;
   final Future<void> Function(String, DeviceConnection, bool) stopWork;
@@ -227,7 +228,6 @@ final class DeviceResources {
       clientForIdentity: _clientForIdentity,
       releaseIdentityClient: _releaseIdentityClient,
       policy: _connectionPolicy,
-      emit: emit,
       isStateUnverified: isStateUnverified,
       authorizeUsb: authorizeUsb,
       cancelUsb: cancelUsb,
@@ -322,7 +322,7 @@ final class DeviceResources {
         cleanupTimeout: Duration(seconds: 5),
         sessionTimeout: Duration(hours: 24),
       ),
-      emit: (type, device, data) => publish(type, device, data),
+      onChanged: onCompanionChanged,
     );
   }
 
@@ -373,8 +373,8 @@ final class DeviceResources {
     required List<DeviceAudioSnapshot> Function() readAudio,
     required Future<UsbAccess> Function(UsbAuthorizationRequest)? authorizeUsb,
     required Future<void> Function(String attemptId)? cancelUsb,
-    required void Function(Map<String, dynamic>) emit,
-    required void Function(String, String?, Map<String, Object?>) publish,
+    required void Function(ActivityCleanupFailed) onCleanupFailure,
+    required void Function(CompanionEvent) onCompanionChanged,
     required void Function(DeviceListChanged) onDevicesChanged,
     required void Function(DeviceObservationEvent) onObservationChanged,
     required Future<void> Function(String, DeviceConnection, bool) stopWork,
@@ -400,8 +400,8 @@ final class DeviceResources {
       readAudio: readAudio,
       authorizeUsb: authorizeUsb,
       cancelUsb: cancelUsb,
-      emit: emit,
-      publish: publish,
+      onCleanupFailure: onCleanupFailure,
+      onCompanionChanged: onCompanionChanged,
       onDevicesChanged: onDevicesChanged,
       onObservationChanged: onObservationChanged,
       stopWork: stopWork,
@@ -433,7 +433,6 @@ final class DeviceResources {
 
   void handleEvent(Map<String, dynamic> event) {
     if (_isDisposed) return;
-    _setupInstance?.handleEvent(event);
     if (_reconnectionInstance case final reconnect?) {
       if (_reconnectEvent(event) case final update?) {
         reconnect.handleEvent(update);
@@ -460,7 +459,7 @@ final class DeviceResources {
           (_) => _cleanup.remove(work),
           onError: (Object error, StackTrace stack) {
             _cleanup.remove(work);
-            emit(ActivityCleanupFailed('$error').toApplicationEvent());
+            onCleanupFailure(ActivityCleanupFailed('$error'));
           },
         ),
       );
@@ -556,9 +555,9 @@ DeviceReconnectEvent? _reconnectEvent(Map<String, dynamic> event) {
   return switch (type) {
     'devices.changed' when raw is DeviceListChanged =>
       DeviceReconnectDevicesChanged(raw.devices, sequence: sequence),
-    'settings.changed' when raw is Preferences =>
+    'settings.changed' when raw is SettingsChanged =>
       DeviceReconnectSettingsChanged(
-        raw.backgroundKeepAlive,
+        raw.preferences.backgroundKeepAlive,
         sequence: sequence,
       ),
     'adb.discovery.changed' => DeviceReconnectDiscoveryChanged(

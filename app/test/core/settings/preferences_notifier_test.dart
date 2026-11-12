@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/core/settings/models/settings_changed.dart';
+
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -70,15 +72,16 @@ void main() {
       const DevicePreferences(lockOnClose: true),
     );
     await _flush(container);
-    events.add({
-      'type': 'settings.changed',
-      'data': Preferences(
-        appearance: .dark,
-        deviceSettings: const {
-          'device': DevicePreferences(showNavigationBar: false),
-        },
-      ),
-    });
+    events.add(
+      SettingsChanged(
+        Preferences(
+          appearance: .dark,
+          deviceSettings: const {
+            'device': DevicePreferences(showNavigationBar: false),
+          },
+        ),
+      ).toApplicationEvent(),
+    );
     settings.writes[0].result.complete(
       Preferences(appearance: Appearance.light),
     );

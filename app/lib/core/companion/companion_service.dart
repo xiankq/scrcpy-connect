@@ -8,13 +8,8 @@ import 'package:scrcpy_connect/core/companion/companion_exception.dart';
 import 'package:scrcpy_connect/core/companion/companion_recovery.dart';
 import 'package:scrcpy_connect/core/companion/companion_update.dart';
 import 'package:scrcpy_connect/core/companion/models/companion_config.dart';
+import 'package:scrcpy_connect/core/companion/models/companion_event.dart';
 import 'package:scrcpy_connect/core/devices/device_connection.dart';
-
-typedef CompanionEmitter = void Function(
-  String type,
-  String? device,
-  Map<String, Object?> data,
-);
 
 final class _Deployment {
   _Deployment(this.device, this.connection, this.client);
@@ -35,7 +30,7 @@ final class CompanionService {
     required this.requireConnection,
     required Uint8List serverBytes,
     required this.config,
-    required this.emit,
+    required this.onChanged,
     this.recovery,
     this.deviceSerial,
   }) : _serverBytes = Uint8List.fromList(serverBytes);
@@ -43,7 +38,7 @@ final class CompanionService {
   final DeviceConnection Function(String) requireConnection;
   final Uint8List _serverBytes;
   final CompanionConfig config;
-  final CompanionEmitter emit;
+  final void Function(CompanionEvent) onChanged;
   final CompanionRecovery? recovery;
   final String? Function(String)? deviceSerial;
   final _deployments = <String, _Deployment>{};
@@ -66,19 +61,6 @@ final class CompanionService {
   bool hasActive(String device) {
     final entry = _deployments[device];
     return entry != null && entry.ready != null && _current(entry);
-  }
-
-  Map<String, Object?> capabilityState(String device) {
-    final entry = _deployments[device];
-    if (entry == null || !_current(entry) || entry.ready == null) {
-      return const {'status': 'unknown', 'live': false};
-    }
-    return {
-      'status': 'available',
-      'live': true,
-      'protocol': entry.ready!['protocol'],
-      'apiLevel': entry.ready!['apiLevel'],
-    };
   }
 
   bool _current(_Deployment entry) =>
@@ -194,10 +176,17 @@ final class CompanionService {
     );
     try {
       // 发布属于启动事务；消费者抛错也必须回收已登记但尚未启动的所有者。
-      emit('companion.starting', device, const {'status': 'starting'});
+      onChanged(CompanionStarting(device, connection.device.id));
       entry.ready = await entry.client.start(cancellation: entry.cancellation);
       _check(entry);
-      emit('companion.ready', device, capabilityState(device));
+      onChanged(
+        CompanionReady(
+          device,
+          connection.device.id,
+          protocol: entry.ready!['protocol']! as int,
+          apiLevel: entry.ready!['apiLevel'] as int?,
+        ),
+      );
       return entry;
     } catch (error, stack) {
       _retire(entry);
@@ -219,17 +208,8 @@ final class CompanionService {
     // 先启动精确回收，通知消费者的异常不能阻断资源清理。
     // 关闭失败仍在 _retiring 中，后续 stop/close 继续重试同一对象。
     unawaited(_release(entry).catchError((Object _) {}));
-    _updates.add(
-      CompanionUpdate(entry.device, entry.connection, 'companion.stopped', {
-        'status': 'unknown',
-        'live': false,
-        'reason': error is CompanionException ? error.message : '互联服务连接失效。',
-      }),
-    );
-    _emitEvent('companion.stopped', entry.device, const {
-      'status': 'unknown',
-      'live': false,
-    });
+    _updates.add(CompanionConnectionLost(entry.device, entry.connection));
+    _emitEvent(CompanionStopped(entry.device, entry.connection.device.id));
   }
 
   void _event(_Deployment entry, Map<String, Object?> message) {
@@ -249,13 +229,21 @@ final class CompanionService {
     if (type == 'notifications.changed' ||
         type == 'calls.changed' ||
         type == 'calls.incoming') {
-      _updates.add(CompanionUpdate(entry.device, entry.connection, type, data));
+      _updates.add(
+        CompanionObservationUpdate(
+          entry.device,
+          entry.connection,
+          type == 'notifications.changed' ? .notifications : .calls,
+          data,
+          incoming: type == 'calls.incoming',
+        ),
+      );
     }
   }
 
-  void _emitEvent(String type, String device, Map<String, Object?> data) {
+  void _emitEvent(CompanionEvent event) {
     try {
-      emit(type, device, data);
+      onChanged(event);
     } catch (_) {
       // 仅隔离应用事件消费者；远端 RPC、部署和资源回收错误不经过此捕获。
     }

@@ -11,6 +11,9 @@ import 'package:scrcpy_connect/core/control/video_quality_policy.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
+import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
+import 'package:scrcpy_connect/core/media/models/video_playback_resumed.dart';
 import 'package:scrcpy_connect/core/media/audio_output_service.dart';
 import 'package:scrcpy_connect/core/media/audio_player.dart';
 import 'package:scrcpy_connect/core/media/media_intent.dart';
@@ -61,7 +64,7 @@ final class MediaPlayback
   final Future<Preferences> Function() readSettings;
 
   final AudioPlatformRequest platform;
-  final void Function(Map<String, dynamic>) emit;
+  final void Function(AppEvent) emit;
   final bool Function() isDisposed;
   final void Function() requireVerifiedState;
   final String dataDirectory;
@@ -166,7 +169,7 @@ final class MediaPlayback
 
   void _handleAudioOutput(AudioOutputEvent event) {
     if (_disposed) return;
-    emit(event.toApplicationEvent());
+    emit(event);
     final id = event.sourceId;
     final source = _audioSources[id];
     if (source == null || event.deviceId != source.deviceId) {
@@ -276,7 +279,8 @@ final class MediaPlayback
           if (device.status == .connected) device.id,
       });
     }
-    if (event['data'] case VideoSessionView(:final session)
+    if (event['data']
+        case VideoSessionChanged(view: VideoSessionView(:final session))
         when !session.live) {
       final output = _textures[session.sessionId];
       if (output != null &&
@@ -378,11 +382,7 @@ final class MediaPlayback
     );
     if (!paused && !_disposed && _textures.containsKey(id)) {
       _textures[id] = _mergeOutput(_textures[id], receipt.output);
-      emit({
-        'type': 'session.output.resumed',
-        'deviceId': receipt.session.deviceId,
-        'data': receipt,
-      });
+      emit(VideoPlaybackResumed(receipt));
     }
     return receipt;
   }

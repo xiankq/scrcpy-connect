@@ -15,6 +15,8 @@ import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
 import 'package:scrcpy_connect/core/devices/scrcpy_server_queries.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
+import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
 import 'package:scrcpy_connect/core/media/device_audio_service.dart';
 import 'package:scrcpy_connect/core/media/models/device_audio_changed.dart';
 import 'package:scrcpy_connect/core/media/models/recovered_video_session.dart';
@@ -37,7 +39,7 @@ final class CaptureResources {
     required this._diagnostics,
     required this.isDisposed,
     required this.isStateUnverified,
-    required this.publish,
+    required this.onChanged,
     required this.onCleanupFailure,
   });
 
@@ -51,7 +53,7 @@ final class CaptureResources {
   final DiagnosticReporter _diagnostics;
   final bool Function() isDisposed;
   final bool Function() isStateUnverified;
-  final void Function(Map<String, dynamic>) publish;
+  final void Function(AppEvent) onChanged;
   final void Function(ActivityCleanupFailed) onCleanupFailure;
   final _cleanup = <Future<void>>{};
   bool _closed = false;
@@ -93,7 +95,7 @@ final class CaptureResources {
       },
       serverQueries: _readServerQueries,
       settings: () => _preferences.settings,
-      emit: (type, device, data) => publishBusiness(type, device, data),
+      onClipboardChanged: _publish,
       onSessionChanged: _publishSession,
       onAudioEligibilityChanged: (id) {
         // 同步撤准入后记录实际排空，回调不等待其他设备，也不丢弃失败所有者。
@@ -123,7 +125,7 @@ final class CaptureResources {
       apiLevel: (id) => _records.current.find(id)?.apiLevel,
       onChanged: (DeviceAudioChanged change) {
         if (!_closed && !isDisposed()) {
-          publish(change.toApplicationEvent());
+          onChanged(change);
         }
       },
     );
@@ -185,14 +187,12 @@ final class CaptureResources {
     VideoSessionSnapshot session,
   ) {
     if (_closed || isDisposed()) return;
-    publish({
-      'type': 'session.${change.name}',
-      'deviceId': session.deviceId,
-      'data': VideoSessionView(
-        session: session,
-        wake: readWake(session.deviceId),
+    onChanged(
+      VideoSessionChanged(
+        change,
+        VideoSessionView(session: session, wake: readWake(session.deviceId)),
       ),
-    });
+    );
   }
 
   void observeCleanup(Future<void> work) {
@@ -208,14 +208,14 @@ final class CaptureResources {
     );
   }
 
-  void publishBusiness(String type, String? device, Map<String, Object?> data) {
+  void _publish(AppEvent event) {
     if (_closed || isDisposed()) return;
-    publish({'type': type, 'deviceId': ?device, 'data': data});
+    onChanged(event);
   }
 
   void _wakeChanged(DeviceKeepAwakeChanged change) {
     if (_closed || isDisposed()) return;
-    publish(change.toApplicationEvent());
+    onChanged(change);
     for (final session
         in _sessions?.currentSessions(deviceId: change.deviceId) ??
             <VideoSessionSnapshot>[]) {

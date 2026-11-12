@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/core/settings/models/settings_changed.dart';
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
@@ -237,7 +239,10 @@ void main() {
     final preferences = await container
         .read(settingsManagementProvider)
         .update(PreferenceChanges(appearance: .dark));
-    expect((await preferencesChanged)['data'], same(preferences));
+    expect(
+      ((await preferencesChanged)['data'] as SettingsChanged).preferences,
+      same(preferences),
+    );
     expect(container.read(appSnapshotProvider).settings, same(preferences));
     final changed = container
         .read(runtimeEventsProvider)

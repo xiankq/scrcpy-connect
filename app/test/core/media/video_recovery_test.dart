@@ -33,7 +33,7 @@ void main() {
         .fail(fixture.outputs['session']!, 'ended')
         .then((_) => complete = true);
     expect(fixture.outputs, isEmpty);
-    final failure = fixture.events.single['data'] as VideoOutputFailed;
+    final failure = fixture.events.single as VideoOutputFailed;
     expect(failure.sessionId, 'session');
     expect(failure.deviceId, 'device');
     expect(failure.captureGeneration, 2);
@@ -58,7 +58,7 @@ void main() {
     final replacement = _output(capture: 2, renderer: 2);
     fixture.recovery.handle(VideoOutputChanged(replacement));
     expect(fixture.outputs['session'], same(replacement));
-    expect(fixture.events.single['data'], isA<VideoOutputChanged>());
+    expect(fixture.events.single, isA<VideoOutputChanged>());
     expect(fixture.ready.single.captureGeneration, 2);
     fixture.recovery.endReconfigure('session');
     fixture.recovery.handle(_failure());
@@ -88,7 +88,7 @@ void main() {
     expect(fixture.outputs['session']!.generation, 2);
     final next = _output(capture: 2, renderer: 3);
     fixture.recovery.handle(VideoOutputChanged(next));
-    expect(fixture.events.single['data'], isA<VideoOutputChanged>());
+    expect(fixture.events.single, isA<VideoOutputChanged>());
     expect(fixture.outputs['session'], same(next));
     expect(fixture.ready.single.generation, 3);
   });
@@ -113,7 +113,7 @@ void main() {
     fixture.recovery.handle(VideoOutputFrame(frame));
     fixture.recovery.handle(VideoOutputFrame(frame.copyWith(frameCount: 1)));
     expect(fixture.events, hasLength(1));
-    expect(fixture.events.single['data'], isA<VideoOutputFrame>());
+    expect(fixture.events.single, isA<VideoOutputFrame>());
     expect(fixture.frames.single.decodedWidth, 200);
     expect(fixture.outputs['session'], same(frame));
   });
@@ -136,10 +136,7 @@ void main() {
     expect(fixture.outputs['session'], same(first));
     expect(fixture.frames, hasLength(2));
     expect(fixture.frames.last.captureGeneration, 3);
-    expect(
-      (fixture.events.last['data'] as VideoOutputFrame).output,
-      same(first),
-    );
+    expect((fixture.events.last as VideoOutputFrame).output, same(first));
     fixture.recovery.handle(VideoOutputFrame(first.copyWith(frameCount: 0)));
     fixture.recovery.handle(
       VideoOutputFrame(
@@ -161,7 +158,7 @@ void main() {
     expect(fixture.outputs['session'], same(replacement));
     expect(fixture.closed, isEmpty);
     expect(fixture.stopped, isEmpty);
-    expect(fixture.events.single['data'], isA<VideoOutputChanged>());
+    expect(fixture.events.single, isA<VideoOutputChanged>());
   });
 }
 
@@ -182,7 +179,7 @@ class _Recovery {
       },
       closeOutput: (id, {failure}) async => closed.add(id),
       emit: (event) {
-        if (event['data'] case VideoOutputChanged(:final output)) {
+        if (event case VideoOutputChanged(:final output)) {
           expect(outputs[output.sessionId], same(output));
         }
         events.add(event);
@@ -192,7 +189,7 @@ class _Recovery {
   }
   late final VideoRecovery recovery;
   final outputs = <String, VideoOutputReceipt>{};
-  final events = <Map<String, dynamic>>[];
+  final events = <VideoOutputEvent>[];
   final ready = <VideoRendererReceipt>[], frames = <VideoRendererReceipt>[];
   final closed = <String>[], stopped = <String>[];
   Future<void> stopping = Future.value();

@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/core/settings/models/settings_changed.dart';
+
 import 'dart:async';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -30,13 +32,13 @@ class PreferencesNotifier extends _$PreferencesNotifier {
       if (payload is RecoveryStarted || payload is RecoveryFailed) {
         owner.request++;
         owner.epoch++;
-      } else if (payload is RecoveryCompleted || payload is Preferences) {
+      } else if (payload is RecoveryCompleted || payload is SettingsChanged) {
         owner.request++;
         owner.epoch++;
         state = state.copyWith(
           values: payload is RecoveryCompleted
               ? payload.snapshot.settings
-              : payload as Preferences,
+              : (payload as SettingsChanged).preferences,
           error: null,
         );
       }

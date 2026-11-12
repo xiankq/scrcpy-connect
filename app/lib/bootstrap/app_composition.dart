@@ -109,7 +109,7 @@ final class AppComposition {
         diagnostics: _diagnostics,
         isDisposed: () => _isDisposed,
         isStateUnverified: () => _stateRecovery.pending,
-        publish: _events.publish,
+        onChanged: _events.publishEvent,
         onCleanupFailure: _events.emitEvent,
       );
 
@@ -175,9 +175,7 @@ final class AppComposition {
     readSnapshot: () => _state.readSnapshot(),
     readSettings: _preferences.read,
     platform: (command, params) => _audioPlatform.request(command, params),
-    emit: (event) {
-      _events.emit(event);
-    },
+    emit: _events.emitEvent,
     isDisposed: () => _isDisposed,
     requireVerifiedState: () => _stateRecovery.requireVerifiedState(),
     dataDirectory: _dataDirectory,
@@ -245,9 +243,8 @@ final class AppComposition {
           ? session._usbAuthorization.authorize
           : null,
       cancelUsb: Platform.isAndroid ? session._usbAuthorization.cancel : null,
-      emit: (event) => session._events.emit(event),
-      publish: (type, device, data) =>
-          session._events.publishBusiness(type, device, data),
+      onCleanupFailure: session._events.emitEvent,
+      onCompanionChanged: session._events.publishEvent,
       onDevicesChanged: session._events.publishEvent,
       onObservationChanged: session._events.publishEvent,
       stopWork: (id, connection, accepted) => Future.wait([
