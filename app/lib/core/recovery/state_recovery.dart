@@ -30,6 +30,15 @@ class StateRecovery {
   bool get pending => _pending;
   bool get hasSnapshot => _watermark >= 0;
 
+  void requireVerifiedState() {
+    if (_disposed || isDisposed()) {
+      throw const RequestFailure('disposed', '状态恢复所有者已关闭。');
+    }
+    if (_pending) {
+      throw const RequestFailure('state_unverified', '正在重新核验设备状态，完成后再操作。');
+    }
+  }
+
   /// 本地业务变化没有原生序列；恢复期间发生变化时必须重读组合快照。
   void noteLocalStateChange() {
     if (!_disposed && !isDisposed()) _localRevision++;

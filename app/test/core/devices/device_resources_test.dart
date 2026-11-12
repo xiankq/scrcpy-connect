@@ -19,6 +19,7 @@ import 'package:scrcpy_connect/core/events/runtime_events.dart';
 import 'package:scrcpy_connect/core/files/file_document_platform.dart';
 import 'package:scrcpy_connect/core/files/file_resources.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_lifecycle.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_lifetime.dart';
 import 'package:scrcpy_connect/core/media/media_playback.dart';
 import 'package:scrcpy_connect/core/platform/background_policy.dart';
 import 'package:scrcpy_connect/core/devices/models/device_reconnect_snapshot.dart';
@@ -448,6 +449,7 @@ Future<AppLifecycle> _lifecycle(
     capture: () => throw StateError('退出不应创建捕获适配器'),
   );
   return AppLifecycle(
+    lifetime: AppLifetime(),
     closeHost: closeHost,
     connections: resources,
     readCaptures: () => null,

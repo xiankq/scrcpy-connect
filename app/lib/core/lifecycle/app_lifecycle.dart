@@ -7,6 +7,7 @@ import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/events/runtime_events.dart';
 import 'package:scrcpy_connect/core/files/file_resources.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_lifetime.dart';
 import 'package:scrcpy_connect/core/media/media_playback.dart';
 import 'package:scrcpy_connect/core/platform/background_policy.dart';
 import 'package:scrcpy_connect/core/recovery/state_recovery.dart';
@@ -17,6 +18,7 @@ import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 /// 协调应用启停、连接退休与有序关闭；依赖由 bootstrap 装配。
 final class AppLifecycle {
   AppLifecycle({
+    required this._lifetime,
     required this._closeHost,
     required this._connections,
     required this._readCaptures,
@@ -31,6 +33,7 @@ final class AppLifecycle {
     required this._diagnostics,
   });
 
+  final AppLifetime _lifetime;
   final Future<void> Function() _closeHost;
   final DeviceResources _connections;
   final CaptureResources? Function() _readCaptures;
@@ -50,7 +53,7 @@ final class AppLifecycle {
     if (!Platform.isAndroid) await _media.setVisible(visible);
   }
 
-  bool _disposed = false;
+  bool get _disposed => _lifetime.ended;
   bool get isDisposed => _disposed;
   void settingsChanged(Preferences preferences) {
     if (_disposed) return;
@@ -59,12 +62,6 @@ final class AppLifecycle {
     );
     _events.publish({'type': 'settings.changed', 'data': preferences});
     _readCaptures()?.settingsChanged();
-  }
-
-  void requireVerifiedState() {
-    if (_stateRecovery.pending) {
-      throw const RequestFailure('state_unverified', '正在重新核验设备状态，完成后再操作。');
-    }
   }
 
   Future<void> activate() async {
@@ -127,7 +124,7 @@ final class AppLifecycle {
   }
 
   OrderedDisposal _prepareDisposal() {
-    _disposed = true;
+    _lifetime.end();
     _files.stopAdmission();
     _media.stopAdmission();
     _stateRecovery.dispose();

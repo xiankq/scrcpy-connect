@@ -24,6 +24,12 @@ void main() {
     final reading = recovery.refresh();
     expect(recovery.refresh(), same(reading));
     expect(recovery.pending, isTrue);
+    expect(
+      recovery.requireVerifiedState,
+      throwsA(
+        isA<RequestFailure>().having((e) => e.code, 'code', 'state_unverified'),
+      ),
+    );
     expect(recovery.accept(sequence: 9), isFalse);
     reads.first.complete(snapshot(8));
     await Future<void>.delayed(Duration.zero);
@@ -33,9 +39,15 @@ void main() {
     expect(await reading, same(verified));
     expect((emitted.last as RecoveryCompleted).snapshot, same(verified));
     expect(recovery.pending, isFalse);
+    recovery.requireVerifiedState();
     expect(recovery.accept(sequence: 8), isFalse);
     expect(recovery.accept(sequence: 9), isFalse);
     expect(recovery.accept(sequence: 10), isTrue);
+    recovery.dispose();
+    expect(
+      recovery.requireVerifiedState,
+      throwsA(isA<RequestFailure>().having((e) => e.code, 'code', 'disposed')),
+    );
   });
 
   test('缺失水位启动核验，重复缺口要求重读，遥测不推进业务水位', () async {

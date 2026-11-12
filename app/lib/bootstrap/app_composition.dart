@@ -33,6 +33,7 @@ import 'package:scrcpy_connect/core/files/file_share_service.dart';
 import 'package:scrcpy_connect/core/gallery/gallery_scanner_provider.dart';
 import 'package:scrcpy_connect/core/identity/identity_management_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_lifecycle.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_lifetime.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/media/media_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/media/media_operations.dart';
@@ -61,6 +62,9 @@ final class AppComposition {
   });
 
   final NativeHost _host;
+  final _lifetime = AppLifetime();
+  bool get _isDisposed => _lifetime.ended;
+  late final AppLifecycle lifecycle;
   late final DeviceResources _connections;
   late final AppLaunchJournal _launches;
   late final FileResources _files;
@@ -229,7 +233,7 @@ final class AppComposition {
       _events.emit(event);
     },
     isDisposed: () => _isDisposed,
-    requireVerifiedState: () => lifecycle.requireVerifiedState(),
+    requireVerifiedState: () => _stateRecovery.requireVerifiedState(),
     dataDirectory: _dataDirectory,
     capture: () => ScrcpyCaptureAdapter(_host.scrcpy.api),
     diagnostics: diagnostics,
@@ -364,8 +368,23 @@ final class AppComposition {
       attachCatalogEvents: (source) => session._events.attachFileEvents(source),
       onSharingOpened: onSharingOpened,
     );
-    // 先完成依赖图，构造失败时仍由启动门禁持有宿主与分享的清理责任。
-    session.lifecycle;
+    session.lifecycle = AppLifecycle(
+      lifetime: session._lifetime,
+      closeHost: host.close,
+      connections: connections,
+      readCaptures: () => session._captureInstance,
+      files: session._files,
+      events: session._events,
+      stateRecovery: session._stateRecovery,
+      preferences: session._preferences,
+      platformEvents: Platform.isAndroid ? _channels.events : null,
+      readVisible: Platform.isAndroid
+          ? session._audioPlatform.readVisible
+          : null,
+      background: session._background,
+      media: session._media,
+      diagnostics: session._diagnostics,
+    );
     return session;
   }
 
@@ -385,22 +404,6 @@ final class AppComposition {
     sessions: _captureResources.sessions,
     isDisposed: () => _isDisposed,
     isStateUnverified: () => _stateRecovery.pending,
-    diagnostics: _diagnostics,
-  );
-  AppLifecycle? _lifecycle;
-  bool get _isDisposed => _lifecycle?.isDisposed ?? false;
-  AppLifecycle get lifecycle => _lifecycle ??= AppLifecycle(
-    closeHost: _host.close,
-    connections: _connections,
-    readCaptures: () => _captureInstance,
-    files: _files,
-    events: _events,
-    stateRecovery: _stateRecovery,
-    preferences: _preferences,
-    platformEvents: Platform.isAndroid ? _channels.events : null,
-    readVisible: Platform.isAndroid ? _audioPlatform.readVisible : null,
-    background: _background,
-    media: _media,
     diagnostics: _diagnostics,
   );
   List<Override> overrides({required Future<void> Function() close}) => [

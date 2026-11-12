@@ -186,6 +186,48 @@ void main() {
     expect(fixture.api.closed, hasLength(4));
   });
 
+  test('实际关闭开始即撤销设置准入，释放失败仍保持关闭且重试原宿主', () async {
+    final fixture = await _Assembly.open();
+    final bootstrap = await AppBootstrap.initialize(
+      dataDirectory: fixture.directory.path,
+    );
+    addTearDown(bootstrap.dispose);
+    final container = ProviderContainer(overrides: bootstrap.overrides);
+    addTearDown(container.dispose);
+    final settings = container.read(settingsManagementProvider);
+    final initial = await settings.read();
+    fixture.api.allowFileClose = false;
+    final gate = fixture.api.closeGate = Completer<void>();
+    final originalScope = fixture.api.scope;
+    final closing = expectLater(
+      bootstrap.dispose(),
+      throwsA(same(fixture.api.closeFailure)),
+    );
+    await fixture.api.fileCloseStarted.future;
+    final disposed = throwsA(
+      isA<RequestFailure>().having((e) => e.code, 'code', 'disposed'),
+    );
+    await expectLater(settings.read(), disposed);
+    await expectLater(
+      settings.update(PreferenceChanges(appearance: .dark)),
+      disposed,
+    );
+    expect(fixture.host.preferences.current.values, same(initial));
+    expect(fixture.api.scope, same(originalScope));
+    gate.complete();
+    await closing;
+    await expectLater(settings.read(), disposed);
+    expect(fixture.api.scope, same(originalScope));
+    fixture.api.allowFileClose = true;
+    await bootstrap.dispose();
+    expect(fixture.api.closed, [
+      'files:files-1',
+      'files:files-1',
+      'admission:scope-1',
+    ]);
+    expect(fixture.api.attachments, 1);
+  });
+
   test('完整启动后的目录配置失败仍通过真实生命周期关闭所有者', () async {
     final fixture = await _Assembly.open();
     final original = StateError('outgoing directory unavailable');
