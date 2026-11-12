@@ -2,16 +2,15 @@ import 'dart:async';
 
 import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
-import 'package:scrcpy_connect/core/lifecycle/app_dependencies.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_session.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 
 /// Scope 的传输与事件所有者。先同步交付状态，再向页面和查询发布事件。
 final class StateSubscription {
-  StateSubscription(this.dependencies) : generation = ++_nextGeneration {
-    _reconciling = dependencies.initialState.reconciliationPending;
-    _snapshotSequence =
-        dependencies.initialState.reconciledSnapshot?['sequence'];
-    _subscription = dependencies.events.listen(
+  StateSubscription(this.session) : generation = ++_nextGeneration {
+    _reconciling = session.initialState.reconciliationPending;
+    _snapshotSequence = session.initialState.reconciledSnapshot?['sequence'];
+    _subscription = session.events.listen(
       _accept,
       onError: _connectionErrors.add,
     );
@@ -19,7 +18,7 @@ final class StateSubscription {
 
   static int _nextGeneration = 0;
   final int generation;
-  final AppDependencies dependencies;
+  final AppSession session;
   final _connectionErrors = StreamController<Object>.broadcast(sync: true);
   final _stateCommits = StreamController<void>.broadcast(sync: true);
   final _states = StreamController<Json>.broadcast(sync: true);
@@ -71,11 +70,11 @@ final class StateSubscription {
     unawaited(_stateCommits.close());
     unawaited(_connectionErrors.close());
     unawaited(_events.close());
-    final close = dependencies.close;
+    final close = session.close;
     if (close != null) {
       unawaited(
         Future<void>.sync(close).catchError((Object error, StackTrace _) {
-          dependencies.diagnostics?.record(
+          session.diagnostics?.record(
             DiagnosticArea.app,
             'shutdown.failed',
             level: LogLevel.error,

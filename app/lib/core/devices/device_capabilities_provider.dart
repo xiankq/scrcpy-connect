@@ -1,5 +1,4 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/core/lifecycle/app_dependencies_provider.dart';
 
 import 'device_apps.dart';
 import 'device_assessment.dart';
@@ -13,33 +12,32 @@ import 'device_setup.dart';
 
 /// 各入口借用启动装配的能力；查询和页面可独立替换，不接管共享资源。
 final deviceManagementProvider = Provider<DeviceManagement>(
-  (ref) => ref.watch(appDependenciesProvider.select((app) => app.devices)),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );
 final deviceConnectionsProvider = Provider<DeviceConnectionControl>(
-  (ref) => ref.watch(appDependenciesProvider.select((app) => app.connections)),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );
 final deviceSetupProvider = Provider<DeviceSetup>(
-  (ref) => ref.watch(appDependenciesProvider.select((app) => app.setup)),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );
 final deviceInspectionProvider = Provider<DeviceInspection>(
-  (ref) => ref.watch(appDependenciesProvider.select((app) => app.inspection)),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );
 final deviceAppsProvider = Provider<DeviceApps>(
-  (ref) => ref.watch(appDependenciesProvider.select((app) => app.apps)),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );
 final deviceAssessmentProvider = Provider<DeviceAssessment>(
-  (ref) => ref.watch(appDependenciesProvider.select((app) => app.assessment)),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );
 final deviceCallsProvider = Provider<DeviceCalls>(
-  (ref) => ref.watch(appDependenciesProvider.select((app) => app.calls)),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );
 final deviceNotificationsProvider = Provider<DeviceNotifications>(
-  (ref) =>
-      ref.watch(appDependenciesProvider.select((app) => app.notifications)),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );
 final deviceObservationProvider = Provider<DeviceObservation>(
-  (ref) => ref.watch(appDependenciesProvider.select((app) => app.observation)),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );
 final deviceWakeProvider = Provider<DeviceWake>(
-  (ref) => ref.watch(appDependenciesProvider.select((app) => app.wake)),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );

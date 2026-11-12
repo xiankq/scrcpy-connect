@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/clipboard/clipboard_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/clipboard/clipboard_focus_notifier.dart';
@@ -10,7 +12,7 @@ import 'package:scrcpy_connect/core/clipboard/models/clipboard_sync_state.dart';
 import 'package:scrcpy_connect/core/clipboard/remote_clipboard.dart';
 import 'package:scrcpy_connect/core/devices/device_management.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
-import 'package:scrcpy_connect/core/lifecycle/app_dependencies_provider.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
 import 'package:scrcpy_connect/core/settings/settings_management.dart';
 
@@ -18,7 +20,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test('剪贴板换源立即撤销原准入，重新建基线后仅同步新捕获事件', () async {
     final events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
-    final dependencies = _Dependencies(events.stream);
+    final dependencies = _Session(events.stream);
     final previous = _Clipboard();
     final replacement = _Clipboard();
     var local = 'local baseline';
@@ -38,7 +40,9 @@ void main() {
     );
     final container = ProviderContainer(
       overrides: [
-        appDependenciesProvider.overrideWithValue(dependencies),
+        appSessionProvider.overrideWithValue(dependencies),
+        deviceManagementProvider.overrideWithValue(dependencies.devices),
+        settingsManagementProvider.overrideWithValue(dependencies.settings),
         remoteClipboardProvider.overrideWithValue(previous),
       ],
     );
@@ -61,7 +65,9 @@ void main() {
       isTrue,
     );
     container.updateOverrides([
-      appDependenciesProvider.overrideWithValue(dependencies),
+      appSessionProvider.overrideWithValue(dependencies),
+      deviceManagementProvider.overrideWithValue(dependencies.devices),
+      settingsManagementProvider.overrideWithValue(dependencies.settings),
       remoteClipboardProvider.overrideWithValue(replacement),
     ]);
     expect(
@@ -145,8 +151,8 @@ class _Clipboard implements RemoteClipboard {
       throw StateError('unexpected replay');
 }
 
-class _Dependencies implements AppDependencies {
-  _Dependencies(this.events);
+class _Session implements AppSession {
+  _Session(this.events);
   @override
   final Stream<Map<String, dynamic>> events;
   @override
@@ -164,9 +170,7 @@ class _Dependencies implements AppDependencies {
       deviceSettings: {'device': const DevicePreferences(clipboardSync: true)},
     ),
   );
-  @override
   final DeviceManagement devices = _Devices();
-  @override
   final SettingsManagement settings = _Settings();
   @override
   bool get initialize => false;

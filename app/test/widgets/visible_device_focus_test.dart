@@ -4,7 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/devices/current_device_notifier.dart';
-import 'package:scrcpy_connect/core/lifecycle/app_dependencies.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_session.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
@@ -14,8 +14,8 @@ import 'package:scrcpy_connect/widgets/visible_device_focus.dart';
 
 void main() {
   testWidgets('应用 scope 替换后重新声明焦点，瞬时恢复和前后台变化也会重新核验', (tester) async {
-    final previous = StateSubscription(_Dependencies());
-    final replacement = StateSubscription(_Dependencies());
+    final previous = StateSubscription(_Session());
+    final replacement = StateSubscription(_Session());
     addTearDown(previous.dispose);
     addTearDown(replacement.dispose);
     final focusOverride = currentDeviceProvider.overrideWith(_Focus.new);
@@ -81,7 +81,7 @@ class _Recovery extends RecoveryStateNotifier {
       state = state.copyWith(reconciliationPending: value);
 }
 
-class _Dependencies implements AppDependencies {
+class _Session implements AppSession {
   @override
   AppState get initialState => AppState();
   @override

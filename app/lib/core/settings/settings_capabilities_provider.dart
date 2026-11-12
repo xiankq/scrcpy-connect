@@ -1,12 +1,11 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/core/lifecycle/app_dependencies_provider.dart';
 
 import 'metadata_management.dart';
 import 'settings_management.dart';
 
 final settingsManagementProvider = Provider<SettingsManagement>(
-  (ref) => ref.watch(appDependenciesProvider.select((app) => app.settings)),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );
 final metadataManagementProvider = Provider<MetadataManagement>(
-  (ref) => ref.watch(appDependenciesProvider.select((app) => app.metadata)),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );

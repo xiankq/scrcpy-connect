@@ -5,7 +5,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/core/lifecycle/app_dependencies_provider.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
@@ -31,16 +31,16 @@ class ConnectApp extends HookConsumerWidget {
     final events = ref.watch(runtimeEventsProvider);
     final videos = ref.watch(videoSessionsProvider);
     final audio = ref.watch(remoteAudioProvider);
-    final dependencies = ref.watch(appDependenciesProvider);
+    final appSession = ref.watch(appSessionProvider);
     useEffect(() {
       final lifecycle = AppLifecycleObserver(
-        setVisible: dependencies.setVisible,
-        diagnostics: dependencies.diagnostics,
-        shutdown: dependencies.close,
+        setVisible: appSession.setVisible,
+        diagnostics: appSession.diagnostics,
+        shutdown: appSession.close,
       );
       unawaited(lifecycle.attach());
       return lifecycle.dispose;
-    }, [dependencies]);
+    }, [appSession]);
     final views = useMemoized(() {
       bool current() =>
           context.mounted &&

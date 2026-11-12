@@ -56,4 +56,4 @@ final class StateSubscriptionProvider
   }
 }
 
-String _$stateSubscriptionHash() => r'93ce5d348336b3decfb4bbbe56e40b3bb3348124';
+String _$stateSubscriptionHash() => r'74541bd9388cfbe4b73729a0454c880a4955e196';

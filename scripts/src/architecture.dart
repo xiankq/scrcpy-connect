@@ -360,7 +360,7 @@ List<String> checkArchitecture(
                   !RegExp(r'_(provider|notifier)\.dart$').hasMatch(source) &&
                   p.isWithin(p.join(appLib, 'core', 'lifecycle'), normalized) &&
                   {
-                    'app_dependencies.dart',
+                    'app_session.dart',
                     'state_subscription.dart',
                   }.contains(p.basename(normalized))) {
                 problems.add(

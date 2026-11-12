@@ -46,14 +46,7 @@ final class RuntimeEvents {
     if (_attached || !_active) throw StateError('应用观察者不能重复附着。');
     _attached = true;
     for (final source in files) {
-      _files.add(
-        source.listen((event) {
-          publish({
-            ...event,
-            'data': {...event}..remove('type'),
-          });
-        }, onError: _error),
-      );
+      attachFileEvents(source);
     }
     _sharing = sharing?.listen(publish, onError: _error);
     _platform = platform?.listen((event) {
@@ -65,6 +58,25 @@ final class RuntimeEvents {
       );
     }, onError: _error);
   }
+
+  /// 按需创建的文件查询在开始工作前附着，仍使用唯一的事件序列与关闭所有者。
+  void attachFileEvents(Stream<RuntimeEvent> source) {
+    if (!_active || _detaching != null) throw StateError('应用事件所有者已关闭。');
+    _files.add(
+      source.listen((event) {
+        publish({
+          ...event,
+          'data': {...event}..remove('type'),
+        });
+      }, onError: _error),
+    );
+  }
+
+  void publishBusiness(
+    String type,
+    String? deviceId,
+    Map<String, Object?> data,
+  ) => publish({'type': type, 'deviceId': ?deviceId, 'data': data});
 
   /// 业务状态先登记水位再通知策略；同步回调重入也不能逆序发布。
   void publish(RuntimeEvent event) {

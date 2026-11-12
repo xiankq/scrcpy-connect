@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/core/lifecycle/app_dependencies_provider.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
@@ -10,16 +10,16 @@ import 'package:scrcpy_connect/core/settings/settings_management.dart';
 
 void main() {
   late _Settings settings;
-  late _Dependencies dependencies;
+  late _Session dependencies;
   late StreamController<Map<String, dynamic>> events;
   late ProviderContainer container;
   setUp(() {
     settings = _Settings();
     events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
-    dependencies = _Dependencies(events.stream);
+    dependencies = _Session(events.stream);
     container = ProviderContainer(
       overrides: [
-        appDependenciesProvider.overrideWithValue(dependencies),
+        appSessionProvider.overrideWithValue(dependencies),
         settingsManagementProvider.overrideWithValue(settings),
       ],
     );
@@ -111,7 +111,7 @@ void main() {
     await _flush(container);
     final replacement = _Settings();
     container.updateOverrides([
-      appDependenciesProvider.overrideWithValue(dependencies),
+      appSessionProvider.overrideWithValue(dependencies),
       settingsManagementProvider.overrideWithValue(replacement),
     ]);
     await _flush(container);
@@ -187,8 +187,8 @@ class _Settings implements SettingsManagement {
   }
 }
 
-class _Dependencies implements AppDependencies {
-  _Dependencies(this.events);
+class _Session implements AppSession {
+  _Session(this.events);
   @override
   final Stream<Map<String, dynamic>> events;
   @override

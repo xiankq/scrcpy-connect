@@ -44,7 +44,7 @@ final class AudioErrorNotifierProvider
 }
 
 String _$audioErrorNotifierHash() =>
-    r'a6db488d496c1e57d6adf6ff70cdd8b298e5b08e';
+    r'984ca5477ea42d11ee92ab1e929411b4538e438c';
 
 abstract class _$AudioErrorNotifier extends $Notifier<String?> {
   String? build();

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:adb/adb.dart' show AdbCancellation;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/control/control_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
@@ -11,12 +13,11 @@ import 'package:scrcpy_connect/core/control/models/video_session.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/control/video_display.dart';
 import 'package:scrcpy_connect/core/devices/device_apps.dart';
-import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_inspection.dart';
 import 'package:scrcpy_connect/core/devices/device_management.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
-import 'package:scrcpy_connect/core/lifecycle/app_dependencies_provider.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
 import 'package:scrcpy_connect/core/media/media_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
@@ -32,14 +33,16 @@ void main() {
     final original = _Videos();
     final replacement = _Videos();
     final events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
-    final dependencies = _Dependencies();
+    final dependencies = _Session();
     final control = _Control();
     final inspection = _Inspection();
     final apps = _Apps();
     final displays = _Displays();
     final container = ProviderContainer(
       overrides: [
-        appDependenciesProvider.overrideWithValue(dependencies),
+        appSessionProvider.overrideWithValue(dependencies),
+        deviceManagementProvider.overrideWithValue(dependencies.devices),
+        settingsManagementProvider.overrideWithValue(dependencies.settings),
         runtimeEventsProvider.overrideWithValue(events.stream),
         videoSessionsProvider.overrideWithValue(original),
         remoteControlProvider.overrideWithValue(control),
@@ -74,7 +77,9 @@ void main() {
     await tester.pump();
     expect(original.starts, 1);
     container.updateOverrides([
-      appDependenciesProvider.overrideWithValue(dependencies),
+      appSessionProvider.overrideWithValue(dependencies),
+      deviceManagementProvider.overrideWithValue(dependencies.devices),
+      settingsManagementProvider.overrideWithValue(dependencies.settings),
       runtimeEventsProvider.overrideWithValue(events.stream),
       videoSessionsProvider.overrideWithValue(replacement),
       remoteControlProvider.overrideWithValue(control),
@@ -122,7 +127,7 @@ const _device = DeviceSnapshot(
   connectionId: 'connection',
 );
 
-class _Dependencies implements AppDependencies {
+class _Session implements AppSession {
   @override
   final initialState = AppState(
     devices: [_device],
@@ -131,9 +136,7 @@ class _Dependencies implements AppDependencies {
       deviceSettings: {'device': const DevicePreferences(wakeOnConnect: false)},
     ),
   );
-  @override
   final DeviceManagement devices = _Devices();
-  @override
   final SettingsManagement settings = _Settings();
   @override
   Stream<Map<String, dynamic>> get events => const Stream.empty();

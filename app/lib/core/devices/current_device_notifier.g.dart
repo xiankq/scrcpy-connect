@@ -47,7 +47,7 @@ final class CurrentDeviceNotifierProvider
 }
 
 String _$currentDeviceNotifierHash() =>
-    r'c5d672918fcee6d6b3de97277e0469c5ffdeff34';
+    r'd8ffc8bc034268d0fbfb0673db8d92ff669e3de3';
 
 /// 当前操作设备归用户焦点选择，不属于宿主恢复状态。
 

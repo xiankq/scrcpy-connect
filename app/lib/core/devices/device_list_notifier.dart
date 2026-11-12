@@ -24,7 +24,7 @@ class DeviceListNotifier extends _$DeviceListNotifier {
       session,
       ref.watch(deviceManagementProvider),
     );
-    final initial = session.dependencies.initialState;
+    final initial = session.session.initialState;
     final subscription = session.stateEvents.listen((event) {
       if (!_current(owner)) return;
       final type = event['type'];
@@ -54,13 +54,13 @@ class DeviceListNotifier extends _$DeviceListNotifier {
       unawaited(subscription.cancel());
       unawaited(errors.cancel());
     });
-    if (session.dependencies.initialize) {
+    if (session.session.initialize) {
       scheduleMicrotask(() {
         if (_current(owner)) unawaited(refresh());
       });
     }
     return identical(previous?.session, session)
-        ? DeviceListState(loading: session.dependencies.initialize)
+        ? DeviceListState(loading: session.session.initialize)
         : DeviceListState(
             devices: initial.devices,
             loading: initial.loading,

@@ -4,20 +4,19 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/bootstrap/app_bootstrap.dart';
 import 'package:scrcpy_connect/core/content/content_cache.dart';
-import 'package:scrcpy_connect/core/lifecycle/app_dependencies.dart';
 
 void main() {
   test('配置缓存后才交付依赖，成功时不关闭所有者', () async {
     final configured = Completer<void>();
     final cache = _Cache(() => configured.future);
     var closes = 0;
-    final dependencies = _Dependencies(cache, () async {
+    final dependencies = _Bootstrap(cache, () async {
       closes++;
     });
     var delivered = false;
     final pending =
         bootstrapApp(
-          createDependencies: () async => dependencies,
+          createSession: () async => dependencies,
           prepareOutgoingDirectory: () async => Directory('/outgoing'),
         ).then((value) {
           delivered = true;
@@ -35,7 +34,7 @@ void main() {
     final original = StateError('cache configuration');
     final closed = Completer<void>();
     var closing = false;
-    final dependencies = _Dependencies(
+    final dependencies = _Bootstrap(
       _Cache(() async {
         throw original;
       }),
@@ -45,7 +44,7 @@ void main() {
       },
     );
     final pending = bootstrapApp(
-      createDependencies: () async => dependencies,
+      createSession: () async => dependencies,
       prepareOutgoingDirectory: () async => Directory('/outgoing'),
     );
     var completed = false;
@@ -61,12 +60,15 @@ void main() {
   });
 }
 
-class _Dependencies implements AppDependencies {
-  _Dependencies(this.cache, this.close);
-  @override
+class _Bootstrap implements AppBootstrap {
+  _Bootstrap(this.cache, this.close);
   final ContentCacheControl cache;
-  @override
   final Future<void> Function()? close;
+  @override
+  Future<void> configureOutgoingDirectory(String path) =>
+      cache.configure(outgoingDirectory: path);
+  @override
+  Future<void> dispose() async => await close?.call();
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

@@ -7,7 +7,7 @@ part 'audio_error_notifier.g.dart';
 class AudioErrorNotifier extends _$AudioErrorNotifier {
   @override
   String? build() =>
-      ref.watch(stateSubscriptionProvider).dependencies.initialState.audioError;
+      ref.watch(stateSubscriptionProvider).session.initialState.audioError;
 
   void update(String? error) {
     if (ref.mounted && state != error) state = error;

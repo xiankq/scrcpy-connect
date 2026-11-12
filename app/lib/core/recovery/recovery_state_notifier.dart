@@ -12,7 +12,7 @@ class RecoveryStateNotifier extends _$RecoveryStateNotifier {
   @override
   RecoveryState build() {
     final session = ref.watch(stateSubscriptionProvider);
-    final initial = session.dependencies.initialState;
+    final initial = session.session.initialState;
     final subscription = session.stateEvents.listen((event) {
       if (!ref.mounted || session.disposed) return;
       final type = event['type'];

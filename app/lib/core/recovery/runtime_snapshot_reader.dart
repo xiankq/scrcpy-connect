@@ -1,14 +1,12 @@
 import 'package:scrcpy_connect/core/activities/activity_management.dart';
 import 'package:scrcpy_connect/core/companion/companion_service.dart';
-import 'package:scrcpy_connect/core/control/control_session_service.dart';
-import 'package:scrcpy_connect/core/control/device_wake_service.dart';
+import 'package:scrcpy_connect/core/control/capture_resources.dart';
 import 'package:scrcpy_connect/core/devices/device_observation_service.dart';
 import 'package:scrcpy_connect/core/devices/device_service.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/events/runtime_events.dart';
 import 'package:scrcpy_connect/core/files/file_share_service.dart';
 import 'package:scrcpy_connect/core/files/file_transfer_service.dart';
-import 'package:scrcpy_connect/core/media/device_audio_service.dart';
 import 'package:scrcpy_connect/core/settings/settings_storage.dart';
 
 /// 借用业务所有者组合只读快照；不建立连接、部署助手或取得资源关闭权。
@@ -18,9 +16,7 @@ final class RuntimeSnapshotReader {
     required this.events,
     required this.activities,
     required this.devices,
-    required this.sessions,
-    required this.audio,
-    required this.keepAwake,
+    required this.captures,
     required this.observations,
     required this.companion,
     required this.transfers,
@@ -30,9 +26,7 @@ final class RuntimeSnapshotReader {
   final RuntimeEvents events;
   final ActivityManagement activities;
   final DeviceService devices;
-  final ControlSessionService sessions;
-  final DeviceAudioService audio;
-  final DeviceWakeService keepAwake;
+  final CaptureResources captures;
   final DeviceObservationService observations;
   final CompanionService companion;
   final FileTransferService transfers;
@@ -42,15 +36,17 @@ final class RuntimeSnapshotReader {
   Future<Map<String, dynamic>> readSnapshot() async {
     for (var attempt = 0; attempt < 4; attempt++) {
       final before = events.cursor;
-      final sessionStates = await sessions.readSessions();
+      final sessionStates = await captures.readSessions();
       final shares = await sharing?.readIncomingShares();
       final activityItems = await activities.readActivities();
       final sessionItems = [
         for (final session in sessionStates)
-          keepAwake.projectSession(session.toSnapshot()),
+          captures.projectSession(session.toSnapshot()),
       ];
       final deviceItems = devices.projectDevices();
-      final sources = [for (final source in audio.snapshots()) source.toJson()];
+      final sources = [
+        for (final source in captures.audioSnapshots()) source.toJson(),
+      ];
       final observationItems = [
         for (final observation in observations.currentSnapshots())
           observations.statusProjection(observation.deviceId),

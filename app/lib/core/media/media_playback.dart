@@ -35,7 +35,8 @@ final class MediaPlayback
         VideoScreenshots,
         VideoQualityControl {
   MediaPlayback({
-    required this.captures,
+    required MediaCapture Function() captures,
+    required this.readCapturedAudio,
     required this.readSnapshot,
     required this.readSettings,
     required this.platform,
@@ -43,11 +44,15 @@ final class MediaPlayback
     required this.isDisposed,
     required this.requireVerifiedState,
     required this.dataDirectory,
-    required this.capture,
+    required ScrcpyCaptureAdapter Function() capture,
     this.diagnostics,
-  });
+  }) : _createCapture = captures,
+       _createAdapter = capture;
 
-  final MediaCapture captures;
+  final MediaCapture Function() _createCapture;
+  MediaCapture? _capture;
+  MediaCapture get captures => _capture ??= _createCapture();
+  final Future<List<DeviceAudioSnapshot>> Function() readCapturedAudio;
   final Future<Map<String, dynamic>> Function() readSnapshot;
   final Future<Preferences> Function() readSettings;
 
@@ -56,7 +61,8 @@ final class MediaPlayback
   final bool Function() isDisposed;
   final void Function() requireVerifiedState;
   final String dataDirectory;
-  final ScrcpyCaptureAdapter capture;
+  final ScrcpyCaptureAdapter Function() _createAdapter;
+  late final ScrcpyCaptureAdapter capture = _createAdapter();
   final DiagnosticLog? diagnostics;
   bool _closing = false;
   bool get _disposed => _closing || isDisposed();
@@ -64,61 +70,72 @@ final class MediaPlayback
   final _audioSources = <String, DeviceAudioSnapshot>{};
   final _audioClosings = <String, Future<void>>{};
   final _mediaIntents = _MediaIntentRegistry();
-  late final _audioOutputs = AudioOutputService(
-    openSource: captures.openAudioSource,
-    sourceStatus: captures.sourceStatus,
-    diagnostics: diagnostics,
-    platform: platform,
-    emit: _handleAudioOutput,
-    isDisposed: () => _disposed,
-  );
-  late final _deviceQuality = VideoQualityService(
-    saveQuality: captures.saveQuality,
-    listSessions: captures.activitySessions,
-    reconfigure: captures.reconfigure,
-    applyOutput: (stream) async {
-      final id = stream.sessionId;
-      VideoOutputReceipt output;
-      try {
-        output = await _videoOutputs.reconfigure(stream);
-      } catch (error) {
-        _videoLifecycle.retainFailedOutput(id);
-        captures.videoOutputFailed(stream, error);
-        rethrow;
-      }
-      if (_textures.containsKey(id)) _textures[id] = output;
-      await captures.readyVideo(output.rendererReceipt);
-    },
-    beginReconfigure: (id) => _videoLifecycle.beginReconfigure(id),
-    endReconfigure: (id) => _videoLifecycle.endReconfigure(id),
-  );
-  late final _videoOutputs = VideoOutputService(
-    openSource: capture.openSource,
-    emit: (event) => _videoLifecycle.handle(event),
-    diagnostics: diagnostics,
-    isDisposed: () => _disposed,
-  );
-  late final _videoPresentation = VideoPlaybackService(
-    pauseCapture: captures.pauseVideo,
-    resumeCapture: captures.resumeVideo,
-    sessionsForDevice: captures.sessionsForDevice,
-    pauseOutput: _videoOutputs.pause,
-    resumeOutput: _videoOutputs.resume,
-  );
-  late final VideoRecovery _videoLifecycle = VideoRecovery(
-    outputs: _textures,
-    sourceStatus: captures.sourceStatus,
-    stopCapture: (id) async {
-      await captures.stopVideo(ControlTarget(sessionId: id));
-    },
-    readyCapture: captures.readyVideo,
-    recordFrame: captures.frameVideo,
-    closeOutput: (id, {failure}) async {
-      await _videoOutputs.stop(id, failure: failure);
-    },
-    emit: emit,
-    isDisposed: () => _disposed,
-  );
+  AudioOutputService? _audioOutputsInstance;
+  AudioOutputService get _audioOutputs =>
+      _audioOutputsInstance ??= AudioOutputService(
+        openSource: (id, generation) =>
+            captures.openAudioSource(id, generation),
+        sourceStatus: (id) => captures.sourceStatus(id),
+        diagnostics: diagnostics,
+        platform: platform,
+        emit: _handleAudioOutput,
+        isDisposed: () => _disposed,
+      );
+  VideoQualityService? _deviceQualityInstance;
+  VideoQualityService get _deviceQuality =>
+      _deviceQualityInstance ??= VideoQualityService(
+        saveQuality: captures.saveQuality,
+        listSessions: captures.activitySessions,
+        reconfigure: captures.reconfigure,
+        applyOutput: (stream) async {
+          final id = stream.sessionId;
+          VideoOutputReceipt output;
+          try {
+            output = await _videoOutputs.reconfigure(stream);
+          } catch (error) {
+            _videoLifecycle.retainFailedOutput(id);
+            captures.videoOutputFailed(stream, error);
+            rethrow;
+          }
+          if (_textures.containsKey(id)) _textures[id] = output;
+          await captures.readyVideo(output.rendererReceipt);
+        },
+        beginReconfigure: (id) => _videoLifecycle.beginReconfigure(id),
+        endReconfigure: (id) => _videoLifecycle.endReconfigure(id),
+      );
+  VideoOutputService? _videoOutputsInstance;
+  VideoOutputService get _videoOutputs =>
+      _videoOutputsInstance ??= VideoOutputService(
+        openSource: capture.openSource,
+        emit: (event) => _videoLifecycle.handle(event),
+        diagnostics: diagnostics,
+        isDisposed: () => _disposed,
+      );
+  VideoPlaybackService? _videoPresentationInstance;
+  VideoPlaybackService get _videoPresentation =>
+      _videoPresentationInstance ??= VideoPlaybackService(
+        pauseCapture: captures.pauseVideo,
+        resumeCapture: captures.resumeVideo,
+        sessionsForDevice: captures.sessionsForDevice,
+        pauseOutput: _videoOutputs.pause,
+        resumeOutput: _videoOutputs.resume,
+      );
+  VideoRecovery? _videoLifecycleInstance;
+  VideoRecovery get _videoLifecycle =>
+      _videoLifecycleInstance ??= VideoRecovery(
+        outputs: _textures,
+        sourceStatus: (id) => captures.sourceStatus(id),
+        stopCapture: (id) async {
+          await captures.stopVideo(ControlTarget(sessionId: id));
+        },
+        readyCapture: captures.readyVideo,
+        recordFrame: captures.frameVideo,
+        closeOutput: (id, {failure}) async {
+          await _videoOutputs.stop(id, failure: failure);
+        },
+        emit: emit,
+        isDisposed: () => _disposed,
+      );
   Future<void> _closeAudio(String id) {
     if (_audioClosings[id] case final pending?) return pending;
     final closing = _releaseAudio(id);
@@ -138,7 +155,7 @@ final class MediaPlayback
 
   Future<void> _releaseAudio(String id) async {
     _audioSources.remove(id);
-    await _audioOutputs.stop(id);
+    await _audioOutputsInstance?.stop(id);
   }
 
   void _handleAudioOutput(Map<String, dynamic> event) {
@@ -179,7 +196,7 @@ final class MediaPlayback
       _videoOutputs.capabilities();
 
   Future<void> retireUnownedAudio() async {
-    for (final source in await captures.audioSources()) {
+    for (final source in await readCapturedAudio()) {
       if (source.status != DeviceAudioStatus.stopped &&
           source.status != DeviceAudioStatus.error) {
         await captures.stopAudio(source.sourceId, source.deviceId);
@@ -244,7 +261,7 @@ final class MediaPlayback
         read: readSnapshot,
         videos: _textures,
         audios: _audioSources,
-        closeVideo: _videoLifecycle.close,
+        closeVideo: (id) async => await _videoLifecycleInstance?.close(id),
         closeAudio: _closeAudio,
         current: current,
       );
@@ -265,9 +282,9 @@ final class MediaPlayback
           '[connect.video] capture ended session=$id reason=${data['reason']}',
         );
       }
-      if (id is String) {
+      if (id is String && _videoLifecycleInstance != null) {
         unawaited(
-          _videoLifecycle.close(
+          _videoLifecycleInstance!.close(
             id,
             failure: data['status'] == 'failed'
                 ? RequestFailure(
@@ -398,7 +415,7 @@ final class MediaPlayback
 
   /// 撤销本设备已有质量与媒体启动意图，不停止其他设备或取得连接关闭权。
   void stopDeviceIntent(String deviceId) {
-    _deviceQuality.stopDevice(deviceId);
+    _deviceQualityInstance?.stopDevice(deviceId);
     _mediaIntents.stopDevice(deviceId);
   }
 
@@ -418,8 +435,8 @@ final class MediaPlayback
     }
     // 页面快照已撤销也可能还有失败或超时的旧输出，仍按设备核对真实释放。
     await Future.wait([
-      _videoOutputs.stopDevice(deviceId),
-      _audioOutputs.stopDevice(deviceId),
+      if (_videoOutputsInstance case final output?) output.stopDevice(deviceId),
+      if (_audioOutputsInstance case final output?) output.stopDevice(deviceId),
     ]);
   }
 
@@ -518,7 +535,7 @@ final class MediaPlayback
   Future<List<DeviceAudioSnapshot>> readAudioSources({
     String? deviceId,
   }) async => List.unmodifiable([
-    for (final source in await captures.audioSources())
+    for (final source in await readCapturedAudio())
       if (deviceId == null || source.deviceId == deviceId) source,
   ]);
   @override
@@ -613,7 +630,7 @@ final class MediaPlayback
   OrderedDisposal? _disposal;
   void stopAdmission() {
     _closing = true;
-    _deviceQuality.dispose();
+    _deviceQualityInstance?.dispose();
     _mediaIntents.cancelAll();
   }
 
@@ -635,7 +652,7 @@ final class MediaPlayback
     };
     return OrderedDisposal([
       for (final id in videoIds) () => _videoLifecycle.close(id),
-      _videoOutputs.dispose,
+      () async => await _videoOutputsInstance?.dispose(),
       for (final id in audioIds)
         () async {
           final device = _audioSources[id]?.deviceId;
@@ -648,7 +665,7 @@ final class MediaPlayback
           }
           await _closeAudio(id);
         },
-      _audioOutputs.dispose,
+      () async => await _audioOutputsInstance?.dispose(),
       () async {
         _textures.clear();
         _audioSources.clear();

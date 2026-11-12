@@ -102,10 +102,10 @@ void main() {
     final owner = _Files();
     var closed = false;
     final operations = FileOperations(
-      search: owner,
-      gallery: owner,
-      directories: owner,
-      mutations: owner,
+      search: () => owner,
+      gallery: () => owner,
+      directories: () => owner,
+      mutations: () => owner,
       transfers: owner,
       isDisposed: () => closed,
       isStateUnverified: () => true,

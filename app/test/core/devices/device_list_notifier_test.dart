@@ -6,21 +6,21 @@ import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/core/devices/device_management.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
-import 'package:scrcpy_connect/core/lifecycle/app_dependencies_provider.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
 
 void main() {
   late StreamController<Map<String, dynamic>> events;
   late _Devices source;
-  late _Dependencies dependencies;
+  late _Session dependencies;
   late ProviderContainer container;
   setUp(() {
     events = StreamController.broadcast(sync: true);
-    dependencies = _Dependencies(events.stream);
+    dependencies = _Session(events.stream);
     source = _Devices();
     container = ProviderContainer(
       overrides: [
-        appDependenciesProvider.overrideWithValue(dependencies),
+        appSessionProvider.overrideWithValue(dependencies),
         deviceManagementProvider.overrideWithValue(source),
       ],
     );
@@ -37,7 +37,7 @@ void main() {
     final retired = actions.refresh();
     final replacement = _Devices();
     container.updateOverrides([
-      appDependenciesProvider.overrideWithValue(dependencies),
+      appSessionProvider.overrideWithValue(dependencies),
       deviceManagementProvider.overrideWithValue(replacement),
     ]);
     await container.pump();
@@ -102,8 +102,8 @@ class _Devices implements DeviceManagement {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class _Dependencies implements AppDependencies {
-  _Dependencies(this.events);
+class _Session implements AppSession {
+  _Session(this.events);
   @override
   final initialState = AppState(
     devices: [const DeviceSnapshot(id: 'initial', name: 'Initial')],

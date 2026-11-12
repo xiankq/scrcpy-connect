@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/clipboard/clipboard_capabilities_provider.dart';
@@ -16,7 +17,7 @@ import 'package:scrcpy_connect/core/files/file_directories.dart';
 import 'package:scrcpy_connect/core/files/file_transfers.dart';
 import 'package:scrcpy_connect/core/files/incoming_shares.dart';
 import 'package:scrcpy_connect/core/files/share_inbox_notifier.dart';
-import 'package:scrcpy_connect/core/lifecycle/app_dependencies_provider.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
 import 'package:scrcpy_connect/pages/incoming_share/share_submission_notifier.dart';
 import 'package:scrcpy_connect/pages/incoming_share/incoming_share_page.dart';
@@ -42,10 +43,11 @@ void main() {
   late ShareSubmissionNotifier actions;
   late void Function() leave;
   final provider = shareSubmissionProvider('share', scope: scope);
-  final dependencies = _Dependencies();
+  final dependencies = _Session();
   const events = Stream<Map<String, dynamic>>.empty();
   sourceOverrides() => [
-    appDependenciesProvider.overrideWithValue(dependencies),
+    appSessionProvider.overrideWithValue(dependencies),
+    deviceManagementProvider.overrideWithValue(dependencies.devices),
     incomingSharesProvider.overrideWithValue(incoming),
     fileDirectoriesProvider.overrideWithValue(directories),
     fileTransfersProvider.overrideWithValue(transfers),
@@ -345,8 +347,7 @@ class _Shares implements IncomingShares {
   }
 }
 
-class _Dependencies implements AppDependencies {
-  @override
+class _Session implements AppSession {
   final DeviceManagement devices = _Devices();
   @override
   final initialState = AppState(

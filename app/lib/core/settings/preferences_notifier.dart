@@ -24,7 +24,7 @@ class PreferencesNotifier extends _$PreferencesNotifier {
       session,
       ref.watch(settingsManagementProvider),
     );
-    final initial = session.dependencies.initialState;
+    final initial = session.session.initialState;
     final subscription = session.stateEvents.listen((event) {
       if (!_current(owner)) return;
       final type = event['type'];
@@ -47,7 +47,7 @@ class PreferencesNotifier extends _$PreferencesNotifier {
       owner.disposed = true;
       unawaited(subscription.cancel());
     });
-    if (session.dependencies.initialize) {
+    if (session.session.initialize) {
       scheduleMicrotask(() {
         if (_current(owner)) unawaited(load());
       });

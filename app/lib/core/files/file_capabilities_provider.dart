@@ -1,5 +1,4 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/core/lifecycle/app_dependencies_provider.dart';
 
 import 'file_directories.dart';
 import 'file_mutations.dart';
@@ -13,35 +12,28 @@ import 'file_transfers.dart';
 
 /// 每个功能入口可独立替换；运行时仍负责共享执行资源的关闭。
 final fileDirectoriesProvider = Provider<FileDirectories>(
-  (ref) => ref.watch(appDependenciesProvider.select((app) => app.directories)),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );
 final fileMutationsProvider = Provider<FileMutations>(
-  (ref) =>
-      ref.watch(appDependenciesProvider.select((app) => app.fileMutations)),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );
 final fileTransfersProvider = Provider<FileTransfers>(
-  (ref) =>
-      ref.watch(appDependenciesProvider.select((app) => app.fileTransfers)),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );
 final fileSearchSourceProvider = Provider<FileSearch>(
-  (ref) => ref.watch(appDependenciesProvider.select((app) => app.fileSearch)),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );
 final incomingSharesProvider = Provider<IncomingShares>(
-  (ref) =>
-      ref.watch(appDependenciesProvider.select((app) => app.incomingShares)),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );
 
 final systemDocumentsProvider = Provider<SystemDocuments>(
-  (ref) => ref.watch(appDependenciesProvider.select((app) => app.documents)),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );
 final documentSelectionResponderProvider =
     Provider<bool Function(String, Json)?>(
-      (ref) => ref.watch(
-        appDependenciesProvider.select((app) => app.completeDocumentSelection),
-      ),
+      (ref) => throw StateError('此能力须由启动装配提供。'),
     );
 final transferCacheLeaseProvider = Provider<Future<String> Function(String)>(
-  (ref) => ref.watch(
-    appDependenciesProvider.select((app) => app.acquireTransferCacheLease),
-  ),
+  (ref) => throw StateError('此能力须由启动装配提供。'),
 );

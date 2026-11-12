@@ -6,7 +6,6 @@ import 'package:scrcpy_connect/core/diagnostics/app_diagnostics.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart'
     show DiagnosticLog;
 import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
-import 'package:scrcpy_connect/core/lifecycle/app_dependencies_provider.dart';
 import 'package:scrcpy_connect/pages/startup_error/startup_error_page.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
@@ -20,12 +19,12 @@ Future<void> main() async {
     diagnostics = await appDiagnostics();
     diagnostics.record(DiagnosticArea.app, 'bootstrap.started');
     await GlassMaterial.initialize();
-    final dependencies = await bootstrapApp(diagnostics: diagnostics);
+    final bootstrap = await bootstrapApp(diagnostics: diagnostics);
     diagnostics.record(DiagnosticArea.app, 'bootstrap.ready');
     runApp(
       ProviderScope(
         overrides: [
-          appDependenciesProvider.overrideWithValue(dependencies),
+          ...bootstrap.overrides,
           systemNotificationSinkProvider.overrideWithValue(
             LocalNotificationSink(),
           ),

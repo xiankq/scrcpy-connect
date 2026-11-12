@@ -53,7 +53,7 @@ class ShareInboxNotifier extends _$ShareInboxNotifier {
       owner.disposed = true;
       unawaited(subscription.cancel());
     });
-    if (session.dependencies.initialize) {
+    if (session.session.initialize) {
       scheduleMicrotask(() {
         if (_current(owner)) unawaited(load());
       });
@@ -61,7 +61,7 @@ class ShareInboxNotifier extends _$ShareInboxNotifier {
     return ShareInboxState(
       shares: identical(previous?.session, session)
           ? const []
-          : session.dependencies.initialState.pendingShares,
+          : session.session.initialState.pendingShares,
     );
   }
 

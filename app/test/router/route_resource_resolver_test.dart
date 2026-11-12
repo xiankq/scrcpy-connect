@@ -11,7 +11,7 @@ import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/files/incoming_shares.dart';
 import 'package:scrcpy_connect/core/files/share_inbox_notifier.dart';
-import 'package:scrcpy_connect/core/lifecycle/app_dependencies_provider.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
 import 'package:scrcpy_connect/core/media/media_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/media/video_sessions.dart';
@@ -84,7 +84,7 @@ void main() {
     final shares = _Shares();
     final container = ProviderContainer(
       overrides: [
-        appDependenciesProvider.overrideWithValue(_Dependencies()),
+        appSessionProvider.overrideWithValue(_Session()),
         incomingSharesProvider.overrideWithValue(shares),
       ],
     );
@@ -147,7 +147,7 @@ class _Shares implements IncomingShares {
   Future<void> consumeShare(String id) async => consumed.add(id);
 }
 
-class _Dependencies implements AppDependencies {
+class _Session implements AppSession {
   @override
   final initialState = AppState();
   @override

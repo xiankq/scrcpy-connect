@@ -47,7 +47,7 @@ final class PreferencesNotifierProvider
 }
 
 String _$preferencesNotifierHash() =>
-    r'369881bf5ddf409b6b0f8725bab716f6151028bd';
+    r'5da54e59816db7c3b6f9948886f7e3f7f823da61';
 
 /// 偏好投影与串行写入的唯一所有者；权威事件作废旧写入回执。
 

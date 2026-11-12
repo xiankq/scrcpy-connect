@@ -44,7 +44,7 @@ final class ShareInboxNotifierProvider
 }
 
 String _$shareInboxNotifierHash() =>
-    r'3f2ea7f0caba72d22849d118c3cdc6dc456d9267';
+    r'8c4252d5d07909df24914cf4c0bd5c0768a86329';
 
 abstract class _$ShareInboxNotifier extends $Notifier<ShareInboxState> {
   ShareInboxState build();

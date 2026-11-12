@@ -21,21 +21,28 @@ final class FileOperations
         FileTransfers,
         IncomingShares {
   FileOperations({
-    required this._search,
-    required this._gallery,
-    required this._directories,
-    required this._mutations,
+    required FileSearch Function() search,
+    required GalleryScanner Function() gallery,
+    required FileDirectories Function() directories,
+    required FileMutations Function() mutations,
     required this._transfers,
     this._sharing,
     required this.isDisposed,
     required this.isStateUnverified,
     required this._diagnostics,
-  });
+  }) : _createSearch = search,
+       _createGallery = gallery,
+       _createDirectories = directories,
+       _createMutations = mutations;
 
-  final FileSearch _search;
-  final GalleryScanner _gallery;
-  final FileDirectories _directories;
-  final FileMutations _mutations;
+  final FileSearch Function() _createSearch;
+  FileSearch get _search => _createSearch();
+  final GalleryScanner Function() _createGallery;
+  GalleryScanner get _gallery => _createGallery();
+  final FileDirectories Function() _createDirectories;
+  FileDirectories get _directories => _createDirectories();
+  final FileMutations Function() _createMutations;
+  FileMutations get _mutations => _createMutations();
   final FileTransfers _transfers;
   final IncomingShares? _sharing;
   final bool Function() isDisposed;

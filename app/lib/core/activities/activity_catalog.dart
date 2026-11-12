@@ -1,6 +1,6 @@
 import 'package:adb/adb.dart';
 import 'package:scrcpy_connect/core/activities/activity_management.dart';
-import 'package:scrcpy_connect/core/control/control_session_service.dart';
+import 'package:scrcpy_connect/core/control/capture_resources.dart';
 import 'package:scrcpy_connect/core/devices/device_observation_service.dart';
 import 'package:scrcpy_connect/core/devices/device_service.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
@@ -9,7 +9,6 @@ import 'package:scrcpy_connect/core/errors/request_failure.dart'
 import 'package:scrcpy_connect/core/events/runtime_events.dart';
 import 'package:scrcpy_connect/core/files/file_transfer_service.dart';
 import 'package:scrcpy_connect/core/files/file_transfers.dart';
-import 'package:scrcpy_connect/core/media/device_audio_service.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 
 /// 活动只是资源所有者的只读组合；停止操作交给原能力并等待其实际关闭。
@@ -18,9 +17,8 @@ final class ActivityCatalog implements ActivityManagement {
     required this._events,
     required this.diagnostics,
     required this._devices,
-    required this._sessions,
+    required this._captures,
     required this._observations,
-    required this._audio,
     required this._transfers,
     required this._disconnectDevice,
     required this._stopVideo,
@@ -30,9 +28,8 @@ final class ActivityCatalog implements ActivityManagement {
   final DiagnosticReporter diagnostics;
   final RuntimeEvents _events;
   final DeviceService _devices;
-  final ControlSessionService _sessions;
+  final CaptureResources _captures;
   final DeviceObservationService _observations;
-  final DeviceAudioService _audio;
   final FileTransferService _transfers;
   final Future<void> Function(String) _disconnectDevice;
   final Future<void> Function(String) _stopVideo;
@@ -75,12 +72,12 @@ final class ActivityCatalog implements ActivityManagement {
     if (deviceId != null) _checkId(deviceId);
     for (var attempt = 0; attempt < 4; attempt++) {
       final before = _events.cursor;
-      final sessions = await _sessions.readActivitySessions(deviceId: deviceId);
+      final sessions = await _captures.readActivitySessions(deviceId: deviceId);
       final transfers = await _transfers.readTransfers();
       _checkOpen();
       final devices = _devices.readDevices();
       final observations = _observations.currentSnapshots();
-      final sources = _audio.snapshots();
+      final sources = _captures.audioSnapshots();
       if (before.revision != _events.cursor.revision) continue;
       final names = {for (final device in devices) device.id: device.name};
       ActivitySnapshot activity(
@@ -193,8 +190,8 @@ final class ActivityCatalog implements ActivityManagement {
           throw const RequestFailure('invalid_argument', '请指定这一代音源。');
         }
         _checkId(id);
-        final current = _audio
-            .snapshots()
+        final current = _captures
+            .audioSnapshots()
             .where(
               (item) => item.sourceId == id && item.deviceId == source.deviceId,
             )

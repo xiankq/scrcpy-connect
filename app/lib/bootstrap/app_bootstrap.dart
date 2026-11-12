@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:hooks_riverpod/misc.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:scrcpy_connect/bootstrap/app_composition.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
@@ -8,25 +9,23 @@ import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/files/file_local_directories.dart';
 import 'package:scrcpy_connect/core/files/file_share_service.dart';
-import 'package:scrcpy_connect/core/lifecycle/app_dependencies.dart';
 import 'package:scrcpy_connect/core/platform/native_host.dart';
 
-/// 全部启动配置成功前由 bootstrap 拥有应用依赖，返回依赖后交给 provider scope。
-Future<AppDependencies> bootstrapApp({
-  Future<AppDependencies> Function()? createDependencies,
+/// 完成启动与目录配置后交付功能绑定，配置失败仍由 bootstrap 关闭资源。
+Future<AppBootstrap> bootstrapApp({
+  Future<AppBootstrap> Function()? createSession,
   DiagnosticLog? diagnostics,
   Future<Directory> Function()? prepareOutgoingDirectory,
 }) async {
-  final dependencies =
-      await (createDependencies ?? () => _createDependencies(diagnostics))();
+  final session = await (createSession ?? () => _createSession(diagnostics))();
   try {
     final outgoing =
         await (prepareOutgoingDirectory ?? outgoingMediaDirectory)();
-    await dependencies.cache.configure(outgoingDirectory: outgoing.path);
-    return dependencies;
+    await session.configureOutgoingDirectory(outgoing.path);
+    return session;
   } catch (error, stack) {
     try {
-      await dependencies.close?.call();
+      await session.dispose();
     } catch (_) {
       // 即使清理失败，也保留最初可操作的启动错误。
     }
@@ -34,24 +33,25 @@ Future<AppDependencies> bootstrapApp({
   }
 }
 
-Future<AppDependencies> _createDependencies(DiagnosticLog? diagnostics) async {
+Future<AppBootstrap> _createSession(DiagnosticLog? diagnostics) async {
   final directory = await getApplicationSupportDirectory();
   await directory.create(recursive: true);
   final session = await AppBootstrap.initialize(
     dataDirectory: await directory.resolveSymbolicLinks(),
     diagnostics: diagnostics,
   );
-  return session.dependencies;
+  return session;
 }
 
-/// 启动并发门禁与尚未交付资源的所有者；完整依赖图交由应用运行时管理。
-final class AppBootstrap {
+/// 启动并发门禁与尚未交付宿主的所有者；功能资源由所属模块管理。
+class AppBootstrap {
   AppBootstrap._(this._composition);
   final AppComposition _composition;
   bool get _disposed => _composition.lifecycle.isDisposed;
-  late final AppDependencies dependencies = _composition.dependencies(
-    close: dispose,
-  );
+  late final List<Override> overrides = _composition.overrides(close: dispose);
+
+  Future<void> configureOutgoingDirectory(String path) =>
+      _composition.configureOutgoingDirectory(path);
 
   Future<void> dispose() => _composition.lifecycle.dispose().then((_) {
     if (identical(_active, this)) _active = null;
@@ -62,7 +62,7 @@ final class AppBootstrap {
   static String? _initializingPolicyJson;
   static String? _initializingBinaryDirectory;
   static AppBootstrap? _active;
-  // 组装尚未交付给 Session 时也保留精确分享所有者，关闭失败由下次启动重试。
+  // 功能装配尚未完成时也保留精确分享所有者，关闭失败由下次启动重试。
   static FileShareService? _startingSharing;
   static NativeHost? _startingHost;
 

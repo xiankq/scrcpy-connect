@@ -5,21 +5,21 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/files/incoming_shares.dart';
 import 'package:scrcpy_connect/core/files/share_inbox_notifier.dart';
-import 'package:scrcpy_connect/core/lifecycle/app_dependencies_provider.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
 
 void main() {
   late StreamController<Map<String, dynamic>> events;
   late _Shares source;
-  late _Dependencies dependencies;
+  late _Session dependencies;
   late ProviderContainer container;
   setUp(() {
     events = StreamController.broadcast(sync: true);
     source = _Shares();
-    dependencies = _Dependencies(events.stream);
+    dependencies = _Session(events.stream);
     container = ProviderContainer(
       overrides: [
-        appDependenciesProvider.overrideWithValue(dependencies),
+        appSessionProvider.overrideWithValue(dependencies),
         incomingSharesProvider.overrideWithValue(source),
       ],
     );
@@ -36,7 +36,7 @@ void main() {
     final consuming = actions.consume('share');
     final replacement = _Shares();
     container.updateOverrides([
-      appDependenciesProvider.overrideWithValue(dependencies),
+      appSessionProvider.overrideWithValue(dependencies),
       incomingSharesProvider.overrideWithValue(replacement),
     ]);
     await container.pump();
@@ -93,7 +93,7 @@ void main() {
     final finding = actions.find('share');
     final replacement = _Shares();
     container.updateOverrides([
-      appDependenciesProvider.overrideWithValue(dependencies),
+      appSessionProvider.overrideWithValue(dependencies),
       incomingSharesProvider.overrideWithValue(replacement),
     ]);
     await container.pump();
@@ -129,8 +129,8 @@ class _Shares implements IncomingShares {
   }
 }
 
-class _Dependencies implements AppDependencies {
-  _Dependencies(this.events);
+class _Session implements AppSession {
+  _Session(this.events);
   @override
   final Stream<Map<String, dynamic>> events;
   @override

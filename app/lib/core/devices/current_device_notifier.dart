@@ -7,11 +7,8 @@ part 'current_device_notifier.g.dart';
 @Riverpod(keepAlive: true)
 class CurrentDeviceNotifier extends _$CurrentDeviceNotifier {
   @override
-  String? build() => ref
-      .watch(stateSubscriptionProvider)
-      .dependencies
-      .initialState
-      .focusedDeviceId;
+  String? build() =>
+      ref.watch(stateSubscriptionProvider).session.initialState.focusedDeviceId;
 
   Future<void> focus(String? deviceId) async {
     if (ref.mounted && state != deviceId) state = deviceId;
