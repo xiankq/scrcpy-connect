@@ -34,7 +34,11 @@ import 'package:scrcpy_connect/core/media/media_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/media/media_operations.dart';
 import 'package:scrcpy_connect/core/media/media_playback.dart';
 import 'package:scrcpy_connect/core/platform/app_info.dart';
-import 'package:scrcpy_connect/core/platform/app_platform.dart';
+import 'package:scrcpy_connect/core/platform/platform_channels.dart';
+import 'package:scrcpy_connect/core/platform/platform_background_control.dart';
+import 'package:scrcpy_connect/core/devices/usb_authorization.dart';
+import 'package:scrcpy_connect/core/files/file_document_platform.dart';
+import 'package:scrcpy_connect/core/media/platform_audio.dart';
 import 'package:scrcpy_connect/core/platform/background_policy.dart';
 import 'package:scrcpy_connect/core/platform/native_host.dart';
 import 'package:scrcpy_connect/core/platform/platform_capabilities_provider.dart';
@@ -50,16 +54,13 @@ final class AppComposition {
   AppComposition._({
     required this._dataDirectory,
     required this._host,
-    required this._connections,
-    required this._launches,
     required this.diagnostics,
-    required this._files,
   });
 
   final NativeHost _host;
-  final DeviceResources _connections;
-  final AppLaunchJournal _launches;
-  final FileResources _files;
+  late final DeviceResources _connections;
+  late final AppLaunchJournal _launches;
+  late final FileResources _files;
 
   final DiagnosticLog? diagnostics;
   late final _diagnostics = DiagnosticReporter(diagnostics);
@@ -72,14 +73,14 @@ final class AppComposition {
     beginChange: _connections.reconnections.beginChange,
     cancelContent: _files.cancelContent,
     cancelUsbAttempt: (id) async {
-      if (Platform.isAndroid) await _platform.cancelUsb({'attemptId': id});
+      if (Platform.isAndroid) await _usbAuthorization.cancel({'attemptId': id});
     },
-    cancelFiles: (id) => lifecycle.cancelDeviceFiles(id),
+    cancelFiles: _files.cancelFiles,
     forgetObservation: _connections.observations.forget,
     forgetPreferences: _preferences.forgetDevicePreferences,
     stopMediaIntent: _media.stopDeviceIntent,
     finishMediaStop: _media.finishDeviceStop,
-    isDisposed: () => lifecycle.isDisposed,
+    isDisposed: () => _isDisposed,
     announceStop: (id) => _events.emit({
       'type': 'device.disconnect.requested',
       'deviceId': id,
@@ -90,7 +91,7 @@ final class AppComposition {
 
   late final _preferences = AppSettings(
     preferences: _host.preferences,
-    isDisposed: () => lifecycle.isDisposed,
+    isDisposed: () => _isDisposed,
     prepareImport: () => _connections.setup.prepareChange(
       const ConnectionChange(ConnectionChangeKind.replaceRecords),
     ),
@@ -105,21 +106,26 @@ final class AppComposition {
     onChanged: (preferences) => lifecycle.settingsChanged(preferences),
   );
 
-  late final _captureResources = CaptureResources(
-    host: _host,
-    devices: _connections.devices,
-    records: _connections.records,
-    preferences: _preferences,
-    launches: _launches,
-    diagnostics: _diagnostics,
-    isDisposed: () => lifecycle.isDisposed,
-    isStateUnverified: () => _stateRecovery.pending,
-    publish: _events.publish,
-    onCleanupFailure: (error) => _events.emit({
-      'type': 'activity.cleanup.failed',
-      'data': {'reason': '$error'},
-    }),
-  );
+  CaptureResources? _captureInstance;
+  CaptureResources get _captureResources =>
+      _captureInstance ??= CaptureResources(
+        scrcpy: _host.scrcpy,
+        serverBytes: _host.scrcpyBytes,
+        displays: _host.physicalDisplays,
+        requireConnection: _connections.devices.requireConnection,
+        connectionForDevice: _connections.devices.current,
+        records: _connections.records,
+        preferences: _preferences,
+        launches: _launches,
+        diagnostics: _diagnostics,
+        isDisposed: () => _isDisposed,
+        isStateUnverified: () => _stateRecovery.pending,
+        publish: _events.publish,
+        onCleanupFailure: (error) => _events.emit({
+          'type': 'activity.cleanup.failed',
+          'data': {'reason': '$error'},
+        }),
+      );
 
   late final _activities = ActivityCatalog(
     diagnostics: _diagnostics,
@@ -137,13 +143,13 @@ final class AppComposition {
       });
       await _media.stopVideo(ControlTarget(sessionId: id));
     },
-    isDisposed: () => lifecycle.isDisposed,
+    isDisposed: () => _isDisposed,
   );
 
   final String _dataDirectory;
 
   late final BackgroundPolicy _background = BackgroundPolicy(
-    platform: Platform.isAndroid ? _platform : null,
+    platform: Platform.isAndroid ? _backgroundControl : null,
     audioPolicy: (enabled) async {
       await _media.policy(enabled);
     },
@@ -155,26 +161,37 @@ final class AppComposition {
     }),
   );
 
-  late final AppPlatform _platform = AppPlatform(
-    usbOwnerLeaseId: _host.usbOwnerLeaseId,
-    localFiles: createNativeScrcpyLocalFiles,
-    sharing: _files.sharing,
-    documentSources: _files.documentSources,
-    deliveries: _files.deliveries,
-    emit: (event) {
-      _events.emit(event);
-    },
-    isDisposed: () => lifecycle.isDisposed,
+  static const _channels = PlatformChannels();
+  late final _backgroundControl = PlatformBackgroundControl(
+    request: _channels.request,
+    isDisposed: () => _isDisposed,
   );
+  late final _usbAuthorization = UsbAuthorization(
+    ownerLeaseId: _host.usbOwnerLeaseId,
+    request: _channels.requestOptional,
+    isDisposed: () => _isDisposed,
+  );
+  late final _audioPlatform = PlatformAudio(request: _channels.request);
   late final _platformEvents = PlatformEventHandler(
     reconnections: _connections.reconnections,
-    isDisposed: () => lifecycle.isDisposed,
+    isDisposed: () => _isDisposed,
     stopConnections: () => Future.wait([
       _connections.setup.stopPending(),
       _connections.devices.stopConnections(),
     ]),
     emit: (event) => _events.emit(event),
-    handleShare: _platform.handleShare,
+    handleShare: (data) async {
+      try {
+        await _files.sharing?.receive(data);
+      } catch (error) {
+        if (!_isDisposed) {
+          _events.emit({
+            'type': 'sharing.failed',
+            'data': {'reason': '$error'},
+          });
+        }
+      }
+    },
     handleMedia: _media.handlePlatformEvent,
   );
   late final RuntimeEvents _events = RuntimeEvents(
@@ -184,34 +201,34 @@ final class AppComposition {
     beforePublish: (event) => _connections.handleEvent(event),
     afterState: (event) => _media.handleApplicationEvent(event),
     handlePlatform: (event) => _platformEvents.handle(event),
-    isDisposed: () => lifecycle.isDisposed,
+    isDisposed: () => _isDisposed,
   );
   late final MediaPlayback _media = MediaPlayback(
     captures: () => _captureResources.capture,
     readCapturedAudio: () async => _captureResources.audioSnapshots(),
-    readSnapshot: _state.readSnapshot,
+    readSnapshot: () => _state.readSnapshot(),
     readSettings: _preferences.read,
-    platform: _platform.audioRequest,
+    platform: (command, params) => _audioPlatform.request(command, params),
     emit: (event) {
       _events.emit(event);
     },
-    isDisposed: () => lifecycle.isDisposed,
+    isDisposed: () => _isDisposed,
     requireVerifiedState: () => lifecycle.requireVerifiedState(),
     dataDirectory: _dataDirectory,
     capture: () => ScrcpyCaptureAdapter(_host.scrcpy.api),
     diagnostics: diagnostics,
   );
   late final StateRecovery _stateRecovery = StateRecovery(
-    read: _media.snapshot,
+    read: (current) => _media.snapshot(current),
     emit: (event) {
       // 恢复回执不是业务变更；直接通知策略，不能重新进入序列核验。
       _connections.handleEvent(event);
       _events.emit(event);
     },
-    isDisposed: () => lifecycle.isDisposed,
+    isDisposed: () => _isDisposed,
   );
   bool completeDocumentSelection(String id, Json result) =>
-      _platform.documentSelections.complete(id, result);
+      _files.documents.completeSelection(id, result);
 
   late final RuntimeSnapshotReader _state = RuntimeSnapshotReader(
     events: _events,
@@ -232,62 +249,68 @@ final class AppComposition {
     DiagnosticLog? diagnostics, {
     required void Function(FileShareService?) onSharingOpened,
   }) async {
-    AppComposition? owner;
-    final connections = await DeviceResources.open(
+    final session = AppComposition._(
+      host: host,
+      dataDirectory: dataDirectory,
+      diagnostics: diagnostics,
+    );
+    final connections = session._connections = await DeviceResources.open(
       host: host,
       dataDirectory: dataDirectory,
       policy: policy,
       diagnostics: diagnostics,
-      isDisposed: () => owner?.lifecycle.isDisposed ?? false,
-      isStateUnverified: () => owner?._stateRecovery.pending ?? false,
-      readSnapshot: () => owner!._state.readSnapshot(),
-      readSessions: () => owner?._captureResources.currentSessions() ?? [],
+      isDisposed: () => session._isDisposed,
+      isStateUnverified: () => session._stateRecovery.pending,
+      readSnapshot: () => session._state.readSnapshot(),
+      readSessions: () => session._captureInstance?.currentSessions() ?? [],
       readAudio: () =>
-          owner?._captureResources.audioSnapshots(activeOnly: true) ?? [],
-      serverQueries: () => owner!._captureResources.serverQueries,
-      authorizeUsb: () =>
-          Platform.isAndroid ? owner!._platform.authorizeUsb : null,
-      cancelUsb: () => Platform.isAndroid ? owner!._platform.cancelUsb : null,
-      releaseUsb: () => Platform.isAndroid ? owner!._platform.releaseUsb : null,
-      emit: (event) => owner?._events.emit(event),
+          session._captureInstance?.audioSnapshots(activeOnly: true) ?? [],
+      serverQueries: () => session._captureResources.serverQueries,
+      authorizeUsb: Platform.isAndroid
+          ? (params) => session._usbAuthorization.authorize(params)
+          : null,
+      cancelUsb: Platform.isAndroid
+          ? (params) => session._usbAuthorization.cancel(params)
+          : null,
+      releaseUsb: Platform.isAndroid
+          ? (params) => session._usbAuthorization.release(params)
+          : null,
+      emit: (event) => session._events.emit(event),
       publish: (type, device, data) =>
-          owner?._events.publishBusiness(type, device, data),
+          session._events.publishBusiness(type, device, data),
       stopWork: (id, connection, accepted) => Future.wait([
-        owner!._captureResources.stopForConnection(id, connection),
-        owner._files.stopForConnection(id, connection, accepted: accepted),
+        session._captureResources.stopForConnection(id, connection),
+        session._files.stopForConnection(id, connection, accepted: accepted),
       ], eagerError: true),
       stopDisplays: (connection) =>
-          owner!._captureResources.stopDisplays(connection),
+          session._captureResources.stopDisplays(connection),
     );
     final identity = await connections.identities.selectForDevice();
     final defaultClient = await host.clientForIdentity(
       identityPath: identity.path,
       fingerprint: identity.fingerprint,
     );
-    final launches = await AppLaunchJournal.open(directory: host.directory);
-    final files = await FileResources.open(
-      host: host,
+    session._launches = await AppLaunchJournal.open(directory: host.directory);
+    session._files = await FileResources.open(
+      fileScopeId: host.fileScopeId,
+      fileScopeKey: host.fileScopeKey,
+      documentPlatform: FileDocumentPlatform(
+        files: createNativeScrcpyLocalFiles,
+        request: _channels.request,
+        isDisposed: () => session._isDisposed,
+      ),
       localFiles: defaultClient.services,
       dataDirectory: dataDirectory,
       records: connections.records,
       requireConnection: (id) => connections.devices.requireConnection(id),
-      request: () => owner!._connections.companion.request,
-      isDisposed: () => owner?.lifecycle.isDisposed ?? false,
-      isStateUnverified: () => owner?._stateRecovery.pending ?? false,
+      request: () => session._connections.companion.request,
+      isDisposed: () => session._isDisposed,
+      isStateUnverified: () => session._stateRecovery.pending,
       diagnostics: DiagnosticReporter(diagnostics),
-      emit: (event) => owner?._events.emit(event),
-      attachCatalogEvents: (source) => owner!._events.attachFileEvents(source),
+      emit: (event) => session._events.emit(event),
+      attachCatalogEvents: (source) => session._events.attachFileEvents(source),
       onSharingOpened: onSharingOpened,
     );
-    final session = AppComposition._(
-      dataDirectory: dataDirectory,
-      host: host,
-      connections: connections,
-      launches: launches,
-      diagnostics: diagnostics,
-      files: files,
-    );
-    owner = session;
     // 事件可能由 helper 同步交付，先建立观察所有者后再附着界面。
     session._connections.observations;
     // 先完成依赖图，构造失败时仍由启动门禁持有宿主与分享的清理责任。
@@ -303,17 +326,19 @@ final class AppComposition {
     resizeDisplayCapture: (target, size) =>
         _captureResources.capture.resizeDisplay(target, size),
     emit: _events.emit,
-    isDisposed: () => lifecycle.isDisposed,
+    isDisposed: () => _isDisposed,
     isStateUnverified: () => _stateRecovery.pending,
     diagnostics: _diagnostics,
   );
   late final _controlOperations = ControlOperations(
     sessions: _captureResources.sessions,
-    isDisposed: () => lifecycle.isDisposed,
+    isDisposed: () => _isDisposed,
     isStateUnverified: () => _stateRecovery.pending,
     diagnostics: _diagnostics,
   );
-  late final AppLifecycle lifecycle = AppLifecycle(
+  AppLifecycle? _lifecycle;
+  bool get _isDisposed => _lifecycle?.isDisposed ?? false;
+  AppLifecycle get lifecycle => _lifecycle ??= AppLifecycle(
     host: _host,
     connections: _connections,
     captures: _captureResources,
@@ -321,7 +346,8 @@ final class AppComposition {
     events: _events,
     stateRecovery: _stateRecovery,
     preferences: _preferences,
-    platform: _platform,
+    platformEvents: Platform.isAndroid ? _channels.events : null,
+    readVisible: Platform.isAndroid ? _audioPlatform.readVisible : null,
     background: _background,
     media: _media,
     diagnostics: _diagnostics,
@@ -344,7 +370,7 @@ final class AppComposition {
     videoDisplayProvider.overrideWith((ref) => _mediaOperations),
     activityManagementProvider.overrideWith((ref) => _activities),
     reconcileStateProvider.overrideWith((ref) => lifecycle.reconcileState),
-    backgroundControlProvider.overrideWith((ref) => _platform),
+    backgroundControlProvider.overrideWith((ref) => _backgroundControl),
     deviceManagementProvider.overrideWith((ref) => _deviceActions),
     deviceConnectionsProvider.overrideWith((ref) => _deviceActions),
     deviceSetupProvider.overrideWith((ref) => _deviceActions),
@@ -358,13 +384,13 @@ final class AppComposition {
     fileMutationsProvider.overrideWith((ref) => _files.operations),
     fileTransfersProvider.overrideWith((ref) => _files.operations),
     incomingSharesProvider.overrideWith((ref) => _files.operations),
-    systemDocumentsProvider.overrideWith((ref) => _platform),
+    systemDocumentsProvider.overrideWith((ref) => _files.documents),
     galleryScannerProvider.overrideWith((ref) => _files.operations),
     deviceAppsProvider.overrideWith((ref) => _connections.apps),
     deviceWakeProvider.overrideWith((ref) => _connections.operations),
     appInfoReaderProvider.overrideWith(
       (ref) =>
-          () => readAppInfo(isClosed: () => lifecycle.isDisposed),
+          () => readAppInfo(isClosed: () => _isDisposed),
     ),
     identityManagementProvider.overrideWith((ref) => _connections.identity),
     metadataManagementProvider.overrideWith((ref) => _preferences),

@@ -12,6 +12,7 @@ import 'package:scrcpy_connect/core/files/file_document_scope.dart';
 import 'package:scrcpy_connect/core/files/file_failure.dart';
 import 'package:scrcpy_connect/core/files/file_selection_requests.dart';
 import 'package:scrcpy_connect/core/files/system_documents.dart';
+import 'package:scrcpy_connect/core/files/system_document_backend.dart';
 
 export 'package:scrcpy_connect/core/files/document_limits.dart';
 
@@ -54,7 +55,7 @@ String _name(String name) {
 }
 
 /// 应用拥有系统文档计划和预算；平台拥有 URI/PFD，通用文件能力执行有界复制。
-class FileDocumentService {
+class FileDocumentService implements SystemDocumentBackend {
   FileDocumentService({
     required this._files,
     this.limits = const DocumentLimits(),
@@ -75,6 +76,7 @@ class FileDocumentService {
   _Operation? _active;
   bool _disposed = false;
 
+  @override
   Future<DocumentConflict?> readConflict(String operationId) async {
     final op = _active;
     final pending = op?.pendingConflict;
@@ -86,6 +88,7 @@ class FileDocumentService {
         : null;
   }
 
+  @override
   Future<bool> resolveConflict(
     String operationId,
     String conflictId,
@@ -107,6 +110,7 @@ class FileDocumentService {
     return true;
   }
 
+  @override
   Future<void> cancel(String operationId) async {
     final op = _active;
     if (op == null || op.id != operationId) return;
@@ -114,13 +118,16 @@ class FileDocumentService {
     if (op.finished.isCompleted) await _finish(op);
   }
 
+  @override
   Future<void> releaseSource(String managedSourceId) async =>
       sources?.release(managedSourceId);
 
+  @override
   Future<DocumentOutcome> importDocuments(
     String operationId,
     DocumentImportKind kind,
   ) => _run(kind, operationId);
+  @override
   Future<DocumentOutcome> exportDocument(DocumentExportPlan plan) =>
       _run(null, plan.operationId, export: plan);
 
@@ -419,6 +426,7 @@ class FileDocumentService {
     }).whenComplete(() => op.cancellationRequest = null);
   }
 
+  @override
   Future<void> dispose() async {
     _disposed = true;
     final op = _active;

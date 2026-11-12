@@ -37,7 +37,7 @@ import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 /// 其他能力在连接退休时交回精确连接的清理回执。
 final class DeviceResources {
   DeviceResources._({
-    required this.host,
+    required this._host,
     required this._records,
     required this._identities,
     required this._dataDirectory,
@@ -58,8 +58,7 @@ final class DeviceResources {
     required this.stopDisplays,
   }) : _connectionPolicy = policy;
 
-  final NativeHost host;
-  NativeHost get _host => host;
+  final NativeHost _host;
   final DeviceRecordStorage _records;
   DeviceRecordStorage get records => _records;
   final AdbIdentityService _identities;
@@ -74,8 +73,8 @@ final class DeviceResources {
   final List<VideoSessionSnapshot> Function() readSessions;
   final List<DeviceAudioSnapshot> Function() readAudio;
   final ScrcpyServerQueries Function() serverQueries;
-  final Future<Json> Function(Json)? Function() authorizeUsb;
-  final Future<void> Function(Json)? Function() cancelUsb, releaseUsb;
+  final Future<Json> Function(Json)? authorizeUsb;
+  final Future<void> Function(Json)? cancelUsb, releaseUsb;
   final void Function(Map<String, dynamic>) emit;
   final void Function(String, String?, Map<String, Object?>) publish;
   final Future<void> Function(String, DeviceConnection, bool) stopWork;
@@ -135,9 +134,9 @@ final class DeviceResources {
     ),
     policy: _connectionPolicy,
     emit: emit,
-    authorizeUsb: authorizeUsb(),
-    cancelUsb: cancelUsb(),
-    releaseUsb: releaseUsb(),
+    authorizeUsb: authorizeUsb,
+    cancelUsb: cancelUsb,
+    releaseUsb: releaseUsb,
     holdDevice: (id) => _reconnections.beginChange(
       ConnectionChange(ConnectionChangeKind.connect, deviceId: id),
     ),
@@ -237,9 +236,9 @@ final class DeviceResources {
     required List<VideoSessionSnapshot> Function() readSessions,
     required List<DeviceAudioSnapshot> Function() readAudio,
     required ScrcpyServerQueries Function() serverQueries,
-    required Future<Json> Function(Json)? Function() authorizeUsb,
-    required Future<void> Function(Json)? Function() cancelUsb,
-    required Future<void> Function(Json)? Function() releaseUsb,
+    required Future<Json> Function(Json)? authorizeUsb,
+    required Future<void> Function(Json)? cancelUsb,
+    required Future<void> Function(Json)? releaseUsb,
     required void Function(Map<String, dynamic>) emit,
     required void Function(String, String?, Map<String, Object?>) publish,
     required Future<void> Function(String, DeviceConnection, bool) stopWork,

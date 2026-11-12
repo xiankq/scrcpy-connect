@@ -9,9 +9,10 @@ import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/files/document_limits.dart';
 import 'package:scrcpy_connect/core/files/file_selection_requests.dart';
 import 'package:scrcpy_connect/core/files/system_documents.dart';
+import 'package:scrcpy_connect/core/files/system_document_backend.dart';
 
 /// 桌面位置选择后的写入端；持久准入及未知结果仍由 FileExportService 统一拥有。
-final class FileDesktopDelivery {
+final class FileDesktopDelivery implements SystemDocumentBackend {
   static const scopeKey = 'scrcpy-connect-desktop-documents';
   static LocalFiles? _recoveringFiles;
   static Future<LocalFileScope>? _recoveringScope;
@@ -49,12 +50,14 @@ final class FileDesktopDelivery {
   _DesktopSave? _active;
   bool _closed = false;
 
+  @override
   Future<DocumentConflict?> readConflict(String operationId) async {
     final active = _active;
     final pending = active?.pending;
     return active?.id == operationId && pending != null ? pending : null;
   }
 
+  @override
   Future<bool> resolveConflict(
     String operationId,
     String conflictId,
@@ -73,6 +76,7 @@ final class FileDesktopDelivery {
     return true;
   }
 
+  @override
   Future<void> cancel(String operationId) async {
     final active = _active;
     if (active == null || active.id != operationId) return;
@@ -81,7 +85,19 @@ final class FileDesktopDelivery {
     if (active.finished.isCompleted) await _finish(active);
   }
 
-  Future<DocumentOutcome> write(DocumentExportPlan plan) => _write(plan);
+  @override
+  Future<DocumentOutcome> exportDocument(DocumentExportPlan plan) =>
+      _write(plan);
+
+  @override
+  Future<DocumentOutcome> importDocuments(
+    String operationId,
+    DocumentImportKind kind,
+  ) => throw const RequestFailure('platform_unavailable', '此桌面入口仅支持保存本机原件。');
+
+  @override
+  Future<void> releaseSource(String managedSourceId) =>
+      throw const RequestFailure('platform_unavailable', '此桌面入口没有托管的导入来源。');
 
   Future<DocumentOutcome> _write(DocumentExportPlan plan) async {
     final previous = _active;
@@ -326,6 +342,7 @@ final class FileDesktopDelivery {
     if (identical(_active, op)) _active = null;
   }
 
+  @override
   Future<void> dispose() async {
     _closed = true;
     final op = _active;

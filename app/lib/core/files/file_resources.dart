@@ -17,13 +17,13 @@ import 'package:scrcpy_connect/core/files/file_catalog.dart';
 import 'package:scrcpy_connect/core/files/file_delivery_journal.dart';
 import 'package:scrcpy_connect/core/files/file_document_cache.dart';
 import 'package:scrcpy_connect/core/files/file_document_scope.dart';
+import 'package:scrcpy_connect/core/files/file_document_platform.dart';
 import 'package:scrcpy_connect/core/files/file_mutation_service.dart';
 import 'package:scrcpy_connect/core/files/file_operations.dart';
 import 'package:scrcpy_connect/core/files/file_publication_lease_pool.dart';
 import 'package:scrcpy_connect/core/files/file_share_service.dart';
 import 'package:scrcpy_connect/core/files/file_transfer_service.dart';
-import 'package:scrcpy_connect/core/platform/app_platform.dart';
-import 'package:scrcpy_connect/core/platform/native_host.dart';
+import 'package:scrcpy_connect/core/files/system_document_service.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 
 /// 文件、缓存、分享和远端缩略图任务的资源所有者。
@@ -35,6 +35,8 @@ final class FileResources {
     required this.deliveries,
     required this.sharing,
     required this.documentSources,
+    required this.documents,
+    required this._documentPlatform,
     required this._executor,
     required this.isDisposed,
     required this.isStateUnverified,
@@ -50,6 +52,8 @@ final class FileResources {
   final FileDeliveryJournal deliveries;
   final FileShareService? sharing;
   final FileDocumentCache? documentSources;
+  final SystemDocumentService documents;
+  final FileDocumentPlatform _documentPlatform;
   final AdbFileExecutor _executor;
   final bool Function() isDisposed;
   final bool Function() isStateUnverified;
@@ -115,7 +119,9 @@ final class FileResources {
   }
 
   static Future<FileResources> open({
-    required NativeHost host,
+    required String fileScopeId,
+    required String fileScopeKey,
+    required FileDocumentPlatform documentPlatform,
     required AdbServices localFiles,
     required String dataDirectory,
     required DeviceRecordStorage records,
@@ -129,14 +135,12 @@ final class FileResources {
     required void Function(FileShareService?) onSharingOpened,
   }) async {
     // 读取或清理缓存前先排空旧 isolate 的文档复制，避免与恢复产生并发写入。
-    await AppPlatform.recoverDocuments(
-      localFiles: createNativeScrcpyLocalFiles,
-    );
+    await documentPlatform.recover();
     final documentSources = Platform.isAndroid
         ? await FileDocumentCache.open(
             cacheDirectory: Directory(
               (await FileDocumentScope.fromEnvironment(
-                await AppPlatform.requestPlatform(
+                await documentPlatform.request(
                   'documents.platform.environment',
                   const {},
                 ),
@@ -147,7 +151,7 @@ final class FileResources {
     final sharing = Platform.isAndroid
         ? await FileShareService.open(
             files: createNativeScrcpyLocalFiles,
-            platform: AppPlatform.requestPlatform,
+            platform: documentPlatform.request,
           )
         : null;
     onSharingOpened(sharing);
@@ -186,8 +190,8 @@ final class FileResources {
     final fileExecutor = AdbFileExecutor(
       localFiles: localFiles,
       resolveConnection: (id) async => requireConnection(id),
-      fileScopeId: host.fileScopeId,
-      fileScopeKey: host.fileScopeKey,
+      fileScopeId: fileScopeId,
+      fileScopeKey: fileScopeKey,
     );
     final transfers = await FileTransferService.open(
       executor: fileExecutor,
@@ -208,6 +212,24 @@ final class FileResources {
       deliveries: deliveries,
       sharing: sharing,
       documentSources: documentSources,
+      documents: SystemDocumentService(
+        deliveries: deliveries,
+        createBackend: documentPlatform.available
+            ? (selections) => documentPlatform.createBackend(
+                selections: selections,
+                sources: documentSources,
+                conflictChanged: (data) {
+                  if (owner?._closed != true && !isDisposed()) {
+                    emit({'type': 'documents.conflict.changed', 'data': data});
+                  }
+                },
+              )
+            : null,
+        allowImport: documentPlatform.allowImport,
+        isDisposed: () => owner?._closed == true || isDisposed(),
+        emit: emit,
+      ),
+      documentPlatform: documentPlatform,
       executor: fileExecutor,
       isDisposed: isDisposed,
       isStateUnverified: isStateUnverified,
@@ -250,13 +272,30 @@ final class FileResources {
 
   void stopAdmission() {
     _closed = true;
+    documents.stopAdmission();
     sharing?.stopIntake();
+  }
+
+  Future<void> attachSharing() async {
+    await sharing?.configure();
+    unawaited(
+      (sharing?.attach() ?? Future<void>.value()).catchError((Object error) {
+        if (!_closed && !isDisposed()) {
+          emit({
+            'type': 'sharing.failed',
+            'data': {'reason': '$error'},
+          });
+        }
+      }),
+    );
   }
 
   OrderedDisposal? _disposal;
   Future<void> close() {
     stopAdmission();
     _disposal ??= OrderedDisposal([
+      documents.close,
+      _documentPlatform.close,
       () async => await _content?.close(),
       () async => await Future.wait([
         transfers.close(),

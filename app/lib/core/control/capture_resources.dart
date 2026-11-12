@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:typed_data';
+
+import 'package:scrcpy/scrcpy.dart';
 
 import 'package:scrcpy_connect/core/control/app_launch_journal.dart';
 import 'package:scrcpy_connect/core/control/control_session_service.dart';
@@ -8,13 +11,12 @@ import 'package:scrcpy_connect/core/control/models/session_activity.dart';
 import 'package:scrcpy_connect/core/control/models/video_session.dart';
 import 'package:scrcpy_connect/core/devices/device_connection.dart';
 import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
-import 'package:scrcpy_connect/core/devices/device_service.dart';
+import 'package:scrcpy_connect/core/control/display_recovery.dart';
 import 'package:scrcpy_connect/core/devices/scrcpy_server_queries.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/media/device_audio_service.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
-import 'package:scrcpy_connect/core/platform/native_host.dart';
 import 'package:scrcpy_connect/core/settings/app_settings.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 
@@ -22,8 +24,11 @@ import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 /// 只读空快照及关闭路径不会创建尚未使用的捕获能力。
 final class CaptureResources {
   CaptureResources({
-    required this._host,
-    required this._devices,
+    required this._scrcpy,
+    required this._serverBytes,
+    required this._displays,
+    required this.requireConnection,
+    required this.connectionForDevice,
     required this._records,
     required this._preferences,
     required this._launches,
@@ -34,8 +39,11 @@ final class CaptureResources {
     required this.onCleanupFailure,
   });
 
-  final NativeHost _host;
-  final DeviceService _devices;
+  final ScrcpyClient _scrcpy;
+  final Uint8List _serverBytes;
+  final DisplayRecovery _displays;
+  final DeviceConnection Function(String) requireConnection;
+  final DeviceConnection? Function(String) connectionForDevice;
   final DeviceRecordStorage _records;
   final AppSettings _preferences;
   final AppLaunchJournal _launches;
@@ -59,9 +67,9 @@ final class CaptureResources {
       sessions: sessions,
       audio: audio,
       keepAwake: keepAwake,
-      connectionForDevice: _devices.current,
+      connectionForDevice: connectionForDevice,
       preferences: _preferences,
-      scrcpy: _host.scrcpy,
+      scrcpy: _scrcpy,
     );
   }
 
@@ -69,7 +77,7 @@ final class CaptureResources {
   ScrcpyServerQueries get serverQueries {
     if (_queries == null) _checkCreation();
     return _queries ??= ScrcpyServerQueries(
-      serverBytes: _host.scrcpyBytes,
+      serverBytes: _serverBytes,
       timeout: const Duration(seconds: 15),
     );
   }
@@ -78,8 +86,8 @@ final class CaptureResources {
   ControlSessionService get sessions {
     if (_sessions == null) _checkCreation();
     return _sessions ??= ControlSessionService(
-      scrcpy: _host.scrcpy,
-      requireConnection: _devices.requireConnection,
+      scrcpy: _scrcpy,
+      requireConnection: requireConnection,
       launches: _launches,
       onClipboardFailure: _diagnostics.clipboardFailure,
       requireClipboardAccess: () {
@@ -91,7 +99,7 @@ final class CaptureResources {
         }
       },
       serverQueries: serverQueries,
-      settings: () => _host.preferences.current.values,
+      settings: () => _preferences.settings,
       emit: (type, device, data) => publishBusiness(type, device, data),
       onAudioEligibilityChanged: (id) {
         // 同步撤准入后记录实际排空，回调不等待其他设备，也不丢弃失败所有者。
@@ -108,8 +116,8 @@ final class CaptureResources {
   DeviceAudioService get audio {
     if (_audio == null) _checkCreation();
     return _audio ??= DeviceAudioService(
-      scrcpy: _host.scrcpy,
-      requireConnection: _devices.requireConnection,
+      scrcpy: _scrcpy,
+      requireConnection: requireConnection,
       hasAudioOwner: sessions.hasAudioOwner,
       deviceName: (id) => _records.current.find(id)?.name ?? 'Android 设备',
       apiLevel: (id) => _records.current.find(id)?.apiLevel,
@@ -121,17 +129,11 @@ final class CaptureResources {
   DeviceWakeService get keepAwake {
     if (_wake == null) _checkCreation();
     return _wake ??= DeviceWakeService(
-      scrcpy: _host.scrcpy,
-      requireConnection: _devices.requireConnection,
+      scrcpy: _scrcpy,
+      requireConnection: requireConnection,
       hasWindowOwner: sessions.hasAudioOwner,
       keepAwakeEnabled: (deviceId) =>
-          _host
-              .preferences
-              .current
-              .values
-              .deviceSettings[deviceId]
-              ?.stayAwake ==
-          true,
+          _preferences.settings.deviceSettings[deviceId]?.stayAwake == true,
       emit: (type, device, data) => publishBusiness(type, device, data),
     );
   }
@@ -207,7 +209,7 @@ final class CaptureResources {
   }
 
   Future<void> stopDisplays(DeviceConnection connection) async {
-    final displays = _host.physicalDisplays;
+    final displays = _displays;
     if ((await connection.client.services.connectionFacts(connection.device))
         .closed) {
       await displays.detachClosedConnection(connection);

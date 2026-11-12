@@ -8,7 +8,6 @@ import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/events/runtime_events.dart';
 import 'package:scrcpy_connect/core/files/file_resources.dart';
 import 'package:scrcpy_connect/core/media/media_playback.dart';
-import 'package:scrcpy_connect/core/platform/app_platform.dart';
 import 'package:scrcpy_connect/core/platform/background_policy.dart';
 import 'package:scrcpy_connect/core/platform/native_host.dart';
 import 'package:scrcpy_connect/core/recovery/state_recovery.dart';
@@ -27,7 +26,8 @@ final class AppLifecycle {
     required this._events,
     required this._stateRecovery,
     required this._preferences,
-    required this._platform,
+    required this._platformEvents,
+    required this._readVisible,
     required this._background,
     required this._media,
     required this._diagnostics,
@@ -40,7 +40,8 @@ final class AppLifecycle {
   final RuntimeEvents _events;
   final StateRecovery _stateRecovery;
   final AppSettings _preferences;
-  final AppPlatform _platform;
+  final Stream<dynamic>? _platformEvents;
+  final Future<bool> Function()? _readVisible;
   final BackgroundPolicy _background;
   final MediaPlayback _media;
   final DiagnosticReporter _diagnostics;
@@ -63,9 +64,6 @@ final class AppLifecycle {
     _captures.settingsChanged();
   }
 
-  Future<void> cancelDeviceFiles(String deviceId) =>
-      _files.cancelFiles(deviceId);
-
   void requireVerifiedState() {
     if (_stateRecovery.pending) {
       throw const RequestFailure('state_unverified', '正在重新核验设备状态，完成后再操作。');
@@ -87,13 +85,13 @@ final class AppLifecycle {
     await _events.attach(
       files: [_files.transfers.events],
       sharing: _files.sharing?.events,
-      platform: Platform.isAndroid ? _platform.events : null,
+      platform: _platformEvents,
     );
-    if (Platform.isAndroid) {
-      final state = await _platform.request('audio.platform.state', const {});
-      await _media.setVisible(state['visible'] == true);
-      _connections.reconnections.setVisible(state['visible'] == true);
-      await _platform.attachShare();
+    if (_readVisible case final readVisible?) {
+      final visible = await readVisible();
+      await _media.setVisible(visible);
+      _connections.reconnections.setVisible(visible);
+      await _files.attachSharing();
     }
     // isolate 重启会丢失播放器及一次性媒体流；回收孤立捕获，不能接管未经核验的播放。
     await _media.retireUnownedAudio();
@@ -148,7 +146,6 @@ final class AppLifecycle {
     _stateRecovery.dispose();
     return OrderedDisposal([
       _connections.stopAdmission,
-      _platform.dispose,
       _files.close,
       _events.detach,
       _media.dispose,

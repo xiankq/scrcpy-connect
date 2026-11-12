@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/files/file_delivery.dart';
 import 'package:scrcpy_connect/core/files/system_documents.dart';
@@ -26,11 +28,18 @@ class FileExportService {
     return true;
   }
 
-  void close() {
+  void stopAdmission() {
     _closed = true;
     for (final pending in _pending.values) {
       pending.cancelled = true;
     }
+  }
+
+  Future<void> close() async {
+    stopAdmission();
+    await Future.wait(
+      _pending.values.map((pending) => pending.finished.future),
+    );
   }
 
   Future<DocumentOutcome> save(DocumentExportPlan request) async {
@@ -109,11 +118,13 @@ class FileExportService {
       return resultReceipt;
     } finally {
       _pending.remove(operationId);
+      pending.finished.complete();
     }
   }
 }
 
 class _PendingSave {
+  final finished = Completer<void>();
   bool cancelled = false;
   bool started = false;
 }
