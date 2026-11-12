@@ -117,13 +117,7 @@ class DeviceReconnectService {
     _sequence = sequence;
     switch (event) {
       case DeviceReconnectDevicesChanged(:final devices):
-        if (devices != null) {
-          _replaceDevices(devices);
-        } else {
-          _quiet(refresh());
-        }
-      case DeviceReconnectDeviceChanged(:final device):
-        if (_devices.containsKey(device.id)) _devices[device.id] = device;
+        _replaceDevices(devices);
       case DeviceReconnectSettingsChanged(:final backgroundKeepAlive):
         _backgroundKeepAlive = backgroundKeepAlive;
       case DeviceReconnectDiscoveryChanged(:final guid):

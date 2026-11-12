@@ -39,17 +39,16 @@ void main() {
     host.read = () => stale.future;
     final refreshing = service.refresh();
     service.handleEvent(
-      DeviceReconnectDeviceChanged(
+      DeviceReconnectDevicesChanged([
         _device('network', status: .connected),
-        sequence: 3,
-      ),
+      ], sequence: 3),
     );
     host.read = null;
     host.snapshot = _snapshot(3, [_device('network', status: .connected)]);
     stale.complete(_snapshot(2, [_device('network')]));
     await refreshing;
     service.handleEvent(
-      DeviceReconnectDeviceChanged(_device('network'), sequence: 2),
+      DeviceReconnectDevicesChanged([_device('network')], sequence: 2),
     );
     expect(timers.active, isEmpty);
     expect(host.attempts, isEmpty);
@@ -93,10 +92,9 @@ void main() {
     timers.active.single.fire();
     await _pump();
     service.handleEvent(
-      DeviceReconnectDeviceChanged(
+      DeviceReconnectDevicesChanged([
         _device('network', status: .connected),
-        sequence: 2,
-      ),
+      ], sequence: 2),
     );
     host.attempts.single.done.complete();
     await _pump();

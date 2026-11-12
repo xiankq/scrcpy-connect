@@ -17,17 +17,11 @@ final class DeviceReconnectRecovered extends DeviceReconnectEvent {
 
 final class DeviceReconnectDevicesChanged extends DeviceReconnectEvent {
   DeviceReconnectDevicesChanged(
-    List<DeviceSnapshot>? devices, {
+    List<DeviceSnapshot> devices, {
     required int sequence,
-  }) : devices = devices == null ? null : immutableDeviceSnapshots(devices),
+  }) : devices = immutableDeviceSnapshots(devices),
        super(sequence: sequence);
-  final List<DeviceSnapshot>? devices;
-}
-
-final class DeviceReconnectDeviceChanged extends DeviceReconnectEvent {
-  const DeviceReconnectDeviceChanged(this.device, {required int sequence})
-    : super(sequence: sequence);
-  final DeviceSnapshot device;
+  final List<DeviceSnapshot> devices;
 }
 
 final class DeviceReconnectSettingsChanged extends DeviceReconnectEvent {
