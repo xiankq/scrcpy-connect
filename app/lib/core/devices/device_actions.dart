@@ -53,6 +53,7 @@ final class DeviceActions
   final void Function(String deviceId) _announceStop;
   final bool Function() _isDisposed;
   final DiagnosticReporter? diagnostics;
+  final _pendingChanges = <_PendingConnectionChange>{};
 
   @override
   Future<List<DiscoveredDevice>> discoverDevices({
@@ -383,6 +384,10 @@ final class DeviceActions
   @override
   Future<void> cancelConnectionAttempt(String attemptId) async {
     _checkOpen();
+    // 操作可能仍在等待旧资源回收，尚未进入设备模块；先撤销该次入口的准入。
+    for (final pending in _pendingChanges) {
+      if (pending.change.attemptId == attemptId) pending.cancelled = true;
+    }
     await _change(
       ConnectionChange(ConnectionChangeKind.cancel, attemptId: attemptId),
       () async {
@@ -407,12 +412,21 @@ final class DeviceActions
     ConnectionChange change,
     Future<T> Function() action,
   ) async {
-    await _prepareChange(change);
-    final finish = _beginChange(change);
+    final pending = change.manual ? _PendingConnectionChange(change) : null;
+    if (pending != null) _pendingChanges.add(pending);
     try {
-      return await action();
+      await _prepareChange(change);
+      if (pending?.cancelled == true) {
+        throw const RequestFailure('cancelled', '本次连接流程已停止。');
+      }
+      final finish = _beginChange(change);
+      try {
+        return await action();
+      } finally {
+        await finish();
+      }
     } finally {
-      await finish();
+      if (pending != null) _pendingChanges.remove(pending);
     }
   }
 
@@ -451,4 +465,10 @@ final class DeviceActions
       );
     }
   }
+}
+
+final class _PendingConnectionChange {
+  _PendingConnectionChange(this.change);
+  final ConnectionChange change;
+  bool cancelled = false;
 }

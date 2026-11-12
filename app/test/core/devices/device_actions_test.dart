@@ -1,0 +1,140 @@
+import 'dart:async';
+
+import 'package:adb/adb.dart' show AdbCancellation;
+import 'package:flutter_test/flutter_test.dart';
+import 'package:scrcpy_connect/core/devices/device_actions.dart';
+import 'package:scrcpy_connect/core/devices/device_connection_control.dart';
+import 'package:scrcpy_connect/core/devices/device_management.dart';
+import 'package:scrcpy_connect/core/devices/device_setup.dart';
+import 'package:scrcpy_connect/core/devices/models/connection_change.dart';
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/identity/models/setup_identity.dart';
+
+void main() {
+  test('等待旧资源回收的 USB、二维码与直接连接，取消后不再提交执行', () async {
+    for (final kind in ['usb', 'qr', 'connect']) {
+      final prepared = Completer<void>();
+      final devices = _Devices();
+      final actions = _actions(devices, (change) async {
+        if (change.manual) await prepared.future;
+      });
+      final Future<Object?> pending = switch (kind) {
+        'usb' => actions.connectUsb(attemptId: 'attempt'),
+        'qr' => actions.beginQrPairing(attemptId: 'attempt'),
+        _ => actions.connectDevice('device', attemptId: 'attempt'),
+      };
+      final cancelled = expectLater(
+        pending,
+        throwsA(
+          isA<RequestFailure>().having((e) => e.code, 'code', 'cancelled'),
+        ),
+      );
+      await actions.cancelConnectionAttempt('attempt');
+      expect(devices.cancelled, ['attempt']);
+      prepared.complete();
+      await cancelled;
+      expect(devices.executed, isEmpty, reason: kind);
+    }
+  });
+
+  test('取消清理失败仍阻止原提交，后续独立尝试不受污染', () async {
+    final prepared = Completer<void>();
+    final devices = _Devices()..cancelFailure = StateError('cleanup failed');
+    final actions = _actions(devices, (change) async {
+      if (change.manual) await prepared.future;
+    });
+    final old = actions.connectUsb(attemptId: 'old');
+    final retired = expectLater(
+      old,
+      throwsA(isA<RequestFailure>().having((e) => e.code, 'code', 'cancelled')),
+    );
+    final next = actions.connectUsb(attemptId: 'next');
+    await expectLater(actions.cancelConnectionAttempt('old'), throwsStateError);
+    prepared.complete();
+    await retired;
+    await next;
+    expect(devices.executed, ['next']);
+    devices.cancelFailure = null;
+    await actions.cancelConnectionAttempt('old');
+    expect(devices.cancelled, ['old', 'old']);
+  });
+}
+
+DeviceActions _actions(
+  _Devices devices,
+  Future<void> Function(ConnectionChange) prepare,
+) => DeviceActions(
+  devices: devices,
+  connections: devices,
+  setup: devices,
+  isStateUnverified: () => false,
+  prepareChange: prepare,
+  beginChange: (_) => () async {},
+  cancelContent: (_) async {},
+  cancelUsbAttempt: (_) async {},
+  cancelFiles: (_) async {},
+  forgetObservation: (_) async {},
+  forgetPreferences: (_) async {},
+  stopMediaIntent: (_) {},
+  finishMediaStop: (_) async {},
+  announceStop: (_) {},
+  isDisposed: () => false,
+);
+
+final class _Devices
+    implements DeviceManagement, DeviceConnectionControl, DeviceSetup {
+  final executed = <String>[];
+  final cancelled = <String>[];
+  Object? cancelFailure;
+
+  @override
+  Future<void> cancelConnectionAttempt(String attemptId) async {
+    cancelled.add(attemptId);
+    if (cancelFailure case final failure?) throw failure;
+  }
+
+  @override
+  Future<UsbSetupResult> connectUsb({
+    String? deviceId,
+    String? attemptId,
+    String? serial,
+    String? usbDeviceId,
+    bool connect = false,
+    SetupIdentity? identity,
+  }) async {
+    executed.add(attemptId!);
+    return const UsbSetupResult.selectionRequired([]);
+  }
+
+  @override
+  Future<QrPairingSession> beginQrPairing({
+    String? deviceId,
+    String? attemptId,
+    SetupIdentity? identity,
+  }) async {
+    executed.add(attemptId!);
+    return QrPairingSession(
+      attemptId: attemptId,
+      payload: 'test',
+      expiresAt: DateTime.now(),
+      result: Future.value(
+        const PairingReceipt(guid: 'guid', address: 'phone'),
+      ),
+    );
+  }
+
+  @override
+  Future<DeviceConnectionReceipt> connectDevice(
+    String deviceId, {
+    String? attemptId,
+    ConnectionCandidateSource candidateSource = .saved,
+    AdbCancellation? cancellation,
+  }) async {
+    executed.add(attemptId!);
+    return DeviceConnectionReceipt(device: DeviceSnapshot(id: deviceId));
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
