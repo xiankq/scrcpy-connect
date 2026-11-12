@@ -24,6 +24,7 @@ import 'package:scrcpy_connect/core/files/file_publication_lease_pool.dart';
 import 'package:scrcpy_connect/core/files/file_share_service.dart';
 import 'package:scrcpy_connect/core/files/file_transfer_service.dart';
 import 'package:scrcpy_connect/core/files/system_document_service.dart';
+import 'package:scrcpy_connect/core/files/models/share_failed.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 
 /// 文件、缓存、分享和远端缩略图任务的资源所有者。
@@ -277,17 +278,28 @@ final class FileResources {
   }
 
   Future<void> attachSharing() async {
+    _checkOpen();
     await sharing?.configure();
+    _checkOpen();
     unawaited(
-      (sharing?.attach() ?? Future<void>.value()).catchError((Object error) {
-        if (!_closed && !isDisposed()) {
-          emit({
-            'type': 'sharing.failed',
-            'data': {'reason': '$error'},
-          });
-        }
-      }),
+      (sharing?.attach() ?? Future<void>.value()).catchError(_sharingFailed),
     );
+  }
+
+  /// 平台分享仍由原文件所有者接收；失败不改变其资源回收与重试责任。
+  Future<void> receiveShare(Map<String, dynamic> data) async {
+    if (_closed || isDisposed()) return;
+    try {
+      await sharing?.receive(data);
+    } catch (error) {
+      _sharingFailed(error);
+    }
+  }
+
+  void _sharingFailed(Object error) {
+    if (!_closed && !isDisposed()) {
+      emit(ShareFailed('$error').toApplicationEvent());
+    }
   }
 
   OrderedDisposal? _disposal;

@@ -41,7 +41,7 @@ void main() {
       RecoveryCompleted(RuntimeSnapshot(sequence: 3, settings: Preferences())),
     ];
     for (final event in recovery) {
-      events.emitRecovery(event);
+      events.emitEvent(event);
     }
     await Future<void>.delayed(Duration.zero);
     expect(accepted, [

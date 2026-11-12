@@ -1,6 +1,7 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:scrcpy_connect/core/control/models/video_renderer_receipt.dart';
 import 'package:scrcpy_connect/core/control/models/video_session.dart';
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 
 part 'video_output.freezed.dart';
 
@@ -61,20 +62,18 @@ abstract class VideoOutputReceipt with _$VideoOutputReceipt {
       textureId == other.textureId;
 }
 
-sealed class VideoOutputEvent {
+sealed class VideoOutputEvent extends AppEvent {
   const VideoOutputEvent();
   String get sessionId;
+  @override
   String get deviceId;
 
-  Map<String, dynamic> toApplicationEvent() => {
-    'type': switch (this) {
-      VideoOutputReady() => 'session.output.ready',
-      VideoOutputChanged() => 'session.output.changed',
-      VideoOutputFrame() => 'session.frame',
-      VideoOutputFailed() => 'session.output.failed',
-    },
-    'deviceId': deviceId,
-    'data': this,
+  @override
+  String get type => switch (this) {
+    VideoOutputReady() => 'session.output.ready',
+    VideoOutputChanged() => 'session.output.changed',
+    VideoOutputFrame() => 'session.frame',
+    VideoOutputFailed() => 'session.output.failed',
   };
 }
 

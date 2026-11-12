@@ -7,6 +7,7 @@ import 'package:scrcpy_connect/core/control/video_quality.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/media/models/video_output.dart';
+import 'package:scrcpy_connect/core/media/models/video_stop_requested.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/core/media/video_screenshots.dart';
 import 'package:scrcpy_connect/core/media/video_sessions.dart';
@@ -25,7 +26,7 @@ final class MediaOperations
     required this._screenshots,
     required this._quality,
     required this.resizeDisplayCapture,
-    required this.emit,
+    required this.onStopRequested,
     required this.isDisposed,
     required this.isStateUnverified,
     required this._diagnostics,
@@ -37,7 +38,7 @@ final class MediaOperations
   final VideoQualityControl _quality;
   final Future<void> Function(ControlTarget, VideoDisplaySize)
   resizeDisplayCapture;
-  final void Function(Map<String, dynamic>) emit;
+  final void Function(VideoStopRequested) onStopRequested;
   final bool Function() isDisposed;
   final bool Function() isStateUnverified;
   final DiagnosticReporter _diagnostics;
@@ -227,10 +228,7 @@ final class MediaOperations
     bool keepLaunchRecord = false,
   }) => _videoOperation('session.stop', target.deviceId, () {
     if (target.sessionId case final id?) {
-      emit({
-        'type': 'session.stop.requested',
-        'data': {'sessionId': id},
-      });
+      onStopRequested(VideoStopRequested(id));
     }
     return _videos.stopVideo(target, keepLaunchRecord: keepLaunchRecord);
   }, sessionId: target.sessionId);

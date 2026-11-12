@@ -52,4 +52,4 @@ final class BackgroundStatusProvider
   }
 }
 
-String _$backgroundStatusHash() => r'e6b0f36c4ab67d7e7cf9676835ee52e54aa7ae75';
+String _$backgroundStatusHash() => r'ad293bab5559e2760dedfa3db29f2035410c1347';

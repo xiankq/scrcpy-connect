@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 
-import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 
 typedef RuntimeEvent = Map<String, dynamic>;
@@ -81,6 +81,8 @@ final class RuntimeEvents {
     Map<String, Object?> data,
   ) => publish({'type': type, 'deviceId': ?deviceId, 'data': data});
 
+  void publishEvent(AppEvent event) => publish(event.toApplicationEvent());
+
   /// 业务状态先登记水位再通知策略；同步回调重入也不能逆序发布。
   void publish(RuntimeEvent event) {
     if (!_active) return;
@@ -133,14 +135,7 @@ final class RuntimeEvents {
     if (_active) _events.add(event);
   }
 
-  void emitRecovery(RecoveryEvent event) => emit({
-    'type': switch (event) {
-      RecoveryStarted() => 'state.resync',
-      RecoveryCompleted() => 'state.resynced',
-      RecoveryFailed() => 'state.resync.failed',
-    },
-    'data': event,
-  });
+  void emitEvent(AppEvent event) => emit(event.toApplicationEvent());
 
   void _error(Object error, StackTrace stack) {
     if (_active) _events.addError(error, stack);

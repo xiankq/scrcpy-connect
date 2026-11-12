@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:adb/adb.dart' show AdbCancellation;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/core/control/control_operations.dart';
+import 'package:scrcpy_connect/core/control/models/session_activity.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/control/video_display.dart';
 import 'package:scrcpy_connect/core/control/video_quality.dart';
@@ -21,6 +22,7 @@ import 'package:scrcpy_connect/core/files/file_search.dart';
 import 'package:scrcpy_connect/core/files/file_transfers.dart';
 import 'package:scrcpy_connect/core/gallery/gallery_scanner.dart';
 import 'package:scrcpy_connect/core/media/media_operations.dart';
+import 'package:scrcpy_connect/core/media/models/video_stop_requested.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/core/media/video_screenshots.dart';
 import 'package:scrcpy_connect/core/media/video_sessions.dart';
@@ -30,6 +32,43 @@ Matcher failsWith(String code) => throwsA(
 );
 
 void main() {
+  test('精确停止先撤销会话恢复意图，再等待原能力确认；恢复期间仍可关闭', () async {
+    final owner = _Outputs();
+    final requested = <VideoStopRequested>[];
+    final operations = MediaOperations(
+      videos: owner,
+      audio: owner,
+      screenshots: owner,
+      quality: owner,
+      resizeDisplayCapture: (_, _) async => fail('停止不应调整显示'),
+      onStopRequested: (event) {
+        expect(owner.videoStops, isEmpty);
+        requested.add(event);
+      },
+      isDisposed: () => false,
+      isStateUnverified: () => true,
+      diagnostics: DiagnosticReporter(null),
+    );
+    await expectLater(
+      operations.stopVideo(const ControlTarget(sessionId: '')),
+      failsWith('invalid_argument'),
+    );
+    expect(requested, isEmpty);
+    const target = ControlTarget(sessionId: 'session');
+    var completed = false;
+    final pending = operations.stopVideo(target).then((receipt) {
+      completed = true;
+      return receipt;
+    });
+    expect(requested.single.sessionId, 'session');
+    expect(owner.videoStops, [target]);
+    expect(completed, isFalse);
+    const receipt = VideoStopReceipt(sessionId: 'session');
+    owner.videoClosed.complete(receipt);
+    expect(await pending, same(receipt));
+    expect(completed, isTrue);
+  });
+
   test('控制先拒绝无效结构，恢复期间只放行精确会话的释放', () async {
     final capture = _Control();
     final RemoteControl control = ControlOperations(
@@ -193,7 +232,7 @@ void main() {
       screenshots: owner,
       quality: owner,
       resizeDisplayCapture: (_, _) async => fail('不应调整显示'),
-      emit: (_) {},
+      onStopRequested: (_) {},
       isDisposed: () => false,
       isStateUnverified: () => true,
       diagnostics: DiagnosticReporter(null),
@@ -307,6 +346,17 @@ class _Outputs
         VideoScreenshots,
         VideoQualityControl {
   final closed = Completer<void>();
+  final videoClosed = Completer<VideoStopReceipt>();
+  final videoStops = <ControlTarget>[];
+  @override
+  Future<VideoStopReceipt> stopVideo(
+    ControlTarget target, {
+    bool keepLaunchRecord = false,
+  }) {
+    videoStops.add(target);
+    return videoClosed.future;
+  }
+
   @override
   Future<void> stopAudio(DeviceAudioTarget target) => closed.future;
   @override

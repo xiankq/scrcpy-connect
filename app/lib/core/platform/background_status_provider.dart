@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
+import 'package:scrcpy_connect/core/platform/models/background_event.dart';
 
 import 'platform_capabilities_provider.dart';
 
@@ -14,8 +15,7 @@ part 'background_status_provider.g.dart';
 Future<BackgroundStatus> backgroundStatus(Ref ref) {
   final source = ref.watch(backgroundControlProvider);
   final subscription = ref.watch(runtimeEventsProvider).listen((event) {
-    if (event['type'] == 'background.changed' ||
-        event['type'] == 'background.failed') {
+    if (event['data'] is BackgroundEvent) {
       ref.invalidateSelf();
     }
   });

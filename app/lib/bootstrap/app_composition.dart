@@ -84,11 +84,7 @@ final class AppComposition {
     stopMediaIntent: (id) => _media.stopDeviceIntent(id),
     finishMediaStop: (id) => _media.finishDeviceStop(id),
     isDisposed: () => _isDisposed,
-    announceStop: (id) => _events.emit({
-      'type': 'device.disconnect.requested',
-      'deviceId': id,
-      'data': <String, dynamic>{},
-    }),
+    onDisconnectRequested: _events.emitEvent,
     diagnostics: _diagnostics,
   );
 
@@ -115,10 +111,7 @@ final class AppComposition {
         isDisposed: () => _isDisposed,
         isStateUnverified: () => _stateRecovery.pending,
         publish: _events.publish,
-        onCleanupFailure: (error) => _events.emit({
-          'type': 'activity.cleanup.failed',
-          'data': {'reason': '$error'},
-        }),
+        onCleanupFailure: _events.emitEvent,
       );
 
   late final _activities = ActivityCatalog(
@@ -131,15 +124,9 @@ final class AppComposition {
     readObservations: _connections.currentObservations,
     transfers: _files.transfers,
     disconnectDevice: (id) => _deviceActions.disconnectDevice(id),
-    stopAudio: (target) => _media.stopAudio(target),
+    stopAudio: (target) => _mediaOperations.stopAudio(target),
     stopObservation: (id) => _connections.operations.stopObservation(id),
-    stopVideo: (id) async {
-      _events.emit({
-        'type': 'session.stop.requested',
-        'data': {'sessionId': id},
-      });
-      await _media.stopVideo(ControlTarget(sessionId: id));
-    },
+    stopVideo: (id) => _mediaOperations.stopVideo(ControlTarget(sessionId: id)),
     isDisposed: () => _isDisposed,
   );
 
@@ -150,12 +137,8 @@ final class AppComposition {
     audioPolicy: (enabled) async {
       await _media.policy(enabled);
     },
-    onChanged: (status) =>
-        _events.emit({'type': 'background.changed', 'data': status.toJson()}),
-    onFailure: (error) => _events.emit({
-      'type': 'background.failed',
-      'data': {'reason': '$error'},
-    }),
+    onEvent: _events.emitEvent,
+    isDisposed: () => _isDisposed,
   );
 
   static const _channels = PlatformChannels();
@@ -174,18 +157,7 @@ final class AppComposition {
     isDisposed: () => _isDisposed,
     stopConnections: _connections.stopConnections,
     emit: (event) => _events.emit(event),
-    handleShare: (data) async {
-      try {
-        await _files.sharing?.receive(data);
-      } catch (error) {
-        if (!_isDisposed) {
-          _events.emit({
-            'type': 'sharing.failed',
-            'data': {'reason': '$error'},
-          });
-        }
-      }
-    },
+    handleShare: _files.receiveShare,
     handleMedia: _media.handlePlatformEvent,
   );
   late final RuntimeEvents _events = RuntimeEvents(
@@ -217,7 +189,7 @@ final class AppComposition {
     read: (current) => _media.snapshot(current),
     emit: (event) {
       _connections.handleRecovery(event);
-      _events.emitRecovery(event);
+      _events.emitEvent(event);
     },
     isDisposed: () => _isDisposed,
   );
@@ -285,8 +257,7 @@ final class AppComposition {
       emit: (event) => session._events.emit(event),
       publish: (type, device, data) =>
           session._events.publishBusiness(type, device, data),
-      onDevicesChanged: (change) =>
-          session._events.publish({'type': 'devices.changed', 'data': change}),
+      onDevicesChanged: session._events.publishEvent,
       stopWork: (id, connection, accepted) => Future.wait([
         if (session._captureInstance case final captures?)
           captures.stopForConnection(id, connection),
@@ -346,7 +317,7 @@ final class AppComposition {
     quality: _media,
     resizeDisplayCapture: (target, size) =>
         _captureResources.capture.resizeDisplay(target, size),
-    emit: _events.emit,
+    onStopRequested: _events.emitEvent,
     isDisposed: () => _isDisposed,
     isStateUnverified: () => _stateRecovery.pending,
     diagnostics: _diagnostics,

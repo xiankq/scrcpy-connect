@@ -502,8 +502,8 @@ Future<AppLifecycle> _lifecycle(
     background: BackgroundPolicy(
       platform: null,
       audioPolicy: (_) async {},
-      onChanged: (_) {},
-      onFailure: (_) {},
+      onEvent: (_) {},
+      isDisposed: () => false,
     ),
     media: media,
     diagnostics: DiagnosticReporter(null),

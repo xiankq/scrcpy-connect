@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
+import 'package:scrcpy_connect/core/activities/models/activity_cleanup_failed.dart';
 import 'package:scrcpy_connect/core/companion/companion_recovery.dart';
 import 'package:scrcpy_connect/core/companion/companion_service.dart';
 import 'package:scrcpy_connect/core/companion/models/companion_config.dart';
@@ -457,10 +458,7 @@ final class DeviceResources {
           (_) => _cleanup.remove(work),
           onError: (Object error, StackTrace stack) {
             _cleanup.remove(work);
-            emit({
-              'type': 'activity.cleanup.failed',
-              'data': {'reason': '$error'},
-            });
+            emit(ActivityCleanupFailed('$error').toApplicationEvent());
           },
         ),
       );

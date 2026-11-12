@@ -22,6 +22,7 @@ import 'package:scrcpy_connect/core/platform/native_host.dart';
 import 'package:scrcpy_connect/core/platform/native_host_dependencies.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_actions_provider.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
+import 'package:scrcpy_connect/core/media/models/video_stop_requested.dart';
 import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/settings/settings_management.dart';
 import 'package:scrcpy_connect/core/settings/metadata_management.dart';
@@ -181,7 +182,16 @@ void main() {
     expect(recovered.live, isFalse);
     expect(recovered.output, isNull);
     expect(recovered.keepAwake!.keepActiveLeaseActive, isFalse);
+    final stopRequests = <VideoStopRequested>[];
+    final subscription = container.read(runtimeEventsProvider).listen((event) {
+      if (event['data'] case final VideoStopRequested stop) {
+        stopRequests.add(stop);
+      }
+    });
+    addTearDown(subscription.cancel);
     await activities.stopActivity(initial.activities.single.target);
+    await container.pump();
+    expect(stopRequests.single.sessionId, operation);
     expect((await activities.readActivities()).pendingApplications, isEmpty);
     await container.read(reconcileStateProvider)();
     expect(

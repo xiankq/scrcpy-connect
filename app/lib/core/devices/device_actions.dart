@@ -9,6 +9,7 @@ import 'package:scrcpy_connect/core/devices/device_setup.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_change.dart';
 import 'package:scrcpy_connect/core/devices/models/device_record.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_disconnect_requested.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart'
     show RequestFailure;
@@ -32,7 +33,7 @@ final class DeviceActions
     required this._forgetPreferences,
     required this._stopMediaIntent,
     required this._finishMediaStop,
-    required this._announceStop,
+    required this._onDisconnectRequested,
     required this._isDisposed,
     this.diagnostics,
   });
@@ -50,7 +51,7 @@ final class DeviceActions
   final Future<void> Function(String deviceId) _forgetPreferences;
   final void Function(String deviceId) _stopMediaIntent;
   final Future<void> Function(String deviceId) _finishMediaStop;
-  final void Function(String deviceId) _announceStop;
+  final void Function(DeviceDisconnectRequested) _onDisconnectRequested;
   final bool Function() _isDisposed;
   final DiagnosticReporter? diagnostics;
   final _pendingChanges = <_PendingConnectionChange>{};
@@ -338,7 +339,7 @@ final class DeviceActions
     if (id.isEmpty || id.contains('\u0000')) {
       throw const RequestFailure('invalid_argument', '设备标识无效。');
     }
-    _announceStop(id);
+    _onDisconnectRequested(DeviceDisconnectRequested(id));
     await _change(
       ConnectionChange(ConnectionChangeKind.stop, deviceId: id),
       () async {

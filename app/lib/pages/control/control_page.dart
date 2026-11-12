@@ -13,6 +13,8 @@ import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/control/remote_display_settings.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
+import 'package:scrcpy_connect/core/devices/models/device_disconnect_requested.dart';
+import 'package:scrcpy_connect/core/media/models/video_stop_requested.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/clipboard/clipboard_focus_notifier.dart';
 import 'package:scrcpy_connect/core/control/control_capabilities_provider.dart';
@@ -43,7 +45,6 @@ import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/router/models/remote_control_intent.dart';
 import 'package:scrcpy_connect/router/models/remote_launch_intent.dart';
 import 'package:scrcpy_connect/router/route_observers.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart'
     show confirm, glassSnackBar;
@@ -487,9 +488,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
 
   void onEvent(Json event) {
     if (!_sourcesCurrent) return;
-    final data = event['data'] is Map<Object?, Object?>
-        ? jsonObject(event['data'])
-        : <String, dynamic>{};
+    final payload = event['data'];
     if (event['data'] case DeviceListChanged(:final devices)) {
       final updated = devices
           .where((d) => d.id == widget.device.id)
@@ -509,10 +508,9 @@ class _ControlPageState extends ConsumerState<ControlPage>
         }
       }
     }
-    if ((event['type'] == 'session.stop.requested' &&
-            data['sessionId'] == sessionId) ||
-        (event['type'] == 'device.disconnect.requested' &&
-            event['deviceId'] == widget.device.id)) {
+    if ((payload is VideoStopRequested && payload.sessionId == sessionId) ||
+        (payload is DeviceDisconnectRequested &&
+            payload.deviceId == widget.device.id)) {
       connectionRecovery.stop();
       if (window.recoveringConnection) {
         // 替换会话取得新身份前接受的停止，不能被迟到列表或启动回执撤销。
@@ -537,7 +535,6 @@ class _ControlPageState extends ConsumerState<ControlPage>
         (presentation.reconcileOnly && view?.isCurrent != true)) {
       return;
     }
-    final payload = event['data'];
     bool belongs(String id, String deviceId) =>
         id == sessionId &&
         deviceId == widget.device.id &&

@@ -10,6 +10,7 @@ import 'package:scrcpy_connect/core/clipboard/remote_clipboard.dart';
 import 'package:scrcpy_connect/core/devices/current_device_notifier.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_disconnect_requested.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/clipboard/clipboard_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/clipboard/clipboard_focus_notifier.dart';
@@ -377,8 +378,8 @@ class _ClipboardCoordinator {
 
   void _event(Json event) {
     if (_disposed) return;
-    if (event['type'] == 'device.disconnect.requested' &&
-        event['deviceId'] == _target) {
+    if (event['data'] case DeviceDisconnectRequested(:final deviceId)
+        when deviceId == _target) {
       _generation++;
       _target = null;
       _configuration = null;

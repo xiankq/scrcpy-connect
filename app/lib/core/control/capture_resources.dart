@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:scrcpy/scrcpy.dart';
+import 'package:scrcpy_connect/core/activities/models/activity_cleanup_failed.dart';
 import 'package:scrcpy_connect/core/control/app_launch_journal.dart';
 import 'package:scrcpy_connect/core/control/control_session_service.dart';
 import 'package:scrcpy_connect/core/control/device_wake_service.dart';
@@ -49,7 +50,7 @@ final class CaptureResources {
   final bool Function() isDisposed;
   final bool Function() isStateUnverified;
   final void Function(Map<String, dynamic>) publish;
-  final void Function(Object) onCleanupFailure;
+  final void Function(ActivityCleanupFailed) onCleanupFailure;
   final _cleanup = <Future<void>>{};
   bool _closed = false;
   void _checkCreation() {
@@ -195,7 +196,7 @@ final class CaptureResources {
         (_) => _cleanup.remove(work),
         onError: (Object error, StackTrace stack) {
           _cleanup.remove(work);
-          onCleanupFailure(error);
+          onCleanupFailure(ActivityCleanupFailed('$error'));
         },
       ),
     );

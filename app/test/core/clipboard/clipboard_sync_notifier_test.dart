@@ -12,6 +12,7 @@ import 'package:scrcpy_connect/core/clipboard/models/clipboard_sync_state.dart';
 import 'package:scrcpy_connect/core/clipboard/remote_clipboard.dart';
 import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_disconnect_requested.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
 import 'package:scrcpy_connect/core/settings/settings_management.dart';
@@ -112,6 +113,29 @@ void main() {
     await flush(container);
     expect(writes, ['new copy']);
     expect(container.read(clipboardSyncProvider).writeCount, 1);
+    events.add(
+      const DeviceDisconnectRequested('another-device').toApplicationEvent(),
+    );
+    await flush(container);
+    expect(
+      container.read(clipboardSyncProvider).status,
+      ClipboardSyncStatus.watching,
+    );
+    events.add(const DeviceDisconnectRequested('device').toApplicationEvent());
+    expect(
+      replacement.admission!(
+        'device',
+        'session',
+        replacement.reads.single.synchronizationGeneration!,
+      ),
+      isFalse,
+    );
+    await flush(container);
+    expect(
+      container.read(clipboardSyncProvider).status,
+      ClipboardSyncStatus.waitingDevice,
+    );
+    expect(replacement.reads, hasLength(1));
     focus.dispose();
     container.dispose();
     expect(replacement.releases, 1);
