@@ -7,6 +7,7 @@ import 'package:scrcpy_connect/core/devices/models/device_call.dart';
 import 'package:scrcpy_connect/core/devices/models/device_notification.dart';
 import 'package:scrcpy_connect/core/devices/models/device_observation_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/devices/models/observed_device_snapshot.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
@@ -317,22 +318,12 @@ class SystemNotifications {
       }
       return;
     }
-    if (event['type'] == 'device.changed') {
-      _connectionLifecycle([
-        DeviceSnapshot.fromJson({...data, 'id': deviceId}),
-      ]);
-      return;
-    }
     if (event['type'] == 'companion.stopped') {
       final owner = _owners[deviceId];
       if (owner != null) _invalidate(deviceId, owner.generation);
       return;
     }
-    if (event['type'] == 'devices.changed') {
-      final devices = [
-        for (final device in objects(data['devices']))
-          DeviceSnapshot.fromJson(device),
-      ];
+    if (event['data'] case DeviceListChanged(:final devices)) {
       _connectionLifecycle(devices, complete: true);
       final connected = {
         for (final device in devices)

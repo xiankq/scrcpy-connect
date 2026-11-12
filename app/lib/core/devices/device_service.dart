@@ -15,6 +15,7 @@ import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
 import 'package:scrcpy_connect/core/devices/models/adb_discovery_endpoint.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
 import 'package:scrcpy_connect/core/devices/models/device_record.dart';
+import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/identity/adb_identity_service.dart';
@@ -58,7 +59,7 @@ final class DeviceService
     this.reconnectionCandidates,
     bool Function()? burstMode,
     DateTime Function()? now,
-    this.emit,
+    this.onChanged,
     this.onConnected,
   }) : _burstMode = burstMode ?? (() => false),
        _now = now ?? DateTime.now {
@@ -87,7 +88,7 @@ final class DeviceService
   final ConnectionPolicy policy;
   final DeviceProbe probe;
   final DeviceReconnectionCandidates? reconnectionCandidates;
-  final void Function(String, Map<String, Object?>)? emit;
+  final void Function(DeviceListChanged)? onChanged;
 
   /// 真实连接交付后登记监测；回调不得重新执行连接或发布候选。
   final void Function(String, DeviceConnection)? onConnected;
@@ -405,11 +406,6 @@ final class DeviceService
     await records.rename(id, validateDeviceName(name));
     _changed();
   }
-
-  // 旧快照传输的序列化入口；业务读取直接共享类型化投影。
-  List<Map<String, Object?>> projectDevices() => [
-    for (final device in readDevices()) device.toJson(),
-  ];
 
   DeviceSnapshot _snapshot(DeviceRecord record) {
     final connection = current(record.id);
@@ -1350,7 +1346,7 @@ final class DeviceService
       records.current.find(id) ??
       (throw const RequestFailure('not_found', '这台设备的本机记录已不存在。'));
   void _changed() {
-    if (!_closed) emit?.call('devices.changed', {'devices': projectDevices()});
+    if (!_closed) onChanged?.call(DeviceListChanged(readDevices()));
   }
 }
 

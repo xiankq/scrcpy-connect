@@ -25,7 +25,7 @@ import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
 import 'package:scrcpy_connect/core/devices/device_service.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_change.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
-import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/devices/models/observed_device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/scrcpy_server_queries.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
@@ -63,6 +63,7 @@ final class DeviceResources {
     required this.releaseUsb,
     required this.emit,
     required this.publish,
+    required this.onDevicesChanged,
     required this.stopWork,
   }) : _connectionPolicy = policy,
        _isAppDisposed = isDisposed;
@@ -99,6 +100,7 @@ final class DeviceResources {
   final Future<void> Function(Json)? cancelUsb, releaseUsb;
   final void Function(Map<String, dynamic>) emit;
   final void Function(String, String?, Map<String, Object?>) publish;
+  final void Function(DeviceListChanged) onDevicesChanged;
   final Future<void> Function(String, DeviceConnection, bool) stopWork;
   final _observedConnections = <String, DeviceConnection>{};
   final _deviceTaskConnections = <DeviceConnection>{};
@@ -139,9 +141,8 @@ final class DeviceResources {
       pauseReconnect: () => _reconnections.beginChange(
         const ConnectionChange(ConnectionChangeKind.defaultIdentity),
       ),
-      publishDevices: () => publish('devices.changed', null, {
-        'devices': _devices.projectDevices(),
-      }),
+      publishDevices: () =>
+          onDevicesChanged(DeviceListChanged(_devices.readDevices())),
       isDisposed: () => _isDisposed,
     );
   }
@@ -244,7 +245,7 @@ final class DeviceResources {
       onConnected: (id, connection) => _health.start(id, connection),
       policy: _connectionPolicy,
       burstMode: _burstMode,
-      emit: (type, data) => publish(type, null, data),
+      onChanged: onDevicesChanged,
     );
   }
 
@@ -341,6 +342,7 @@ final class DeviceResources {
     required Future<void> Function(Json)? releaseUsb,
     required void Function(Map<String, dynamic>) emit,
     required void Function(String, String?, Map<String, Object?>) publish,
+    required void Function(DeviceListChanged) onDevicesChanged,
     required Future<void> Function(String, DeviceConnection, bool) stopWork,
   }) async {
     await recoverConnections();
@@ -367,6 +369,7 @@ final class DeviceResources {
       releaseUsb: releaseUsb,
       emit: emit,
       publish: publish,
+      onDevicesChanged: onDevicesChanged,
       stopWork: stopWork,
     );
     owner._identities = await AdbIdentityService.open(
@@ -397,7 +400,7 @@ final class DeviceResources {
         reconnect.handleEvent(update);
       }
     }
-    if (event['type'] != 'devices.changed') return;
+    if (event['data'] is! DeviceListChanged) return;
     final ids = {
       ..._observedConnections.keys,
       ..._records.current.devices.map((record) => record.id),
@@ -511,23 +514,11 @@ DeviceReconnectEvent? _reconnectEvent(Map<String, dynamic> event) {
   final data = raw is Map
       ? Map<String, dynamic>.from(raw)
       : <String, dynamic>{};
-  List<DeviceSnapshot>? devices() => data['devices'] is List
-      ? [
-          for (final device in data['devices'] as List)
-            DeviceSnapshot.fromJson(Map<String, dynamic>.from(device as Map)),
-        ]
-      : null;
   final sequence = event['sequence'];
   if (sequence is! int || sequence < 0) return null;
   return switch (type) {
-    'devices.changed' => DeviceReconnectDevicesChanged(
-      devices(),
-      sequence: sequence,
-    ),
-    'device.changed' when data['id'] is String => DeviceReconnectDeviceChanged(
-      DeviceSnapshot.fromJson(data),
-      sequence: sequence,
-    ),
+    'devices.changed' when raw is DeviceListChanged =>
+      DeviceReconnectDevicesChanged(raw.devices, sequence: sequence),
     'settings.changed' => DeviceReconnectSettingsChanged(
       data['backgroundKeepAlive'] == true,
       sequence: sequence,

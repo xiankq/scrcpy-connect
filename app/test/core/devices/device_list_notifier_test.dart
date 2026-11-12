@@ -6,6 +6,7 @@ import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
@@ -54,13 +55,19 @@ void main() {
     await retired;
     expect(container.read(deviceListProvider).devices.single.id, 'new');
     expect(container.read(deviceListProvider).error, isNull);
-    events.add({'type': 'device.changed'});
+    final pending = actions.refresh();
     expect(replacement.reads, hasLength(2));
     expect(source.reads, hasLength(1));
+    final devices = [const DeviceSnapshot(id: 'latest', name: 'Latest')];
+    final change = DeviceListChanged(devices);
+    devices.clear();
+    events.add({'type': 'devices.changed', 'data': change});
+    expect(container.read(deviceListProvider).devices.single.id, 'latest');
+    expect(change.devices.clear, throwsUnsupportedError);
     replacement.reads.last.complete([
-      const DeviceSnapshot(id: 'latest', name: 'Latest'),
+      const DeviceSnapshot(id: 'retired', name: 'Retired'),
     ]);
-    await Future<void>.delayed(Duration.zero);
+    await pending;
     expect(container.read(deviceListProvider).devices.single.id, 'latest');
   });
 

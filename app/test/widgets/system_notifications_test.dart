@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/core/devices/models/device_call.dart';
+import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/devices/models/device_notification.dart';
 import 'package:scrcpy_connect/core/devices/models/device_observation_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
@@ -18,6 +19,31 @@ void main() {
     loading: false,
     reconciliationPending: false,
   );
+  test('完整设备投影移除来源后撤回提醒，迟到通知不能复活', () async {
+    final events = StreamController<Map<String, dynamic>>.broadcast(sync: true);
+    final sink = _Sink();
+    final notifications = SystemNotifications(
+      events: events.stream,
+      readSnapshot: () => snapshot,
+      current: () => true,
+      sink: sink,
+    );
+    await notifications.initialize();
+    events.add(observing());
+    events.add(notificationsChanged('live'));
+    await notifications.drain();
+    expect(sink.shown, hasLength(1));
+    events.add({'type': 'devices.changed', 'data': DeviceListChanged([])});
+    events.add(notificationsChanged('late'));
+    await notifications.drain();
+    expect(sink.cancelled, [sink.shown.single.id]);
+    expect(sink.shown, hasLength(1));
+    notifications.dispose();
+    await notifications.drain();
+    await events.close();
+    await sink.activationsController.close();
+  });
+
   test('初始化期间换源不继续申请权限，迟到状态不再提交', () async {
     var current = true;
     final sink = _Sink()..initializing = Completer<void>();

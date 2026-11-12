@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+
 /// 只为已查看的手机画面保存短暂恢复意图，连接变化本身不能新建会话、重放打开或撤销停止。
 class RemoteConnectionRecovery {
   bool _viewed = false;
@@ -14,11 +16,11 @@ class RemoteConnectionRecovery {
     pending = false;
   }
 
-  void observe(String status, {required bool autoReconnect}) {
-    _connected = status == 'connected';
+  void observe(DeviceConnectionStatus status, {required bool autoReconnect}) {
+    _connected = status == .connected;
     if (!autoReconnect) {
       stop();
-    } else if (_viewed && status == 'offline') {
+    } else if (_viewed && status == .offline) {
       pending = true;
     }
   }

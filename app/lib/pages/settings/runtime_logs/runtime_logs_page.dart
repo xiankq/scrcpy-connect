@@ -210,6 +210,7 @@ String _title(DiagnosticRecord record) => switch (record.event) {
   'async.error' => '异步任务发生错误',
   'app.lifecycle' => '应用状态变化',
   'device.changed' => '设备连接状态变化',
+  'devices.changed' => '设备状态变化',
   'session.disconnected' => '控制会话已断开',
   'audio.updated' => '设备声音状态变化',
   'log.dropped' => '日志写入繁忙，部分记录已丢弃',

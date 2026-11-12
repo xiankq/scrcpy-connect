@@ -1,4 +1,5 @@
 import 'package:scrcpy_connect/core/control/remote_control.dart';
+import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
@@ -190,9 +191,19 @@ class DiagnosticReporter {
   }
 
   void applicationEvent(Map<String, dynamic> event) {
+    if (event['data'] case DeviceListChanged(:final devices)) {
+      log?.record(
+        DiagnosticArea.connection,
+        'devices.changed',
+        fields: {
+          'deviceCount': devices.length,
+          'connectedCount': devices.where((d) => d.status == .connected).length,
+        },
+      );
+      return;
+    }
     final type = event['type'];
     if (!const {
-      'device.changed',
       'session.disconnected',
       'audio.updated',
       'platform.failed',
@@ -209,9 +220,7 @@ class DiagnosticReporter {
       return;
     }
     log?.record(
-      type == 'device.changed'
-          ? DiagnosticArea.connection
-          : DiagnosticArea.runtime,
+      DiagnosticArea.runtime,
       type as String,
       level: type == 'platform.failed' || data['status'] == 'failed'
           ? LogLevel.error

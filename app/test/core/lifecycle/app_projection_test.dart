@@ -6,6 +6,7 @@ import 'package:scrcpy_connect/core/devices/current_device_notifier.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
@@ -71,6 +72,17 @@ void main() {
     });
     expect(observed, hasLength(1));
     expect(projections, hasLength(1));
+    events.add({
+      'type': 'devices.changed',
+      'data': DeviceListChanged([
+        const DeviceSnapshot(id: 'new-device', name: 'New'),
+      ]),
+    });
+    expect(observed.last.devices.single.id, 'new-device');
+    expect(observed.last.settings.appearance, Appearance.dark);
+    expect(observed.last.focusedDeviceId, 'selected');
+    expect(projections, hasLength(2));
+    expect(observed, hasLength(2));
     await subscription.cancel();
     container.dispose();
     await events.close();

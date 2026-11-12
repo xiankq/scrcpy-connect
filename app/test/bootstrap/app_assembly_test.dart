@@ -9,7 +9,10 @@ import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/bootstrap/app_bootstrap.dart';
 import 'package:scrcpy_connect/core/activities/activity_management_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/devices/models/device_endpoint.dart';
+import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
 import 'package:scrcpy_connect/core/platform/bundled_server_files.dart';
 import 'package:scrcpy_connect/core/platform/native_host.dart';
@@ -49,6 +52,19 @@ void main() {
         .read(activityManagementProvider)
         .readActivities();
     expect(activities.activities, isEmpty);
+    final changed = container
+        .read(runtimeEventsProvider)
+        .firstWhere((event) => event['data'] is DeviceListChanged);
+    final saved = await container
+        .read(deviceManagementProvider)
+        .addDevice(const DeviceEndpoint(address: '192.0.2.1', port: 5555));
+    final event = await changed;
+    expect((event['data'] as DeviceListChanged).devices.single.id, saved.id);
+    // 实际发布链先提交状态，页面收到同一事件时无需重新查询。
+    expect(container.read(appSnapshotProvider).devices.single, saved);
+    await container.read(deviceManagementProvider).forgetDevice(saved.id);
+    await container.pump();
+    expect(container.read(appSnapshotProvider).devices, isEmpty);
     await bootstrap.dispose();
     expect(fixture.api.closed, ['files:files-1', 'admission:scope-1']);
     expect(fixture.api.scope, isNull);

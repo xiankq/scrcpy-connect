@@ -10,6 +10,7 @@ import 'package:scrcpy_connect/core/control/scrcpy_capture_adapter.dart';
 import 'package:scrcpy_connect/core/control/video_quality.dart';
 import 'package:scrcpy_connect/core/control/video_quality_policy.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
+import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/media/audio_output_service.dart';
 import 'package:scrcpy_connect/core/media/audio_player.dart';
@@ -271,10 +272,11 @@ final class MediaPlayback
     final data = event['data'] is Map
         ? Map<String, dynamic>.from(event['data'] as Map)
         : const <String, dynamic>{};
-    if (event['type'] == 'device.changed' &&
-        data['status'] != 'connected' &&
-        event['deviceId'] is String) {
-      _mediaIntents.stopDevice(event['deviceId'] as String);
+    if (event['data'] case DeviceListChanged(:final devices)) {
+      _mediaIntents.retainDevices({
+        for (final device in devices)
+          if (device.status == .connected) device.id,
+      });
     }
     if (event['type'] == 'session.disconnected') {
       final id = data['sessionId'];
@@ -704,6 +706,12 @@ class _MediaIntentRegistry {
   void stopDevice(String device) {
     for (final intent in active.where((i) => i.deviceId == device)) {
       intent.cancelled = true;
+    }
+  }
+
+  void retainDevices(Set<String> connected) {
+    for (final intent in active) {
+      if (!connected.contains(intent.deviceId)) intent.cancelled = true;
     }
   }
 

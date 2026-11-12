@@ -19,6 +19,7 @@ import 'package:scrcpy_connect/core/devices/device_resources.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_change.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
 import 'package:scrcpy_connect/core/devices/models/device_reconnect_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/devices/usb_authorization.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log_provider.dart';
@@ -101,8 +102,10 @@ final class AppComposition {
       const ConnectionChange(ConnectionChangeKind.replaceRecords),
     ),
     records: _connections.records,
-    onDevicesImported: (receipt) =>
-        _events.publish({'type': 'devices.changed', 'data': receipt.toJson()}),
+    onDevicesImported: (_) => _events.publish({
+      'type': 'devices.changed',
+      'data': DeviceListChanged(_connections.devices.readDevices()),
+    }),
     applyBackgroundPolicy: (enabled) =>
         _background.apply(enabled, automatic: false),
     onChanged: (preferences) => lifecycle.settingsChanged(preferences),
@@ -331,6 +334,8 @@ final class AppComposition {
       emit: (event) => session._events.emit(event),
       publish: (type, device, data) =>
           session._events.publishBusiness(type, device, data),
+      onDevicesChanged: (change) =>
+          session._events.publish({'type': 'devices.changed', 'data': change}),
       stopWork: (id, connection, accepted) => Future.wait([
         if (session._captureInstance case final captures?)
           captures.stopForConnection(id, connection),

@@ -11,6 +11,7 @@ import 'package:scrcpy_connect/core/devices/device_connection_service.dart';
 import 'package:scrcpy_connect/core/devices/device_discovery.dart';
 import 'package:scrcpy_connect/core/devices/device_resources.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_change.dart';
+import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
@@ -33,7 +34,10 @@ void main() {
       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     );
     resources.handleEvent({'type': 'settings.changed'});
-    resources.handleEvent({'type': 'devices.changed'});
+    resources.handleEvent({
+      'type': 'devices.changed',
+      'data': DeviceListChanged([]),
+    });
     await resources.prepareChange(
       const ConnectionChange(.cancel, attemptId: 'unused'),
     );
@@ -41,7 +45,10 @@ void main() {
     await resources.stopAdmission();
     await resources.close();
     await resources.close();
-    resources.handleEvent({'type': 'devices.changed'});
+    resources.handleEvent({
+      'type': 'devices.changed',
+      'data': DeviceListChanged([]),
+    });
     _expectUnused(resources);
   });
 
@@ -95,7 +102,7 @@ void main() {
     resources.handleEvent({
       'type': 'devices.changed',
       'sequence': 1,
-      'data': {'devices': <Map<String, dynamic>>[]},
+      'data': DeviceListChanged([]),
     });
     resources.invalidateState();
     resources.restoreState(
@@ -477,6 +484,7 @@ Future<DeviceResources> _resources({
     releaseUsb: releaseUsb,
     emit: (_) => throw StateError('此流程不应发布事件'),
     publish: (_, _, _) => throw StateError('此流程不应发布事件'),
+    onDevicesChanged: (_) => throw StateError('此流程不应修改设备投影'),
     stopWork: stopWork ?? (_, _, _) async => throw StateError('没有设备活动需要停止'),
   );
   addTearDown(resources.close);

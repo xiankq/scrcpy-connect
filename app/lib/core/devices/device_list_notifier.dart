@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_state.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
-import 'package:scrcpy_connect/utils/json_readers.dart';
 
 import 'device_capabilities_provider.dart';
 import 'device_reader.dart';
@@ -38,8 +38,9 @@ class DeviceListNotifier extends _$DeviceListNotifier {
           loading: false,
           error: null,
         );
-      } else if (value(event, 'type').startsWith('device')) {
-        unawaited(refresh());
+      } else if (event['data'] case DeviceListChanged(:final devices)) {
+        owner.request++;
+        state = state.copyWith(devices: devices, loading: false, error: null);
       }
     });
     final errors = session.connectionErrors.listen((error) {

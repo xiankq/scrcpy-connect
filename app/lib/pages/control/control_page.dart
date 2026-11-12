@@ -9,6 +9,7 @@ import 'package:scrcpy_connect/core/control/models/video_session.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/control/remote_display_settings.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/clipboard/clipboard_focus_notifier.dart';
 import 'package:scrcpy_connect/core/control/control_capabilities_provider.dart';
@@ -594,17 +595,23 @@ class _ControlPageState extends ConsumerState<ControlPage>
     final data = event['data'] is Map<Object?, Object?>
         ? jsonObject(event['data'])
         : <String, dynamic>{};
-    if (event['type'] == 'devices.changed' ||
-        event['type'] == 'device.changed') {
-      final updated = event['type'] == 'device.changed'
-          ? data
-          : objects(data['devices'])
-                .where((d) => d['id'] == widget.device.id)
-                .firstOrNull;
-      if (updated != null &&
-          updated['id'] == widget.device.id &&
-          updated['status'] != 'connected') {
+    if (event['data'] case DeviceListChanged(:final devices)) {
+      final updated = devices
+          .where((d) => d.id == widget.device.id)
+          .firstOrNull;
+      if (updated?.status != .connected) {
         screenState.invalidate();
+      }
+      if (widget.packageName == null) {
+        if (updated == null) {
+          connectionRecovery.stop();
+        } else {
+          connectionRecovery.observe(
+            updated.status,
+            autoReconnect: updated.autoReconnect,
+          );
+          recoverConnection();
+        }
       }
     }
     if ((event['type'] == 'session.stop.requested' &&
@@ -619,18 +626,6 @@ class _ControlPageState extends ConsumerState<ControlPage>
         setState(() => presentation.deferStart());
       }
       return;
-    }
-    if (event['type'] == 'devices.changed' && widget.packageName == null) {
-      final device = objects(data['devices'])
-          .where((d) => d['id'] == widget.device.id)
-          .firstOrNull;
-      if (device != null) {
-        connectionRecovery.observe(
-          value(device, 'status'),
-          autoReconnect: device['autoReconnect'] == true,
-        );
-        recoverConnection();
-      }
     }
     if (event['type'] == 'state.resync') {
       markStateUnknown();
