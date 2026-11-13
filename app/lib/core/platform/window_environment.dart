@@ -146,9 +146,11 @@ final class WindowEnvironment {
   bool get isMedium => sizeClass == WindowSizeClass.medium;
   bool get isExpanded => sizeClass == WindowSizeClass.expanded;
 
-  /// Expanded workspaces use their content toolbar rather than a phone-style
-  /// status/header strip, including short resized or split windows.
-  bool get usesWorkspaceToolbar => isExpanded;
+  /// Expanded and freeform workspaces use their content toolbar rather than a
+  /// phone-style status/header strip. A desktop window can be narrower than
+  /// the expanded breakpoint, so its window mode must take precedence over a
+  /// width-only classification.
+  bool get usesWorkspaceToolbar => isExpanded || mode == WindowMode.freeform;
 
   /// A feature that physically divides or blocks content must be treated as a
   /// reserved region by pane layout.

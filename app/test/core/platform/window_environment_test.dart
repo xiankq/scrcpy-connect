@@ -60,6 +60,22 @@ void main() {
       const WindowEnvironment(width: 839, height: 900).usesWorkspaceToolbar,
       isFalse,
     );
+    expect(
+      const WindowEnvironment(
+        width: 720,
+        height: 900,
+        mode: WindowMode.freeform,
+      ).usesWorkspaceToolbar,
+      isTrue,
+    );
+    expect(
+      const WindowEnvironment(
+        width: 720,
+        height: 900,
+        mode: WindowMode.split,
+      ).usesWorkspaceToolbar,
+      isFalse,
+    );
   });
 
   test('folds, hinges and cutouts are reserved regions', () {
