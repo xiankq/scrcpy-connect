@@ -6,6 +6,7 @@
         "get_runtime_errors": true,
         "widget_inspector": true,
         "flutter_driver_command": true,
+        "dtd": true,
     },
     "files.exclude": {
         "**/*.g.dart": true,
