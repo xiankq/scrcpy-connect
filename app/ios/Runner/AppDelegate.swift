@@ -19,7 +19,8 @@ import UserNotifications
     registerPlatformChannels(
       messenger: engineBridge.applicationRegistrar.messenger(),
       registry: engineBridge.pluginRegistry,
-      windowProvider: { AppDelegate.activeWindow() })
+      windowProvider: { AppDelegate.activeWindow() },
+      windowIdProvider: { nil })
   }
 
   func makeEngine(initialRoute: String?) -> FlutterEngine {
@@ -31,17 +32,19 @@ import UserNotifications
     return engine
   }
 
-  func configure(engine: FlutterEngine, window: UIWindow) {
+  func configure(engine: FlutterEngine, window: UIWindow, windowId: String? = nil) {
     registerPlatformChannels(
       messenger: engine.binaryMessenger,
       registry: engine,
-      windowProvider: { [weak window] in window })
+      windowProvider: { [weak window] in window },
+      windowIdProvider: { windowId })
   }
 
   private func registerPlatformChannels(
     messenger: FlutterBinaryMessenger,
     registry: FlutterPluginRegistry,
-    windowProvider: @escaping () -> UIWindow?
+    windowProvider: @escaping () -> UIWindow?,
+    windowIdProvider: @escaping () -> String?
   ) {
     let platform = FlutterMethodChannel(
       name: "dev.scrcpyconnect/platform", binaryMessenger: messenger)
@@ -60,7 +63,7 @@ import UserNotifications
         result([
           "width": bounds.width,
           "height": bounds.height,
-          "windowId": scene.session.persistentIdentifier,
+          "windowId": windowIdProvider() ?? scene.session.persistentIdentifier,
           "insets": [
             "left": safe.left,
             "top": safe.top,

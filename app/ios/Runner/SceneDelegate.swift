@@ -13,6 +13,7 @@ class SceneDelegate: FlutterSceneDelegate {
       let appDelegate = UIApplication.shared.delegate as? AppDelegate else { return }
     let activity = connectionOptions.userActivities.first
     let initialRoute = activity?.userInfo?["initialRoute"] as? String
+    let windowId = activity?.userInfo?["windowId"] as? String
     let engine = appDelegate.makeEngine(initialRoute: initialRoute)
     flutterEngine = engine
     window = UIWindow(windowScene: windowScene)
@@ -20,7 +21,7 @@ class SceneDelegate: FlutterSceneDelegate {
     window?.rootViewController = controller
     window?.makeKeyAndVisible()
     if let window = window {
-      appDelegate.configure(engine: engine, window: window)
+      appDelegate.configure(engine: engine, window: window, windowId: windowId)
     }
     registerSceneLifeCycle(with: engine)
     super.scene(scene, willConnectTo: session, options: connectionOptions)
