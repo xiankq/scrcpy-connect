@@ -72,8 +72,14 @@ final class FileDesktopDelivery implements SystemDocumentBackend {
         active?.reply == null) {
       return false;
     }
-    if (applyToRemaining && decision != .cancel) active!.policy = decision.name;
-    active!.reply!.complete(decision.name);
+    if (applyToRemaining && decision != .cancel) {
+      active!.policy = switch (decision) {
+        .keepBoth => DocumentConflictPolicy.keepBoth,
+        .skip => DocumentConflictPolicy.skip,
+        .cancel => throw StateError('取消决定不复用'),
+      };
+    }
+    active!.reply!.complete(decision);
     active.reply = null;
     return true;
   }
@@ -111,7 +117,7 @@ final class FileDesktopDelivery implements SystemDocumentBackend {
     }
     final op = _DesktopSave(plan.operationId);
     _active = op;
-    String status = 'failed';
+    DocumentOutcomeStatus status = .failed;
     try {
       final source = _absolute(plan.source.localPath);
       final name = plan.name;
@@ -133,7 +139,7 @@ final class FileDesktopDelivery implements SystemDocumentBackend {
       ]);
       op.check();
       if (selection is DocumentSelectionCancelled) {
-        return op.result('cancelled');
+        return op.result(.cancelled);
       }
       if (selection is! DocumentDestinationSelected) {
         throw const RequestFailure('invalid_path', '系统没有返回本机保存位置。');
@@ -160,7 +166,7 @@ final class FileDesktopDelivery implements SystemDocumentBackend {
       destination = await _copyNode(op, source, destination, 0) ?? destination;
       op.destination = destination;
       op.check();
-      status = op.skipped > 0 ? 'partial' : 'saved';
+      status = op.skipped > 0 ? .partial : .saved;
     } catch (error) {
       final uncertain =
           op.publishing ||
@@ -173,25 +179,25 @@ final class FileDesktopDelivery implements SystemDocumentBackend {
           op.cancelled.isCompleted ||
           error is RequestFailure && error.code == 'cancelled';
       status = uncertain
-          ? 'result_unknown'
+          ? .resultUnknown
           : cancelled
-          ? 'cancelled'
+          ? .cancelled
           : op.written
-          ? 'partial'
-          : 'failed';
-      op.errors.add({'message': '$error'});
+          ? .partial
+          : .failed;
+      op.errors.add(DocumentIssue(message: '$error'));
     } finally {
       selections.cancel(op.id);
       op.timer?.cancel();
-      op.reply?.complete('cancel');
+      op.reply?.complete(.cancel);
       op.reply = null;
       op.pending = null;
       onConflictChanged(DocumentConflictChanged(op.id, null));
       try {
         await _finish(op);
       } catch (error) {
-        status = 'result_unknown';
-        op.errors.add({'message': '桌面复制资源尚未确认关闭：$error'});
+        status = .resultUnknown;
+        op.errors.add(DocumentIssue(message: '桌面复制资源尚未确认关闭：$error'));
       }
       op.finished.complete();
     }
@@ -206,9 +212,13 @@ final class FileDesktopDelivery implements SystemDocumentBackend {
       if (error.code == LocalFileErrorCode.notFound) return destination;
       rethrow;
     }
-    var decision = op.policy;
-    if (decision == 'ask') {
-      final reply = Completer<String>();
+    var decision = switch (op.policy) {
+      .ask => null,
+      .skip => DocumentConflictDecision.skip,
+      .keepBoth => DocumentConflictDecision.keepBoth,
+    };
+    if (decision == null) {
+      final reply = Completer<DocumentConflictDecision>();
       op.reply = reply;
       op.pending = DocumentConflict(
         operationId: op.id,
@@ -219,7 +229,7 @@ final class FileDesktopDelivery implements SystemDocumentBackend {
       try {
         decision = await Future.any([
           reply.future,
-          op.cancelled.future.then((_) => 'cancel'),
+          op.cancelled.future.then((_) => DocumentConflictDecision.cancel),
         ]);
       } finally {
         op.pending = null;
@@ -228,14 +238,14 @@ final class FileDesktopDelivery implements SystemDocumentBackend {
       }
     }
     op.check();
-    if (decision == 'cancel') {
+    if (decision == DocumentConflictDecision.cancel) {
       throw const RequestFailure('cancelled', '已取消保存，已有内容保留。');
     }
-    if (decision == 'skip') {
+    if (decision == DocumentConflictDecision.skip) {
       op.skipped++;
       return null;
     }
-    if (decision != 'keepBoth') {
+    if (decision != DocumentConflictDecision.keepBoth) {
       throw const RequestFailure('invalid_decision', '未确认同名项目处理方式。');
     }
     final extension = p.extension(destination);
@@ -392,8 +402,8 @@ final class _DesktopSave {
   LocalFileScope? scope;
   Timer? timer;
   DocumentConflict? pending;
-  Completer<String>? reply;
-  String policy = 'ask';
+  Completer<DocumentConflictDecision>? reply;
+  DocumentConflictPolicy policy = .ask;
   String? destination;
   bool publishing = false, written = false;
   int bytes = 0,
@@ -402,7 +412,7 @@ final class _DesktopSave {
       skipped = 0,
       entries = 0,
       pathBytes = 0;
-  final errors = <Json>[];
+  final errors = <DocumentIssue>[];
   void cancel() {
     if (!cancelled.isCompleted) cancelled.complete();
     cancellation.cancel();
@@ -414,10 +424,8 @@ final class _DesktopSave {
     }
   }
 
-  DocumentOutcome result(String status) => DocumentOutcome(
-    status: status == 'result_unknown'
-        ? DocumentOutcomeStatus.resultUnknown
-        : DocumentOutcomeStatus.values.byName(status),
+  DocumentOutcome result(DocumentOutcomeStatus status) => DocumentOutcome(
+    status: status,
     operationId: id,
     name: destination == null ? null : p.basename(destination!),
     localPath: destination,
@@ -425,9 +433,10 @@ final class _DesktopSave {
     files: files,
     directories: directories,
     skipped: skipped,
-    errors: errors.map(DocumentIssue.fromJson).toList(),
+    errors: List.unmodifiable(errors),
     partialDestinationPossible:
-        status == 'result_unknown' || written && status != 'saved',
+        status == DocumentOutcomeStatus.resultUnknown ||
+        written && status != DocumentOutcomeStatus.saved,
     cacheRetained: true,
   );
 }

@@ -13,6 +13,7 @@ import 'package:scrcpy_connect/core/files/file_failure.dart';
 import 'package:scrcpy_connect/core/files/file_selection_requests.dart';
 import 'package:scrcpy_connect/core/files/models/document_selection.dart';
 import 'package:scrcpy_connect/core/files/models/document_event.dart';
+import 'package:scrcpy_connect/core/files/models/provider_document.dart';
 import 'package:scrcpy_connect/core/files/system_documents.dart';
 import 'package:scrcpy_connect/core/files/system_document_backend.dart';
 
@@ -24,19 +25,6 @@ typedef DocumentsRequest = Future<DocumentsJson> Function(
   DocumentsJson,
 );
 
-DocumentsJson _map(Object? value) => value is Map<Object?, Object?>
-    ? {
-        for (final e in value.entries)
-          if (e.key case final String key) key: e.value,
-      }
-    : <String, dynamic>{};
-List<DocumentsJson> _maps(Object? value) => value is List<Object?>
-    ? value.whereType<Map<Object?, Object?>>().map(_map).toList()
-    : <DocumentsJson>[];
-String _text(DocumentsJson value, String key, [String fallback = '']) =>
-    value[key] is String ? value[key] as String : fallback;
-int _number(DocumentsJson value, String key, [int fallback = 0]) =>
-    value[key] is num ? (value[key] as num).toInt() : fallback;
 String _id() {
   final random = Random.secure();
   return List.generate(
@@ -105,9 +93,15 @@ class FileDocumentService implements SystemDocumentBackend {
         op.conflictReply == null) {
       return false;
     }
-    if (applyToRemaining && decision != .cancel) op.conflict = decision.name;
+    if (applyToRemaining && decision != .cancel) {
+      op.conflict = switch (decision) {
+        .keepBoth => DocumentConflictPolicy.keepBoth,
+        .skip => DocumentConflictPolicy.skip,
+        .cancel => throw StateError('取消决定不复用'),
+      };
+    }
     _clearConflict(op);
-    op.conflictReply!.complete(decision.name);
+    op.conflictReply!.complete(decision);
     op.conflictReply = null;
     return true;
   }
@@ -160,7 +154,7 @@ class FileDocumentService implements SystemDocumentBackend {
     final op = _Operation(
       id,
       importKind != null,
-      export?.conflict.name ?? 'ask',
+      export?.conflict ?? DocumentConflictPolicy.ask,
       limits,
     );
     _active = op;
@@ -218,7 +212,7 @@ class FileDocumentService implements SystemDocumentBackend {
         ),
       );
       if (selection is DocumentSelectionCancelled) {
-        return op.response('cancelled');
+        return op.response(.cancelled);
       }
       if (selection is! DocumentLocationsSelected) {
         throw const RequestFailure('invalid_uri', '系统没有返回文档位置。');
@@ -238,11 +232,11 @@ class FileDocumentService implements SystemDocumentBackend {
       }
       op.uri = selections.first.uri;
       if (mode == .importDirectory) {
-        final root = await _metadata(op, selections.first.toJson());
-        if (root['directory'] != true || root['virtual'] == true) {
+        final root = await _metadata(op, selections.first.handle);
+        if (!root.directory || root.virtual) {
           throw const RequestFailure('not_a_directory', '请选择可读取的普通文档目录。');
         }
-        op.name = _name(_text(root, 'name'));
+        op.name = _name(root.name);
         final owner = await _owner(op);
         op.localPath = '$owner/${op.name}';
         await _importNode(op, root, op.localPath!, 0, op.name);
@@ -253,26 +247,25 @@ class FileDocumentService implements SystemDocumentBackend {
         for (var index = 0; index < selections.length; index++) {
           op.examine();
           try {
-            final source = await _metadata(op, selections[index].toJson());
-            if (source['directory'] == true) {
+            final source = await _metadata(op, selections[index].handle);
+            if (source.directory) {
               throw const RequestFailure(
                 'not_a_file',
                 '文件选择器返回了目录，请使用发送本机文件夹。',
               );
             }
-            final name = _name(_text(source, 'name'));
+            final name = _name(source.name);
             final parent = '$owner/$index';
             await _mkdir(op, parent);
             final path = '$parent/$name';
-            final copied = await _importNode(op, source, path, 0, name);
-            if (copied) op.items.add({'localPath': path, 'name': name});
+            await _importNode(op, source, path, 0, name);
           } catch (error) {
             op.record('所选文件 ${index + 1}', error);
           }
         }
       } else if (mode == .exportDirectory) {
-        final parent = await _metadata(op, selections.first.toJson());
-        if (parent['directory'] != true || parent['canCreate'] != true) {
+        final parent = await _metadata(op, selections.first.handle);
+        if (!parent.directory || !parent.canCreate) {
           throw const RequestFailure(
             'create_unavailable',
             '所选提供方目录没有新建能力；本机暂存已保留。',
@@ -280,22 +273,22 @@ class FileDocumentService implements SystemDocumentBackend {
         }
         final root = await _create(op, parent, op.name, true);
         if (root != null) {
-          op.uri = _text(root, 'uri');
-          op.name = _text(root, 'name');
+          op.uri = root.uri;
+          op.name = root.name;
           await _exportNode(op, source!, root, 0, op.name);
         }
       } else {
-        final target = await _metadata(op, selections.first.toJson());
-        op.name = _text(target, 'name');
+        final target = await _metadata(op, selections.first.handle);
+        op.name = target.name;
         await _writeFile(op, source!, target, p.basename(source));
       }
       op.check(_disposed || _isDisposed());
       return op.response(
         op.errorsCount > 0 || op.skipped > 0
-            ? 'partial'
+            ? .partial
             : importKind != null
-            ? 'imported'
-            : 'saved',
+            ? .imported
+            : .saved,
       );
     } catch (error) {
       final code = op.timedOut
@@ -306,12 +299,12 @@ class FileDocumentService implements SystemDocumentBackend {
       op.error(op.name, code, '$error');
       return op.response(
         code == 'result_unknown'
-            ? 'result_unknown'
+            ? .resultUnknown
             : code == 'cancelled'
-            ? 'cancelled'
+            ? .cancelled
             : !op.started
-            ? 'failed'
-            : 'partial',
+            ? .failed
+            : .partial,
       );
     } finally {
       selections.cancel(op.id);
@@ -455,40 +448,44 @@ class FileDocumentService implements SystemDocumentBackend {
   Uint8List _path(_Operation op, String value) =>
       Uint8List.fromList(utf8.encode(op.boundary!.pathForScope(value)));
 
-  Future<DocumentsJson> _metadata(_Operation op, DocumentsJson document) async {
+  Future<ProviderDocument> _metadata(_Operation op, String handle) async {
     op.check(_disposed || _isDisposed());
-    return _platformCall('documents.platform.metadata', {
-      'operationId': op.id,
-      'handle': document['handle'],
-    });
+    return ProviderDocument.fromJson(
+      await _platformCall('documents.platform.metadata', {
+        'operationId': op.id,
+        'handle': handle,
+      }),
+    );
   }
 
-  Future<List<DocumentsJson>> _children(
+  Future<List<ProviderDocument>> _children(
     _Operation op,
-    DocumentsJson parent,
+    ProviderDocument parent,
   ) async {
-    final children = <DocumentsJson>[];
+    final children = <ProviderDocument>[];
     var offset = 0;
     while (true) {
       op.check(_disposed || _isDisposed());
-      final page = await _platformCall('documents.platform.children', {
-        'operationId': op.id,
-        'handle': parent['handle'],
-        'offset': offset,
-        'limit': 256,
-      });
-      final entries = _maps(page['documents']);
+      final page = ProviderDocumentPage.fromJson(
+        await _platformCall('documents.platform.children', {
+          'operationId': op.id,
+          'handle': parent.handle,
+          'offset': offset,
+          'limit': 256,
+        }),
+      );
+      final entries = page.documents;
       children.addAll(entries);
       if (children.length > op.limits.maxEntries) {
         throw const RequestFailure('tree_limit', '提供方目录超过项目上限，请分批处理。');
       }
-      if (page['loading'] == true) {
+      if (page.loading) {
         throw const RequestFailure(
           'provider_loading',
           '文档提供方尚未完成目录加载，请稍后重新选择。',
         );
       }
-      if (page['hasMore'] != true) return children;
+      if (!page.hasMore) return children;
       if (entries.isEmpty) {
         throw const RequestFailure('provider_loading', '提供方没有完成目录分页。');
       }
@@ -559,7 +556,7 @@ class FileDocumentService implements SystemDocumentBackend {
 
   Future<LocalFileCopy> _copy(
     _Operation op,
-    DocumentsJson provider,
+    ProviderDocument provider,
     String mode, {
     String? source,
     String? target,
@@ -568,7 +565,7 @@ class FileDocumentService implements SystemDocumentBackend {
     op.check(_disposed || _isDisposed());
     final opened = await _platformCall('documents.platform.openFd', {
       'operationId': op.id,
-      'handle': provider['handle'],
+      'handle': provider.handle,
       'mode': mode,
     });
     LocalFileCopy? copy;
@@ -598,7 +595,9 @@ class FileDocumentService implements SystemDocumentBackend {
       completed = true;
       return completedCopy;
     } on RequestFailure catch (error) {
-      op.bytes += _number(_map(error.details), 'bytesCopied');
+      if (error.details case {'bytesCopied': final int copied}) {
+        op.bytes += copied;
+      }
       cleanupUnconfirmed = error.code == 'document_cleanup_unconfirmed';
       rethrow;
     } finally {
@@ -633,22 +632,22 @@ class FileDocumentService implements SystemDocumentBackend {
 
   Future<bool> _importNode(
     _Operation op,
-    DocumentsJson source,
+    ProviderDocument source,
     String target,
     int depth,
     String relative,
   ) async {
     op.entry(depth, relative);
-    final providerIdentity = '${source['authority']}:${source['id']}';
+    final providerIdentity = '${source.authority}:${source.id}';
     if (!op.visited.add(providerIdentity)) {
       op.skip(relative, 'document_cycle', '提供方重复返回同一文档，未继续递归。');
       return false;
     }
-    if (source['virtual'] == true) {
+    if (source.virtual) {
       op.skip(relative, 'virtual_document', '虚拟文档未自动转换或下载。');
       return false;
     }
-    if (source['directory'] == true) {
+    if (source.directory) {
       await _mkdir(op, target);
       op.writing = true;
       op.directories++;
@@ -656,7 +655,7 @@ class FileDocumentService implements SystemDocumentBackend {
       for (final child in await _children(op, source)) {
         op.examine();
         try {
-          final name = _name(_text(child, 'name'));
+          final name = _name(child.name);
           if (!names.add(name)) {
             throw const RequestFailure('duplicate_name', '提供方返回同名项目，未合并或覆盖。');
           }
@@ -668,10 +667,10 @@ class FileDocumentService implements SystemDocumentBackend {
             '$relative/$name',
           );
         } catch (error) {
-          op.record('$relative/${child['name']}', error);
+          op.record('$relative/${child.name}', error);
         }
       }
-      final after = await _metadata(op, source);
+      final after = await _metadata(op, source.handle);
       if (!_sameProvider(source, after, directory: true)) {
         op.error(relative, 'source_changed', '目录在复制期间发生变化；快照未完整确认。');
       }
@@ -679,8 +678,8 @@ class FileDocumentService implements SystemDocumentBackend {
     }
     final parent = p.dirname(target);
     final space = await _stat(op, parent);
-    if (source['size'] is num &&
-        BigInt.from(_number(source, 'size')) >
+    if (source.size != null &&
+        BigInt.from(source.size!) >
             (space.freeBytes ?? BigInt.zero) -
                 BigInt.from(op.limits.reserveBytes)) {
       throw const RequestFailure('cache_full', '本机暂存空间不足，未下载此文件。');
@@ -689,9 +688,9 @@ class FileDocumentService implements SystemDocumentBackend {
     LocalFileCopy? copy;
     try {
       copy = await _copy(op, source, 'r', target: part);
-      final after = await _metadata(op, source);
+      final after = await _metadata(op, source.handle);
       if (!_sameProvider(source, after, directory: false) ||
-          (source['size'] is num && copy.bytes != _number(source, 'size'))) {
+          (source.size != null && copy.bytes != source.size!)) {
         throw const RequestFailure('source_changed', '源文件在复制期间发生变化；未提交暂存文件。');
       }
       final identity = copy.identity;
@@ -710,55 +709,61 @@ class FileDocumentService implements SystemDocumentBackend {
   }
 
   bool _sameProvider(
-    DocumentsJson before,
-    DocumentsJson after, {
+    ProviderDocument before,
+    ProviderDocument after, {
     required bool directory,
   }) =>
-      before['id'] == after['id'] &&
-      after['directory'] == directory &&
-      (before['modified'] == null || before['modified'] == after['modified']) &&
-      (directory || before['size'] == null || before['size'] == after['size']);
+      before.id == after.id &&
+      after.directory == directory &&
+      (before.modified == null || before.modified == after.modified) &&
+      (directory || before.size == null || before.size == after.size);
 
-  Future<DocumentsJson?> _create(
+  Future<ProviderDocument?> _create(
     _Operation op,
-    DocumentsJson parent,
+    ProviderDocument parent,
     String requested,
     bool directory,
   ) async {
     final existing = await _children(op, parent);
     var name = _name(requested);
-    if (existing.any((child) => child['name'] == name)) {
-      final decision = op.conflict == 'ask'
+    if (existing.any((child) => child.name == name)) {
+      final decision = op.conflict == DocumentConflictPolicy.ask
           ? await _conflict(op, name)
-          : op.conflict;
-      if (decision == 'cancel') {
+          : switch (op.conflict) {
+              .skip => DocumentConflictDecision.skip,
+              .keepBoth => DocumentConflictDecision.keepBoth,
+              .ask => throw StateError('询问决定尚未返回'),
+            };
+      if (decision == DocumentConflictDecision.cancel) {
         throw const RequestFailure('cancelled', '已取消保存；已完成内容保留。');
       }
-      if (decision == 'skip') {
+      if (decision == DocumentConflictDecision.skip) {
         op.skipped++;
         return null;
       }
-      if (decision != 'keepBoth') {
+      if (decision != DocumentConflictDecision.keepBoth) {
         throw const RequestFailure('invalid_decision', '未确认同名项目处理方式。');
       }
       name = '$name (${_id()})';
     }
-    final fresh = await _metadata(op, parent);
-    if (fresh['directory'] != true || fresh['canCreate'] != true) {
+    final fresh = await _metadata(op, parent.handle);
+    if (!fresh.directory || !fresh.canCreate) {
       throw const RequestFailure('target_changed', '目标目录的新建能力已变化。');
     }
     op.check(_disposed || _isDisposed());
     op.writing = true;
-    DocumentsJson created;
+    ProviderDocument created;
     try {
-      created = await _platformCall('documents.platform.create', {
-        'operationId': op.id,
-        'handle': parent['handle'],
-        'name': name,
-        'mime': directory
-            ? 'vnd.android.document/directory'
-            : 'application/octet-stream',
-      });
+      created = ProviderDocument.fromJson(
+        await _platformCall('documents.platform.create', {
+          'operationId': op.id,
+          'handle': parent.handle,
+          'name': name,
+          'mime': directory
+              ? 'vnd.android.document/directory'
+              : 'application/octet-stream',
+        }),
+      );
     } catch (_) {
       throw const RequestFailure(
         'result_unknown',
@@ -766,16 +771,13 @@ class FileDocumentService implements SystemDocumentBackend {
       );
     }
     op.createdCount++;
-    if (op.created.length < op.limits.maxErrors) {
-      op.created.add({'uri': created['uri'], 'name': created['name']});
-    }
     if (op.createdCount == 1) {
-      op.uri = _text(created, 'uri');
-      op.name = _text(created, 'name');
+      op.uri = created.uri;
+      op.name = created.name;
     }
-    if (existing.any((child) => child['id'] == created['id']) ||
-        created['name'] != name ||
-        created['directory'] != directory) {
+    if (existing.any((child) => child.id == created.id) ||
+        created.name != name ||
+        created.directory != directory) {
       throw const RequestFailure(
         'target_changed',
         '提供方返回已有文档、不同类型或修改了名称；未写入内容，请核对空项目。',
@@ -784,23 +786,16 @@ class FileDocumentService implements SystemDocumentBackend {
     if ((await _children(
           op,
           parent,
-        )).where((child) => child['name'] == name).length !=
+        )).where((child) => child.name == name).length !=
         1) {
       throw const RequestFailure('target_changed', '创建期间出现同名竞争；未写入内容，请核对空项目。');
-    }
-    if (name != requested && op.renamed.length < op.limits.maxErrors) {
-      op.renamed.add({
-        'requested': requested,
-        'name': name,
-        'uri': created['uri'],
-      });
     }
     return created;
   }
 
-  Future<String> _conflict(_Operation op, String name) async {
+  Future<DocumentConflictDecision> _conflict(_Operation op, String name) async {
     op.check(_disposed || _isDisposed());
-    final reply = Completer<String>();
+    final reply = Completer<DocumentConflictDecision>();
     op.conflictReply = reply;
     op.pendingConflict = DocumentConflict(
       operationId: op.id,
@@ -825,7 +820,7 @@ class FileDocumentService implements SystemDocumentBackend {
   Future<void> _exportNode(
     _Operation op,
     String source,
-    DocumentsJson target,
+    ProviderDocument target,
     int depth,
     String relative, {
     LocalFileIdentity? expected,
@@ -902,7 +897,7 @@ class FileDocumentService implements SystemDocumentBackend {
   Future<void> _writeFile(
     _Operation op,
     String source,
-    DocumentsJson target,
+    ProviderDocument target,
     String relative,
   ) async {
     op.examine();
@@ -910,14 +905,14 @@ class FileDocumentService implements SystemDocumentBackend {
     if (before.kind != LocalFileKind.file) {
       throw const RequestFailure('source_changed', '源文件类型已变化，未跟随符号链接。');
     }
-    final fresh = await _metadata(op, target);
-    if (fresh['id'] != target['id'] ||
-        fresh['directory'] == true ||
-        fresh['virtual'] == true ||
-        (fresh['size'] != null && fresh['size'] != 0)) {
+    final fresh = await _metadata(op, target.handle);
+    if (fresh.id != target.id ||
+        fresh.directory ||
+        fresh.virtual ||
+        (fresh.size != null && fresh.size != 0)) {
       throw const RequestFailure('target_changed', '目标不是刚创建的空文档，未覆盖已有内容。');
     }
-    if (fresh['canWrite'] != true) {
+    if (!fresh.canWrite) {
       throw const RequestFailure('write_unavailable', '提供方没有声明写入能力；本机暂存已保留。');
     }
     op.writing = true;
@@ -936,9 +931,8 @@ class FileDocumentService implements SystemDocumentBackend {
     } finally {
       await _native(copy.close);
     }
-    final saved = await _metadata(op, target);
-    if (saved['size'] != null &&
-        BigInt.from(_number(saved, 'size')) != before.size) {
+    final saved = await _metadata(op, target.handle);
+    if (saved.size != null && BigInt.from(saved.size!) != before.size) {
       throw const RequestFailure(
         'result_unknown',
         '提供方返回保存长度不一致，请核对目标；本机暂存已保留。',
@@ -952,9 +946,9 @@ class _Operation {
   _Operation(this.id, this.importing, this.conflict, this.limits);
   final String id;
   final bool importing;
-  String conflict;
+  DocumentConflictPolicy conflict;
   DocumentConflict? pendingConflict;
-  Completer<String>? conflictReply;
+  Completer<DocumentConflictDecision>? conflictReply;
   final DocumentLimits limits;
   FileDocumentScope? boundary;
   Future<LocalFileScope>? openingScope;
@@ -988,10 +982,7 @@ class _Operation {
       errorsCount = 0,
       createdCount = 0;
   final visited = <String>{};
-  final errors = <DocumentsJson>[],
-      renamed = <DocumentsJson>[],
-      created = <DocumentsJson>[],
-      items = <DocumentsJson>[];
+  final errors = <DocumentIssue>[];
   void check(bool disposed) {
     if (timedOut) {
       throw const RequestFailure('timeout', '系统文档复制超过十分钟；已完成内容保留，请分批处理。');
@@ -1022,7 +1013,7 @@ class _Operation {
   void error(String path, String code, String message) {
     errorsCount++;
     if (errors.length < limits.maxErrors) {
-      errors.add({'path': path, 'code': code, 'message': message});
+      errors.add(DocumentIssue(path: path, code: code, message: message));
     }
   }
 
@@ -1051,13 +1042,10 @@ class _Operation {
     );
   }
 
-  DocumentOutcome response(String status) => DocumentOutcome(
+  DocumentOutcome response(DocumentOutcomeStatus status) => DocumentOutcome(
     operationId: id,
     managedSourceId: managedSourceId,
-    status: switch (status) {
-      'result_unknown' => DocumentOutcomeStatus.resultUnknown,
-      _ => DocumentOutcomeStatus.values.byName(status),
-    },
+    status: status,
     localPath: localPath,
     uri: uri,
     name: name,
@@ -1065,11 +1053,15 @@ class _Operation {
     files: files,
     directories: directories,
     skipped: skipped,
-    errors: errors.map(DocumentIssue.fromJson).toList(),
+    errors: List.unmodifiable(errors),
     errorCount: errorsCount,
     errorsTruncated: errorsCount > errors.length,
     partialDestinationPossible:
-        writing && !['saved', 'imported'].contains(status),
+        writing &&
+        ![
+          DocumentOutcomeStatus.saved,
+          DocumentOutcomeStatus.imported,
+        ].contains(status),
     cacheRetained: localPath != null,
   );
 }
