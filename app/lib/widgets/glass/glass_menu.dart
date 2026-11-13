@@ -221,6 +221,7 @@ class GlassToolbarGroup extends StatelessWidget {
         child: Glass(
           radius: DesignTokens.roundedFull,
           variant: variant,
+          showShadow: false,
           child: IconButtonTheme(
             data: IconButtonThemeData(
               style:
