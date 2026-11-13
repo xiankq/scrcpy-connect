@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:scrcpy_connect/core/media/models/audio_focus.dart';
 
 part 'device_audio_snapshot.freezed.dart';
 
@@ -62,7 +63,7 @@ abstract class DeviceAudioSnapshot with _$DeviceAudioSnapshot {
     bool? focusPaused,
     bool? backgroundPaused,
     bool? requiresUserResume,
-    String? focusSignal,
+    AudioFocusSignal? focusSignal,
     String? reason,
     AudioCleanupFailure? cleanupError,
   }) = _DeviceAudioSnapshot;
@@ -108,7 +109,7 @@ abstract class AudioOutputReceipt with _$AudioOutputReceipt {
     required double volume,
     required bool muted,
     int? focusEpoch,
-    required String focusSignal,
+    required AudioFocusSignal focusSignal,
     @Default(false) bool audibleContentVerified,
     @Default(false) bool speakerSamplesVerified,
     @Default(false) bool volumeConfigured,

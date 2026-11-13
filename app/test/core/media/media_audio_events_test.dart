@@ -5,6 +5,7 @@ import 'package:media_codec/media_codec.dart';
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/core/control/media_capture.dart';
 import 'package:scrcpy_connect/core/media/audio_player.dart';
+import 'package:scrcpy_connect/core/media/audio_platform.dart';
 import 'package:scrcpy_connect/core/media/media_playback.dart';
 import 'package:scrcpy_connect/core/media/models/audio_output_event.dart';
 import 'package:scrcpy_connect/core/media/models/device_audio_changed.dart';
@@ -32,14 +33,13 @@ void main() {
         .last;
     expect(fixture.capture.presented, contains(same(presentation.receipt)));
     expect(presentation.receipt.manualPaused, isTrue);
-    await fixture.media.handlePlatformEvent({
-      'type': 'audio.platform.focus',
-      'data': {'epoch': 1, 'signal': 'noisy'},
-    });
+    await fixture.media.handlePlatformEvent(
+      const AudioFocusChanged(epoch: 1, signal: .noisy),
+    );
     final interruption = fixture.events.whereType<AudioResumeRequired>().single;
     expect(interruption.sourceId, 'source');
     expect(interruption.deviceId, 'device');
-    expect(interruption.focusSignal, 'noisy');
+    expect(interruption.focusSignal, AudioFocusSignal.noisy);
     final views = DeviceAudioViewCoordinator(
       audio: fixture.media,
       readSnapshot: () => const DeviceAudioViewSnapshot(
@@ -69,10 +69,9 @@ void main() {
     views.playbackSucceeded(resumed, currentRevision);
     expect(views.playbackRequestRevision('device'), 0);
     final delivered = fixture.events.length;
-    await fixture.media.handlePlatformEvent({
-      'type': 'audio.platform.focus',
-      'data': {'epoch': 1, 'signal': 'permanentLoss'},
-    });
+    await fixture.media.handlePlatformEvent(
+      const AudioFocusChanged(epoch: 1, signal: .permanentLoss),
+    );
     expect(fixture.events, hasLength(delivered));
     expect(fixture.capture.stopped, isEmpty);
     await fixture.media.stopAudio(target);
@@ -141,7 +140,7 @@ const _source = DeviceAudioSnapshot(
       '0000000000000000000000000000000000000000000000000000000000000001',
 );
 
-class _Audio {
+class _Audio implements AudioPlatform {
   final player = _Player();
   final capture = _Capture();
   final events = <AudioOutputEvent>[];
@@ -153,18 +152,24 @@ class _Audio {
     readSnapshot: () async =>
         RuntimeSnapshot(sequence: 0, settings: Preferences()),
     readSettings: () => throw StateError('声音不应读取画质'),
-    platform: (command, params) async => switch (command) {
-      'audio.platform.focus.acquire' => {'granted': true, 'epoch': ++_focus},
-      'audio.platform.focus.release' => {'released': true},
-      'audio.platform.background' => {'supported': false, 'ready': false},
-      _ => throw StateError('非声音平台操作 $command'),
-    },
+    platform: this,
     emit: (event) => events.add(event as AudioOutputEvent),
     isDisposed: () => false,
     requireVerifiedState: () {},
     dataDirectory: '/unused',
     audioPlayerFactory: () => player,
   );
+
+  @override
+  Future<AudioFocusResult> acquireFocus(String ownerId) async =>
+      AudioFocusResult(granted: true, epoch: ++_focus);
+  @override
+  Future<bool> releaseFocus(String ownerId, int epoch) async => true;
+  @override
+  Future<AudioBackgroundState> setBackground(
+    String ownerId,
+    bool enabled,
+  ) async => const AudioBackgroundState(supported: false, ready: false);
 }
 
 class _Capture implements MediaCapture {

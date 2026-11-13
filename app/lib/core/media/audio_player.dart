@@ -28,10 +28,6 @@ final class _NativeAudioPlayer implements AudioPlayer {
 }
 
 typedef AudioJson = Map<String, dynamic>;
-typedef AudioPlatformRequest = Future<AudioJson> Function(
-  String command,
-  AudioJson params,
-);
 typedef AudioPlayerFactory = AudioPlayer Function();
 
 /// 播放器接口，不负责 PCM 复制或系统焦点策略。

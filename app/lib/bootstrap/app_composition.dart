@@ -31,6 +31,8 @@ import 'package:scrcpy_connect/core/identity/identity_management_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_lifecycle.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_lifetime.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
+import 'package:scrcpy_connect/core/media/audio_focus_service.dart';
+import 'package:scrcpy_connect/core/media/audio_platform.dart';
 import 'package:scrcpy_connect/core/media/media_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/media/media_operations.dart';
 import 'package:scrcpy_connect/core/media/media_playback.dart';
@@ -150,14 +152,18 @@ final class AppComposition {
     request: _channels.requestOptional,
     isDisposed: () => _isDisposed,
   );
-  late final _audioPlatform = PlatformAudio(request: _channels.request);
+  late final _systemAudioPlatform = PlatformAudio(request: _channels.request);
+  late final AudioPlatform _audioPlatform = Platform.isAndroid
+      ? _systemAudioPlatform
+      : AudioFocusService(backgroundPlaybackSupported: !Platform.isIOS);
   late final _platformEvents = PlatformEventHandler(
     reconnections: _connections.reconnections,
     isDisposed: () => _isDisposed,
     stopConnections: _connections.stopConnections,
     emit: _events.emitEvent,
     handleShare: _files.receiveShare,
-    handleMedia: _media.handlePlatformEvent,
+    handleAudio: _media.handlePlatformEvent,
+    stopMedia: _media.stopForHost,
   );
   late final RuntimeEvents _events = RuntimeEvents(
     acceptState: ({required sequence, required telemetry}) =>
@@ -177,7 +183,7 @@ final class AppComposition {
     readCapturedAudio: () async => _captureInstance?.audioSnapshots() ?? [],
     readSnapshot: () => _state.readSnapshot(),
     readSettings: _preferences.read,
-    platform: (command, params) => _audioPlatform.request(command, params),
+    platform: _audioPlatform,
     emit: _events.emitEvent,
     isDisposed: () => _isDisposed,
     requireVerifiedState: () => _stateRecovery.requireVerifiedState(),
@@ -288,7 +294,7 @@ final class AppComposition {
       preferences: session._preferences,
       platformEvents: Platform.isAndroid ? _channels.events : null,
       readVisible: Platform.isAndroid
-          ? session._audioPlatform.readVisible
+          ? session._systemAudioPlatform.readVisible
           : null,
       background: session._background,
       media: session._media,

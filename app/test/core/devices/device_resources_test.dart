@@ -19,6 +19,7 @@ import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/events/runtime_events.dart';
+import 'package:scrcpy_connect/core/media/audio_platform.dart';
 import 'package:scrcpy_connect/core/files/file_document_platform.dart';
 import 'package:scrcpy_connect/core/files/file_resources.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_lifecycle.dart';
@@ -541,7 +542,7 @@ Future<AppLifecycle> _lifecycle(
     readCapturedAudio: () async => throw StateError('退出不应读取捕获音源'),
     readSnapshot: () async => throw StateError('退出不应恢复业务状态'),
     readSettings: settings.read,
-    platform: (_, _) async => throw StateError('退出不应创建平台播放器'),
+    platform: _UnusedAudioPlatform(),
     emit: (_) {},
     isDisposed: () => false,
     requireVerifiedState: () {},
@@ -744,4 +745,10 @@ final class _QueryClient implements AdbClient {
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw StateError('清单查询不应创建其他客户端能力：${invocation.memberName}');
+}
+
+class _UnusedAudioPlatform implements AudioPlatform {
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw StateError('退出不应创建平台播放器');
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:scrcpy_connect/core/events/models/app_event.dart';
+import 'package:scrcpy_connect/core/media/audio_platform.dart';
 import 'package:scrcpy_connect/core/media/models/video_session_view.dart';
 import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -25,7 +26,7 @@ void main() {
         readCapturedAudio: () async => [],
         readSnapshot: () async => _snapshot,
         readSettings: () => throw StateError('不应读取画质'),
-        platform: (_, _) => throw StateError('不应创建声音输出'),
+        platform: _UnusedAudioPlatform(),
         emit: (_) {},
         isDisposed: () => false,
         requireVerifiedState: () {},
@@ -62,6 +63,92 @@ void main() {
     });
   }
 
+  test('宿主停止等待在途声音启动和迟到源清理，不创建输出', () async {
+    final capture = _PendingAudio();
+    final media = MediaPlayback(
+      captures: () => capture,
+      capture: () => throw StateError('不应创建视频输入'),
+      readCapturedAudio: () async => [],
+      readSnapshot: () async => _snapshot,
+      readSettings: () => throw StateError('不应读取画质'),
+      platform: _UnusedAudioPlatform(),
+      emit: (_) {},
+      isDisposed: () => false,
+      requireVerifiedState: () {},
+      dataDirectory: '/unused',
+    );
+    final starting = expectLater(
+      media.startAudio('device'),
+      throwsA(isA<RequestFailure>().having((e) => e.code, 'code', 'cancelled')),
+    );
+    var stopped = false;
+    final stopping = media.stopForHost().then((_) => stopped = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(stopped, isFalse);
+    capture.source.complete(
+      const DeviceAudioSnapshot(
+        sourceId: 'late-source',
+        deviceId: 'device',
+        generation: 1,
+        name: 'Audio',
+        status: .starting,
+        createdAt: 1,
+      ),
+    );
+    await stopping;
+    await starting;
+    expect(capture.stopped, [('late-source', 'device')]);
+    await media.dispose();
+    expect(capture.stopped, [('late-source', 'device')]);
+  });
+
+  testWidgets('退出超时保留原启动责任，迟到源收尾后可重试关闭', (tester) async {
+    final capture = _PendingAudio();
+    final media = MediaPlayback(
+      captures: () => capture,
+      capture: () => throw StateError('不应创建视频输入'),
+      readCapturedAudio: () async => [],
+      readSnapshot: () async => _snapshot,
+      readSettings: () => throw StateError('不应读取画质'),
+      platform: _UnusedAudioPlatform(),
+      emit: (_) {},
+      isDisposed: () => false,
+      requireVerifiedState: () {},
+      dataDirectory: '/unused',
+    );
+    final starting = expectLater(
+      media.startAudio('device'),
+      throwsA(isA<RequestFailure>().having((e) => e.code, 'code', 'cancelled')),
+    );
+    final closing = expectLater(
+      media.dispose(),
+      throwsA(
+        isA<RequestFailure>().having(
+          (e) => e.code,
+          'code',
+          'media_cleanup_unconfirmed',
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 46));
+    await closing;
+    capture.source.complete(
+      const DeviceAudioSnapshot(
+        sourceId: 'late-source',
+        deviceId: 'device',
+        generation: 1,
+        name: 'Audio',
+        status: .starting,
+        createdAt: 1,
+      ),
+    );
+    await tester.pump();
+    await media.dispose();
+    await starting;
+    expect(capture.stopped, [('late-source', 'device')]);
+  });
+
   test('空快照、设备收尾和退出不创建捕获或播放器', () async {
     final media = MediaPlayback(
       captures: () => throw StateError('不应创建捕获'),
@@ -69,7 +156,7 @@ void main() {
       readCapturedAudio: () async => [],
       readSnapshot: () async => _snapshot,
       readSettings: () => throw StateError('不应读取画质'),
-      platform: (_, _) => throw StateError('不应调用平台媒体'),
+      platform: _UnusedAudioPlatform(),
       emit: (_) {},
       isDisposed: () => false,
       requireVerifiedState: () {},
@@ -96,6 +183,8 @@ void main() {
       ).toApplicationEvent(),
     );
     await media.dispose();
+    await media.handlePlatformEvent(const AudioVisibilityChanged(true));
+    await media.stopForHost();
     await media.dispose();
   });
 
@@ -111,7 +200,7 @@ void main() {
       readCapturedAudio: () async => [],
       readSnapshot: () async => _snapshot,
       readSettings: () => throw StateError('不应读取画质'),
-      platform: (_, _) => throw StateError('不应调用平台媒体'),
+      platform: _UnusedAudioPlatform(),
       emit: (_) {},
       isDisposed: () => false,
       requireVerifiedState: () {},
@@ -127,6 +216,11 @@ void main() {
 }
 
 final _snapshot = RuntimeSnapshot(sequence: 0, settings: Preferences());
+
+class _UnusedAudioPlatform implements AudioPlatform {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw StateError('不应创建平台声音活动');
+}
 
 class _PendingAudio implements MediaCapture {
   final source = Completer<DeviceAudioSnapshot>();

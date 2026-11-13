@@ -7,6 +7,7 @@ import 'package:scrcpy_connect/core/devices/models/connections_stopped.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:scrcpy_connect/core/platform/platform_event_handler.dart';
+import 'package:scrcpy_connect/core/media/audio_platform.dart';
 
 void main() {
   for (final failing in ['connections', 'publish', 'media']) {
@@ -37,11 +38,11 @@ void main() {
           order.add('publish');
           if (failing == 'publish') throw failure;
         },
-        handleMedia: (event) {
-          expect(event['type'], 'connections.stopped');
+        stopMedia: () {
           order.add('media');
           return media.future;
         },
+        handleAudio: (_) async => fail('停止宿主不伪造声音平台事件'),
         handleShare: (_) async => fail('停止连接不能进入分享接收'),
       );
       final result = handler.handle(const {'type': 'connections.stopped'});
@@ -81,14 +82,15 @@ void main() {
     addTearDown(reconnections.dispose);
     final published = <AppEvent>[];
     final shares = <Map<String, dynamic>>[];
-    final audio = <Map<String, dynamic>>[];
+    final audio = <AudioPlatformEvent>[];
     final handler = PlatformEventHandler(
       reconnections: reconnections,
       isDisposed: () => disposed,
       stopConnections: () async => fail('未收到停止消息'),
       emit: published.add,
       handleShare: (data) async => shares.add(data),
-      handleMedia: (event) async => audio.add(event),
+      handleAudio: (event) async => audio.add(event),
+      stopMedia: () async => fail('未收到停止消息'),
     );
     const share = {
       'type': 'share.platform.pending',
@@ -96,13 +98,22 @@ void main() {
     };
     const focus = {
       'type': 'audio.platform.focus',
-      'data': {'state': 'lost'},
+      'data': {'epoch': 1, 'signal': 'permanentLoss'},
     };
     await handler.handle(share);
     await handler.handle(focus);
     await handler.handle(const {'type': 'unknown'});
     expect(shares, [share['data']]);
-    expect(audio, [same(focus)]);
+    expect(
+      audio.single,
+      isA<AudioFocusChanged>()
+          .having((event) => event.epoch, 'epoch', 1)
+          .having(
+            (event) => event.signal,
+            'signal',
+            AudioFocusSignal.permanentLoss,
+          ),
+    );
     expect(published, isEmpty);
     disposed = true;
     await handler.handle(share);

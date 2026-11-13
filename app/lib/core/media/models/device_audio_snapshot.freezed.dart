@@ -549,7 +549,7 @@ as String,
 /// @nodoc
 mixin _$DeviceAudioSnapshot {
 
- String get sourceId; String get deviceId; int get generation; String get name; DeviceAudioStatus get status; int get createdAt; String get codec; int get sampleRate; int get channels; int get bytesPerSample; double get volume; bool get muted; bool get nativeAttached; bool get playbackVerified; bool get speakerSamplesVerified; bool get audibleContentVerified; String get captureSource; bool get callAudioSupported; bool get remoteExitVerified; bool get captureReady; bool get mediaReady; bool get localReleased; bool get existing; String? get audioSourceId; String? get captureRef; int? get nativeGeneration; int? get processId; int? get processStarted; String? get backend; int? get nativeRevision; int? get bytesWritten; bool? get presentationOnly; bool? get manualPaused; bool? get focusPaused; bool? get backgroundPaused; bool? get requiresUserResume; String? get focusSignal; String? get reason; AudioCleanupFailure? get cleanupError;
+ String get sourceId; String get deviceId; int get generation; String get name; DeviceAudioStatus get status; int get createdAt; String get codec; int get sampleRate; int get channels; int get bytesPerSample; double get volume; bool get muted; bool get nativeAttached; bool get playbackVerified; bool get speakerSamplesVerified; bool get audibleContentVerified; String get captureSource; bool get callAudioSupported; bool get remoteExitVerified; bool get captureReady; bool get mediaReady; bool get localReleased; bool get existing; String? get audioSourceId; String? get captureRef; int? get nativeGeneration; int? get processId; int? get processStarted; String? get backend; int? get nativeRevision; int? get bytesWritten; bool? get presentationOnly; bool? get manualPaused; bool? get focusPaused; bool? get backgroundPaused; bool? get requiresUserResume; AudioFocusSignal? get focusSignal; String? get reason; AudioCleanupFailure? get cleanupError;
 /// Create a copy of DeviceAudioSnapshot
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -585,7 +585,7 @@ abstract mixin class $DeviceAudioSnapshotCopyWith<$Res>  {
   factory $DeviceAudioSnapshotCopyWith(DeviceAudioSnapshot value, $Res Function(DeviceAudioSnapshot) _then) = _$DeviceAudioSnapshotCopyWithImpl;
 @useResult
 $Res call({
- String sourceId, String deviceId, int generation, String name, DeviceAudioStatus status, int createdAt, String codec, int sampleRate, int channels, int bytesPerSample, double volume, bool muted, bool nativeAttached, bool playbackVerified, bool speakerSamplesVerified, bool audibleContentVerified, String captureSource, bool callAudioSupported, bool remoteExitVerified, bool captureReady, bool mediaReady, bool localReleased, bool existing, String? audioSourceId, String? captureRef, int? nativeGeneration, int? processId, int? processStarted, String? backend, int? nativeRevision, int? bytesWritten, bool? presentationOnly, bool? manualPaused, bool? focusPaused, bool? backgroundPaused, bool? requiresUserResume, String? focusSignal, String? reason, AudioCleanupFailure? cleanupError
+ String sourceId, String deviceId, int generation, String name, DeviceAudioStatus status, int createdAt, String codec, int sampleRate, int channels, int bytesPerSample, double volume, bool muted, bool nativeAttached, bool playbackVerified, bool speakerSamplesVerified, bool audibleContentVerified, String captureSource, bool callAudioSupported, bool remoteExitVerified, bool captureReady, bool mediaReady, bool localReleased, bool existing, String? audioSourceId, String? captureRef, int? nativeGeneration, int? processId, int? processStarted, String? backend, int? nativeRevision, int? bytesWritten, bool? presentationOnly, bool? manualPaused, bool? focusPaused, bool? backgroundPaused, bool? requiresUserResume, AudioFocusSignal? focusSignal, String? reason, AudioCleanupFailure? cleanupError
 });
 
 
@@ -641,7 +641,7 @@ as bool?,focusPaused: freezed == focusPaused ? _self.focusPaused : focusPaused /
 as bool?,backgroundPaused: freezed == backgroundPaused ? _self.backgroundPaused : backgroundPaused // ignore: cast_nullable_to_non_nullable
 as bool?,requiresUserResume: freezed == requiresUserResume ? _self.requiresUserResume : requiresUserResume // ignore: cast_nullable_to_non_nullable
 as bool?,focusSignal: freezed == focusSignal ? _self.focusSignal : focusSignal // ignore: cast_nullable_to_non_nullable
-as String?,reason: freezed == reason ? _self.reason : reason // ignore: cast_nullable_to_non_nullable
+as AudioFocusSignal?,reason: freezed == reason ? _self.reason : reason // ignore: cast_nullable_to_non_nullable
 as String?,cleanupError: freezed == cleanupError ? _self.cleanupError : cleanupError // ignore: cast_nullable_to_non_nullable
 as AudioCleanupFailure?,
   ));
@@ -740,7 +740,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String sourceId,  String deviceId,  int generation,  String name,  DeviceAudioStatus status,  int createdAt,  String codec,  int sampleRate,  int channels,  int bytesPerSample,  double volume,  bool muted,  bool nativeAttached,  bool playbackVerified,  bool speakerSamplesVerified,  bool audibleContentVerified,  String captureSource,  bool callAudioSupported,  bool remoteExitVerified,  bool captureReady,  bool mediaReady,  bool localReleased,  bool existing,  String? audioSourceId,  String? captureRef,  int? nativeGeneration,  int? processId,  int? processStarted,  String? backend,  int? nativeRevision,  int? bytesWritten,  bool? presentationOnly,  bool? manualPaused,  bool? focusPaused,  bool? backgroundPaused,  bool? requiresUserResume,  String? focusSignal,  String? reason,  AudioCleanupFailure? cleanupError)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String sourceId,  String deviceId,  int generation,  String name,  DeviceAudioStatus status,  int createdAt,  String codec,  int sampleRate,  int channels,  int bytesPerSample,  double volume,  bool muted,  bool nativeAttached,  bool playbackVerified,  bool speakerSamplesVerified,  bool audibleContentVerified,  String captureSource,  bool callAudioSupported,  bool remoteExitVerified,  bool captureReady,  bool mediaReady,  bool localReleased,  bool existing,  String? audioSourceId,  String? captureRef,  int? nativeGeneration,  int? processId,  int? processStarted,  String? backend,  int? nativeRevision,  int? bytesWritten,  bool? presentationOnly,  bool? manualPaused,  bool? focusPaused,  bool? backgroundPaused,  bool? requiresUserResume,  AudioFocusSignal? focusSignal,  String? reason,  AudioCleanupFailure? cleanupError)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _DeviceAudioSnapshot() when $default != null:
 return $default(_that.sourceId,_that.deviceId,_that.generation,_that.name,_that.status,_that.createdAt,_that.codec,_that.sampleRate,_that.channels,_that.bytesPerSample,_that.volume,_that.muted,_that.nativeAttached,_that.playbackVerified,_that.speakerSamplesVerified,_that.audibleContentVerified,_that.captureSource,_that.callAudioSupported,_that.remoteExitVerified,_that.captureReady,_that.mediaReady,_that.localReleased,_that.existing,_that.audioSourceId,_that.captureRef,_that.nativeGeneration,_that.processId,_that.processStarted,_that.backend,_that.nativeRevision,_that.bytesWritten,_that.presentationOnly,_that.manualPaused,_that.focusPaused,_that.backgroundPaused,_that.requiresUserResume,_that.focusSignal,_that.reason,_that.cleanupError);case _:
@@ -761,7 +761,7 @@ return $default(_that.sourceId,_that.deviceId,_that.generation,_that.name,_that.
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String sourceId,  String deviceId,  int generation,  String name,  DeviceAudioStatus status,  int createdAt,  String codec,  int sampleRate,  int channels,  int bytesPerSample,  double volume,  bool muted,  bool nativeAttached,  bool playbackVerified,  bool speakerSamplesVerified,  bool audibleContentVerified,  String captureSource,  bool callAudioSupported,  bool remoteExitVerified,  bool captureReady,  bool mediaReady,  bool localReleased,  bool existing,  String? audioSourceId,  String? captureRef,  int? nativeGeneration,  int? processId,  int? processStarted,  String? backend,  int? nativeRevision,  int? bytesWritten,  bool? presentationOnly,  bool? manualPaused,  bool? focusPaused,  bool? backgroundPaused,  bool? requiresUserResume,  String? focusSignal,  String? reason,  AudioCleanupFailure? cleanupError)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String sourceId,  String deviceId,  int generation,  String name,  DeviceAudioStatus status,  int createdAt,  String codec,  int sampleRate,  int channels,  int bytesPerSample,  double volume,  bool muted,  bool nativeAttached,  bool playbackVerified,  bool speakerSamplesVerified,  bool audibleContentVerified,  String captureSource,  bool callAudioSupported,  bool remoteExitVerified,  bool captureReady,  bool mediaReady,  bool localReleased,  bool existing,  String? audioSourceId,  String? captureRef,  int? nativeGeneration,  int? processId,  int? processStarted,  String? backend,  int? nativeRevision,  int? bytesWritten,  bool? presentationOnly,  bool? manualPaused,  bool? focusPaused,  bool? backgroundPaused,  bool? requiresUserResume,  AudioFocusSignal? focusSignal,  String? reason,  AudioCleanupFailure? cleanupError)  $default,) {final _that = this;
 switch (_that) {
 case _DeviceAudioSnapshot():
 return $default(_that.sourceId,_that.deviceId,_that.generation,_that.name,_that.status,_that.createdAt,_that.codec,_that.sampleRate,_that.channels,_that.bytesPerSample,_that.volume,_that.muted,_that.nativeAttached,_that.playbackVerified,_that.speakerSamplesVerified,_that.audibleContentVerified,_that.captureSource,_that.callAudioSupported,_that.remoteExitVerified,_that.captureReady,_that.mediaReady,_that.localReleased,_that.existing,_that.audioSourceId,_that.captureRef,_that.nativeGeneration,_that.processId,_that.processStarted,_that.backend,_that.nativeRevision,_that.bytesWritten,_that.presentationOnly,_that.manualPaused,_that.focusPaused,_that.backgroundPaused,_that.requiresUserResume,_that.focusSignal,_that.reason,_that.cleanupError);case _:
@@ -781,7 +781,7 @@ return $default(_that.sourceId,_that.deviceId,_that.generation,_that.name,_that.
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String sourceId,  String deviceId,  int generation,  String name,  DeviceAudioStatus status,  int createdAt,  String codec,  int sampleRate,  int channels,  int bytesPerSample,  double volume,  bool muted,  bool nativeAttached,  bool playbackVerified,  bool speakerSamplesVerified,  bool audibleContentVerified,  String captureSource,  bool callAudioSupported,  bool remoteExitVerified,  bool captureReady,  bool mediaReady,  bool localReleased,  bool existing,  String? audioSourceId,  String? captureRef,  int? nativeGeneration,  int? processId,  int? processStarted,  String? backend,  int? nativeRevision,  int? bytesWritten,  bool? presentationOnly,  bool? manualPaused,  bool? focusPaused,  bool? backgroundPaused,  bool? requiresUserResume,  String? focusSignal,  String? reason,  AudioCleanupFailure? cleanupError)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String sourceId,  String deviceId,  int generation,  String name,  DeviceAudioStatus status,  int createdAt,  String codec,  int sampleRate,  int channels,  int bytesPerSample,  double volume,  bool muted,  bool nativeAttached,  bool playbackVerified,  bool speakerSamplesVerified,  bool audibleContentVerified,  String captureSource,  bool callAudioSupported,  bool remoteExitVerified,  bool captureReady,  bool mediaReady,  bool localReleased,  bool existing,  String? audioSourceId,  String? captureRef,  int? nativeGeneration,  int? processId,  int? processStarted,  String? backend,  int? nativeRevision,  int? bytesWritten,  bool? presentationOnly,  bool? manualPaused,  bool? focusPaused,  bool? backgroundPaused,  bool? requiresUserResume,  AudioFocusSignal? focusSignal,  String? reason,  AudioCleanupFailure? cleanupError)?  $default,) {final _that = this;
 switch (_that) {
 case _DeviceAudioSnapshot() when $default != null:
 return $default(_that.sourceId,_that.deviceId,_that.generation,_that.name,_that.status,_that.createdAt,_that.codec,_that.sampleRate,_that.channels,_that.bytesPerSample,_that.volume,_that.muted,_that.nativeAttached,_that.playbackVerified,_that.speakerSamplesVerified,_that.audibleContentVerified,_that.captureSource,_that.callAudioSupported,_that.remoteExitVerified,_that.captureReady,_that.mediaReady,_that.localReleased,_that.existing,_that.audioSourceId,_that.captureRef,_that.nativeGeneration,_that.processId,_that.processStarted,_that.backend,_that.nativeRevision,_that.bytesWritten,_that.presentationOnly,_that.manualPaused,_that.focusPaused,_that.backgroundPaused,_that.requiresUserResume,_that.focusSignal,_that.reason,_that.cleanupError);case _:
@@ -835,7 +835,7 @@ class _DeviceAudioSnapshot implements DeviceAudioSnapshot {
 @override final  bool? focusPaused;
 @override final  bool? backgroundPaused;
 @override final  bool? requiresUserResume;
-@override final  String? focusSignal;
+@override final  AudioFocusSignal? focusSignal;
 @override final  String? reason;
 @override final  AudioCleanupFailure? cleanupError;
 
@@ -871,7 +871,7 @@ abstract mixin class _$DeviceAudioSnapshotCopyWith<$Res> implements $DeviceAudio
   factory _$DeviceAudioSnapshotCopyWith(_DeviceAudioSnapshot value, $Res Function(_DeviceAudioSnapshot) _then) = __$DeviceAudioSnapshotCopyWithImpl;
 @override @useResult
 $Res call({
- String sourceId, String deviceId, int generation, String name, DeviceAudioStatus status, int createdAt, String codec, int sampleRate, int channels, int bytesPerSample, double volume, bool muted, bool nativeAttached, bool playbackVerified, bool speakerSamplesVerified, bool audibleContentVerified, String captureSource, bool callAudioSupported, bool remoteExitVerified, bool captureReady, bool mediaReady, bool localReleased, bool existing, String? audioSourceId, String? captureRef, int? nativeGeneration, int? processId, int? processStarted, String? backend, int? nativeRevision, int? bytesWritten, bool? presentationOnly, bool? manualPaused, bool? focusPaused, bool? backgroundPaused, bool? requiresUserResume, String? focusSignal, String? reason, AudioCleanupFailure? cleanupError
+ String sourceId, String deviceId, int generation, String name, DeviceAudioStatus status, int createdAt, String codec, int sampleRate, int channels, int bytesPerSample, double volume, bool muted, bool nativeAttached, bool playbackVerified, bool speakerSamplesVerified, bool audibleContentVerified, String captureSource, bool callAudioSupported, bool remoteExitVerified, bool captureReady, bool mediaReady, bool localReleased, bool existing, String? audioSourceId, String? captureRef, int? nativeGeneration, int? processId, int? processStarted, String? backend, int? nativeRevision, int? bytesWritten, bool? presentationOnly, bool? manualPaused, bool? focusPaused, bool? backgroundPaused, bool? requiresUserResume, AudioFocusSignal? focusSignal, String? reason, AudioCleanupFailure? cleanupError
 });
 
 
@@ -927,7 +927,7 @@ as bool?,focusPaused: freezed == focusPaused ? _self.focusPaused : focusPaused /
 as bool?,backgroundPaused: freezed == backgroundPaused ? _self.backgroundPaused : backgroundPaused // ignore: cast_nullable_to_non_nullable
 as bool?,requiresUserResume: freezed == requiresUserResume ? _self.requiresUserResume : requiresUserResume // ignore: cast_nullable_to_non_nullable
 as bool?,focusSignal: freezed == focusSignal ? _self.focusSignal : focusSignal // ignore: cast_nullable_to_non_nullable
-as String?,reason: freezed == reason ? _self.reason : reason // ignore: cast_nullable_to_non_nullable
+as AudioFocusSignal?,reason: freezed == reason ? _self.reason : reason // ignore: cast_nullable_to_non_nullable
 as String?,cleanupError: freezed == cleanupError ? _self.cleanupError : cleanupError // ignore: cast_nullable_to_non_nullable
 as AudioCleanupFailure?,
   ));
@@ -1239,7 +1239,7 @@ $DeviceAudioTargetCopyWith<$Res> get target {
 /// @nodoc
 mixin _$AudioOutputReceipt {
 
- String get sourceId; String get deviceId; String? get relayId; String get backend; bool get nativeReady; int get bytesWritten; int get revision; bool get applied; AudioPlayState get playState; bool get manualPaused; bool get focusPaused; bool get backgroundPaused; bool get requiresUserResume; String get reason; int get sampleRate; int get channels; bool get mediaInfoReady; bool get playingConfirmed; bool get sourcePcmReceived; int get sourcePcmPackets; bool get playbackClockAdvanced; int? get clockStartMs; int? get clockEndMs; int? get positionMs; double get volume; bool get muted; int? get focusEpoch; String get focusSignal; bool get audibleContentVerified; bool get speakerSamplesVerified; bool get volumeConfigured; bool get volumeOutputVerified;
+ String get sourceId; String get deviceId; String? get relayId; String get backend; bool get nativeReady; int get bytesWritten; int get revision; bool get applied; AudioPlayState get playState; bool get manualPaused; bool get focusPaused; bool get backgroundPaused; bool get requiresUserResume; String get reason; int get sampleRate; int get channels; bool get mediaInfoReady; bool get playingConfirmed; bool get sourcePcmReceived; int get sourcePcmPackets; bool get playbackClockAdvanced; int? get clockStartMs; int? get clockEndMs; int? get positionMs; double get volume; bool get muted; int? get focusEpoch; AudioFocusSignal get focusSignal; bool get audibleContentVerified; bool get speakerSamplesVerified; bool get volumeConfigured; bool get volumeOutputVerified;
 /// Create a copy of AudioOutputReceipt
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1275,7 +1275,7 @@ abstract mixin class $AudioOutputReceiptCopyWith<$Res>  {
   factory $AudioOutputReceiptCopyWith(AudioOutputReceipt value, $Res Function(AudioOutputReceipt) _then) = _$AudioOutputReceiptCopyWithImpl;
 @useResult
 $Res call({
- String sourceId, String deviceId, String? relayId, String backend, bool nativeReady, int bytesWritten, int revision, bool applied, AudioPlayState playState, bool manualPaused, bool focusPaused, bool backgroundPaused, bool requiresUserResume, String reason, int sampleRate, int channels, bool mediaInfoReady, bool playingConfirmed, bool sourcePcmReceived, int sourcePcmPackets, bool playbackClockAdvanced, int? clockStartMs, int? clockEndMs, int? positionMs, double volume, bool muted, int? focusEpoch, String focusSignal, bool audibleContentVerified, bool speakerSamplesVerified, bool volumeConfigured, bool volumeOutputVerified
+ String sourceId, String deviceId, String? relayId, String backend, bool nativeReady, int bytesWritten, int revision, bool applied, AudioPlayState playState, bool manualPaused, bool focusPaused, bool backgroundPaused, bool requiresUserResume, String reason, int sampleRate, int channels, bool mediaInfoReady, bool playingConfirmed, bool sourcePcmReceived, int sourcePcmPackets, bool playbackClockAdvanced, int? clockStartMs, int? clockEndMs, int? positionMs, double volume, bool muted, int? focusEpoch, AudioFocusSignal focusSignal, bool audibleContentVerified, bool speakerSamplesVerified, bool volumeConfigured, bool volumeOutputVerified
 });
 
 
@@ -1322,7 +1322,7 @@ as int?,volume: null == volume ? _self.volume : volume // ignore: cast_nullable_
 as double,muted: null == muted ? _self.muted : muted // ignore: cast_nullable_to_non_nullable
 as bool,focusEpoch: freezed == focusEpoch ? _self.focusEpoch : focusEpoch // ignore: cast_nullable_to_non_nullable
 as int?,focusSignal: null == focusSignal ? _self.focusSignal : focusSignal // ignore: cast_nullable_to_non_nullable
-as String,audibleContentVerified: null == audibleContentVerified ? _self.audibleContentVerified : audibleContentVerified // ignore: cast_nullable_to_non_nullable
+as AudioFocusSignal,audibleContentVerified: null == audibleContentVerified ? _self.audibleContentVerified : audibleContentVerified // ignore: cast_nullable_to_non_nullable
 as bool,speakerSamplesVerified: null == speakerSamplesVerified ? _self.speakerSamplesVerified : speakerSamplesVerified // ignore: cast_nullable_to_non_nullable
 as bool,volumeConfigured: null == volumeConfigured ? _self.volumeConfigured : volumeConfigured // ignore: cast_nullable_to_non_nullable
 as bool,volumeOutputVerified: null == volumeOutputVerified ? _self.volumeOutputVerified : volumeOutputVerified // ignore: cast_nullable_to_non_nullable
@@ -1411,7 +1411,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String sourceId,  String deviceId,  String? relayId,  String backend,  bool nativeReady,  int bytesWritten,  int revision,  bool applied,  AudioPlayState playState,  bool manualPaused,  bool focusPaused,  bool backgroundPaused,  bool requiresUserResume,  String reason,  int sampleRate,  int channels,  bool mediaInfoReady,  bool playingConfirmed,  bool sourcePcmReceived,  int sourcePcmPackets,  bool playbackClockAdvanced,  int? clockStartMs,  int? clockEndMs,  int? positionMs,  double volume,  bool muted,  int? focusEpoch,  String focusSignal,  bool audibleContentVerified,  bool speakerSamplesVerified,  bool volumeConfigured,  bool volumeOutputVerified)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String sourceId,  String deviceId,  String? relayId,  String backend,  bool nativeReady,  int bytesWritten,  int revision,  bool applied,  AudioPlayState playState,  bool manualPaused,  bool focusPaused,  bool backgroundPaused,  bool requiresUserResume,  String reason,  int sampleRate,  int channels,  bool mediaInfoReady,  bool playingConfirmed,  bool sourcePcmReceived,  int sourcePcmPackets,  bool playbackClockAdvanced,  int? clockStartMs,  int? clockEndMs,  int? positionMs,  double volume,  bool muted,  int? focusEpoch,  AudioFocusSignal focusSignal,  bool audibleContentVerified,  bool speakerSamplesVerified,  bool volumeConfigured,  bool volumeOutputVerified)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _AudioOutputReceipt() when $default != null:
 return $default(_that.sourceId,_that.deviceId,_that.relayId,_that.backend,_that.nativeReady,_that.bytesWritten,_that.revision,_that.applied,_that.playState,_that.manualPaused,_that.focusPaused,_that.backgroundPaused,_that.requiresUserResume,_that.reason,_that.sampleRate,_that.channels,_that.mediaInfoReady,_that.playingConfirmed,_that.sourcePcmReceived,_that.sourcePcmPackets,_that.playbackClockAdvanced,_that.clockStartMs,_that.clockEndMs,_that.positionMs,_that.volume,_that.muted,_that.focusEpoch,_that.focusSignal,_that.audibleContentVerified,_that.speakerSamplesVerified,_that.volumeConfigured,_that.volumeOutputVerified);case _:
@@ -1432,7 +1432,7 @@ return $default(_that.sourceId,_that.deviceId,_that.relayId,_that.backend,_that.
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String sourceId,  String deviceId,  String? relayId,  String backend,  bool nativeReady,  int bytesWritten,  int revision,  bool applied,  AudioPlayState playState,  bool manualPaused,  bool focusPaused,  bool backgroundPaused,  bool requiresUserResume,  String reason,  int sampleRate,  int channels,  bool mediaInfoReady,  bool playingConfirmed,  bool sourcePcmReceived,  int sourcePcmPackets,  bool playbackClockAdvanced,  int? clockStartMs,  int? clockEndMs,  int? positionMs,  double volume,  bool muted,  int? focusEpoch,  String focusSignal,  bool audibleContentVerified,  bool speakerSamplesVerified,  bool volumeConfigured,  bool volumeOutputVerified)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String sourceId,  String deviceId,  String? relayId,  String backend,  bool nativeReady,  int bytesWritten,  int revision,  bool applied,  AudioPlayState playState,  bool manualPaused,  bool focusPaused,  bool backgroundPaused,  bool requiresUserResume,  String reason,  int sampleRate,  int channels,  bool mediaInfoReady,  bool playingConfirmed,  bool sourcePcmReceived,  int sourcePcmPackets,  bool playbackClockAdvanced,  int? clockStartMs,  int? clockEndMs,  int? positionMs,  double volume,  bool muted,  int? focusEpoch,  AudioFocusSignal focusSignal,  bool audibleContentVerified,  bool speakerSamplesVerified,  bool volumeConfigured,  bool volumeOutputVerified)  $default,) {final _that = this;
 switch (_that) {
 case _AudioOutputReceipt():
 return $default(_that.sourceId,_that.deviceId,_that.relayId,_that.backend,_that.nativeReady,_that.bytesWritten,_that.revision,_that.applied,_that.playState,_that.manualPaused,_that.focusPaused,_that.backgroundPaused,_that.requiresUserResume,_that.reason,_that.sampleRate,_that.channels,_that.mediaInfoReady,_that.playingConfirmed,_that.sourcePcmReceived,_that.sourcePcmPackets,_that.playbackClockAdvanced,_that.clockStartMs,_that.clockEndMs,_that.positionMs,_that.volume,_that.muted,_that.focusEpoch,_that.focusSignal,_that.audibleContentVerified,_that.speakerSamplesVerified,_that.volumeConfigured,_that.volumeOutputVerified);case _:
@@ -1452,7 +1452,7 @@ return $default(_that.sourceId,_that.deviceId,_that.relayId,_that.backend,_that.
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String sourceId,  String deviceId,  String? relayId,  String backend,  bool nativeReady,  int bytesWritten,  int revision,  bool applied,  AudioPlayState playState,  bool manualPaused,  bool focusPaused,  bool backgroundPaused,  bool requiresUserResume,  String reason,  int sampleRate,  int channels,  bool mediaInfoReady,  bool playingConfirmed,  bool sourcePcmReceived,  int sourcePcmPackets,  bool playbackClockAdvanced,  int? clockStartMs,  int? clockEndMs,  int? positionMs,  double volume,  bool muted,  int? focusEpoch,  String focusSignal,  bool audibleContentVerified,  bool speakerSamplesVerified,  bool volumeConfigured,  bool volumeOutputVerified)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String sourceId,  String deviceId,  String? relayId,  String backend,  bool nativeReady,  int bytesWritten,  int revision,  bool applied,  AudioPlayState playState,  bool manualPaused,  bool focusPaused,  bool backgroundPaused,  bool requiresUserResume,  String reason,  int sampleRate,  int channels,  bool mediaInfoReady,  bool playingConfirmed,  bool sourcePcmReceived,  int sourcePcmPackets,  bool playbackClockAdvanced,  int? clockStartMs,  int? clockEndMs,  int? positionMs,  double volume,  bool muted,  int? focusEpoch,  AudioFocusSignal focusSignal,  bool audibleContentVerified,  bool speakerSamplesVerified,  bool volumeConfigured,  bool volumeOutputVerified)?  $default,) {final _that = this;
 switch (_that) {
 case _AudioOutputReceipt() when $default != null:
 return $default(_that.sourceId,_that.deviceId,_that.relayId,_that.backend,_that.nativeReady,_that.bytesWritten,_that.revision,_that.applied,_that.playState,_that.manualPaused,_that.focusPaused,_that.backgroundPaused,_that.requiresUserResume,_that.reason,_that.sampleRate,_that.channels,_that.mediaInfoReady,_that.playingConfirmed,_that.sourcePcmReceived,_that.sourcePcmPackets,_that.playbackClockAdvanced,_that.clockStartMs,_that.clockEndMs,_that.positionMs,_that.volume,_that.muted,_that.focusEpoch,_that.focusSignal,_that.audibleContentVerified,_that.speakerSamplesVerified,_that.volumeConfigured,_that.volumeOutputVerified);case _:
@@ -1497,7 +1497,7 @@ class _AudioOutputReceipt implements AudioOutputReceipt {
 @override final  double volume;
 @override final  bool muted;
 @override final  int? focusEpoch;
-@override final  String focusSignal;
+@override final  AudioFocusSignal focusSignal;
 @override@JsonKey() final  bool audibleContentVerified;
 @override@JsonKey() final  bool speakerSamplesVerified;
 @override@JsonKey() final  bool volumeConfigured;
@@ -1535,7 +1535,7 @@ abstract mixin class _$AudioOutputReceiptCopyWith<$Res> implements $AudioOutputR
   factory _$AudioOutputReceiptCopyWith(_AudioOutputReceipt value, $Res Function(_AudioOutputReceipt) _then) = __$AudioOutputReceiptCopyWithImpl;
 @override @useResult
 $Res call({
- String sourceId, String deviceId, String? relayId, String backend, bool nativeReady, int bytesWritten, int revision, bool applied, AudioPlayState playState, bool manualPaused, bool focusPaused, bool backgroundPaused, bool requiresUserResume, String reason, int sampleRate, int channels, bool mediaInfoReady, bool playingConfirmed, bool sourcePcmReceived, int sourcePcmPackets, bool playbackClockAdvanced, int? clockStartMs, int? clockEndMs, int? positionMs, double volume, bool muted, int? focusEpoch, String focusSignal, bool audibleContentVerified, bool speakerSamplesVerified, bool volumeConfigured, bool volumeOutputVerified
+ String sourceId, String deviceId, String? relayId, String backend, bool nativeReady, int bytesWritten, int revision, bool applied, AudioPlayState playState, bool manualPaused, bool focusPaused, bool backgroundPaused, bool requiresUserResume, String reason, int sampleRate, int channels, bool mediaInfoReady, bool playingConfirmed, bool sourcePcmReceived, int sourcePcmPackets, bool playbackClockAdvanced, int? clockStartMs, int? clockEndMs, int? positionMs, double volume, bool muted, int? focusEpoch, AudioFocusSignal focusSignal, bool audibleContentVerified, bool speakerSamplesVerified, bool volumeConfigured, bool volumeOutputVerified
 });
 
 
@@ -1582,7 +1582,7 @@ as int?,volume: null == volume ? _self.volume : volume // ignore: cast_nullable_
 as double,muted: null == muted ? _self.muted : muted // ignore: cast_nullable_to_non_nullable
 as bool,focusEpoch: freezed == focusEpoch ? _self.focusEpoch : focusEpoch // ignore: cast_nullable_to_non_nullable
 as int?,focusSignal: null == focusSignal ? _self.focusSignal : focusSignal // ignore: cast_nullable_to_non_nullable
-as String,audibleContentVerified: null == audibleContentVerified ? _self.audibleContentVerified : audibleContentVerified // ignore: cast_nullable_to_non_nullable
+as AudioFocusSignal,audibleContentVerified: null == audibleContentVerified ? _self.audibleContentVerified : audibleContentVerified // ignore: cast_nullable_to_non_nullable
 as bool,speakerSamplesVerified: null == speakerSamplesVerified ? _self.speakerSamplesVerified : speakerSamplesVerified // ignore: cast_nullable_to_non_nullable
 as bool,volumeConfigured: null == volumeConfigured ? _self.volumeConfigured : volumeConfigured // ignore: cast_nullable_to_non_nullable
 as bool,volumeOutputVerified: null == volumeOutputVerified ? _self.volumeOutputVerified : volumeOutputVerified // ignore: cast_nullable_to_non_nullable

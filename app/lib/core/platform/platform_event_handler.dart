@@ -1,6 +1,8 @@
 import 'package:scrcpy_connect/core/devices/device_reconnect_service.dart';
 import 'package:scrcpy_connect/core/devices/models/connections_stopped.dart';
 import 'package:scrcpy_connect/core/events/models/app_event.dart';
+import 'package:scrcpy_connect/core/media/audio_platform.dart';
+import 'package:scrcpy_connect/core/media/platform_audio.dart';
 
 /// 宿主事实不参与核心事件序列；同步撤销本地准入，再发布事件并交接异步清理。
 class PlatformEventHandler {
@@ -9,7 +11,8 @@ class PlatformEventHandler {
     required this.isDisposed,
     required this.emit,
     required this.handleShare,
-    required this.handleMedia,
+    required this.handleAudio,
+    required this.stopMedia,
     required this.stopConnections,
   });
 
@@ -17,7 +20,8 @@ class PlatformEventHandler {
   final bool Function() isDisposed;
   final void Function(AppEvent) emit;
   final Future<void> Function(Map<String, dynamic>) handleShare;
-  final Future<void> Function(Map<String, dynamic>) handleMedia;
+  final Future<void> Function(AudioPlatformEvent) handleAudio;
+  final Future<void> Function() stopMedia;
   final Future<void> Function() stopConnections;
 
   Future<void> handle(Map<String, dynamic> event) async {
@@ -31,22 +35,20 @@ class PlatformEventHandler {
       final published = Future<void>.sync(
         () => emit(const ConnectionsStopped()),
       );
-      final media = Future<void>.sync(() => handleMedia(event));
+      final media = Future<void>.sync(stopMedia);
       await Future.wait([stopped, published, media]);
       return;
     }
-    final data = event['data'] is Map
-        ? Map<String, dynamic>.from(event['data'] as Map)
-        : const <String, dynamic>{};
-    if (data['visible'] is bool &&
-        event['type'].toString().startsWith('audio.platform.')) {
-      reconnections.setVisible(data['visible'] as bool);
-    }
     if (event['type'] == 'share.platform.pending') {
+      final data = event['data'] is Map
+          ? Map<String, dynamic>.from(event['data'] as Map)
+          : const <String, dynamic>{};
       await handleShare(data);
-    } else if (event['type']?.toString().startsWith('audio.platform.') ==
-        true) {
-      await handleMedia(event);
+    } else if (decodeAudioPlatformEvent(event) case final audio?) {
+      if (audio case AudioVisibilityChanged(:final visible)) {
+        reconnections.setVisible(visible);
+      }
+      await handleAudio(audio);
     }
   }
 }

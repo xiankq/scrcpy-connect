@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:media_codec/media_codec.dart';
 import 'package:scrcpy/scrcpy.dart';
+import 'package:scrcpy_connect/core/media/audio_platform.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
@@ -30,7 +31,7 @@ class AudioOutputService {
   final Future<MediaCodecSource> Function(String sourceId, int generation)
   openSource;
   final Future<ScrcpySourceStatus> Function(String sourceId) sourceStatus;
-  final AudioPlatformRequest platform;
+  final AudioPlatform platform;
   static int _nextOwner = 0;
   final String _ownerId =
       'audio-${DateTime.now().microsecondsSinceEpoch}-${_nextOwner++}';
@@ -43,14 +44,16 @@ class AudioOutputService {
   final _stopped = <String>{};
   final _retiring = <_AudioOutput>{};
   final _releasedEpochs = <int>{};
+  final _pendingEpochReleases = <int>{};
   final _epochReleases = <int, Future<void>>{};
   int? _epoch;
   int _lastEpoch = -1, _focusGeneration = 0, _policyRevision = 0;
-  String _focusSignal = 'none';
+  AudioFocusSignal _focusSignal = .none;
   Future<void>? _acquiring, _backgroundSync, _disposing;
   bool _disposed = false, _visible = false;
   bool _backgroundAllowed = false, _backgroundReady = false;
   bool? _backgroundRequested;
+  bool _backgroundUsed = false;
 
   Future<AudioOutputReceipt> start(
     DeviceAudioSnapshot stream, {
@@ -255,7 +258,8 @@ class AudioOutputService {
       _check(entry);
       if (revision != entry.requestRevision) throw _cancelled();
       if (!entry.opened) return _receipt(entry);
-      final focusPaused = _focusSignal != 'granted' || entry.requiresUserResume;
+      final focusPaused =
+          _focusSignal != AudioFocusSignal.granted || entry.requiresUserResume;
       final backgroundPaused =
           !_visible && !(_backgroundAllowed && _backgroundReady);
       final manualPaused = entry.manualPaused;
@@ -358,36 +362,34 @@ class AudioOutputService {
     await _reconcile('visibility');
   }
 
-  Future<void> handlePlatformEvent(AudioJson event) async {
+  Future<void> handlePlatformEvent(AudioPlatformEvent event) async {
     if (_disposed || isDisposed()) return;
-    final raw = event['data'];
-    final data = raw is Map ? Map<String, dynamic>.from(raw) : event;
-    if (event['type'] == 'audio.platform.visibility' &&
-        data['visible'] is bool) {
-      await setVisible(data['visible'] as bool);
+    if (event case AudioVisibilityChanged(:final visible)) {
+      await setVisible(visible);
       return;
     }
-    if (event['type'] == 'audio.platform.background' &&
-        data['ownerId'] == _ownerId &&
-        data['ready'] is bool) {
-      _backgroundReady = _backgroundAllowed && data['ready'] == true;
+    if (event case AudioBackgroundChanged(:final ownerId, :final ready)
+        when ownerId == _ownerId) {
+      _backgroundReady = _backgroundAllowed && ready;
       await _reconcile('background_service');
       return;
     }
-    if (event['type'] != 'audio.platform.focus' ||
-        data['epoch'] != _epoch ||
+    if (event is! AudioFocusChanged ||
+        event.epoch != _epoch ||
         _epoch == null) {
       return;
     }
-    final signal = data['signal'];
-    if (signal == 'granted' || signal == 'transientLoss') {
+    final signal = event.signal;
+    if (signal == AudioFocusSignal.granted ||
+        signal == AudioFocusSignal.transientLoss) {
       if (_focusSignal == signal) return;
-      _focusSignal = signal as String;
-      await _reconcile(signal);
-    } else if (signal == 'permanentLoss' || signal == 'noisy') {
+      _focusSignal = signal;
+      await _reconcile(signal.name);
+    } else if (signal == AudioFocusSignal.permanentLoss ||
+        signal == AudioFocusSignal.noisy) {
       final epoch = _epoch!;
       _epoch = null;
-      _focusSignal = signal as String;
+      _focusSignal = signal;
       _focusGeneration++;
       for (final entry in _entries.values) {
         entry.requiresUserResume = true;
@@ -400,7 +402,7 @@ class AudioOutputService {
           ),
         );
       }
-      await _reconcile(signal);
+      await _reconcile(signal.name);
       await _releaseEpoch(epoch);
     }
   }
@@ -410,8 +412,7 @@ class AudioOutputService {
   Future<void> _ensureFocus() async {
     while (true) {
       // 此所有者的重叠请求可能收到相同的原生 epoch。
-      await Future.wait(_epochReleases.values.toList())
-          .timeout(operationTimeout);
+      await _drainFocusReleases();
       if (_epoch != null) {
         return; // 短暂丢失焦点不能授权主动夺回焦点。
       }
@@ -449,33 +450,32 @@ class AudioOutputService {
   Future<void> _acquireFocus() async {
     final generation = _focusGeneration;
     // 调用方超时不能将操作从 _acquiring 分离；平台迟到回复仍可能携带需要精确清理的存活租约。
-    final result = await _platform('audio.platform.focus.acquire', {});
-    final epoch = result['epoch'];
+    final result = await platform.acquireFocus(_ownerId);
+    final epoch = result.epoch;
     if (_disposed ||
         isDisposed() ||
         _entries.isEmpty ||
         generation != _focusGeneration) {
-      if (result['granted'] == true && epoch is int) await _releaseEpoch(epoch);
+      if (result.granted && epoch != null) await _releaseEpoch(epoch);
       throw _cancelled();
     }
-    if (result['granted'] != true ||
-        epoch is! int ||
-        epoch < 0 ||
-        epoch <= _lastEpoch) {
-      if (result['granted'] == true && epoch is int && epoch >= 0) {
+    if (!result.granted || epoch == null || epoch < 0 || epoch <= _lastEpoch) {
+      if (result.granted && epoch != null && epoch >= 0) {
         await _releaseEpoch(epoch);
       }
       throw const RequestFailure('audio_focus_denied', '系统没有确认新的声音焦点，尚未开始播放。');
     }
     _epoch = epoch;
     _lastEpoch = epoch;
-    _focusSignal = 'granted';
+    _focusSignal = .granted;
   }
 
   Future<void> _releaseEpoch(int epoch) async {
     if (_releasedEpochs.contains(epoch)) return;
+    _pendingEpochReleases.add(epoch);
     final operation = _epochReleases.putIfAbsent(epoch, () async {
-      await _platform('audio.platform.focus.release', {'epoch': epoch});
+      await platform.releaseFocus(_ownerId, epoch);
+      _pendingEpochReleases.remove(epoch);
       _releasedEpochs.add(epoch);
       if (_releasedEpochs.length > 4096) {
         _releasedEpochs.remove(_releasedEpochs.first);
@@ -489,25 +489,82 @@ class AudioOutputService {
           }
         },
         onError: (Object _, StackTrace _) {
-          // 清理结果未知时保留失败栅栏；新的租约申请必须安全失败，不能再次接收并遗弃同一原生租约。
+          // 保留原代次的清理责任，后继申请或关闭只能重试这一原租约。
+          if (identical(_epochReleases[epoch], operation)) {
+            _epochReleases.remove(epoch);
+          }
         },
       ),
     );
     try {
       await operation.timeout(operationTimeout);
     } catch (_) {
-      /* 清理旧租约时不能取得替换租约。 */
+      throw const RequestFailure(
+        'audio_focus_cleanup_unconfirmed',
+        '声音焦点租约尚未确认释放，请重试关闭。',
+      );
     }
   }
 
-  Future<void> _syncBackground() async {
-    if (_backgroundSync case final pending?) return pending;
-    final operation = _runBackground();
-    _backgroundSync = operation;
+  Future<void> _drainFocusReleases() async {
+    while (_pendingEpochReleases.isNotEmpty) {
+      await Future.wait(_pendingEpochReleases.toList().map(_releaseEpoch));
+    }
+  }
+
+  Future<void> _drainFocus() async {
+    if (_acquiring case final acquiring?) {
+      try {
+        await acquiring.timeout(operationTimeout);
+      } catch (_) {
+        if (identical(_acquiring, acquiring)) {
+          throw const RequestFailure(
+            'audio_focus_cleanup_unconfirmed',
+            '原声音焦点申请尚未结束，请重试关闭。',
+          );
+        }
+        // 申请已结束；失败或取消不代表其迟到租约已经释放，继续排空原代次。
+      }
+    }
+    await _drainFocusReleases();
+  }
+
+  Future<void> _syncBackground() {
+    var operation = _backgroundSync;
+    if (operation == null) {
+      final owned = Future<void>.microtask(_runBackground);
+      _backgroundSync = operation = owned;
+      void clear() {
+        if (identical(_backgroundSync, owned)) _backgroundSync = null;
+      }
+
+      unawaited(
+        owned.then<void>(
+          (_) => clear(),
+          onError: (Object _, StackTrace _) => clear(),
+        ),
+      );
+    }
+    // 只结束调用方等待；原请求及其迟到禁用仍属于同一所有者。
+    return operation.timeout(operationTimeout);
+  }
+
+  Future<void> _drainBackground() async {
+    if (!_backgroundUsed && _backgroundSync == null) return;
     try {
-      await operation;
-    } finally {
-      if (identical(_backgroundSync, operation)) _backgroundSync = null;
+      if (_backgroundSync case final pending?) {
+        try {
+          await pending.timeout(operationTimeout);
+        } catch (_) {
+          if (identical(_backgroundSync, pending)) rethrow;
+        }
+      }
+      await _syncBackground();
+    } catch (_) {
+      throw const RequestFailure(
+        'audio_background_cleanup_unconfirmed',
+        '原后台声音请求尚未确认结束，请重试关闭。',
+      );
     }
   }
 
@@ -515,38 +572,26 @@ class AudioOutputService {
     while (true) {
       final enabled = !_disposed && _backgroundAllowed && _entries.isNotEmpty;
       if (_backgroundRequested == enabled) return;
-      final request = _platform('audio.platform.background', {
-        'enabled': enabled,
-      });
-      unawaited(
-        request.then<void>((_) {
-          if (enabled &&
-              (_disposed || !_backgroundAllowed || _entries.isEmpty)) {
-            unawaited(
-              _platform('audio.platform.background', {'enabled': false})
-                  .timeout(operationTimeout)
-                  .then<void>((_) {}, onError: (Object _, StackTrace _) {}),
-            );
-          }
-        }, onError: (Object _, StackTrace _) {}),
-      );
-      final result = await request.timeout(operationTimeout);
-      final ready =
-          result['ready'] == true || result['mediaPlaybackReady'] == true;
+      _backgroundUsed = true;
+      _backgroundRequested = null;
+      final result = await platform.setBackground(_ownerId, enabled);
+      final ready = result.ready;
+      _backgroundRequested = enabled;
+      _backgroundReady = enabled && ready;
       // 明确的宿主能力限制仍允许前台播放；支持的服务若就绪失败，则不能准入。
-      if (enabled && !ready && result['supported'] != false) {
+      if (enabled &&
+          !ready &&
+          result.supported &&
+          !_disposed &&
+          _backgroundAllowed &&
+          _entries.isNotEmpty) {
         throw const RequestFailure(
           'audio_background_unavailable',
           '系统尚未确认媒体前台服务，声音不会在后台播放。',
         );
       }
-      _backgroundRequested = enabled;
-      _backgroundReady = enabled && ready;
     }
   }
-
-  Future<AudioJson> _platform(String command, AudioJson params) =>
-      platform(command, {...params, 'ownerId': _ownerId});
 
   Future<void> _reconcile(String reason) async {
     await Future.wait(
@@ -577,7 +622,13 @@ class AudioOutputService {
         ),
       );
     }
-    unawaited(_release(entry).then((_) => _retireUnused()));
+    unawaited(
+      _release(entry)
+          .then((_) => _retireUnused())
+          .catchError((Object error, StackTrace stack) {
+            _diagnostics.failure(DiagnosticArea.audio, entry.id, error);
+          }),
+    );
   }
 
   Future<AudioJson> stop(String id) async {
@@ -608,14 +659,11 @@ class AudioOutputService {
     if (_entries.isNotEmpty) return;
     final epoch = _epoch;
     _epoch = null;
-    _focusSignal = 'none';
+    _focusSignal = .none;
     _focusGeneration++;
     if (epoch != null) await _releaseEpoch(epoch);
-    try {
-      await _syncBackground();
-    } catch (_) {
-      /* 清理不会启用后台播放。 */
-    }
+    await _drainFocus();
+    await _drainBackground();
   }
 
   void _invalidateEmptyFocus() {
@@ -632,10 +680,18 @@ class AudioOutputService {
   Future<void> _dispose() async {
     _disposed = true;
     _focusGeneration++;
-    await Future.wait(
-      {..._entries.keys, for (final entry in _retiring) entry.id}.map(stop),
-    );
-    await _retireUnused();
+    await Future.wait([
+      for (final id in {
+        ..._entries.keys,
+        for (final entry in _retiring) entry.id,
+      })
+        Future<void>.sync(() async {
+          await stop(id);
+        }),
+      Future<void>.sync(_retireUnused),
+      Future<void>.sync(_drainFocus),
+      Future<void>.sync(_drainBackground),
+    ]);
     _checkReleased();
   }
 

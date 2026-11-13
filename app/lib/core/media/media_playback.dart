@@ -16,6 +16,7 @@ import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
 import 'package:scrcpy_connect/core/media/models/video_playback_resumed.dart';
 import 'package:scrcpy_connect/core/media/audio_output_service.dart';
 import 'package:scrcpy_connect/core/media/audio_player.dart';
+import 'package:scrcpy_connect/core/media/audio_platform.dart';
 import 'package:scrcpy_connect/core/media/media_intent.dart';
 import 'package:scrcpy_connect/core/media/media_output_reconciliation.dart';
 import 'package:scrcpy_connect/core/media/models/audio_output_event.dart';
@@ -63,7 +64,7 @@ final class MediaPlayback
   final Future<RuntimeSnapshot> Function() readSnapshot;
   final Future<Preferences> Function() readSettings;
 
-  final AudioPlatformRequest platform;
+  final AudioPlatform platform;
   final void Function(AppEvent) emit;
   final bool Function() isDisposed;
   final void Function() requireVerifiedState;
@@ -315,14 +316,22 @@ final class MediaPlayback
 
   Future<void> setVisible(bool visible) => _audioOutputs.setVisible(visible);
   Future<void> policy(bool enabled) => _audioOutputs.policy(enabled);
-  Future<void> handlePlatformEvent(Map<String, dynamic> event) async {
-    if (event['type'] == 'connections.stopped') {
-      _mediaIntents.cancelAll();
-      await Future.wait(_textures.keys.toList().map(_videoLifecycle.close));
-      await Future.wait(_audioSources.keys.toList().map(_closeAudio));
-    } else {
-      await _audioOutputs.handlePlatformEvent(event);
-    }
+  Future<void> handlePlatformEvent(AudioPlatformEvent event) async {
+    if (_disposed) return;
+    await _audioOutputs.handlePlatformEvent(event);
+  }
+
+  /// 宿主明确停止时同步撤销意图，再等待各输出原所有者排空。
+  Future<void> stopForHost() async {
+    final pending = _mediaIntents.active.toList();
+    _mediaIntents.cancelAll();
+    await Future.wait([
+      for (final id in _textures.keys.toList())
+        Future<void>.sync(() => _videoLifecycle.close(id)),
+      for (final id in _audioSources.keys.toList())
+        Future<void>.sync(() => _closeAudio(id)),
+      for (final intent in pending) intent.done,
+    ]);
   }
 
   @override
@@ -677,7 +686,10 @@ final class MediaPlayback
           await Future.wait(pending.map((i) => i.done))
               .timeout(const Duration(seconds: 45));
         } on TimeoutException {
-          // 迟到的原生启动继续由原所有者完成有界取消清理。
+          throw const RequestFailure(
+            'media_cleanup_unconfirmed',
+            '原媒体启动尚未确认结束，请重试关闭。',
+          );
         }
       },
     ]);

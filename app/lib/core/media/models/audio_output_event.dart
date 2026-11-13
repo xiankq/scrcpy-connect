@@ -1,5 +1,6 @@
 import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:scrcpy_connect/core/media/models/device_audio_snapshot.dart';
+import 'package:scrcpy_connect/core/media/models/audio_focus.dart';
 
 sealed class AudioOutputEvent extends AppEvent {
   const AudioOutputEvent();
@@ -49,5 +50,5 @@ final class AudioResumeRequired extends AudioOutputEvent {
   final String sourceId;
   @override
   final String deviceId;
-  final String focusSignal;
+  final AudioFocusSignal focusSignal;
 }
