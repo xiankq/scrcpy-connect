@@ -18,7 +18,7 @@ abstract final class GlassMaterial {
 
   static bool get isInitialized => _initialized;
   static const backend = 'liquid_glass_widgets';
-  static const backendVersion = '1.15.0';
+  static const backendVersion = '1.17.2';
   static const samplingBounds = 'surface-rect-with-optical-headroom';
   static const composition =
       'component-owned-navigation-and-local-surface-groups';
@@ -97,12 +97,9 @@ abstract final class GlassMaterial {
       ? settings(context).copyWith(glassColor: DesignTokens.colorTransparent)
       : liquid.AnimatedGlassIndicator.baseIndicatorSettings;
 
-  static bool restingNavigationLens(BuildContext context) =>
-      ImageFilter.isShaderFilterSupported &&
-      Theme.of(context).brightness == Brightness.light &&
-      quality(context) == liquid.GlassQuality.premium;
-
-  /// 唯一 regular 导航轨道，先于选择镜片和图标绘制，避免静止镜片采样自身前景标签。
+  /// The package-owned navigation track and indicator share one optical layer.
+  /// Keeping the shadow on that same settings object avoids a second overlay
+  /// that can be clipped or disappear while the official indicator settles.
   static liquid.LiquidGlassSettings navigationTrackSettings(
     BuildContext context,
   ) => settings(context).copyWith(
@@ -117,20 +114,10 @@ abstract final class GlassMaterial {
         : const [],
   );
 
-  /// 前景栏保留库的手势和移动镜片。
-  /// premium 三层路径中，同时为零的深度和模糊选择无光学快速路径；仅透明仍会绘制玻璃轨道。
+  /// The official bottom bar owns both the track and its moving indicator.
   static liquid.LiquidGlassSettings navigationBarSettings(
     BuildContext context,
-  ) => restingNavigationLens(context)
-      ? settings(context).copyWith(
-          thickness: 0,
-          blur: 0,
-          glassColor: DesignTokens.colorTransparent,
-          backerColor: DesignTokens.colorTransparent,
-          bodyMode: liquid.GlassBodyMode.clear,
-          shadow: const [],
-        )
-      : navigationTrackSettings(context);
+  ) => navigationTrackSettings(context);
 
   /// 向后端注册 Material 明暗模式和系统辅助偏好。
   /// 背景采样组只属于局部控件组，不能放在根 Navigator。

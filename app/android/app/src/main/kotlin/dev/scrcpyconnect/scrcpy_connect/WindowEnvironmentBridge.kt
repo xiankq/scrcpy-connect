@@ -91,9 +91,16 @@ internal class WindowEnvironmentBridge(
             "width" to bounds.width() / density,
             "height" to bounds.height() / density,
             "windowId" to windowId(),
+            "mode" to windowMode(),
             "posture" to posture,
             "displayFeatures" to projectedFeatures,
         )
+    }
+
+    private fun windowMode(): String = when {
+        activity.isInPictureInPictureMode -> "floating"
+        activity.isInMultiWindowMode -> "split"
+        else -> "fullScreen"
     }
 
     private fun featurePayload(
