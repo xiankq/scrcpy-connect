@@ -90,8 +90,8 @@ abstract final class GlassMaterial {
     );
   }
 
-  /// 标签栏局部 clear 镜片，与 regular 玻璃轨道分开。
-  static liquid.LiquidGlassSettings navigationLensSettings(
+  /// 标签栏指示器的局部 clear 材质，与 regular 玻璃轨道分开。
+  static liquid.LiquidGlassSettings navigationIndicatorSettings(
     BuildContext context,
   ) => opaque(context)
       ? settings(context).copyWith(glassColor: DesignTokens.colorTransparent)
