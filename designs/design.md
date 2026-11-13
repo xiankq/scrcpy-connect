@@ -608,7 +608,7 @@ components:
     textColor: '{colors.black}'
 ---
 
-# 桌面多窗口由 `desktop_multi_window` 管理独立 Flutter engine；每个子窗口必须注册插件并携带自己的设备、应用和会话身份。Android 由 `FlutterEngineGroup` 与独立 `Activity` 任务创建第二窗口，iOS/iPadOS 由 `UIApplicationSupportsMultipleScenes`、`FlutterEngineGroup` 与 `SceneDelegate` 创建第二 scene。HarmonyOS 仍由 WindowStage 宿主适配器负责创建窗口；没有宿主能力时只能明确回退为同页分栏。
+# 桌面多窗口由 `desktop_multi_window` 管理独立 Flutter engine；每个子窗口必须注册插件并携带自己的设备、应用和会话身份，缺少 `window.readEnvironment` 回调时仍从当前 `WindowController.windowId` 投影窗口身份。Android 由 `FlutterEngineGroup` 与独立 `Activity` 任务创建第二窗口，iOS/iPadOS 由 `UIApplicationSupportsMultipleScenes`、`FlutterEngineGroup` 与 `SceneDelegate` 创建第二 scene。HarmonyOS 仍由 WindowStage 宿主适配器负责创建窗口；没有宿主能力时只能明确回退为同页分栏。
 
 # 邻接 · iOS 27 设计规范
 

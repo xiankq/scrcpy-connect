@@ -8,7 +8,7 @@
 
 折叠与双屏必须避开铰链、折痕、挖孔和相机等系统保留区。外屏保持单列，完全展开使用双栏，书本／桌面半折按实时折叠特征避让；开合、旋转、分屏、自由缩放和键盘出现时保留当前设备、应用任务、焦点、选择、未提交输入和滚动位置。iPhone Duo 使用外屏单列、内屏双栏和 reserved regions；Android 使用 WindowManager 折叠特征；HarmonyOS 使用窗口断点与折叠分栏容器；Flutter 统一层只消费宿主提供的 `WindowEnvironment`。
 
-连接屏幕的独立窗口属于控制会话的窗口实例。每个实例拥有唯一窗口身份、设备身份、应用任务、视频捕获和输入焦点；关闭只撤销自己的会话，迟到回执不能更新已关闭窗口。平板、桌面、移动端和鸿蒙分别由宿主的 Android Activity/WindowManager、iPadOS/macOS scene/window、HarmonyOS WindowStage 或对应插件创建和销毁；Flutter 官方 view／multi-engine 能力不等于统一的原生窗口 API。宿主不支持额外窗口时回退为同页分栏，但继续使用同一窗口身份和状态边界。
+连接屏幕的独立窗口属于控制会话的窗口实例。每个实例拥有唯一窗口身份、设备身份、应用任务、视频捕获和输入焦点；关闭只撤销自己的会话，迟到回执不能更新已关闭窗口。平板、桌面、移动端和鸿蒙分别由宿主的 Android Activity/WindowManager、iPadOS/macOS scene/window、HarmonyOS WindowStage 或对应插件创建和销毁；桌面子 engine 若没有 `window.readEnvironment` 宿主回调，使用 `desktop_multi_window` 当前 `WindowController.windowId` 保持身份隔离。Flutter 官方 view／multi-engine 能力不等于统一的原生窗口 API。宿主不支持额外窗口时回退为同页分栏，但继续使用同一窗口身份和状态边界。
 
  Flutter 侧已交付 `WindowEnvironment`、`WindowEnvironmentCodec` 与显示特征保留区布局：引擎能提供的 Android／折叠特征直接由 `MediaQuery` 消费，iPhone Duo 与 HarmonyOS 宿主可将 scene／FoldSplitContainer 投影为同一 payload；窗口指标变化或应用恢复前台时重新读取宿主投影，当前 Flutter view 的尺寸与显示特征保持实时；桌面工作区和折叠导航会为全高折痕／铰链留下真实空区。横向全宽铰链进入桌面半折时，`WindowPaneHost` 选择安全子屏并重写该子屏的 MediaQuery，内容不跨铰链。Linux、macOS、Windows 使用 `desktop_multi_window` 创建独立 Flutter engine，并在每个子窗口注册插件；Android 使用 `FlutterEngineGroup` + 独立 `Activity` 任务，iOS/iPadOS 使用 `UIApplicationSupportsMultipleScenes` + `FlutterEngineGroup` + `SceneDelegate` 创建真实窗口。Flutter 官方主线没有 HarmonyOS 目标；OpenHarmony 社区 fork 需要独立 SDK、`flutter.har` 和 DevEco/HVIGOR 工具链（见 [社区 fork](https://gitee.com/openharmony-sig/flutter_flutter) 与 [Flutter 讨论](https://github.com/flutter/flutter/issues/178206)）。当前仓库只有统一 payload 与 Dart 侧回退契约，没有这些宿主工程和工具链，不能把 HarmonyOS 标记为已交付的原生多窗口。
 
