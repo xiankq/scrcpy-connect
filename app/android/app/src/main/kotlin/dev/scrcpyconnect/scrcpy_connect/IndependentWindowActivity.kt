@@ -2,6 +2,7 @@ package dev.scrcpyconnect.scrcpy_connect
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -20,6 +21,23 @@ class IndependentWindowActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         engine = flutterEngine
         ProcessFlutterHost.attachIndependent(this, flutterEngine)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        ProcessFlutterHost.refreshEnvironment(this)
+    }
+
+    override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean) {
+        super.onMultiWindowModeChanged(isInMultiWindowMode)
+        ProcessFlutterHost.refreshEnvironment(this)
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode)
+        ProcessFlutterHost.refreshEnvironment(this)
     }
 
     override fun onDestroy() {

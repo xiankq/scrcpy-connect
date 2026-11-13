@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.Configuration
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbManager
@@ -94,6 +95,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onStart() {
         super.onStart()
+        ProcessFlutterHost.refreshEnvironment(this)
         audio.visible(this, true)
         DiscoveryNetwork.acquire(this, activityLease)
         ConnectionService.appEntered(this)
@@ -104,6 +106,23 @@ class MainActivity : FlutterActivity() {
         audio.visible(this, false)
         DiscoveryNetwork.release(activityLease)
         super.onStop()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        ProcessFlutterHost.refreshEnvironment(this)
+    }
+
+    override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean) {
+        super.onMultiWindowModeChanged(isInMultiWindowMode)
+        ProcessFlutterHost.refreshEnvironment(this)
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode)
+        ProcessFlutterHost.refreshEnvironment(this)
     }
 
     override fun onNewIntent(intent: Intent) {

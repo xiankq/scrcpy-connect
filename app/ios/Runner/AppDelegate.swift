@@ -5,6 +5,7 @@ import UserNotifications
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private let engineGroup = FlutterEngineGroup(name: "scrcpy_connect", project: nil)
+  private var environmentEventHandlers: [ObjectIdentifier: WindowEnvironmentEvents] = [:]
 
   override func application(
     _ application: UIApplication,
@@ -17,6 +18,7 @@ import UserNotifications
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     registerPlatformChannels(
+      engine: nil,
       messenger: engineBridge.applicationRegistrar.messenger(),
       registry: engineBridge.pluginRegistry,
       windowProvider: { AppDelegate.activeWindow() },
@@ -34,6 +36,7 @@ import UserNotifications
 
   func configure(engine: FlutterEngine, window: UIWindow, windowId: String? = nil) {
     registerPlatformChannels(
+      engine: engine,
       messenger: engine.binaryMessenger,
       registry: engine,
       windowProvider: { [weak window] in window },
@@ -41,6 +44,7 @@ import UserNotifications
   }
 
   private func registerPlatformChannels(
+    engine: FlutterEngine?,
     messenger: FlutterBinaryMessenger,
     registry: FlutterPluginRegistry,
     windowProvider: @escaping () -> UIWindow?,
@@ -55,6 +59,9 @@ import UserNotifications
       name: "dev.scrcpyconnect/window_environment/events",
       binaryMessenger: messenger)
     environmentChannel.setStreamHandler(environmentEvents)
+    if let engine = engine {
+      environmentEventHandlers[ObjectIdentifier(engine)] = environmentEvents
+    }
     if #available(iOS 27.1, *) {
       DispatchQueue.main.async { [weak environmentEvents] in
         guard let view = windowProvider()?.rootViewController?.view else { return }
@@ -90,6 +97,14 @@ import UserNotifications
     if let registrar = registry.registrar(forPlugin: "SystemVisualPreferences") {
       SystemVisualPreferences.register(with: registrar)
     }
+  }
+
+  func refreshEnvironment(for engine: FlutterEngine) {
+    environmentEventHandlers[ObjectIdentifier(engine)]?.emit()
+  }
+
+  func removeEnvironment(for engine: FlutterEngine) {
+    environmentEventHandlers.removeValue(forKey: ObjectIdentifier(engine))
   }
 
   private func readEnvironment(

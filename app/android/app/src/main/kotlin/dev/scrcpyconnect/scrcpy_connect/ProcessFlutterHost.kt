@@ -152,6 +152,13 @@ internal object ProcessFlutterHost {
             },
         )
     }
+
+    fun refreshEnvironment(host: android.app.Activity) {
+        environmentBridges.values
+            .filter { it.isFor(host) }
+            .forEach { it.refresh() }
+    }
+
     fun emit(event: Map<String, Any?>) { main.post { sinks.values.toList().forEach { it.success(event) } } }
     fun stopRequested(context: Context) {
         NativeAudioRuntime.get(context).stopAll()

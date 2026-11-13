@@ -31,8 +31,10 @@ internal class WindowEnvironmentBridge(
     )
     private val executor = ContextCompat.getMainExecutor(activity)
     private var sink: EventChannel.EventSink? = null
+    private var latestFeatures: List<DisplayFeature> = emptyList()
     private var latest = snapshot(emptyList())
     private val listener = Consumer<WindowLayoutInfo> { info ->
+        latestFeatures = info.displayFeatures
         latest = snapshot(info.displayFeatures)
         sink?.success(latest)
     }
@@ -52,6 +54,14 @@ internal class WindowEnvironmentBridge(
     }
 
     fun readEnvironment(): Map<String, Any> = latest
+
+    /** Re-emits mode, bounds and cutouts after an Activity callback. */
+    fun refresh() {
+        latest = snapshot(latestFeatures)
+        sink?.success(latest)
+    }
+
+    fun isFor(owner: Activity): Boolean = activity === owner
 
     fun close() {
         tracker.removeWindowLayoutInfoListener(listener)

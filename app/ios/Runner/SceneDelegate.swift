@@ -24,15 +24,40 @@ class SceneDelegate: FlutterSceneDelegate {
       appDelegate.configure(engine: engine, window: window, windowId: windowId)
     }
     registerSceneLifeCycle(with: engine)
+    appDelegate.refreshEnvironment(for: engine)
     super.scene(scene, willConnectTo: session, options: connectionOptions)
   }
 
+  override func sceneDidBecomeActive(_ scene: UIScene) {
+    super.sceneDidBecomeActive(scene)
+    refreshEnvironment()
+  }
+
+  override func sceneWillEnterForeground(_ scene: UIScene) {
+    super.sceneWillEnterForeground(scene)
+    refreshEnvironment()
+  }
+
+  func sceneDidUpdate(_ scene: UIScene) {
+    refreshEnvironment()
+  }
+
   override func sceneDidDisconnect(_ scene: UIScene) {
+    if let appDelegate = UIApplication.shared.delegate as? AppDelegate,
+      let engine = flutterEngine {
+      appDelegate.removeEnvironment(for: engine)
+    }
     if let engine = flutterEngine {
       unregisterSceneLifeCycle(with: engine)
     }
     flutterEngine = nil
     super.sceneDidDisconnect(scene)
+  }
+
+  private func refreshEnvironment() {
+    guard let appDelegate = UIApplication.shared.delegate as? AppDelegate,
+      let engine = flutterEngine else { return }
+    appDelegate.refreshEnvironment(for: engine)
   }
 
 }
