@@ -715,7 +715,7 @@ Ardot 独立顶层画板：规范／组件在左，完整页面居中按产品�
 
 媒体 `media-shade` 覆盖控制实际高度及安全区，再按 `media-protection.height` 渐退，先于玻璃绘制、不拦触摸。背景滚动／视频、按下／取消和辅助偏好需运行验证；静态稿仅核对材料目标。用照片、细线及密集文字检查连续折射和可读性，离散重影须修正采样。
 
-`assets/liquid-glass.glsl` 是静态材质参考；opticalDepth 为厚度，refractionWidth 为边缘过渡及形状融合距离。生产后端与初始化见[应用入口](../app/lib/main.dart)。
+玻璃光学参数中 opticalDepth 为厚度，refractionWidth 为边缘过渡及形状融合距离。生产后端与初始化见[应用入口](../app/lib/main.dart)。
 
 ## Shapes
 
