@@ -17,6 +17,7 @@ import 'package:scrcpy_connect/core/files/file_failure.dart';
 import 'package:scrcpy_connect/core/files/file_paths.dart';
 import 'package:scrcpy_connect/core/files/file_publication_leases.dart';
 import 'package:scrcpy_connect/core/files/file_transfer_journal.dart';
+import 'package:scrcpy_connect/core/files/file_transfer_publications.dart';
 import 'package:scrcpy_connect/core/files/file_transfers.dart';
 import 'package:scrcpy_connect/core/files/models/file_stamp.dart';
 import 'package:scrcpy_connect/core/files/models/file_transfer_event.dart';
@@ -34,7 +35,14 @@ class FileTransferService implements FileTransfers {
   final FileExecutor executor;
   final FileCacheLeases? cache;
   final FilePublicationLeases? publication;
-  final _shareSubmissions = <String, _ShareSubmission>{};
+  late final _publications = FileTransferPublications(
+    leases: publication,
+    publish: (plan, {required shareId, required batchId}) =>
+        _startTransfer(plan, shareId: shareId, publicationBatchId: batchId),
+    readRecords: () => _tasks.values.map((task) => task.record),
+    readWriteTail: () => _writes,
+  );
+
   // 同 isolate 重新附着时旧租约持续保护未知结果；冷启动从持久任务重建保护。
   static final _leaseHandoffs =
       <String, List<({FileCacheLeases owner, Map<String, String> leases})>>{};
@@ -261,12 +269,7 @@ class FileTransferService implements FileTransfers {
         .map((state) => state.worker)
         .whereType<Future<void>>()
         .toList();
-    final submissions = _shareSubmissions.values
-        .where((submission) => submission.device == device)
-        .toList();
-    for (final submission in submissions) {
-      submission.cancellation.cancel();
-    }
+    final publications = _publications.cancelPending(deviceId: device);
     final preparing = _batchStates.values
         .map((state) => state.preparation)
         .whereType<_TransferPreparation>()
@@ -284,12 +287,7 @@ class FileTransferService implements FileTransfers {
         _tasks.values.where((t) => t.record.deviceId == device).toList(),
       );
     })();
-    await Future.wait([
-      prepared,
-      transfers,
-      ...workers,
-      ...submissions.map((submission) => submission.finished.future),
-    ]);
+    await Future.wait([prepared, transfers, ...workers, publications]);
   }
 
   Future<void> close() {
@@ -301,10 +299,7 @@ class FileTransferService implements FileTransfers {
   }
 
   Future<void> _close() async {
-    final submissions = _shareSubmissions.values.toList();
-    for (final submission in submissions) {
-      submission.cancellation.cancel();
-    }
+    final publications = _publications.cancelPending();
     final preparing = _batchStates.values
         .map((state) => state.preparation)
         .whereType<_TransferPreparation>()
@@ -333,7 +328,7 @@ class FileTransferService implements FileTransfers {
         ..._batchStates.values
             .map((state) => state.worker)
             .whereType<Future<void>>(),
-        ...submissions.map((submission) => submission.finished.future),
+        publications,
       ]);
       await _retryTransferCleanups(_tasks.values, requireRecoverable: false);
       await _writes;
@@ -903,9 +898,11 @@ class FileTransferService implements FileTransfers {
     FileTransferPlan plan, {
     String? shareId,
   }) async {
-    return shareId != null && plan.direction == FileTransferDirection.push
-        ? _submitSharePlan(plan, shareId: shareId)
-        : _startTransfer(plan, shareId: shareId);
+    if (shareId != null && plan.direction == FileTransferDirection.push) {
+      _checkTransferAdmission(plan.deviceId);
+      return _publications.submit(plan, shareId: shareId);
+    }
+    return _startTransfer(plan, shareId: shareId);
   }
 
   Future<FileTransferSubmission> _startTransfer(
@@ -994,7 +991,8 @@ class FileTransferService implements FileTransfers {
         _check();
         if (owner != null) {
           timer.cancel();
-          return await _submitSharePlan(plan, shareId: owner);
+          _checkTransferAdmission(plan.deviceId);
+          return await _publications.submit(plan, shareId: owner);
         }
       }
       while (pending.isNotEmpty) {
@@ -1713,106 +1711,6 @@ class FileTransferService implements FileTransfers {
     }
   }
 
-  /// 同一分享只提交一次；持久指纹从实际执行计划生成。
-  Future<FileTransferSubmission> _submitSharePlan(
-    FileTransferPlan plan, {
-    required String shareId,
-  }) {
-    final device = plan.deviceId;
-    _checkTransferAdmission(device);
-    if (plan.direction != FileTransferDirection.push) {
-      throw const FileFailure('invalid_argument', '分享来源只能发送到设备。');
-    }
-    final previous = _shareSubmissions[shareId];
-    if (previous != null) {
-      if (!previous.matches(plan)) {
-        throw const FileFailure('share_submission_mismatch', '本次分享已经使用其他传输参数。');
-      }
-      return previous.result.future;
-    }
-    final submission = _ShareSubmission(plan);
-    // 来源租约尚未返回也属于本设备的准备责任，先登记再调用外部所有者。
-    _shareSubmissions[shareId] = submission;
-    unawaited(() async {
-      try {
-        submission.result.complete(
-          await _publishShare(
-            plan,
-            shareId: shareId,
-            cancellation: submission.cancellation,
-          ),
-        );
-      } catch (error, stack) {
-        submission.result.completeError(error, stack);
-      } finally {
-        _shareSubmissions.remove(shareId);
-        submission.finished.complete();
-      }
-    }());
-    return submission.result.future;
-  }
-
-  Future<FileTransferSubmission> _publishShare(
-    FileTransferPlan plan, {
-    required String shareId,
-    required FileCancellation cancellation,
-  }) async {
-    final leases = publication;
-    if (leases == null) {
-      throw const FileFailure('share_not_configured', '分享来源租约执行器尚未配置。');
-    }
-    final batch = const Uuid().v4();
-    final previous = await leases.begin(shareId, plan, transferId: batch);
-    if (previous != null) {
-      return FileTransferSubmission(
-        batchId: previous.batchId,
-        transferId: previous.transferId,
-        itemCount:
-            previous.itemCount ??
-            _tasks.values
-                .where((task) => task.record.batchId == previous.batchId)
-                .length,
-        status: previous.status,
-        reusedTransfer: true,
-      );
-    }
-    try {
-      // 停止可能发生在来源登记等待期间；迟到租约只能收尾，不能创建新传输。
-      cancellation.check();
-      final receipt = await _startTransfer(
-        plan,
-        shareId: shareId,
-        publicationBatchId: batch,
-      );
-      try {
-        await leases.finish(
-          shareId,
-          FilePublicationOutcome.published(
-            FilePublicationReceipt.fromSubmission(receipt),
-          ),
-        );
-      } catch (_) {
-        return receipt.copyWith(sourceLeaseReconciliationPending: true);
-      }
-      return receipt;
-    } catch (error, stack) {
-      final unpublished = !_tasks.values.any(
-        (task) => task.record.batchId == batch,
-      );
-      try {
-        await leases.finish(
-          shareId,
-          unpublished
-              ? const FilePublicationOutcome.unpublished()
-              : const FilePublicationOutcome.unknown(),
-        );
-      } catch (_) {
-        // 回执缺失时保留源租约。
-      }
-      Error.throwWithStackTrace(error, stack);
-    }
-  }
-
   /// 保护受管取回内容及未发布片段；租约由实际消费者显式释放。
   Future<String> acquireCacheLease(String transferId) async {
     _check();
@@ -1833,67 +1731,8 @@ class FileTransferService implements FileTransfers {
     ]);
   }
 
-  Future<FilePublicationReconciliation> reconcileShares() async {
-    final sources = publication;
-    if (sources == null) {
-      return const FilePublicationReconciliation(
-        reconciled: false,
-        snapshotComplete: false,
-        reason: FilePublicationReconciliationReason.notConfigured,
-      );
-    }
-    final paths = await sources.sourcePaths;
-    // Await the current tail again if another task queued a commit while the
-    // previous tail was flushing. Runtime completion alone is not durable proof.
-    while (true) {
-      final pending = _writes;
-      await pending;
-      if (identical(pending, _writes)) break;
-    }
-    Set<String> rootsFor(Object? source) => source is! String
-        ? {}
-        : {
-            for (final root in paths)
-              if (p.equals(root, source) || p.isWithin(root, source)) root,
-          };
-    // Directory owners cover every descendant, including independently selected
-    // children. All consumers still contribute their whole batch status.
-    // Unrelated history does not spend the source owner's bounded proof budget.
-    final batches = _tasks.values
-        .where(
-          (task) =>
-              task.record.direction == FileTransferDirection.push &&
-              rootsFor(task.record.source).isNotEmpty,
-        )
-        .map((task) => task.record.batchId)
-        .toSet();
-    final groups = <String, List<_TransferTask>>{};
-    for (final task in _tasks.values.where(
-      (t) => t.record.direction == FileTransferDirection.push,
-    )) {
-      final batch = task.record.batchId;
-      if (!batches.contains(batch)) continue;
-      groups.putIfAbsent(batch, () => []).add(task);
-    }
-    return sources.reconcile(
-      DurableFilePublications(
-        complete: true,
-        coveredSources: paths,
-        transfers: [
-          for (final group in groups.entries)
-            DurableFilePublication(
-              batchId: group.key,
-              completed: group.value.every(
-                (task) => task.record.status == FileTransferStatus.completed,
-              ),
-              sources: group.value
-                  .expand((task) => rootsFor(task.record.source))
-                  .toSet(),
-            ),
-        ],
-      ),
-    );
-  }
+  Future<FilePublicationReconciliation> reconcileShares() =>
+      _publications.reconcile();
 }
 
 /// 仅当前 isolate 的精确清理权；持久日志只保存未知事实，不序列化资源句柄。
@@ -1947,27 +1786,6 @@ final class _TransferPreparation {
   final finished = Completer<void>();
   String? lease;
   Future<void>? releasing;
-}
-
-/// 分享来源交接在普通传输准备前开始，停止必须等待其真实结算。
-final class _ShareSubmission {
-  _ShareSubmission(this.plan);
-  final FileTransferPlan plan;
-  String get device => plan.deviceId;
-  bool matches(FileTransferPlan other) =>
-      plan.deviceId == other.deviceId &&
-      plan.direction == other.direction &&
-      plan.conflict == other.conflict &&
-      plan.destination == other.destination &&
-      plan.items.length == other.items.length &&
-      Iterable<int>.generate(plan.items.length).every(
-        (index) =>
-            plan.items[index].source == other.items[index].source &&
-            plan.items[index].destination == other.items[index].destination,
-      );
-  final cancellation = FileCancellation();
-  final result = Completer<FileTransferSubmission>();
-  final finished = Completer<void>();
 }
 
 /// worker 和取消持有稳定身份，状态更新替换不可变记录；旧任务不能重新写回任务表。

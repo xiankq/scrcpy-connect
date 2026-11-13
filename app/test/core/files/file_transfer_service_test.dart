@@ -10,6 +10,7 @@ import 'package:scrcpy_connect/core/files/file_cancellation.dart';
 import 'package:scrcpy_connect/core/files/file_changes_provider.dart';
 import 'package:scrcpy_connect/core/files/file_executor.dart';
 import 'package:scrcpy_connect/core/files/file_failure.dart';
+import 'package:scrcpy_connect/core/files/file_publication_leases.dart';
 import 'package:scrcpy_connect/core/files/file_transfer_service.dart';
 import 'package:scrcpy_connect/core/files/file_transfer_journal.dart';
 import 'package:scrcpy_connect/core/files/models/file_directory_facts.dart';
@@ -18,6 +19,92 @@ import 'package:scrcpy_connect/core/files/models/file_transfer_event.dart';
 import 'package:scrcpy_connect/core/files/file_transfers.dart';
 
 void main() {
+  test('分享提交接入真实传输与日志，重复入口不重复执行且完成证据已落盘', () async {
+    final directory = await Directory.systemTemp.createTemp('transfer-share-');
+    final executor = _Executor();
+    final leases = _PendingPublication();
+    final transfers = await FileTransferService.open(
+      executor: executor,
+      dataDirectory: directory,
+      publication: leases,
+    );
+    addTearDown(() async {
+      if (!leases.begun.isCompleted) leases.begun.complete(null);
+      if (!executor.copied.isCompleted) executor.copied.complete(3);
+      await transfers.close();
+      await directory.delete(recursive: true);
+    });
+    final first = transfers.startTransfer(_plan(), shareId: 'share');
+    final duplicate = transfers.startTransfer(_plan(), shareId: 'share');
+    leases.begun.complete(null);
+    final receipt = await first;
+    expect(await duplicate, receipt);
+    expect(
+      (leases.outcomes.single as FilePublicationPublished).receipt.batchId,
+      receipt.batchId,
+    );
+    await executor.copyStarted.future;
+    executor.copied.complete(3);
+    final evidence = await leases.evidence.future;
+    expect(evidence.transfers.single.batchId, receipt.batchId);
+    expect(evidence.transfers.single.completed, isTrue);
+    expect(executor.copyCalls, 1);
+    final durable = await FileTransferJournal(directory).load();
+    expect(durable.values.single.shareId, 'share');
+    expect(durable.values.single.status, FileTransferStatus.completed);
+    expect(durable.values.single.transferred, 3);
+  });
+
+  for (final close in [false, true]) {
+    test('${close ? '关闭所有者' : '停止设备'}等待迟到来源租约，禁止产生后继传输', () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'transfer-publication-',
+      );
+      final executor = _Executor();
+      final leases = _PendingPublication();
+      final transfers = await FileTransferService.open(
+        executor: executor,
+        dataDirectory: directory,
+        publication: leases,
+      );
+      addTearDown(() async {
+        if (!leases.begun.isCompleted) leases.begun.complete(null);
+        if (!executor.copied.isCompleted) executor.copied.complete(3);
+        await transfers.close();
+        await directory.delete(recursive: true);
+      });
+      final submitted = transfers.startTransfer(_plan(), shareId: 'share');
+      final cancelled = expectLater(
+        submitted,
+        throwsA(isA<FileFailure>().having((e) => e.code, 'code', 'cancelled')),
+      );
+      var stopped = false;
+      final stopping =
+          (close ? transfers.close() : transfers.cancelDevice('device')).then(
+            (_) => stopped = true,
+          );
+      await Future<void>.delayed(Duration.zero);
+      expect(stopped, isFalse);
+      await expectLater(
+        transfers.startTransfer(_plan(), shareId: 'successor'),
+        throwsA(
+          isA<FileFailure>().having(
+            (e) => e.code,
+            'code',
+            close ? 'closed' : 'transfer_active',
+          ),
+        ),
+      );
+      leases.begun.complete(null);
+      await cancelled;
+      await stopping;
+      expect(leases.outcomes.single, isA<FilePublicationUnpublished>());
+      expect(executor.copyCalls, 0);
+      expect((await transfers.readTransfers()).transfers, isEmpty);
+      expect(await FileTransferJournal(directory).load(), isEmpty);
+    });
+  }
+
   test('旧提交中的任务只恢复未知事实，不重放文件操作，来源身份按旧格式归一', () async {
     final directory = await Directory.systemTemp.createTemp(
       'transfer-recover-',
@@ -384,5 +471,37 @@ final class _Resource implements FileExecutionResource {
   Future<void> close() async {
     closes++;
     if (fail) throw StateError('原 worker 尚未退出');
+  }
+}
+
+final class _PendingPublication implements FilePublicationLeases {
+  final begun = Completer<FilePublicationReceipt?>();
+  final outcomes = <FilePublicationOutcome>[];
+  final evidence = Completer<DurableFilePublications>();
+
+  @override
+  Future<FilePublicationReceipt?> begin(
+    String share,
+    FileTransferPlan plan, {
+    required String transferId,
+  }) => begun.future;
+
+  @override
+  Future<void> finish(String share, FilePublicationOutcome outcome) async {
+    outcomes.add(outcome);
+  }
+
+  @override
+  Future<Set<String>> get sourcePaths async => {'/tmp/source.bin'};
+
+  @override
+  Future<FilePublicationReconciliation> reconcile(
+    DurableFilePublications evidence,
+  ) async {
+    if (!this.evidence.isCompleted) this.evidence.complete(evidence);
+    return const FilePublicationReconciliation(
+      reconciled: true,
+      snapshotComplete: true,
+    );
   }
 }
