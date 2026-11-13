@@ -13,6 +13,34 @@ import 'package:scrcpy_connect/core/settings/settings_management.dart';
 import 'package:scrcpy_connect/core/settings/settings_storage.dart';
 
 void main() {
+  test('画质更新和单设备保存均在写入前拒绝无效预设，允许仅修改明确参数', () async {
+    final fixture = await _Fixture.open();
+    final revision = fixture.settings.revision;
+    await expectLater(
+      fixture.settings.update(
+        PreferenceChanges(
+          quality: const VideoQualityPreferences(
+            qualityPreset: (name: 'unknown'),
+          ),
+        ),
+      ),
+      _failure('invalid_argument'),
+    );
+    await expectLater(
+      fixture.settings.saveDeviceQuality(
+        'phone',
+        const VideoQualityPreferences(qualityPreset: (name: 'unknown')),
+      ),
+      _failure('invalid_argument'),
+    );
+    expect(fixture.settings.revision, revision);
+    expect(fixture.settings.settings.deviceQuality, isEmpty);
+    await fixture.settings.update(
+      PreferenceChanges(quality: const VideoQualityPreferences(maxFps: 30)),
+    );
+    expect(fixture.settings.settings.quality.maxFps, 30);
+  });
+
   test('偏好已保存后关闭不再启动后台策略，回执保留已保存但应用未知', () async {
     final fixture = await _Fixture.open();
     var applied = 0;

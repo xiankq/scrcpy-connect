@@ -39,26 +39,55 @@ final class DeviceRecord {
     String? reason,
     bool autoReconnect = false,
     bool observationWanted = true,
-  }) => DeviceRecord.fromJson({
-    'id': id,
-    'name': name,
-    'address': address,
-    'port': port,
-    'transport': transport.name,
-    'status': status,
-    'guid': guid,
-    'serial': serial,
-    'model': model,
-    'androidVersion': androidVersion,
-    'apiLevel': apiLevel,
-    'battery': battery,
-    'charging': charging,
-    'batteryUpdatedAt': batteryUpdatedAt,
-    'lastSeen': lastSeen,
-    'reason': reason,
-    'autoReconnect': autoReconnect,
-    'observationWanted': observationWanted,
-  });
+  }) {
+    recordString(id, 'id', 36);
+    if (!validDeviceId(id)) {
+      throw const DeviceRecordsFailure('invalid_device_id', '设备记录标识无效。');
+    }
+    final checkedName = validateDeviceName(name);
+    final checkedAddress = validateDeviceAddress(
+      address,
+      allowEmpty: transport != DeviceTransport.tcp,
+    );
+    recordInteger(port, 'port', 65535);
+    if (transport == DeviceTransport.tcp && port == 0) {
+      throw const DeviceRecordsFailure('invalid_port', 'TCP 端口必须为 1 到 65535。');
+    }
+    recordString(status, 'status', 32);
+    if (!const {
+      'offline',
+      'connecting',
+      'connected',
+      'unauthorized',
+      'authorizing',
+    }.contains(status)) {
+      throw const DeviceRecordsFailure('invalid_device_state', '设备记录的状态无效。');
+    }
+    return DeviceRecord._(
+      id: id,
+      name: checkedName,
+      address: checkedAddress,
+      port: port,
+      transport: transport,
+      status: status,
+      guid: _nullableText(guid, 'guid', 256),
+      serial: _nullableText(serial, 'serial', 256),
+      model: _nullableText(model, 'model', 256),
+      androidVersion: _nullableText(androidVersion, 'androidVersion', 256),
+      apiLevel: _nullableInteger(apiLevel, 'apiLevel', 0xffffffff),
+      battery: _nullableInteger(battery, 'battery', 100),
+      charging: charging,
+      batteryUpdatedAt: _nullableInteger(
+        batteryUpdatedAt,
+        'batteryUpdatedAt',
+        0x7fffffffffffffff,
+      ),
+      lastSeen: _nullableInteger(lastSeen, 'lastSeen', 0x7fffffffffffffff),
+      reason: _nullableText(reason, 'reason', 4096),
+      autoReconnect: autoReconnect,
+      observationWanted: observationWanted,
+    );
+  }
   const DeviceRecord._({
     required this.id,
     required this.name,
@@ -81,42 +110,22 @@ final class DeviceRecord {
   });
   factory DeviceRecord.fromJson(Object? value) {
     final map = recordObject(value);
-    final id = recordString(map['id'], 'id', 36);
-    if (!validDeviceId(id)) {
-      throw const DeviceRecordsFailure('invalid_device_id', '设备记录标识无效。');
-    }
-    final name = validateDeviceName(map['name']);
     final transport = DeviceTransport.values
         .where((v) => v.name == map['transport'])
         .firstOrNull;
     if (transport == null) {
       throw const DeviceRecordsFailure('invalid_transport', '设备记录的连接方式无效。');
     }
-    final address = validateDeviceAddress(
-      map['address'],
-      allowEmpty: transport != DeviceTransport.tcp,
-    );
-    final port = recordInteger(map['port'], 'port', 65535);
-    if (transport == DeviceTransport.tcp && port == 0) {
-      throw const DeviceRecordsFailure('invalid_port', 'TCP 端口必须为 1 到 65535。');
-    }
-    final status = recordString(map['status'], 'status', 32);
-    if (!const {
-      'offline',
-      'connecting',
-      'connected',
-      'unauthorized',
-      'authorizing',
-    }.contains(status)) {
-      throw const DeviceRecordsFailure('invalid_device_state', '设备记录的状态无效。');
-    }
-    return DeviceRecord._(
-      id: id,
-      name: name,
-      address: address,
-      port: port,
+    return DeviceRecord(
+      id: recordString(map['id'], 'id', 36),
+      name: validateDeviceName(map['name']),
+      address: validateDeviceAddress(
+        map['address'],
+        allowEmpty: transport != DeviceTransport.tcp,
+      ),
+      port: recordInteger(map['port'], 'port', 65535),
       transport: transport,
-      status: status,
+      status: recordString(map['status'], 'status', 32),
       guid: _optionalText(map, 'guid', 256),
       serial: _optionalText(map, 'serial', 256),
       model: _optionalText(map, 'model', 256),
@@ -182,27 +191,50 @@ final class DeviceRecord {
     Object? reason = _absent,
     bool? autoReconnect,
     bool? observationWanted,
-  }) => DeviceRecord.fromJson({
-    ...toJson(),
-    'name': ?name,
-    'address': ?address,
-    'port': ?port,
-    if (transport != null) 'transport': transport.name,
-    'status': ?status,
-    if (!identical(guid, _absent)) 'guid': guid,
-    if (!identical(serial, _absent)) 'serial': serial,
-    if (!identical(model, _absent)) 'model': model,
-    if (!identical(androidVersion, _absent)) 'androidVersion': androidVersion,
-    if (!identical(apiLevel, _absent)) 'apiLevel': apiLevel,
-    if (!identical(battery, _absent)) 'battery': battery,
-    if (!identical(charging, _absent)) 'charging': charging,
-    if (!identical(batteryUpdatedAt, _absent))
-      'batteryUpdatedAt': batteryUpdatedAt,
-    if (!identical(lastSeen, _absent)) 'lastSeen': lastSeen,
-    if (!identical(reason, _absent)) 'reason': reason,
-    'autoReconnect': ?autoReconnect,
-    'observationWanted': ?observationWanted,
-  });
+  }) => DeviceRecord(
+    id: id,
+    name: name ?? this.name,
+    address: address ?? this.address,
+    port: port ?? this.port,
+    transport: transport ?? this.transport,
+    status: status ?? this.status,
+    guid: identical(guid, _absent)
+        ? this.guid
+        : _nullableText(guid, 'guid', 256),
+    serial: identical(serial, _absent)
+        ? this.serial
+        : _nullableText(serial, 'serial', 256),
+    model: identical(model, _absent)
+        ? this.model
+        : _nullableText(model, 'model', 256),
+    androidVersion: identical(androidVersion, _absent)
+        ? this.androidVersion
+        : _nullableText(androidVersion, 'androidVersion', 256),
+    apiLevel: identical(apiLevel, _absent)
+        ? this.apiLevel
+        : _nullableInteger(apiLevel, 'apiLevel', 0xffffffff),
+    battery: identical(battery, _absent)
+        ? this.battery
+        : _nullableInteger(battery, 'battery', 100),
+    charging: identical(charging, _absent)
+        ? this.charging
+        : _nullableBoolean(charging, 'charging'),
+    batteryUpdatedAt: identical(batteryUpdatedAt, _absent)
+        ? this.batteryUpdatedAt
+        : _nullableInteger(
+            batteryUpdatedAt,
+            'batteryUpdatedAt',
+            0x7fffffffffffffff,
+          ),
+    lastSeen: identical(lastSeen, _absent)
+        ? this.lastSeen
+        : _nullableInteger(lastSeen, 'lastSeen', 0x7fffffffffffffff),
+    reason: identical(reason, _absent)
+        ? this.reason
+        : _nullableText(reason, 'reason', 4096),
+    autoReconnect: autoReconnect ?? this.autoReconnect,
+    observationWanted: observationWanted ?? this.observationWanted,
+  );
 }
 
 bool validDeviceId(String value) => RegExp(
@@ -279,3 +311,15 @@ bool _boolean(Map<String, Object?> value, String key, bool fallback) {
 
 bool? _optionalBoolean(Map<String, Object?> value, String key) =>
     value[key] == null ? null : _boolean(value, key, false);
+
+String? _nullableText(Object? value, String key, int limit) =>
+    value == null ? null : recordString(value, key, limit);
+int? _nullableInteger(Object? value, String key, int limit) =>
+    value == null ? null : recordInteger(value, key, limit);
+bool? _nullableBoolean(Object? value, String key) {
+  if (value == null) return null;
+  if (value is! bool) {
+    throw DeviceRecordsFailure('invalid_data', '设备记录布尔字段无效：$key。');
+  }
+  return value;
+}

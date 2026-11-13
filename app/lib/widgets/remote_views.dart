@@ -137,8 +137,6 @@ class RemoteViewsScope extends InheritedWidget {
       views != oldWidget.views;
 }
 
-typedef SessionJson = Map<String, dynamic>;
-
 /// 路由拥有打开的控制窗口；可见性与明确关闭分开，单会话队列先排空旧输入再恢复新画面。
 class SessionViewRegistry {
   SessionViewRegistry(this.videos, {bool Function()? current})

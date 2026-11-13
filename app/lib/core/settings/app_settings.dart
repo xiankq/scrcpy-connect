@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:scrcpy_connect/core/control/video_quality_policy.dart'
-    show defaultVideoQuality, VideoQualityPolicy;
+    show VideoQualityPolicy;
 import 'package:scrcpy_connect/core/devices/device_metadata_transfer.dart';
 import 'package:scrcpy_connect/core/devices/models/device_metadata.dart';
 import 'package:scrcpy_connect/core/devices/models/device_record.dart'
@@ -40,7 +40,10 @@ final class AppSettings implements MetadataManagement, SettingsManagement {
       SettingsStorage.open(
         directory: directory,
         schema: PreferenceSchema(
-          defaults: {...preferenceDefaults, ...defaultVideoQuality},
+          defaults: {
+            ...preferenceDefaults,
+            ...PreferenceCodec.encodeQuality(VideoQualityPreferences.defaults),
+          },
         ),
       );
 
@@ -74,6 +77,9 @@ final class AppSettings implements MetadataManagement, SettingsManagement {
   ) => _enqueue(() async {
     _requireActive();
     final devices = {...settings.deviceQuality, deviceId: quality};
+    VideoQualityPolicy.validateSettings(
+      PreferenceChanges(deviceQuality: devices),
+    );
     await preferences.update(
       PreferenceCodec.encodeChanges(PreferenceChanges(deviceQuality: devices)),
     );
@@ -146,8 +152,8 @@ final class AppSettings implements MetadataManagement, SettingsManagement {
     int? expectedRevision,
   }) => _enqueue(() async {
     _requireActive();
+    VideoQualityPolicy.validateSettings(changes);
     final encoded = PreferenceCodec.encodeChanges(changes);
-    VideoQualityPolicy.validateSettings(encoded);
     await preferences.update(encoded, expectedRevision: expectedRevision);
     return _publishAndApply(
       forceBackgroundPolicy: changes.backgroundKeepAlive != null,
@@ -198,10 +204,13 @@ final class AppSettings implements MetadataManagement, SettingsManagement {
 
   Map<String, Object?> _importSettings(DeviceMetadata metadata) {
     final raw = metadata.document['settings'];
-    if (raw is Map) {
-      VideoQualityPolicy.validateSettings(Map<String, dynamic>.from(raw));
-    }
-    return preferences.schema.importSettings(raw ?? <String, Object?>{});
+    final imported = preferences.schema.importSettings(
+      raw ?? <String, Object?>{},
+    );
+    VideoQualityPolicy.validateSettings(
+      PreferenceCodec.decodeChanges(imported),
+    );
+    return imported;
   }
 
   void _requireActive() {
