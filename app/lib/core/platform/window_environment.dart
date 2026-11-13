@@ -23,6 +23,17 @@ final class WindowInsets {
   final double top;
   final double right;
   final double bottom;
+
+  @override
+  bool operator ==(Object other) =>
+      other is WindowInsets &&
+      left == other.left &&
+      top == other.top &&
+      right == other.right &&
+      bottom == other.bottom;
+
+  @override
+  int get hashCode => Object.hash(left, top, right, bottom);
 }
 
 final class WindowDisplayFeature {
@@ -41,6 +52,19 @@ final class WindowDisplayFeature {
   final double height;
   final WindowDisplayFeatureType type;
   final WindowPosture? state;
+
+  @override
+  bool operator ==(Object other) =>
+      other is WindowDisplayFeature &&
+      left == other.left &&
+      top == other.top &&
+      width == other.width &&
+      height == other.height &&
+      type == other.type &&
+      state == other.state;
+
+  @override
+  int get hashCode => Object.hash(left, top, width, height, type, state);
 
   bool contains(double x, double y) =>
       x >= left && x <= left + width && y >= top && y <= top + height;
@@ -66,6 +90,37 @@ final class WindowEnvironment {
   final WindowMode mode;
   final WindowPosture posture;
   final WindowInputCapabilities input;
+
+  @override
+  bool operator ==(Object other) {
+    if (other is! WindowEnvironment ||
+        width != other.width ||
+        height != other.height ||
+        insets != other.insets ||
+        windowId != other.windowId ||
+        mode != other.mode ||
+        posture != other.posture ||
+        input != other.input ||
+        displayFeatures.length != other.displayFeatures.length) {
+      return false;
+    }
+    for (var index = 0; index < displayFeatures.length; index++) {
+      if (displayFeatures[index] != other.displayFeatures[index]) return false;
+    }
+    return true;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    width,
+    height,
+    insets,
+    windowId,
+    mode,
+    posture,
+    input,
+    Object.hashAll(displayFeatures),
+  );
 
   WindowSizeClass get sizeClass => sizeClassFor(width);
 
@@ -123,4 +178,15 @@ final class WindowInputCapabilities {
   final bool keyboard;
   final bool pointer;
   final bool stylus;
+
+  @override
+  bool operator ==(Object other) =>
+      other is WindowInputCapabilities &&
+      touch == other.touch &&
+      keyboard == other.keyboard &&
+      pointer == other.pointer &&
+      stylus == other.stylus;
+
+  @override
+  int get hashCode => Object.hash(touch, keyboard, pointer, stylus);
 }

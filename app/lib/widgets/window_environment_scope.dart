@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:scrcpy_connect/core/platform/platform_channels.dart';
 import 'package:scrcpy_connect/core/platform/window_environment.dart';
 import 'package:scrcpy_connect/core/platform/window_environment_codec.dart';
+import 'package:scrcpy_connect/widgets/window_environment_media.dart';
 
 /// Tracks optional native window metadata and merges it with Flutter's live
 /// MediaQuery geometry as the window or application lifecycle changes.
@@ -77,39 +77,7 @@ final class _WindowEnvironmentScopeState extends State<WindowEnvironmentScope>
   static bool _sameEnvironment(
     WindowEnvironment? left,
     WindowEnvironment? right,
-  ) {
-    if (identical(left, right)) return true;
-    if (left == null || right == null) return false;
-    if (left.width != right.width ||
-        left.height != right.height ||
-        left.windowId != right.windowId ||
-        left.mode != right.mode ||
-        left.posture != right.posture ||
-        left.insets.left != right.insets.left ||
-        left.insets.top != right.insets.top ||
-        left.insets.right != right.insets.right ||
-        left.insets.bottom != right.insets.bottom ||
-        left.input.touch != right.input.touch ||
-        left.input.keyboard != right.input.keyboard ||
-        left.input.pointer != right.input.pointer ||
-        left.input.stylus != right.input.stylus ||
-        left.displayFeatures.length != right.displayFeatures.length) {
-      return false;
-    }
-    for (var i = 0; i < left.displayFeatures.length; i++) {
-      final a = left.displayFeatures[i];
-      final b = right.displayFeatures[i];
-      if (a.left != b.left ||
-          a.top != b.top ||
-          a.width != b.width ||
-          a.height != b.height ||
-          a.type != b.type ||
-          a.state != b.state) {
-        return false;
-      }
-    }
-    return true;
-  }
+  ) => left == right;
 
   @override
   Widget build(BuildContext context) {
@@ -124,44 +92,7 @@ final class _WindowEnvironmentScopeState extends State<WindowEnvironmentScope>
   }
 
   static WindowEnvironment _mediaEnvironmentOf(BuildContext context) {
-    final media = MediaQuery.of(context);
-    final displayFeatures = <WindowDisplayFeature>[];
-    var posture = WindowPosture.normal;
-    for (final feature in media.displayFeatures) {
-      final featurePosture = switch (feature.state) {
-        ui.DisplayFeatureState.postureFlat => WindowPosture.flat,
-        ui.DisplayFeatureState.postureHalfOpened => WindowPosture.book,
-        _ => null,
-      };
-      if (featurePosture != null) posture = featurePosture;
-      displayFeatures.add(
-        WindowDisplayFeature(
-          left: feature.bounds.left,
-          top: feature.bounds.top,
-          width: feature.bounds.width,
-          height: feature.bounds.height,
-          type: switch (feature.type) {
-            ui.DisplayFeatureType.fold => WindowDisplayFeatureType.fold,
-            ui.DisplayFeatureType.hinge => WindowDisplayFeatureType.hinge,
-            ui.DisplayFeatureType.cutout => WindowDisplayFeatureType.cutout,
-            _ => WindowDisplayFeatureType.fold,
-          },
-          state: featurePosture,
-        ),
-      );
-    }
-    return WindowEnvironment(
-      width: media.size.width,
-      height: media.size.height,
-      insets: WindowInsets(
-        left: media.padding.left,
-        top: media.padding.top,
-        right: media.padding.right,
-        bottom: media.padding.bottom,
-      ),
-      displayFeatures: displayFeatures,
-      posture: posture,
-    );
+    return windowEnvironmentFromMedia(MediaQuery.of(context));
   }
 
   static WindowEnvironment _merge(

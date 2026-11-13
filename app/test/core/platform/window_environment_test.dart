@@ -10,6 +10,47 @@ void main() {
     expect(WindowEnvironment.sizeClassFor(840), WindowSizeClass.expanded);
   });
 
+  test(
+    'window projections use value semantics for stable inherited updates',
+    () {
+      const first = WindowEnvironment(
+        width: 840,
+        height: 700,
+        insets: WindowInsets(top: 24),
+        displayFeatures: [
+          WindowDisplayFeature(
+            left: 420,
+            top: 0,
+            width: 2,
+            height: 700,
+            type: WindowDisplayFeatureType.fold,
+            state: WindowPosture.book,
+          ),
+        ],
+        input: WindowInputCapabilities(pointer: true),
+      );
+      const second = WindowEnvironment(
+        width: 840,
+        height: 700,
+        insets: WindowInsets(top: 24),
+        displayFeatures: [
+          WindowDisplayFeature(
+            left: 420,
+            top: 0,
+            width: 2,
+            height: 700,
+            type: WindowDisplayFeatureType.fold,
+            state: WindowPosture.book,
+          ),
+        ],
+        input: WindowInputCapabilities(pointer: true),
+      );
+
+      expect(first, second);
+      expect(first.hashCode, second.hashCode);
+    },
+  );
+
   test('workspace toolbar follows the expanded width breakpoint', () {
     expect(
       const WindowEnvironment(width: 1200, height: 479).usesWorkspaceToolbar,

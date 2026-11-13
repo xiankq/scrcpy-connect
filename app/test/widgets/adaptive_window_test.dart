@@ -6,6 +6,35 @@ import 'package:scrcpy_connect/core/platform/window_environment.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
 
 void main() {
+  testWidgets('projects MediaQuery fold posture without a host override', (
+    tester,
+  ) async {
+    WindowEnvironment? observed;
+    await tester.pumpWidget(
+      MediaQuery(
+        data: MediaQueryData(
+          size: const Size(700, 500),
+          displayFeatures: const [
+            DisplayFeature(
+              bounds: Rect.fromLTWH(349, 0, 2, 500),
+              type: DisplayFeatureType.fold,
+              state: DisplayFeatureState.postureHalfOpened,
+            ),
+          ],
+        ),
+        child: Builder(
+          builder: (context) {
+            observed = context.windowEnvironment;
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    expect(observed?.posture, WindowPosture.book);
+    expect(observed?.displayFeatures.single.state, WindowPosture.book);
+  });
+
   testWidgets('merges host posture with the live Flutter view size', (
     tester,
   ) async {
