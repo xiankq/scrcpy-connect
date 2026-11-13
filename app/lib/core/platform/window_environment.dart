@@ -177,6 +177,21 @@ final class WindowEnvironment {
     return null;
   }
 
+  /// A full-width fold or hinge that divides a tabletop or stacked layout.
+  WindowDisplayFeature? get horizontalPaneDivider {
+    for (final feature in displayFeatures) {
+      final spansWidth =
+          feature.left <= 0 &&
+          feature.left + feature.width >= width &&
+          feature.width > feature.height;
+      final isFoldOrHinge =
+          feature.type == WindowDisplayFeatureType.fold ||
+          feature.type == WindowDisplayFeatureType.hinge;
+      if (spansWidth && isFoldOrHinge) return feature;
+    }
+    return null;
+  }
+
   static WindowSizeClass sizeClassFor(double width) {
     if (width < 600) return WindowSizeClass.compact;
     if (width < 840) return WindowSizeClass.medium;

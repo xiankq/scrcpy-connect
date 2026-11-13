@@ -100,6 +100,25 @@ void main() {
     expect(environment.verticalPaneDivider, isNotNull);
   });
 
+  test('a horizontal hinge exposes a safe tabletop pane', () {
+    const environment = WindowEnvironment(
+      width: 840,
+      height: 1200,
+      displayFeatures: [
+        WindowDisplayFeature(
+          left: 0,
+          top: 599,
+          width: 840,
+          height: 2,
+          type: WindowDisplayFeatureType.hinge,
+        ),
+      ],
+    );
+
+    expect(environment.horizontalPaneDivider, isNotNull);
+    expect(environment.verticalPaneDivider, isNull);
+  });
+
   test('a camera cutout does not split the workspace into panes', () {
     const environment = WindowEnvironment(
       width: 840,

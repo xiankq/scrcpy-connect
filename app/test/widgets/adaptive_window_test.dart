@@ -35,6 +35,57 @@ void main() {
     expect(observed?.displayFeatures.single.state, WindowPosture.book);
   });
 
+  testWidgets('keeps tabletop content inside the top pane', (tester) async {
+    Size? size;
+    List<DisplayFeature>? features;
+    await tester.pumpWidget(
+      MediaQuery(
+        data: MediaQueryData(
+          size: const Size(840, 1200),
+          displayFeatures: const [
+            DisplayFeature(
+              bounds: Rect.fromLTWH(0, 599, 840, 2),
+              type: DisplayFeatureType.hinge,
+              state: DisplayFeatureState.postureHalfOpened,
+            ),
+          ],
+        ),
+        child: WindowEnvironmentScope(
+          readHostEnvironment: () async => const WindowEnvironment(
+            width: 840,
+            height: 1200,
+            posture: WindowPosture.tabletop,
+            postureProvided: true,
+            displayFeaturesProvided: true,
+            displayFeatures: [
+              WindowDisplayFeature(
+                left: 0,
+                top: 599,
+                width: 840,
+                height: 2,
+                type: WindowDisplayFeatureType.hinge,
+                state: WindowPosture.tabletop,
+              ),
+            ],
+          ),
+          child: WindowPaneHost(
+            child: Builder(
+              builder: (context) {
+                size = MediaQuery.sizeOf(context);
+                features = MediaQuery.of(context).displayFeatures;
+                return const SizedBox.expand();
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(size, const Size(840, 599));
+    expect(features, isEmpty);
+  });
+
   testWidgets('merges host posture with the live Flutter view size', (
     tester,
   ) async {
