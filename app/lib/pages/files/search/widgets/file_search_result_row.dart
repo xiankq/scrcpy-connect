@@ -4,7 +4,6 @@ import 'package:scrcpy_connect/core/files/models/file_catalog_entry.dart';
 import 'package:scrcpy_connect/pages/files/widgets/file_kind_style.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 
 class FileSearchResultRow extends StatelessWidget {
@@ -32,7 +31,7 @@ class FileSearchResultRow extends StatelessWidget {
     final kind = FileKind.classify(name: file.name, mime: file.mime);
     return Semantics(
       button: onTap != null,
-      child: GlassTooltip(
+      child: Tooltip(
         message: path,
         child: InkWell(
           onTap: onTap,

@@ -7,8 +7,8 @@ import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
+import 'package:scrcpy_connect/widgets/overlays.dart';
 
 Future<void> chooseScreenRatio(
   BuildContext context,
@@ -29,9 +29,9 @@ Future<void> chooseScreenRatio(
     ScreenAspectRatio.landscape: '16:9',
     ScreenAspectRatio.custom: '自定义',
   };
-  final choice = await showGlassDialog<ScreenAspectRatio>(
+  final choice = await showAppDialog<ScreenAspectRatio>(
     context: context,
-    builder: (context) => GlassAlertDialog(
+    builder: (context) => AppAlertDialog(
       title: const Text('屏幕比例'),
       content: SizedBox(
         width: double.maxFinite,

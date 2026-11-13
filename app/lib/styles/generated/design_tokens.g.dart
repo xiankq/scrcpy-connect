@@ -355,7 +355,7 @@ abstract final class DesignTokens {
   static const componentSheetPadding = 24.0;
   static const componentSheetRounded = 28.0;
   static const componentSheetShortHeight = 304.0;
-  static const componentSidebarBackgroundColor = Color(0x80ffffff);
+  static const componentSidebarBackgroundColor = Color(0xffffffff);
   static const componentSidebarCompactWidth = 180.0;
   static const componentSidebarTextColor = Color(0xff000000);
   static const componentSidebarWidth = 244.0;

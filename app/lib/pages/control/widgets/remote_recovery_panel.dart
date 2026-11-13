@@ -5,7 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
 import 'package:scrcpy_connect/pages/control/widgets/exit_handle.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
+import 'package:scrcpy_connect/widgets/overlays.dart';
 
 class RemoteRecoveryPanel extends StatelessWidget {
   const RemoteRecoveryPanel({
@@ -154,7 +154,7 @@ class RemoteRecoveryPanel extends StatelessWidget {
             key: const ValueKey('remote-recovery-content'),
             child: waitingForFirstFrame
                 ? _content(context)
-                : Glass(
+                : ContentSurface(
                     radius: DesignTokens.roundedLg,
                     padding: const EdgeInsets.all(DesignTokens.spacingLg),
                     child: _content(context),

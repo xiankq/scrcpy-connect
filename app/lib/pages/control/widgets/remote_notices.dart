@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
-import 'package:scrcpy_connect/widgets/dialogs.dart' show glassSnackBar;
+import 'package:scrcpy_connect/widgets/dialogs.dart' show appSnackBar;
 
 /// 提示的去重、排队和可见性由远控视图持有；会话只提供当前状态。
 final class RemoteNotices {
@@ -21,7 +21,7 @@ final class RemoteNotices {
   void show(String message) {
     if (_disposed) return;
     final notice = messengerKey.currentState?.showSnackBar(
-      glassSnackBar(message),
+      appSnackBar(message),
     );
     if (notice == null) return;
     _tail = notice;

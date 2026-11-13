@@ -1,6 +1,6 @@
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:scrcpy_connect/widgets/overlays.dart';
 
 /// 连接与授权表单共用正文和字段反馈，适用于设备设置以及内嵌 USB、二维码内容。
 class ConnectionContent extends StatelessWidget {
@@ -66,10 +66,10 @@ Future<bool> confirmConnectionChange(
   required String action,
   bool danger = false,
 }) async =>
-    await showGlassDialog<bool>(
+    await showAppDialog<bool>(
       context: context,
       builder: (dialogContext) => ConnectionContent(
-        child: GlassAlertDialog(
+        child: AppAlertDialog(
           title: Text(title),
           content: Text(message),
           actions: [

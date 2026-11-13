@@ -6,7 +6,6 @@ import 'package:scrcpy_connect/pages/files/widgets/file_kind_style.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content/media_thumbnail.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 
 class FolderListTile extends StatelessWidget {
@@ -129,7 +128,7 @@ class FolderGridTile extends StatelessWidget {
               ),
             ),
             const SizedBox(height: DesignTokens.spacingXs),
-            GlassTooltip(
+            Tooltip(
               triggerMode: TooltipTriggerMode.manual,
               message: (folder.path ?? ''),
               child: SizedBox(
@@ -256,7 +255,7 @@ class FileGridTile extends StatelessWidget {
               ),
             ),
             const SizedBox(height: DesignTokens.spacingXs),
-            GlassTooltip(
+            Tooltip(
               triggerMode: TooltipTriggerMode.manual,
               message: file.path ?? fileUnavailableReason(file),
               child: SizedBox(
@@ -398,7 +397,7 @@ class FileListTile extends StatelessWidget {
         icon: fileKindIcon(kind),
         backgroundColor: fileKindColor(kind),
       ),
-      title: GlassTooltip(
+      title: Tooltip(
         triggerMode: TooltipTriggerMode.manual,
         message: (file.path ?? ''),
         child: Text(

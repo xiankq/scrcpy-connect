@@ -8,7 +8,6 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 
 class PageFrame extends StatefulWidget {
   const PageFrame({
@@ -142,7 +141,7 @@ class _PageFrameState extends State<PageFrame> {
                       left: DesignTokens.spacingMd,
                     ),
                     child: Center(
-                      child: GlassTooltip(
+                      child: Tooltip(
                         message: backLabel,
                         child: GlassIconButton(
                           semanticLabel: backLabel,

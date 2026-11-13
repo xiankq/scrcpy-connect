@@ -8,6 +8,7 @@ import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_press_feedback.dart';
 import 'package:scrcpy_connect/widgets/glass/navigation_selection_lens.dart';
+import 'package:scrcpy_connect/widgets/overlays.dart';
 
 class NavigationScaffold extends HookConsumerWidget {
   const NavigationScaffold({super.key, required this.navigationShell});
@@ -176,7 +177,7 @@ class AppNavigationShell extends StatelessWidget {
                                   ? DesignTokens.spacingXs
                                   : DesignTokens.spacingMd,
                             ),
-                            child: Glass(
+                            child: ContentSurface(
                               padding: const EdgeInsets.all(
                                 DesignTokens.spacingXs,
                               ),

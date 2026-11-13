@@ -1,19 +1,18 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
+import 'package:scrcpy_connect/widgets/overlays.dart';
 
 void feedback(BuildContext context, String message) =>
-    ScaffoldMessenger.of(context).showSnackBar(glassSnackBar(message));
+    ScaffoldMessenger.of(context).showSnackBar(appSnackBar(message));
 
-/// 提示前景跟随玻璃外观，在接收消息的上下文中构建，避免使用默认反色文字。
-SnackBar glassSnackBar(String message) => SnackBar(
+/// 文字反馈使用实体面，前景在接收消息的上下文中跟随明暗主题。
+SnackBar appSnackBar(String message) => SnackBar(
   behavior: SnackBarBehavior.floating,
   backgroundColor: Colors.transparent,
   elevation: 0,
   padding: EdgeInsets.zero,
   content: Builder(
-    builder: (context) => Glass(
+    builder: (context) => ContentSurface(
       radius: DesignTokens.roundedLg,
       padding: const EdgeInsets.all(DesignTokens.spacingMd),
       child: Text(
@@ -46,7 +45,7 @@ Future<String?> askText(
   String? label,
   String action = '保存',
   int lines = 1,
-}) => showGlassDialog<String>(
+}) => showAppDialog<String>(
   context: context,
   builder: (_) => _TextDialog(
     title: title,
@@ -84,7 +83,7 @@ class _TextDialogState extends State<_TextDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => GlassAlertDialog(
+  Widget build(BuildContext context) => AppAlertDialog(
     title: Text(widget.title),
     content: Column(
       mainAxisSize: MainAxisSize.min,
@@ -132,9 +131,9 @@ Future<bool> confirm(
   String action = '确认',
   bool danger = false,
 }) async =>
-    await showGlassDialog<bool>(
+    await showAppDialog<bool>(
       context: context,
-      builder: (context) => GlassAlertDialog(
+      builder: (context) => AppAlertDialog(
         title: Text(title),
         content: Text(message),
         actions: [

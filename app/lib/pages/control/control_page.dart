@@ -41,8 +41,7 @@ import 'package:scrcpy_connect/router/models/remote_launch_intent.dart';
 import 'package:scrcpy_connect/router/route_observers.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 
-import 'package:scrcpy_connect/widgets/dialogs.dart'
-    show confirm, glassSnackBar;
+import 'package:scrcpy_connect/widgets/dialogs.dart' show confirm, appSnackBar;
 import 'package:scrcpy_connect/widgets/remote_failure.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
 
@@ -645,12 +644,12 @@ class _ControlPageState extends ConsumerState<ControlPage>
         if (feedback?.mounted != true) return;
         if (result.lockFailure case final failure?) {
           feedback!.showSnackBar(
-            glassSnackBar('熄屏尚未确认：${remoteFailure(failure)}'),
+            appSnackBar('熄屏尚未确认：${remoteFailure(failure)}'),
           );
         }
         if (result.closeFailure case final failure?) {
           feedback!.showSnackBar(
-            glassSnackBar('关闭窗口尚未确认：${remoteFailure(failure)}'),
+            appSnackBar('关闭窗口尚未确认：${remoteFailure(failure)}'),
           );
         }
         final receipt = result.receipt;
@@ -659,7 +658,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
             keepActive != null &&
             !keepActive.cleanupConfirmed) {
           final reason = keepActive.keepActiveError?.reason ?? '请稍后重新检查。';
-          feedback!.showSnackBar(glassSnackBar('窗口已关闭，保持唤醒服务释放尚未确认：$reason'));
+          feedback!.showSnackBar(appSnackBar('窗口已关闭，保持唤醒服务释放尚未确认：$reason'));
         }
       }),
     );

@@ -7,8 +7,8 @@ import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/content/content_capabilities_provider.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
+import 'package:scrcpy_connect/widgets/overlays.dart';
 
 bool isMediaCacheAdmissionFailure(Object? error) {
   final code = switch (error) {
@@ -94,9 +94,9 @@ Future<void> showMediaCacheAdmissionFailure(
   Object error, {
   bool canReduceSelection = false,
   VoidCallback? onOpenPhone,
-}) => showGlassDialog<void>(
+}) => showAppDialog<void>(
   context: context,
-  builder: (context) => GlassAlertDialog(
+  builder: (context) => AppAlertDialog(
     title: const Text('暂时无法准备原件'),
     content: SingleChildScrollView(
       child: Column(

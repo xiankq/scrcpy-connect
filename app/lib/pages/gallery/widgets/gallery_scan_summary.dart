@@ -5,8 +5,8 @@ import 'package:scrcpy_connect/core/gallery/gallery_scan_notifier.dart';
 import 'package:scrcpy_connect/pages/gallery/widgets/gallery_scope_sheet.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
+import 'package:scrcpy_connect/widgets/overlays.dart';
 
 class GalleryScanSummary extends StatelessWidget {
   const GalleryScanSummary({
@@ -71,7 +71,7 @@ class GalleryScanSummary extends StatelessWidget {
                   DesignTokens.componentIconButtonSize,
                 ),
               ),
-              onPressed: () => showGlassModalSheet<void>(
+              onPressed: () => showAppModalSheet<void>(
                 context: context,
                 isScrollControlled: true,
                 builder: (_) =>

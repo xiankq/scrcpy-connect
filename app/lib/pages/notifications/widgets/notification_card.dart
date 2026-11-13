@@ -11,7 +11,6 @@ import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 class NotificationCard extends HookConsumerWidget {
@@ -208,7 +207,7 @@ class NotificationCard extends HookConsumerWidget {
                           runSpacing: DesignTokens.spacingXxs,
                           children: [
                             if (notification.canDismiss == true)
-                              GlassTooltip(
+                              Tooltip(
                                 message: '清除通知',
                                 child: TextButton.icon(
                                   style: TextButton.styleFrom(

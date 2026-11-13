@@ -16,10 +16,9 @@ import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/clipboard_visibility.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:scrcpy_connect/widgets/system_notifications.dart';
+import 'package:scrcpy_connect/widgets/overlays.dart';
 
 /// 应用根部的外部意图呈现边界；调度与迟到回调必须同时遵循当前前台资格。
 class AppPresentationHost extends HookConsumerWidget {
@@ -86,9 +85,9 @@ class AppPresentationHost extends HookConsumerWidget {
           final activation = systemNotifications.takeActivation();
           if (activation == null) return;
           if (!activation.available) {
-            showGlassDialog<void>(
+            showAppDialog<void>(
               context: context,
-              builder: (context) => GlassAlertDialog(
+              builder: (context) => AppAlertDialog(
                 title: const Text('这条提醒已失效'),
                 content: Text(activation.reason),
                 actions: [
@@ -222,7 +221,7 @@ class AppPresentationHost extends HookConsumerWidget {
               elevation: 0,
               padding: EdgeInsets.zero,
               duration: const Duration(seconds: 8),
-              content: Glass(
+              content: ContentSurface(
                 padding: const EdgeInsets.all(DesignTokens.spacingMd),
                 child: Row(
                   children: [
