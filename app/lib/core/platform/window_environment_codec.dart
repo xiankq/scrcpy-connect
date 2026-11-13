@@ -20,7 +20,10 @@ final class WindowEnvironmentCodec {
     final features = _features(payload['displayFeatures']);
     final input = _input(payload['input']);
     final mode = _mode(payload['mode']);
-    final posture = _posture(payload['posture']) ?? WindowPosture.normal;
+    final posture =
+        _posture(payload['posture'], allowNull: true) ??
+        _postureFromFeatures(features) ??
+        WindowPosture.normal;
     final windowId = payload['windowId'];
     return WindowEnvironment(
       width: width,
@@ -93,6 +96,15 @@ final class WindowEnvironmentCodec {
       type: type,
       state: _posture(value['state'], allowNull: true),
     );
+  }
+
+  static WindowPosture? _postureFromFeatures(
+    List<WindowDisplayFeature> features,
+  ) {
+    for (final feature in features) {
+      if (feature.state != null) return feature.state;
+    }
+    return null;
   }
 
   static WindowDisplayFeatureType? _featureType(Object? value) =>

@@ -26,20 +26,89 @@ final class WindowEnvironmentScope extends StatefulWidget {
   State<WindowEnvironmentScope> createState() => _WindowEnvironmentScopeState();
 }
 
-final class _WindowEnvironmentScopeState extends State<WindowEnvironmentScope> {
+final class _WindowEnvironmentScopeState extends State<WindowEnvironmentScope>
+    with WidgetsBindingObserver {
   WindowEnvironment? _hostEnvironment;
+  int _requestGeneration = 0;
+  bool _reloadQueued = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_loadHostEnvironment());
   }
 
-  Future<void> _loadHostEnvironment() async {
-    final environment = await widget.readHostEnvironment();
-    if (mounted && environment != null) {
-      setState(() => _hostEnvironment = environment);
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() => _queueHostEnvironmentReload();
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _queueHostEnvironmentReload();
     }
+  }
+
+  void _queueHostEnvironmentReload() {
+    if (_reloadQueued) return;
+    _reloadQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _reloadQueued = false;
+      if (mounted) unawaited(_loadHostEnvironment());
+    });
+  }
+
+  Future<void> _loadHostEnvironment() async {
+    final requestGeneration = ++_requestGeneration;
+    final environment = await widget.readHostEnvironment();
+    if (!mounted || requestGeneration != _requestGeneration) return;
+    if (_sameEnvironment(_hostEnvironment, environment)) return;
+    setState(() {
+      _hostEnvironment = environment;
+    });
+  }
+
+  static bool _sameEnvironment(
+    WindowEnvironment? left,
+    WindowEnvironment? right,
+  ) {
+    if (identical(left, right)) return true;
+    if (left == null || right == null) return false;
+    if (left.width != right.width ||
+        left.height != right.height ||
+        left.windowId != right.windowId ||
+        left.mode != right.mode ||
+        left.posture != right.posture ||
+        left.insets.left != right.insets.left ||
+        left.insets.top != right.insets.top ||
+        left.insets.right != right.insets.right ||
+        left.insets.bottom != right.insets.bottom ||
+        left.input.touch != right.input.touch ||
+        left.input.keyboard != right.input.keyboard ||
+        left.input.pointer != right.input.pointer ||
+        left.input.stylus != right.input.stylus ||
+        left.displayFeatures.length != right.displayFeatures.length) {
+      return false;
+    }
+    for (var i = 0; i < left.displayFeatures.length; i++) {
+      final a = left.displayFeatures[i];
+      final b = right.displayFeatures[i];
+      if (a.left != b.left ||
+          a.top != b.top ||
+          a.width != b.width ||
+          a.height != b.height ||
+          a.type != b.type ||
+          a.state != b.state) {
+        return false;
+      }
+    }
+    return true;
   }
 
   @override
@@ -56,6 +125,31 @@ final class _WindowEnvironmentScopeState extends State<WindowEnvironmentScope> {
 
   static WindowEnvironment _mediaEnvironmentOf(BuildContext context) {
     final media = MediaQuery.of(context);
+    final displayFeatures = <WindowDisplayFeature>[];
+    var posture = WindowPosture.normal;
+    for (final feature in media.displayFeatures) {
+      final featurePosture = switch (feature.state) {
+        ui.DisplayFeatureState.postureFlat => WindowPosture.flat,
+        ui.DisplayFeatureState.postureHalfOpened => WindowPosture.book,
+        _ => null,
+      };
+      if (featurePosture != null) posture = featurePosture;
+      displayFeatures.add(
+        WindowDisplayFeature(
+          left: feature.bounds.left,
+          top: feature.bounds.top,
+          width: feature.bounds.width,
+          height: feature.bounds.height,
+          type: switch (feature.type) {
+            ui.DisplayFeatureType.fold => WindowDisplayFeatureType.fold,
+            ui.DisplayFeatureType.hinge => WindowDisplayFeatureType.hinge,
+            ui.DisplayFeatureType.cutout => WindowDisplayFeatureType.cutout,
+            _ => WindowDisplayFeatureType.fold,
+          },
+          state: featurePosture,
+        ),
+      );
+    }
     return WindowEnvironment(
       width: media.size.width,
       height: media.size.height,
@@ -65,27 +159,8 @@ final class _WindowEnvironmentScopeState extends State<WindowEnvironmentScope> {
         right: media.padding.right,
         bottom: media.padding.bottom,
       ),
-      displayFeatures: media.displayFeatures
-          .map(
-            (feature) => WindowDisplayFeature(
-              left: feature.bounds.left,
-              top: feature.bounds.top,
-              width: feature.bounds.width,
-              height: feature.bounds.height,
-              type: switch (feature.type) {
-                ui.DisplayFeatureType.fold => WindowDisplayFeatureType.fold,
-                ui.DisplayFeatureType.hinge => WindowDisplayFeatureType.hinge,
-                ui.DisplayFeatureType.cutout => WindowDisplayFeatureType.cutout,
-                _ => WindowDisplayFeatureType.fold,
-              },
-              state: switch (feature.state) {
-                ui.DisplayFeatureState.postureFlat => WindowPosture.flat,
-                ui.DisplayFeatureState.postureHalfOpened => WindowPosture.book,
-                _ => null,
-              },
-            ),
-          )
-          .toList(growable: false),
+      displayFeatures: displayFeatures,
+      posture: posture,
     );
   }
 
@@ -93,6 +168,7 @@ final class _WindowEnvironmentScopeState extends State<WindowEnvironmentScope> {
     WindowEnvironment media,
     WindowEnvironment host,
   ) {
+    final hostHasDisplayFeatures = host.displayFeatures.isNotEmpty;
     final hostHasInsets =
         host.insets.left != 0 ||
         host.insets.top != 0 ||
@@ -102,12 +178,17 @@ final class _WindowEnvironmentScopeState extends State<WindowEnvironmentScope> {
       width: media.width,
       height: media.height,
       insets: hostHasInsets ? host.insets : media.insets,
-      displayFeatures: host.displayFeatures.isNotEmpty
+      displayFeatures: hostHasDisplayFeatures
           ? host.displayFeatures
           : media.displayFeatures,
       windowId: host.windowId,
       mode: host.mode,
-      posture: host.posture,
+      // A host that only knows its window identity decodes with the neutral
+      // posture. Preserve the live Flutter display-feature posture until the
+      // host supplies an explicit posture or feature projection.
+      posture: host.posture != WindowPosture.normal || hostHasDisplayFeatures
+          ? host.posture
+          : media.posture,
       input: host.input,
     );
   }
