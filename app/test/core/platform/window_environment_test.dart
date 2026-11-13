@@ -154,7 +154,7 @@ void main() {
       'width': 700,
       'height': 500,
       'posture': 'normal',
-      'displayFeatures': const [],
+      'displayFeatures': const <Object?>[],
     });
 
     expect(environment, isNotNull);
