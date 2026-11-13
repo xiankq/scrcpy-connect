@@ -327,6 +327,8 @@ abstract final class DesignTokens {
   static const componentRemoteExitRounded = 999.0;
   static const componentRemoteExitSize = 52.0;
   static const componentRemoteExitTextColor = Color(0xff000000);
+  static const componentRemoteNavigationHeight = 56.0;
+  static const componentRemoteNavigationPadding = 67.5;
   static const componentRemoteScreenBackgroundColor = Color(0xff111114);
   static const componentRemoteScreenHeight = 492.0;
   static const componentRemoteScreenRounded = 20.0;
