@@ -25,7 +25,8 @@ import 'package:scrcpy_connect/widgets/remote_views.dart';
 import 'package:scrcpy_connect/widgets/models/device_audio_view_snapshot.dart';
 
 class ConnectApp extends HookConsumerWidget {
-  const ConnectApp({super.key});
+  const ConnectApp({super.key, this.initialLocation = '/devices'});
+  final String initialLocation;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(stateSubscriptionProvider);
@@ -82,9 +83,13 @@ class ConnectApp extends HookConsumerWidget {
       preferencesProvider.select((state) => state.values),
     );
     final navigator = useMemoized(() => GlobalKey<NavigatorState>());
-    final router = useMemoized(() => createAppRouter(navigatorKey: navigator), [
-      session,
-    ]);
+    final router = useMemoized(
+      () => createAppRouter(
+        navigatorKey: navigator,
+        initialLocation: initialLocation,
+      ),
+      [session, initialLocation],
+    );
     useEffect(() => router.dispose, [router]);
     final systemVisualPreferences = useMemoized(SystemVisualPreferences.new);
     useListenable(systemVisualPreferences);

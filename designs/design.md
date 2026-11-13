@@ -608,6 +608,8 @@ components:
     textColor: '{colors.black}'
 ---
 
+# 桌面多窗口由 `desktop_multi_window` 管理独立 Flutter engine；每个子窗口必须注册插件并携带自己的设备、应用和会话身份。移动端由宿主 Activity／scene 决定是否支持第二窗口，暂不把同页回退伪装成独立窗口。
+
 # 邻接 · iOS 27 设计规范
 
 ## Overview
