@@ -5,7 +5,8 @@ import 'package:scrcpy_connect/core/files/file_failure.dart';
 import 'package:scrcpy_connect/core/files/models/file_stamp.dart';
 
 class FileEntryFact {
-  const FileEntryFact({required this.nameBytes, this.stamp, this.error});
+  FileEntryFact({required Uint8List nameBytes, this.stamp, this.error})
+    : nameBytes = Uint8List.fromList(nameBytes).asUnmodifiableView();
   final Uint8List nameBytes;
   final FileStamp? stamp;
   final FileFailure? error;

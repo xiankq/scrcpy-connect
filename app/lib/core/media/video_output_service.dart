@@ -463,8 +463,8 @@ class VideoOutputService {
         deviceId: entry.device,
         generation: entry.generation,
         localPath: file.path,
-        width: width,
-        height: height,
+        width: pixels.width,
+        height: pixels.height,
         scaled: factor < 1,
         paused: entry.playback.paused,
       );

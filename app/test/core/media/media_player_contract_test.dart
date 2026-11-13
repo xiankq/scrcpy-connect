@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:media_codec/media_codec.dart';
@@ -13,6 +16,46 @@ import 'package:scrcpy_connect/core/media/video_player.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('截图回执使用实际 PNG 尺寸，只读像素不受来源改写影响', () async {
+    final fixture = _Fixture(operationTimeout: const Duration(seconds: 3));
+    final directory = await Directory.systemTemp.createTemp(
+      'video-screenshot-',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+    final original = Uint8List.fromList([255, 0, 0, 255, 0, 255, 0, 255]);
+    fixture.player.snapshotPixels = VideoPixels(2, 1, original);
+    original.fillRange(0, original.length, 0);
+    await fixture.service.start(_capture);
+    final receipt = await fixture.service.screenshot(
+      'session',
+      directory: directory.path,
+    );
+    expect(receipt.width, 2);
+    expect(receipt.height, 1);
+    expect(receipt.generation, _capture.generation);
+    final codec = await ui.instantiateImageCodec(
+      await File(receipt.localPath).readAsBytes(),
+    );
+    addTearDown(codec.dispose);
+    final image = (await codec.getNextFrame()).image;
+    addTearDown(image.dispose);
+    expect(image.width, receipt.width);
+    expect(image.height, receipt.height);
+    final rgba = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    expect(rgba!.buffer.asUint8List(rgba.offsetInBytes, rgba.lengthInBytes), [
+      255,
+      0,
+      0,
+      255,
+      0,
+      255,
+      0,
+      255,
+    ]);
+  });
+
   test('未打开的真实播放器可关闭，不创建原生输出并返回实际空资源证据', () async {
     final audio = AudioPlayer();
     final video = VideoPlayer();
@@ -208,7 +251,7 @@ const _capture = VideoCapture(
 Future<void> _tick() => Future<void>.delayed(Duration.zero);
 
 final class _Fixture {
-  _Fixture() {
+  _Fixture({Duration operationTimeout = const Duration(milliseconds: 20)}) {
     service = VideoOutputService(
       emit: events.add,
       isDisposed: () => false,
@@ -225,7 +268,7 @@ final class _Fixture {
             attachAddress: 1,
             detachAddress: 1,
           ),
-      operationTimeout: const Duration(milliseconds: 20),
+      operationTimeout: operationTimeout,
     );
     addTearDown(() async {
       final pending = player.releasing;
@@ -249,6 +292,7 @@ final class _VideoPlayer implements VideoPlayer {
   );
   Completer<VideoTexture>? opening;
   Completer<MediaOutputRelease>? releasing;
+  VideoPixels? snapshotPixels;
   var releases = 0;
   MediaOutputRelease releaseReceipt = const MediaOutputRelease(
     nativeDeleteConfirmed: true,
@@ -264,7 +308,7 @@ final class _VideoPlayer implements VideoPlayer {
   Future<VideoPixels?> snapshot({
     required int width,
     required int height,
-  }) async => null;
+  }) async => snapshotPixels;
   @override
   Future<MediaOutputRelease> release() async {
     releases++;

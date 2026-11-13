@@ -1,7 +1,8 @@
 import 'dart:typed_data';
 
 class VideoPixels {
-  const VideoPixels(this.width, this.height, this.rgba);
+  VideoPixels(this.width, this.height, Uint8List rgba)
+    : rgba = Uint8List.fromList(rgba).asUnmodifiableView();
   final int width, height;
   final Uint8List rgba;
   bool get valid =>
