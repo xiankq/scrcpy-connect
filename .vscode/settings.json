@@ -1,4 +1,12 @@
 {
+    "dart.mcpServer": true,
+    "dart.mcpServerTools": {
+        "run_tests": true,
+        "launch_app": true,
+        "get_runtime_errors": true,
+        "widget_inspector": true,
+        "flutter_driver_command": true,
+    },
     "files.exclude": {
         "**/*.g.dart": true,
         "**/*.freezed.dart": true,

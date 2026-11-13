@@ -12,6 +12,7 @@ import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
+import 'package:scrcpy_connect/widgets/adaptive_window.dart';
 
 class DevicesPage extends HookConsumerWidget {
   const DevicesPage({super.key});
@@ -146,6 +147,27 @@ class DevicesPage extends HookConsumerWidget {
                                 ),
                                 label: const Text('添加设备'),
                               ),
+                      ),
+                    ),
+                  )
+                else if (WindowEnvironment.sizeClassFor(constraints.maxWidth) ==
+                    WindowSizeClass.expanded)
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: DesignTokens.spacingMd,
+                    ),
+                    sliver: SliverGrid.builder(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: DesignTokens.spacingMd,
+                            crossAxisSpacing: DesignTokens.spacingMd,
+                            childAspectRatio: 2.35,
+                          ),
+                      itemCount: devices.length,
+                      itemBuilder: (context, index) => DeviceCard(
+                        device: devices[index],
+                        compact: compactHeader,
                       ),
                     ),
                   )

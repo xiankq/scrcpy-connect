@@ -45,6 +45,10 @@ internal object ProcessFlutterHost {
                                 UsbLeases.connections.release(call.argument<String>("usbLeaseId"), lease)
                                 result.success(mapOf("released" to true, "ownerLeaseId" to lease))
                             }
+                            "window.openIndependent" -> result.success(mapOf(
+                                "supported" to false,
+                                "reason" to "Android 原生独立 Activity 需独立 Flutter 引擎；当前回退为同页控制会话。"
+                            ))
                             else -> if (!audio.handle(call, result)) {
                                 val host = activity?.get()
                                 if (host != null) host.handlePlatform(call, result)

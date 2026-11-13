@@ -8,6 +8,7 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
+import 'package:scrcpy_connect/widgets/adaptive_window.dart';
 
 class PageFrame extends StatefulWidget {
   const PageFrame({
@@ -118,7 +119,11 @@ class _PageFrameState extends State<PageFrame> {
                     '/settings',
                   ].contains(router.routeInformationProvider.value.uri.path));
       final toolbarHeight = _toolbarHeight(context, constraints);
-      final top = MediaQuery.paddingOf(context).top + toolbarHeight;
+      final workspaceToolbar =
+          widget.root && windowEnvironmentOf(context).usesWorkspaceToolbar;
+      final top = workspaceToolbar
+          ? 0.0
+          : MediaQuery.paddingOf(context).top + toolbarHeight;
       final backLabel = MaterialLocalizations.of(context).backButtonTooltip;
       final onBack = widget.onBack ?? () => closePage<void>(context);
       final reduceMotion = GlassMaterial.reduceMotion(context);
@@ -193,32 +198,35 @@ class _PageFrameState extends State<PageFrame> {
         backgroundColor: widget.backgroundColor,
         extendBodyBehindAppBar: true,
         extendBody: true,
-        appBar: PreferredSize(
-          preferredSize: appBar.preferredSize,
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            excludeFromSemantics: true,
-            onTap: () {},
-            onVerticalDragStart: (details) {
-              _headerDrag = _contentPosition?.drag(
-                details,
-                () => _headerDrag = null,
-              );
-            },
-            onVerticalDragUpdate: (details) => _headerDrag?.update(details),
-            onVerticalDragEnd: (details) => _headerDrag?.end(details),
-            onVerticalDragCancel: () => _headerDrag?.cancel(),
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: DesignTokens.componentPageContentMaxWidth,
+        appBar: workspaceToolbar
+            ? null
+            : PreferredSize(
+                preferredSize: appBar.preferredSize,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  excludeFromSemantics: true,
+                  onTap: () {},
+                  onVerticalDragStart: (details) {
+                    _headerDrag = _contentPosition?.drag(
+                      details,
+                      () => _headerDrag = null,
+                    );
+                  },
+                  onVerticalDragUpdate: (details) =>
+                      _headerDrag?.update(details),
+                  onVerticalDragEnd: (details) => _headerDrag?.end(details),
+                  onVerticalDragCancel: () => _headerDrag?.cancel(),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: DesignTokens.componentPageContentMaxWidth,
+                      ),
+                      child: GlassSurfaceGroup(child: appBar),
+                    ),
+                  ),
                 ),
-                child: GlassSurfaceGroup(child: appBar),
               ),
-            ),
-          ),
-        ),
         body: Builder(
           builder: (context) => PageChromePadding(
             padding: EdgeInsets.only(
@@ -235,48 +243,66 @@ class _PageFrameState extends State<PageFrame> {
               bottom: false,
               child: Align(
                 alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: DesignTokens.componentPageContentMaxWidth,
-                  ),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      NotificationListener<ScrollMetricsNotification>(
-                        onNotification: (notification) {
-                          _rememberPosition(notification.context);
-                          return false;
-                        },
-                        child: NotificationListener<ScrollNotification>(
-                          onNotification: (notification) {
-                            _rememberPosition(notification.context);
-                            if (notification.metrics.axis == Axis.vertical &&
-                                notification.depth <= 1) {
-                              final scrolled =
-                                  notification.metrics.extentBefore >
-                                  DesignTokens.spacingLg;
-                              if (_scrolled != scrolled) {
-                                setState(() => _scrolled = scrolled);
-                              }
-                            }
-                            return false;
-                          },
-                          child: widget.child,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (workspaceToolbar)
+                      _WorkspaceToolbar(
+                        title: widget.title,
+                        titleContent: widget.titleContent,
+                        leading: widget.leading,
+                        actions: widget.actions,
+                        trailingAction: widget.trailingAction,
+                        onBack: onBack,
+                        hasBack: hasBack,
+                      ),
+                    Expanded(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: DesignTokens.componentPageContentMaxWidth,
+                        ),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            NotificationListener<ScrollMetricsNotification>(
+                              onNotification: (notification) {
+                                _rememberPosition(notification.context);
+                                return false;
+                              },
+                              child: NotificationListener<ScrollNotification>(
+                                onNotification: (notification) {
+                                  _rememberPosition(notification.context);
+                                  if (notification.metrics.axis ==
+                                          Axis.vertical &&
+                                      notification.depth <= 1) {
+                                    final scrolled =
+                                        notification.metrics.extentBefore >
+                                        DesignTokens.spacingLg;
+                                    if (_scrolled != scrolled) {
+                                      setState(() => _scrolled = scrolled);
+                                    }
+                                  }
+                                  return false;
+                                },
+                                child: widget.child,
+                              ),
+                            ),
+                            Positioned(
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              child: PageChromeProtection(
+                                height: top,
+                                backgroundColor:
+                                    widget.backgroundColor ??
+                                    Theme.of(context).scaffoldBackgroundColor,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      Positioned(
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        child: PageChromeProtection(
-                          height: top,
-                          backgroundColor:
-                              widget.backgroundColor ??
-                              Theme.of(context).scaffoldBackgroundColor,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -319,4 +345,93 @@ class _PageFrameState extends State<PageFrame> {
       );
     },
   );
+}
+
+/// The expanded workspace toolbar is part of the page content plane. It
+/// carries page identity and actions without recreating a phone status bar at
+/// the top of a desktop window.
+class _WorkspaceToolbar extends StatelessWidget {
+  const _WorkspaceToolbar({
+    required this.title,
+    required this.titleContent,
+    required this.leading,
+    required this.actions,
+    required this.trailingAction,
+    required this.onBack,
+    required this.hasBack,
+  });
+
+  final String title;
+  final Widget? titleContent;
+  final Widget? leading;
+  final List<Widget>? actions;
+  final Widget? trailingAction;
+  final VoidCallback onBack;
+  final bool hasBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final backLabel = MaterialLocalizations.of(context).backButtonTooltip;
+    final reduceMotion = GlassMaterial.reduceMotion(context);
+    final trailing = <Widget>[
+      if (actions != null && actions!.isNotEmpty)
+        GlassToolbarGroup(children: actions!),
+      ?trailingAction,
+    ];
+    return ConstrainedBox(
+      constraints: const BoxConstraints(
+        maxWidth: DesignTokens.componentPageContentMaxWidth,
+        minHeight: DesignTokens.componentPageHeaderHeight,
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          DesignTokens.spacingMd,
+          MediaQuery.paddingOf(context).top + DesignTokens.spacingSm,
+          DesignTokens.spacingMd,
+          DesignTokens.spacingSm,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (leading != null)
+              leading!
+            else if (hasBack)
+              Tooltip(
+                message: backLabel,
+                child: GlassIconButton(
+                  semanticLabel: backLabel,
+                  size: DesignTokens.componentIconButtonSize,
+                  iconSize: DesignTokens.componentIconSize,
+                  settings: GlassMaterial.settings(context),
+                  quality: GlassMaterial.quality(context),
+                  interactionScale: reduceMotion
+                      ? 1
+                      : DesignTokens.componentGlassInteractionScale,
+                  anchorStretch: !reduceMotion,
+                  onPressed: onBack,
+                  icon: const Icon(LucideIcons.chevronLeft),
+                ),
+              ),
+            if (leading != null || hasBack)
+              const SizedBox(width: DesignTokens.spacingSm),
+            Expanded(
+              child:
+                  titleContent ??
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.headlineSmall,
+                  ),
+            ),
+            if (trailing.isNotEmpty) ...[
+              const SizedBox(width: DesignTokens.spacingMd),
+              ...trailing,
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }

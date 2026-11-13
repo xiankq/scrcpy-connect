@@ -22,6 +22,7 @@ import 'package:scrcpy_connect/core/recovery/recovery_actions_provider.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
+import 'package:scrcpy_connect/core/platform/window_host_provider.dart';
 import 'package:scrcpy_connect/pages/control/remote_session_lifecycle.dart';
 import 'package:scrcpy_connect/pages/control/remote_display_sizing.dart';
 import 'package:scrcpy_connect/pages/control/remote_input_owner.dart';
@@ -156,11 +157,24 @@ class _ControlPageState extends ConsumerState<ControlPage>
     if (converting || widget.packageName != null || !canSendInput) return;
     setState(() => converting = true);
     try {
+      final sourceSessionId = sessionId;
       final package = await window.convertToIndependent(
         canSendInput: () => canSendInput,
         releaseInputs: releaseInputs,
       );
       if (!mounted || package == null) return;
+      final nativeWindow = await ref
+          .read(platformWindowHostProvider)
+          .open(
+            deviceId: widget.device.id,
+            packageName: package,
+            sessionId: sourceSessionId,
+          );
+      if (!mounted) return;
+      if (nativeWindow.opened) {
+        closePage<void>(context);
+        return;
+      }
       RemoteAppRoute(
         deviceId: widget.device.id,
         packageName: package,
