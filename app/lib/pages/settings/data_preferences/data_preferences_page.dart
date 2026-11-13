@@ -1,16 +1,9 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/core/devices/models/device_metadata.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
-import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
-import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
-import 'package:scrcpy_connect/core/settings/metadata_management.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
+
 import 'package:scrcpy_connect/pages/settings/data_preferences/widgets/metadata_import_preview.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
@@ -21,14 +14,21 @@ import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
-class DataPreferencesPage extends ConsumerWidget {
+import 'metadata_operation_notifier.dart';
+
+class DataPreferencesPage extends HookConsumerWidget {
   const DataPreferencesPage({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final source = ref.watch(metadataManagementProvider);
-    bool ownsScope() =>
-        context.mounted &&
-        identical(ref.read(metadataManagementProvider), source);
+    final scope = useMemoized(Object.new);
+    final provider = metadataOperationProvider(scope: scope);
+    final operation = ref.watch(provider);
+    final actions = ref.read(provider.notifier);
+    ref.listen(provider, (previous, next) {
+      if (next.message != null && next.message != previous?.message) {
+        feedback(context, next.message!);
+      }
+    });
     return PageFrame(
       title: '本地数据',
       child: GroupedListView(
@@ -44,92 +44,48 @@ class DataPreferencesPage extends ConsumerWidget {
                 icon: LucideIcons.fileOutput,
                 title: '导出设备记录',
 
-                onTap: () async {
-                  try {
-                    final metadata = await source.exportMetadata();
-                    if ((!context.mounted || !ownsScope())) return;
-                    final saved = await FilePicker.saveFile(
-                      fileName: 'interconnect-devices.json',
-                      mimeType: 'application/json',
-                      bytes: Uint8List.fromList(
-                        utf8.encode(
-                          const JsonEncoder.withIndent('  ')
-                              .convert(metadata.document),
-                        ),
+                enabled: !operation.busy,
+                onTap: operation.busy
+                    ? null
+                    : () => actions.exportRecords(
+                        saveFile: (bytes) => !context.mounted
+                            ? Future<Uri?>.value(null)
+                            : FilePicker.saveFile(
+                                fileName: 'interconnect-devices.json',
+                                mimeType: 'application/json',
+                                bytes: bytes,
+                              ),
                       ),
-                    );
-                    if (saved != null && context.mounted && ownsScope()) {
-                      feedback(context, '设备记录已保存至 $saved');
-                    }
-                  } catch (e) {
-                    if (context.mounted && ownsScope()) {
-                      feedback(context, '保存记录失败：$e');
-                    }
-                  }
-                },
               ),
               ActionRow(
                 icon: LucideIcons.fileInput,
                 title: '导入设备记录',
 
-                onTap: () async {
-                  SettingsImportResult? result;
-                  try {
-                    final picked = await FilePicker.pickFile(
-                      type: FileType.custom,
-                      allowedExtensions: ['json'],
-                    );
-                    if (picked?.path == null ||
-                        (!context.mounted || !ownsScope())) {
-                      return;
-                    }
-                    final input = File(picked!.path!);
-                    final size = await input.length();
-                    if (size > 1024 * 1024 || size < 2) {
-                      if (context.mounted && ownsScope()) {
-                        feedback(context, '设备记录文件须小于 1 MB，并包含有效的 JSON 内容。');
-                      }
-                      return;
-                    }
-                    final metadata = DeviceMetadata.parse(
-                      jsonDecode(await input.readAsString()),
-                    );
-                    if ((!context.mounted || !ownsScope())) return;
-                    final preview = await source.previewImport(metadata);
-                    if ((!context.mounted || !ownsScope())) return;
-                    final importGlobal = await showGlassModalSheet<bool>(
-                      context: context,
-                      isScrollControlled: true,
-                      builder: (_) => MetadataImportPreview(preview: preview),
-                    );
-                    if (importGlobal == null ||
-                        (!context.mounted || !ownsScope())) {
-                      return;
-                    }
-                    result = await source.importMetadata(
-                      preview,
-                      importGlobalPreferences: importGlobal,
-                    );
-                  } catch (e) {
-                    if (context.mounted && ownsScope()) {
-                      feedback(context, '无法读取记录文件：$e');
-                    }
-                  }
-                  if (result != null && ownsScope()) {
-                    await ref.read(preferencesProvider.notifier).load();
-                    if (!ownsScope()) return;
-                    await ref.read(deviceListProvider.notifier).refresh();
-                    if (context.mounted && ownsScope()) {
-                      feedback(
-                        context,
-                        result.records.alreadyImported
-                            ? '此文件已导入，已核对本机记录。'
-                            : '设备记录已导入，请在被控手机重新核验授权。',
-                      );
-                    }
-                  }
-                },
+                enabled: !operation.busy,
+                onTap: operation.busy
+                    ? null
+                    : () => actions.importRecords(
+                        pickFile: () async => (await FilePicker.pickFile(
+                          type: FileType.custom,
+                          allowedExtensions: ['json'],
+                        ))?.path,
+                        confirm: (preview) => !context.mounted
+                            ? Future<bool?>.value(null)
+                            : showGlassModalSheet<bool>(
+                                context: context,
+                                isScrollControlled: true,
+                                builder: (_) =>
+                                    MetadataImportPreview(preview: preview),
+                              ),
+                      ),
               ),
+              if (operation.refreshPending)
+                ActionRow(
+                  icon: LucideIcons.refreshCw,
+                  title: '重新加载记录',
+                  enabled: !operation.busy,
+                  onTap: operation.busy ? null : actions.refreshRecords,
+                ),
             ],
           ),
           const StateNote(
