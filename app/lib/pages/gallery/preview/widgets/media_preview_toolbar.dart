@@ -1,5 +1,4 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/gallery/preview/widgets/media_controls_protection.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
@@ -33,16 +32,10 @@ class MediaPreviewToolbar extends StatelessWidget {
             children: [
               Tooltip(
                 message: MaterialLocalizations.of(context).backButtonTooltip,
-                child: GlassIconButton(
+                child: GlassToolbarIconButton(
                   semanticLabel: MaterialLocalizations.of(context)
                       .backButtonTooltip,
-                  size: DesignTokens.componentIconButtonSize,
-                  iconSize: DesignTokens.componentIconSize,
-                  settings: GlassMaterial.settings(
-                    context,
-                    variant: GlassVariant.clear,
-                  ),
-                  quality: GlassMaterial.quality(context),
+                  variant: GlassVariant.clear,
                   interactionScale: GlassMaterial.reduceMotion(context)
                       ? 1
                       : DesignTokens.componentGlassInteractionScale,

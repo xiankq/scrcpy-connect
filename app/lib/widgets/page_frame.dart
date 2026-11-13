@@ -4,7 +4,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart' show Drag;
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
@@ -151,12 +150,8 @@ class _PageFrameState extends State<PageFrame> {
                     child: Center(
                       child: Tooltip(
                         message: backLabel,
-                        child: GlassIconButton(
+                        child: GlassToolbarIconButton(
                           semanticLabel: backLabel,
-                          size: DesignTokens.componentIconButtonSize,
-                          iconSize: DesignTokens.componentIconSize,
-                          settings: GlassMaterial.settings(context),
-                          quality: GlassMaterial.quality(context),
                           interactionScale: reduceMotion
                               ? 1
                               : DesignTokens.componentGlassInteractionScale,
@@ -406,12 +401,8 @@ class _WorkspaceToolbar extends StatelessWidget {
             else if (hasBack)
               Tooltip(
                 message: backLabel,
-                child: GlassIconButton(
+                child: GlassToolbarIconButton(
                   semanticLabel: backLabel,
-                  size: DesignTokens.componentIconButtonSize,
-                  iconSize: DesignTokens.componentIconSize,
-                  settings: GlassMaterial.settings(context),
-                  quality: GlassMaterial.quality(context),
                   interactionScale: reduceMotion
                       ? 1
                       : DesignTokens.componentGlassInteractionScale,
