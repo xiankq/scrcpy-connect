@@ -329,6 +329,58 @@ void main() {
     expect(changes.single.path, '/sdcard');
   });
 
+  test('排队批次可立即取消，停止设备不等待其他批次空出名额', () async {
+    final directory = await Directory.systemTemp.createTemp('transfer-queue-');
+    final executor = _ConcurrentExecutor();
+    final transfers = await FileTransferService.open(
+      executor: executor,
+      dataDirectory: directory,
+    );
+    addTearDown(() async {
+      for (final copy in executor.copies) {
+        if (!copy.isCompleted) copy.complete(3);
+      }
+      await transfers.close();
+      await directory.delete(recursive: true);
+    });
+    final first = await transfers.startTransfer(_plan());
+    final second = await transfers.startTransfer(_plan());
+    await executor.bothStarted.future;
+    final waiting = await transfers.startTransfer(_plan());
+    expect(
+      (await transfers.readTransfer(waiting.transferId!)).status,
+      FileTransferStatus.queued,
+    );
+    await transfers
+        .cancelTransfer(FileTransferTarget.batch(waiting.batchId))
+        .timeout(const Duration(seconds: 2));
+    expect(executor.copies, hasLength(2));
+    expect(executor.copies.every((copy) => !copy.isCompleted), isTrue);
+    expect(
+      (await transfers.readTransfer(waiting.transferId!)).status,
+      FileTransferStatus.cancelled,
+    );
+    // 同设备的在途任务仍正常排空；被取消批次没有在名额释放后复活。
+    await transfers.cancelDevice('device');
+    expect(executor.copies, hasLength(2));
+    expect(
+      (await transfers.readTransfer(first.transferId!)).status,
+      FileTransferStatus.cancelled,
+    );
+    expect(
+      (await transfers.readTransfer(second.transferId!)).status,
+      FileTransferStatus.cancelled,
+    );
+    await transfers.close();
+    final durable = await FileTransferJournal(directory).load();
+    expect(
+      durable.values.every(
+        (record) => record.status == FileTransferStatus.cancelled,
+      ),
+      isTrue,
+    );
+  });
+
   test('实际传输所有者的持久变更和进度共用业务水位，并直接驱动文件查询失效', () async {
     final directory = await Directory.systemTemp.createTemp('transfer-events-');
     final executor = _Executor();

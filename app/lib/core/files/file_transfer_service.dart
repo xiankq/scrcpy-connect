@@ -18,9 +18,11 @@ import 'package:scrcpy_connect/core/files/file_failure.dart';
 import 'package:scrcpy_connect/core/files/file_paths.dart';
 import 'package:scrcpy_connect/core/files/file_publication_leases.dart';
 import 'package:scrcpy_connect/core/files/file_transfer_journal.dart';
+import 'package:scrcpy_connect/core/files/file_transfer_scheduler.dart';
 import 'package:scrcpy_connect/core/files/file_transfer_publications.dart';
 import 'package:scrcpy_connect/core/files/file_transfers.dart';
 import 'package:scrcpy_connect/core/files/models/file_stamp.dart';
+import 'package:scrcpy_connect/core/files/models/file_transfer_summary.dart';
 import 'package:scrcpy_connect/core/files/models/file_transfer_event.dart';
 import 'package:uuid/uuid.dart';
 
@@ -75,7 +77,7 @@ class FileTransferService implements FileTransfers {
   bool _closed = false;
   bool _closeConfirmed = false;
   Future<void>? _closing;
-  int _activeBatches = 0;
+  final _scheduler = FileTransferScheduler();
   Future<void> _writes = Future.value();
   Stream<FileTransferEvent> get events => _events.stream;
 
@@ -295,6 +297,7 @@ class FileTransferService implements FileTransfers {
   Future<void> close() {
     if (_closeConfirmed) return Future.value();
     _closed = true;
+    _scheduler.close();
     return _closing ??= _close().whenComplete(() {
       _closing = null;
     });
@@ -453,7 +456,9 @@ class FileTransferService implements FileTransfers {
   Future<FileTransferCollection> readTransfers() async =>
       FileTransferCollection(
         transfers: _tasks.values.map(_snapshot).toList(),
-        batches: _batches(),
+        batches: summarizeTransferBatches(
+          _tasks.values.map((task) => task.record),
+        ),
       );
 
   @override
@@ -467,65 +472,10 @@ class FileTransferService implements FileTransfers {
               .map(_snapshot)
               .toList()
             ..sort((a, b) => a.itemIndex.compareTo(b.itemIndex)),
-      batch: _batches()
+      batch: summarizeTransferBatches(_tasks.values.map((task) => task.record))
           .where((batch) => batch.batchId == task.record.batchId)
           .firstOrNull,
     );
-  }
-
-  List<FileTransferBatch> _batches() {
-    final groups = <String, List<_TransferTask>>{};
-    for (final task in _tasks.values) {
-      groups.putIfAbsent(task.record.batchId, () => []).add(task);
-    }
-    return groups.entries.map((g) {
-      final tasks = g.value;
-      int count(FileTransferStatus status) =>
-          tasks.where((t) => t.record.status == status).length;
-      final active = tasks.any(
-        (t) =>
-            !_terminal(t.record.status) ||
-            t.record.kind == FileTransferKind.directory &&
-                t.record.status == FileTransferStatus.completed &&
-                t.record.treeVerified != true,
-      );
-      final status = count(FileTransferStatus.conflict) > 0
-          ? FileTransferStatus.conflict
-          : active
-          ? FileTransferStatus.running
-          : count(FileTransferStatus.failed) > 0
-          ? FileTransferStatus.partialFailure
-          : count(FileTransferStatus.interrupted) > 0
-          ? FileTransferStatus.interrupted
-          : count(FileTransferStatus.cancelled) > 0
-          ? FileTransferStatus.cancelled
-          : count(FileTransferStatus.skipped) > 0
-          ? FileTransferStatus.completedWithSkips
-          : FileTransferStatus.completed;
-      return FileTransferBatch(
-        batchId: g.key,
-        deviceId: tasks.first.record.deviceId,
-        direction: tasks.first.record.direction,
-        destinationScope: tasks.first.record.destinationScope,
-        status: status,
-        itemCount: tasks.length,
-        fileCount: tasks
-            .where((t) => t.record.kind == FileTransferKind.file)
-            .length,
-        directoryCount: tasks
-            .where((t) => t.record.kind == FileTransferKind.directory)
-            .length,
-        completed: count(FileTransferStatus.completed),
-        failed: count(FileTransferStatus.failed),
-        cancelled: count(FileTransferStatus.cancelled),
-        skipped: count(FileTransferStatus.skipped),
-        interrupted: count(FileTransferStatus.interrupted),
-        transferred: tasks.fold<int>(0, (n, t) => n + (t.record.transferred)),
-        total: tasks.fold<int>(0, (n, t) => n + (t.record.total ?? 0)),
-        canCancel: active || tasks.any((t) => t.record.cleanupPending == true),
-        selectedRootCount: tasks.where((t) => t.record.parentId == null).length,
-      );
-    }).toList();
   }
 
   void _retainExecution(_TransferTask task, Object error) {
@@ -849,8 +799,17 @@ class FileTransferService implements FileTransfers {
     for (final task in active) {
       await _save(task);
     }
-    // 任务终态不代表 worker 的来源核验收尾完成，停止仍须等待原批次。
+    // 排队批次不必等其他设备释放名额；在途 worker 仍须真实收尾。
     final batches = tasks.map((t) => t.record.batchId).toSet();
+    for (final batch in batches) {
+      if (!_tasks.values.any(
+        (task) =>
+            task.record.batchId == batch &&
+            task.record.status == FileTransferStatus.queued,
+      )) {
+        _scheduler.cancelQueued(batch);
+      }
+    }
     await Future.wait(
       batches.map((b) => _batchStates[b]?.worker).whereType<Future<void>>(),
     );
@@ -1145,7 +1104,9 @@ class FileTransferService implements FileTransfers {
             path: p.posix.dirname(task.record.destination),
           ),
     };
-    final job = Future<void>(() => _runBatch(batch, state));
+    final job = _scheduler
+        .schedule(batch, () => _runBatch(batch, state))
+        .whenComplete(() => _finishBatch(batch));
     state.worker = job;
     unawaited(
       job.then<void>(
@@ -1196,85 +1157,79 @@ class FileTransferService implements FileTransfers {
   }
 
   Future<void> _runBatch(String batch, _TransferBatch state) async {
-    // 每个批次内顺序执行，全局最多并发两个批次。
-    while (!_closed && _activeBatches >= 2) {
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-    }
+    // 名额由调度队列交付，每个批次内顺序执行并完成原执行资源的收尾。
     if (_closed) return;
-    _activeBatches++;
-    try {
-      final tasks =
-          _tasks.values.where((t) => t.record.batchId == batch).toList()
-            ..sort((a, b) => a.record.itemIndex.compareTo(b.record.itemIndex));
-      for (final task in tasks) {
-        if (_closed || task.record.status == FileTransferStatus.conflict) break;
-        if (task.record.status != FileTransferStatus.queued) continue;
-        final token = FileCancellation();
-        state.activeTask = (taskId: task.record.id, cancellation: token);
-        try {
-          await _runTask(task, token);
-        } on FileFailure catch (e) {
-          _retainExecution(task, e);
-          final status = switch (e.code) {
-            'conflict' => FileTransferStatus.conflict,
-            'cancelled' => FileTransferStatus.cancelled,
-            _ => FileTransferStatus.failed,
-          };
-          final errorCode =
-              (status == FileTransferStatus.failed ||
-                      status == FileTransferStatus.cancelled) &&
-                  task.record.saveMode == 'committing'
-              ? 'result_unknown'
-              : e.code;
-          task.record = task.record.copyWith(
-            status: status,
-            errorCode: errorCode,
-            partialDestinationPossible: errorCode == 'result_unknown',
-            error: e.message,
-          );
-          _retainFailedTaskOutcome(task, token);
-          await _save(task);
-        } catch (e) {
-          final unknown = task.record.saveMode == 'committing';
-          task.record = task.record.copyWith(
-            status: FileTransferStatus.failed,
-            errorCode: unknown ? 'result_unknown' : 'transfer_failed',
-            partialDestinationPossible: unknown,
-            error: '$e',
-          );
-          _retainFailedTaskOutcome(task, token);
-          await _save(task);
-        } finally {
-          state.activeTask = null;
-        }
-        if (task.record.status == FileTransferStatus.conflict) break;
-      }
-      final children = _children(tasks);
-      for (final task in tasks.reversed.where(
-        (t) =>
-            t.record.kind == FileTransferKind.directory &&
-            t.record.status == FileTransferStatus.completed,
-      )) {
-        task.record = task.record.copyWith(
-          treeVerified: true,
-          treeComplete: (children[task.record.id] ?? const []).every(
-            (child) =>
-                child.record.status == FileTransferStatus.completed &&
-                (child.record.kind != FileTransferKind.directory ||
-                    child.record.treeVerified == true &&
-                        child.record.treeComplete == true),
-          ),
-        );
-        await _save(task);
-      }
-    } finally {
-      _activeBatches--;
-      await _releaseBatchLeaseIfSafe(batch);
+    final tasks = _tasks.values.where((t) => t.record.batchId == batch).toList()
+      ..sort((a, b) => a.record.itemIndex.compareTo(b.record.itemIndex));
+    for (final task in tasks) {
+      if (_closed || task.record.status == FileTransferStatus.conflict) break;
+      if (task.record.status != FileTransferStatus.queued) continue;
+      final token = FileCancellation();
+      state.activeTask = (taskId: task.record.id, cancellation: token);
       try {
-        await reconcileShares();
-      } catch (_) {
-        /* 无法取得持久证明时继续保留源。 */
+        await _runTask(task, token);
+      } on FileFailure catch (e) {
+        _retainExecution(task, e);
+        final status = switch (e.code) {
+          'conflict' => FileTransferStatus.conflict,
+          'cancelled' => FileTransferStatus.cancelled,
+          _ => FileTransferStatus.failed,
+        };
+        final errorCode =
+            (status == FileTransferStatus.failed ||
+                    status == FileTransferStatus.cancelled) &&
+                task.record.saveMode == 'committing'
+            ? 'result_unknown'
+            : e.code;
+        task.record = task.record.copyWith(
+          status: status,
+          errorCode: errorCode,
+          partialDestinationPossible: errorCode == 'result_unknown',
+          error: e.message,
+        );
+        _retainFailedTaskOutcome(task, token);
+        await _save(task);
+      } catch (e) {
+        final unknown = task.record.saveMode == 'committing';
+        task.record = task.record.copyWith(
+          status: FileTransferStatus.failed,
+          errorCode: unknown ? 'result_unknown' : 'transfer_failed',
+          partialDestinationPossible: unknown,
+          error: '$e',
+        );
+        _retainFailedTaskOutcome(task, token);
+        await _save(task);
+      } finally {
+        state.activeTask = null;
       }
+      if (task.record.status == FileTransferStatus.conflict) break;
+    }
+    final children = _children(tasks);
+    for (final task in tasks.reversed.where(
+      (t) =>
+          t.record.kind == FileTransferKind.directory &&
+          t.record.status == FileTransferStatus.completed,
+    )) {
+      task.record = task.record.copyWith(
+        treeVerified: true,
+        treeComplete: (children[task.record.id] ?? const []).every(
+          (child) =>
+              child.record.status == FileTransferStatus.completed &&
+              (child.record.kind != FileTransferKind.directory ||
+                  child.record.treeVerified == true &&
+                      child.record.treeComplete == true),
+        ),
+      );
+      await _save(task);
+    }
+  }
+
+  Future<void> _finishBatch(String batch) async {
+    await _releaseBatchLeaseIfSafe(batch);
+    try {
+      await reconcileShares();
+    } catch (_) {
+      // 无法取得持久证明时继续保留来源租约。
     }
   }
 
