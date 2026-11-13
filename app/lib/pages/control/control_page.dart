@@ -209,6 +209,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
   late final ClipboardFocusLease _clipboardFocus;
   int _clipboardFocusRevision = 0;
   bool _retired = false;
+  bool _hostDetached = false;
   bool get _sourcesCurrent => mounted && window.isCurrent;
 
   void _checkSources() {
@@ -602,6 +603,13 @@ class _ControlPageState extends ConsumerState<ControlPage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached && widget.packageName != null) {
+      if (!_hostDetached) {
+        _hostDetached = true;
+        unawaited(window.close(releaseInputs));
+      }
+      return;
+    }
     if (state != AppLifecycleState.resumed) unawaited(releaseInputs());
     if (state == AppLifecycleState.inactive || sessionId.isEmpty) return;
     if (state == AppLifecycleState.resumed) {
