@@ -1,3 +1,7 @@
+import 'package:scrcpy_connect/core/files/file_publication_leases.dart';
+import 'package:scrcpy_connect/core/files/models/file_transfer_plan.dart';
+import 'package:scrcpy_connect/core/files/models/shared_source_file.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -52,6 +56,84 @@ void main() {
 
     final reopened = await FileShareLedger.open(cacheDirectory: cache);
     expect(await reopened.pending(), isEmpty);
+  });
+
+  test('发布中断重开不重复发布，整批完成证据到达前持续保护来源', () async {
+    const transferId = '00000000-0000-4000-8000-000000000002';
+    var store = await FileShareLedger.open(cacheDirectory: cache);
+    await store.reserve(shareId);
+    final path = '${store.root.path}/$shareId/file';
+    await File(path).writeAsString('data');
+    await store.complete(shareId, [
+      const SharedSourceFile(diskName: 'file', name: '原件', size: 4),
+    ]);
+    final plan = FileTransferPlan(
+      deviceId: 'device',
+      direction: .push,
+      items: [FileTransferSelection(source: path, destination: '/sdcard/file')],
+    );
+    expect(await store.begin(shareId, plan, transferId: transferId), isNull);
+    store = await FileShareLedger.open(cacheDirectory: cache);
+    await expectLater(
+      store.begin(shareId, plan, transferId: transferId),
+      throwsA(
+        isA<FileFailure>().having(
+          (e) => e.code,
+          '不能重放',
+          'share_submission_unknown',
+        ),
+      ),
+    );
+    await store.consume(shareId);
+    expect(await File(path).exists(), isTrue);
+    expect(await store.pending(), isEmpty);
+    for (final completed in [false, true]) {
+      await store.reconcile(
+        DurableFilePublications(
+          complete: true,
+          transfers: [
+            DurableFilePublication(
+              batchId: transferId,
+              completed: completed,
+              sources: {path},
+            ),
+          ],
+        ),
+      );
+      expect(await File(path).exists(), !completed);
+    }
+    expect(await store.sourcePaths, isEmpty);
+  });
+
+  test('已发布回执重开后仍可幂等读取，明确未发布才重置原租约', () async {
+    const transferId = '00000000-0000-4000-8000-000000000003';
+    var store = await FileShareLedger.open(cacheDirectory: cache);
+    await store.reserve(shareId);
+    final path = '${store.root.path}/$shareId/file';
+    await File(path).writeAsString('data');
+    await store.complete(shareId, [
+      const SharedSourceFile(diskName: 'file', name: '原件', size: 4),
+    ]);
+    final plan = FileTransferPlan(
+      deviceId: 'device',
+      direction: .push,
+      items: [FileTransferSelection(source: path, destination: '/sdcard/file')],
+    );
+    await store.begin(shareId, plan, transferId: transferId);
+    await store.finish(shareId, const FilePublicationUnpublished());
+    expect(await store.begin(shareId, plan, transferId: transferId), isNull);
+    await store.finish(
+      shareId,
+      const FilePublicationPublished(
+        FilePublicationReceipt(batchId: transferId, status: .submitted),
+      ),
+    );
+    store = await FileShareLedger.open(cacheDirectory: cache);
+    expect(
+      (await store.begin(shareId, plan, transferId: transferId))!.batchId,
+      transferId,
+    );
+    expect(await File(path).readAsString(), 'data');
   });
 
   test('未确认持久提交不发布就绪事实，原账本封存并保留磁盘来源', () async {

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
+import 'package:scrcpy_connect/core/files/models/delivery_journal_record.dart';
 import 'package:scrcpy_connect/core/content/content_cache_gate.dart';
 import 'package:scrcpy_connect/core/content/models/cache_status.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
@@ -27,7 +28,7 @@ final class FileDeliveryJournal implements FileDeliveryRecords {
   static const _maxOperations = 16384;
   static const _maxBytes = 4 * 1024 * 1024;
   final Directory _root;
-  Map<String, _Json> _records;
+  Map<String, DeliveryJournalRecord> _records;
   Set<String> _operations;
   Future<void> _pending = Future.value();
   File get _file => File(p.join(_root.path, 'deliveries.json'));
@@ -38,7 +39,7 @@ final class FileDeliveryJournal implements FileDeliveryRecords {
     ContentCacheGate? cacheGate,
     Future<void> Function(String)? validateSource,
   }) async {
-    final records = <String, _Json>{};
+    final records = <String, DeliveryJournalRecord>{};
     final operations = <String>{};
     final file = File(p.join(root.path, 'deliveries.json'));
     final bytes = await _read(file);
@@ -90,7 +91,7 @@ final class FileDeliveryJournal implements FileDeliveryRecords {
               throw const FormatException();
             }
           }
-          records[entry.key] = record;
+          records[entry.key] = DeliveryJournalRecord.fromJson(record);
         }
       } on Object {
         throw const RequestFailure(
@@ -107,15 +108,16 @@ final class FileDeliveryJournal implements FileDeliveryRecords {
       validateSource,
     );
     var changed = false;
-    for (final record in records.values) {
-      if (record['status'] == 'pending') {
-        record['status'] = 'result_unknown';
-        record['result'] = {
-          'status': 'result_unknown',
-          'partialDestinationPossible': true,
-          'cacheRetained': true,
-        };
-        record['updatedAt'] = _now();
+    for (final entry in records.entries.toList()) {
+      if (entry.value.status == DocumentOutcomeStatus.pending) {
+        records[entry.key] = entry.value.complete(
+          const DocumentOutcome(
+            status: .resultUnknown,
+            partialDestinationPossible: true,
+            cacheRetained: true,
+          ),
+          _now(),
+        );
         changed = true;
       }
     }
@@ -127,12 +129,7 @@ final class FileDeliveryJournal implements FileDeliveryRecords {
   Future<List<String>> get protectedPaths => _serial(
     () async => [
       for (final key in _records.keys.toList()..sort())
-        if (_records[key]!['status'] == 'pending' ||
-            _records[key]!['status'] == 'result_unknown' ||
-            (_records[key]!['result']
-                    as _Json?)?['partialDestinationPossible'] ==
-                true)
-          _records[key]!['localPath'] as String,
+        if (_records[key]!.protectsSource) _records[key]!.source.localPath,
     ],
   );
 
@@ -140,14 +137,12 @@ final class FileDeliveryJournal implements FileDeliveryRecords {
   Future<List<CacheProtection>> get protectedSources => _serial(
     () async => [
       for (final record in _records.values)
-        if (record['status'] == 'pending' ||
-            record['status'] == 'result_unknown' ||
-            (record['result'] as _Json?)?['partialDestinationPossible'] == true)
+        if (record.protectsSource)
           CacheProtection(
-            path: record['localPath'] as String,
-            name: record['name'] as String?,
-            sourceLabel: record['sourceId'] == 'local' ? '本机原件' : '取回的手机原件',
-            reason: record['status'] == 'pending'
+            path: record.source.localPath,
+            name: record.name,
+            sourceLabel: record.source.sourceId == 'local' ? '本机原件' : '取回的手机原件',
+            reason: record.status == DocumentOutcomeStatus.pending
                 ? '系统保存仍在执行'
                 : '系统保存结果待核对，原件继续保留',
           ),
@@ -157,7 +152,7 @@ final class FileDeliveryJournal implements FileDeliveryRecords {
   @override
   Future<FileDeliveryRecord?> read(DocumentSource source) => _commit(() async {
     final record = _records[_sourceKey(source)];
-    return record == null ? null : FileDeliveryRecord.fromJson(record);
+    return record?.view;
   });
 
   @override
@@ -200,61 +195,52 @@ final class FileDeliveryJournal implements FileDeliveryRecords {
     if (previous == null) {
       throw const RequestFailure('delivery_not_found', '找不到本次保存记录。');
     }
-    if (previous['operationId'] != operation) {
+    if (previous.operationId != operation) {
       throw const RequestFailure('delivery_operation_mismatch', '保存回执不属于当前操作。');
     }
     // v1 持久契约的有界回执适配，保守保留未知结果与原件保护。
-    final result = _cleanResult(outcome.toJson());
-    if (previous['status'] != 'pending') {
-      if (_same(previous['result'], result)) {
-        return FileDeliveryRecord.fromJson(previous);
+    final result = _boundedOutcome(outcome);
+    if (previous.status != DocumentOutcomeStatus.pending) {
+      if (previous.result == result) {
+        return previous.view;
       }
       throw const RequestFailure('delivery_result_conflict', '已有保存终态，请核对目标内容。');
     }
-    final record = {
-      ...previous,
-      'status': result['status'],
-      'result': result,
-      'updatedAt': _now(),
-    };
+    final record = previous.complete(result, _now());
     final records = {..._records, key: record};
     await _write(records, _operations);
     _records = records;
-    return FileDeliveryRecord.fromJson(record);
+    return record.view;
   }
 
   Future<void> _begin(FileDeliveryPlan plan) async {
     final key = _sourceKey(plan.source);
     final previous = _records[key];
-    final record = <String, dynamic>{
-      'operationId': _checkedText(plan.operationId, 'operationId', 256),
-      'sourceId': plan.source.sourceId,
-      'localPath': plan.source.localPath,
-      'kind': plan.source.kind.name,
-      'name': _checkedText(plan.name, 'name', 1024),
-      'status': 'pending',
-      'result': null,
-      'updatedAt': _now(),
-    };
+    final record = DeliveryJournalRecord(
+      operationId: _checkedText(plan.operationId, 'operationId', 256),
+      source: plan.source,
+      name: _checkedText(plan.name, 'name', 1024),
+      status: .pending,
+      updatedAt: _now(),
+    );
     if (previous != null) {
-      if (previous['status'] == 'pending') {
+      if (previous.status == DocumentOutcomeStatus.pending) {
         throw const RequestFailure('delivery_busy', '此内容正在保存，请等待结果。');
       }
-      if (previous['status'] == 'saved' &&
-          plan.additionalCopyOfOperationId != previous['operationId']) {
+      if (previous.status == DocumentOutcomeStatus.saved &&
+          plan.additionalCopyOfOperationId != previous.operationId) {
         throw const RequestFailure('delivery_saved', '此内容已经保存。');
       }
-      if ((previous['status'] == 'result_unknown' ||
-              (previous['result'] as _Json)['partialDestinationPossible'] ==
-                  true) &&
-          plan.reviewedOperationId != previous['operationId']) {
+      if ((previous.status == DocumentOutcomeStatus.resultUnknown ||
+              previous.result?.partialDestinationPossible == true) &&
+          plan.reviewedOperationId != previous.operationId) {
         throw const RequestFailure(
           'delivery_review_required',
           '请先核对上次目标，再明确重新保存。',
         );
       }
     }
-    final operation = record['operationId'] as String;
+    final operation = record.operationId;
     if (_operations.contains(operation)) {
       throw const RequestFailure('delivery_operation_reused', '重新保存需要新的操作标识。');
     }
@@ -270,21 +256,24 @@ final class FileDeliveryJournal implements FileDeliveryRecords {
   }
 
   Future<void> _write(
-    Map<String, _Json> records,
+    Map<String, DeliveryJournalRecord> records,
     Set<String> operations,
   ) async {
     final bytes = utf8.encode(
       jsonEncode({
         'version': 1,
         'records': {
-          for (final key in records.keys.toList()..sort()) key: records[key],
+          for (final key in records.keys.toList()..sort())
+            key: records[key]!.toJson(),
         },
         'operations': operations.toList()..sort(),
       }),
     );
     // pending 必须为崩溃恢复时增加的保守终态预留空间。
     final reserve =
-        records.values.where((record) => record['status'] == 'pending').length *
+        records.values
+            .where((record) => record.status == DocumentOutcomeStatus.pending)
+            .length *
         256;
     if (bytes.length + reserve > _maxBytes) {
       throw const RequestFailure('delivery_capacity', '保存记录已满，请保留当前缓存。');
@@ -396,6 +385,65 @@ final class FileDeliveryJournal implements FileDeliveryRecords {
           ).every((same) => same);
     }
     return left == right;
+  }
+
+  static DocumentOutcome _boundedOutcome(DocumentOutcome input) {
+    if (!const {
+      DocumentOutcomeStatus.saved,
+      DocumentOutcomeStatus.partial,
+      DocumentOutcomeStatus.failed,
+      DocumentOutcomeStatus.cancelled,
+      DocumentOutcomeStatus.resultUnknown,
+    }.contains(input.status)) {
+      throw const RequestFailure('invalid_argument', '保存结果状态无效。');
+    }
+    if (input.name != null && !_validText(input.name, 1024, empty: true)) {
+      throw const RequestFailure('invalid_argument', '保存结果名称无效。');
+    }
+    for (final count in [
+      input.files,
+      input.directories,
+      input.bytes,
+      input.skipped,
+    ]) {
+      if (count != null && count < 0) {
+        throw const RequestFailure('invalid_argument', '保存结果计数无效。');
+      }
+    }
+    return DocumentOutcome(
+      status: input.status,
+      name: input.name,
+      files: input.files,
+      directories: input.directories,
+      bytes: input.bytes,
+      skipped: input.skipped,
+      partialDestinationPossible:
+          input.status == DocumentOutcomeStatus.resultUnknown
+          ? true
+          : input.partialDestinationPossible ??
+                (input.status == DocumentOutcomeStatus.saved ? null : true),
+      cacheRetained: input.cacheRetained,
+      errors: [
+        for (final error in input.errors.take(100))
+          DocumentIssue(
+            path: _boundedErrorText(error.path, 4096),
+            code: _boundedErrorText(error.code, 256),
+            message: _boundedErrorText(error.message, 4096),
+          ),
+      ],
+    );
+  }
+
+  static String _boundedErrorText(String value, int limit) {
+    if (!_validText(value, 0x7fffffffffffffff, empty: true)) {
+      throw const RequestFailure('invalid_argument', '保存错误字段无效。');
+    }
+    final bytes = utf8.encode(value);
+    var end = bytes.length > limit ? limit : bytes.length;
+    while (end < bytes.length && bytes[end] & 0xc0 == 0x80) {
+      end--;
+    }
+    return utf8.decode(bytes.sublist(0, end));
   }
 
   static _Json _cleanResult(Object? input) {

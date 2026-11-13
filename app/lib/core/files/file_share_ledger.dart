@@ -4,6 +4,8 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:path/path.dart' as p;
+import 'package:scrcpy_connect/core/files/models/share_batch_record.dart';
+import 'package:scrcpy_connect/core/files/models/share_lease_record.dart';
 import 'package:scrcpy_connect/core/files/file_failure.dart';
 import 'package:scrcpy_connect/core/files/file_publication_leases.dart';
 import 'package:scrcpy_connect/core/files/file_share_ledger_format.dart';
@@ -39,8 +41,8 @@ final class FileShareLedger implements FilePublicationLeases {
   final FileShareStorage _storage;
   final DateTime Function() _now;
   final bool _directories;
-  final _batches = <String, Map<String, dynamic>>{};
-  final _leases = <String, Map<String, dynamic>>{};
+  final _batches = <String, ShareBatchRecord>{};
+  final _leases = <String, ShareLeaseRecord>{};
   bool _uncertain = false;
   int _unknownBatches = 0;
   static final _queues = <String, Future<void>>{};
@@ -105,39 +107,36 @@ final class FileShareLedger implements FilePublicationLeases {
     return result;
   }
 
-  int get _retainedBytes => _batches.values.fold(
-    0,
-    (total, batch) => total + (batch['bytes'] as int),
-  );
+  int get _retainedBytes =>
+      _batches.values.fold(0, (total, batch) => total + batch.bytes);
   File _batchFile(String id) => File(p.join(root.path, id, '.share'));
   File _leaseFile(String id) => File(p.join(root.path, '.leases', id));
-  List<String> _paths(Map<String, dynamic> batch) => [
-    for (final file in (batch['files'] as List).cast<Map<String, dynamic>>())
-      p.join(root.path, batch['id'] as String, file['diskName'] as String),
+  List<String> _paths(ShareBatchRecord batch) => [
+    for (final file in batch.files) p.join(root.path, batch.id, file.diskName),
   ];
-  IncomingShare _view(Map<String, dynamic> batch) => IncomingShare(
-    shareId: batch['id'] as String,
-    status: IncomingShareStatus.values.byName(batch['status'] as String),
-    text: batch['text'] as String? ?? '',
-    mime: batch['mime'] as String?,
+  IncomingShare _view(ShareBatchRecord batch) => IncomingShare(
+    shareId: batch.id,
+    status: switch (batch.status) {
+      .importing => IncomingShareStatus.importing,
+      .ready => IncomingShareStatus.ready,
+      .error => IncomingShareStatus.error,
+    },
+    text: batch.text ?? '',
+    mime: batch.mime,
     files: [
-      for (final file in (batch['files'] as List).cast<Map<String, dynamic>>())
+      for (final file in batch.files)
         IncomingShareFile(
-          name: file['name'] as String,
-          size: file['size'] as int,
-          localPath: p.join(
-            root.path,
-            batch['id'] as String,
-            file['diskName'] as String,
-          ),
+          name: file.name,
+          size: file.size,
+          localPath: p.join(root.path, batch.id, file.diskName),
         ),
     ],
-    errors: List<String>.from(batch['errors'] as List),
+    errors: batch.errors,
   );
   Future<List<IncomingShare>> pending() => _exclusive(
     () async => List.unmodifiable([
       for (final id in (_batches.keys.toList()..sort()))
-        if (_batches[id]!['visible'] == true) _view(_batches[id]!),
+        if (_batches[id]!.visible == true) _view(_batches[id]!),
     ]),
   );
   @override
@@ -156,7 +155,7 @@ final class FileShareLedger implements FilePublicationLeases {
   });
   void _changed(String id) {
     final batch = _batches[id];
-    final event = batch != null && batch['visible'] == true
+    final event = batch != null && batch.visible == true
         ? ShareReceived(_view(batch))
         : ShareConsumed(id);
     // 监听器只得到不可与账本共享的投影，不参与磁盘提交结果。
@@ -173,7 +172,7 @@ final class FileShareLedger implements FilePublicationLeases {
     _storage.writable();
     if (!_validId(id) || _batches.containsKey(id)) _bad('分享标识无效或已存在。');
     if (_uncertain ||
-        _batches.values.where((b) => b['visible'] == true).length >=
+        _batches.values.where((b) => b.visible == true).length >=
             limits.pending ||
         _batches.length + _unknownBatches >= limits.batches ||
         _retainedBytes >= limits.totalBytes) {
@@ -183,18 +182,13 @@ final class FileShareLedger implements FilePublicationLeases {
         mime != null && utf8.encode(mime).length > 256) {
       _bad('分享文字或类型过长。');
     }
-    final batch = <String, dynamic>{
-      'version': 2,
-      'id': id,
-      'created': _now().millisecondsSinceEpoch,
-      'visible': true,
-      'status': 'importing',
-      'bytes': 0,
-      'text': text,
-      'mime': mime,
-      'files': <Map<String, dynamic>>[],
-      'errors': <String>[],
-    };
+    final batch = ShareBatchRecord(
+      id: id,
+      created: _now().millisecondsSinceEpoch,
+      status: ShareBatchStatus.importing,
+      text: text,
+      mime: mime,
+    );
     final directory = Directory(p.join(root.path, id));
     if (await FileSystemEntity.type(directory.path, followLinks: false) !=
         FileSystemEntityType.notFound) {
@@ -203,7 +197,7 @@ final class FileShareLedger implements FilePublicationLeases {
     await _storage.persist(() async {
       await _storage.assertRoot();
       await directory.create();
-      await _storage.write(_batchFile(id), batch);
+      await _storage.write(_batchFile(id), batch.toJson());
     });
     _batches[id] = batch;
   }
@@ -212,15 +206,12 @@ final class FileShareLedger implements FilePublicationLeases {
   Future<int> availableBytes(String id) => _exclusive(() async {
     _storage.writable();
     final batch = _requireBatch(id);
-    if (batch['status'] != 'importing' || batch['visible'] != true) {
+    if (batch.status != ShareBatchStatus.importing || batch.visible != true) {
       throw const FileFailure('cancelled', '分享导入已结束。');
     }
     return max(
       0,
-      min(
-        limits.batchBytes - (batch['bytes'] as int),
-        limits.totalBytes - _retainedBytes,
-      ),
+      min(limits.batchBytes - batch.bytes, limits.totalBytes - _retainedBytes),
     );
   });
   Future<void> complete(String id, List<SharedSourceFile> files) {
@@ -228,7 +219,9 @@ final class FileShareLedger implements FilePublicationLeases {
     return _exclusive(() async {
       _storage.writable();
       final old = _requireBatch(id);
-      if (old['status'] != 'importing' || old['visible'] != true) return;
+      if (old.status != ShareBatchStatus.importing || !old.visible) {
+        return;
+      }
       if (captured.length > limits.sources) _bad('分享文件数超限。');
       final unique = <String>{};
       var bytes = 0;
@@ -256,16 +249,13 @@ final class FileShareLedger implements FilePublicationLeases {
         bytes += file.size;
       }
       if (bytes > limits.batchBytes ||
-          _retainedBytes - (old['bytes'] as int) + bytes > limits.totalBytes) {
+          _retainedBytes - old.bytes + bytes > limits.totalBytes) {
         throw const FileFailure('share_byte_limit', '分享内容超过暂存容量。');
       }
-      final batch = {
-        ...old,
-        'status': 'ready',
-        'bytes': bytes,
-        'files': captured.map((file) => file.toJson()).toList(),
-      };
-      await _storage.persist(() => _storage.write(_batchFile(id), batch));
+      final batch = old.copyWith(status: .ready, bytes: bytes, files: captured);
+      await _storage.persist(
+        () => _storage.write(_batchFile(id), batch.toJson()),
+      );
       _batches[id] = batch;
       _changed(id);
     });
@@ -277,17 +267,16 @@ final class FileShareLedger implements FilePublicationLeases {
   Future<void> _fail(String id, String reason) async {
     _storage.writable();
     final old = _batches[id];
-    if (old == null || old['status'] != 'importing') return;
-    final batch = {
-      ...old,
-      'status': 'error',
-      'bytes': 0,
-      'files': <Map<String, dynamic>>[],
-      'errors': [String.fromCharCodes(reason.runes.take(4096))],
-    };
+    if (old == null || old.status != ShareBatchStatus.importing) return;
+    final batch = old.copyWith(
+      status: .error,
+      bytes: 0,
+      files: [],
+      errors: [String.fromCharCodes(reason.runes.take(4096))],
+    );
     await _storage.persist(() async {
       await _storage.removeChildren(id, keepJournal: true);
-      await _storage.write(_batchFile(id), batch);
+      await _storage.write(_batchFile(id), batch.toJson());
     });
     _batches[id] = batch;
     _changed(id);
@@ -295,7 +284,7 @@ final class FileShareLedger implements FilePublicationLeases {
 
   Future<void> _drainBeforeRemove(String id) async {
     final active = await _exclusive(
-      () async => _batches[id]?['status'] == 'importing',
+      () async => _batches[id]?.status == ShareBatchStatus.importing,
     );
     if (!active) return;
     if (_beforeRemove == null) {
@@ -327,8 +316,10 @@ final class FileShareLedger implements FilePublicationLeases {
       _changed(id);
       return;
     }
-    final batch = {...old, 'visible': false};
-    await _storage.persist(() => _storage.write(_batchFile(id), batch));
+    final batch = old.copyWith(visible: false);
+    await _storage.persist(
+      () => _storage.write(_batchFile(id), batch.toJson()),
+    );
     _batches[id] = batch;
     await _reclaim(id);
     _changed(id);
@@ -336,8 +327,8 @@ final class FileShareLedger implements FilePublicationLeases {
 
   Future<void> _reclaim(String id) async {
     if (_uncertain ||
-        _batches[id]?['visible'] != false ||
-        _leases.values.any((l) => l['shareId'] == id)) {
+        _batches[id]?.visible != false ||
+        _leases.values.any((l) => l.shareId == id)) {
       return;
     }
     await _storage.persist(() async {
@@ -349,34 +340,24 @@ final class FileShareLedger implements FilePublicationLeases {
 
   Future<void> _retain(String id) async {
     _storage.writable();
-    final existing = _leases.values
-        .where((l) => l['shareId'] == id)
-        .firstOrNull;
+    final existing = _leases.values.where((l) => l.shareId == id).firstOrNull;
     if (existing != null) return;
     final batch = _requireBatch(id);
-    if (batch['status'] != 'ready' || (batch['files'] as List).isEmpty) {
+    if (batch.status != ShareBatchStatus.ready || batch.files.isEmpty) {
       _bad('分享文件尚未完成导入。');
     }
     if (_leases.length >= limits.leases) {
       throw const FileFailure('share_cache_busy', '分享租约已满。');
     }
-    final lease = <String, dynamic>{
-      'version': 2,
-      'id': const Uuid().v4(),
-      'shareId': id,
-      'transferId': null,
-      'request': null,
-      'publication': null,
-      'receipt': null,
-    };
+    final lease = ShareLeaseRecord(id: const Uuid().v4(), shareId: id);
     await _saveLease(lease);
   }
 
-  Future<void> _saveLease(Map<String, dynamic> lease) async {
+  Future<void> _saveLease(ShareLeaseRecord lease) async {
     await _storage.persist(
-      () => _storage.write(_leaseFile(lease['id'] as String), lease),
+      () => _storage.write(_leaseFile(lease.id), lease.toJson()),
     );
-    _leases[lease['id'] as String] = lease;
+    _leases[lease.id] = lease;
   }
 
   Future<void> _release(String id) async {
@@ -392,7 +373,7 @@ final class FileShareLedger implements FilePublicationLeases {
       }
     });
     _leases.remove(id);
-    await _reclaim(lease['shareId'] as String);
+    await _reclaim(lease.shareId);
   }
 
   @override
@@ -422,7 +403,7 @@ final class FileShareLedger implements FilePublicationLeases {
       _bad('请完整提交本次分享文件。');
     }
     await _retain(share);
-    final old = _leases.values.firstWhere((l) => l['shareId'] == share);
+    final old = _leases.values.firstWhere((l) => l.shareId == share);
     final fingerprint = shareRequestFingerprint({
       'shareId': publicationId ?? share,
       'deviceId': plan.deviceId,
@@ -430,76 +411,71 @@ final class FileShareLedger implements FilePublicationLeases {
       'conflict': plan.conflict.name,
       'destinationScope': plan.destination.name,
     });
-    if (old['request'] != null && old['request'] != fingerprint) {
+    if (old.request != null && old.request != fingerprint) {
       throw const FileFailure('share_submission_mismatch', '本次分享已经使用其他传输参数。');
     }
-    if (old['receipt'] != null) {
-      return FilePublicationReceipt.fromJson(
-        Map<String, Object?>.from(old['receipt'] as Map),
-      );
+    if (old.receipt != null) {
+      return old.receipt;
     }
-    if (old['transferId'] != null || old['publication'] != null) {
+    if (old.transferId != null || old.publication != null) {
       throw const FileFailure(
         'share_submission_unknown',
         '分享已有任务或提交结果待核对，不会重复发布。',
       );
     }
-    await _saveLease({
-      ...old,
-      'transferId': transferId,
-      'request': fingerprint,
-      'publication': 'publishing',
-    });
+    await _saveLease(
+      old.copyWith(
+        transferId: transferId,
+        request: fingerprint,
+        publication: .publishing,
+      ),
+    );
     return null;
   });
 
   @override
-  Future<void> finish(
-    String share,
-    FilePublicationOutcome outcome,
-  ) => _exclusive(() async {
-    _storage.writable();
-    switch (outcome) {
-      case FilePublicationUnpublished():
-        final lease = _leases.values
-            .where((l) => l['shareId'] == share)
-            .firstOrNull;
-        if (lease == null) return;
-        if (lease['receipt'] != null || lease['publication'] != 'publishing') {
-          throw const FileFailure('share_submission_unknown', '已有提交仍待核对，不能重置。');
+  Future<void> finish(String share, FilePublicationOutcome outcome) =>
+      _exclusive(() async {
+        _storage.writable();
+        switch (outcome) {
+          case FilePublicationUnpublished():
+            final lease = _leases.values
+                .where((l) => l.shareId == share)
+                .firstOrNull;
+            if (lease == null) return;
+            if (lease.receipt != null ||
+                lease.publication != SharePublicationStatus.publishing) {
+              throw const FileFailure(
+                'share_submission_unknown',
+                '已有提交仍待核对，不能重置。',
+              );
+            }
+            await _saveLease(lease.reset());
+            if (_directories) await _release(lease.id);
+          case FilePublicationPublished(:final receipt):
+            await _finished(share, receipt);
+          case FilePublicationUnknown():
+            await _finished(share, null);
         }
-        await _saveLease({
-          ...lease,
-          'transferId': null,
-          'request': null,
-          'publication': null,
-        });
-        if (_directories) await _release(lease['id'] as String);
-      case FilePublicationPublished(:final receipt):
-        await _finished(share, receipt);
-      case FilePublicationUnknown():
-        await _finished(share, null);
-    }
-  });
+      });
 
   Future<void> _finished(String share, FilePublicationReceipt? receipt) async {
     final lease =
-        _leases.values.where((l) => l['shareId'] == share).firstOrNull ??
+        _leases.values.where((l) => l.shareId == share).firstOrNull ??
         (throw const FileFailure('share_source_invalid', '分享租约不存在。'));
-    final next = {...lease};
+    ShareLeaseRecord next;
     if (receipt == null) {
-      next['publication'] = 'unknown';
+      next = lease.copyWith(publication: .unknown);
     } else {
       final id = receipt.batchId;
-      if (!_validId(id) ||
-          lease['transferId'] != null && lease['transferId'] != id) {
+      if (!_validId(id) || lease.transferId != null && lease.transferId != id) {
         _bad('分享任务回执与绑定不一致。');
       }
-      next.addAll({
-        'transferId': id,
-        'receipt': receipt.toJson(),
-        'publication': 'published',
-      });
+      next = lease.copyWith(
+        transferId: id,
+        receipt: receipt,
+        publication: .published,
+      );
     }
     await _saveLease(next);
   }
@@ -578,7 +554,7 @@ final class FileShareLedger implements FilePublicationLeases {
     }
     for (final id in _leases.keys.toList()) {
       final lease = _leases[id]!;
-      final batch = _batches[lease['shareId']];
+      final batch = _batches[lease.shareId];
       if (batch == null) continue;
       final paths = _paths(batch).toSet();
       if (coveredSources != null && !coveredSources.containsAll(paths)) {
@@ -588,15 +564,15 @@ final class FileShareLedger implements FilePublicationLeases {
           .where((row) => row.sources.intersection(paths).isNotEmpty)
           .toList();
       // 路径证明消费者覆盖，批次身份才证明是哪一次发布；旧无批次记录继续保留。
-      final transfer = lease['transferId'] as String?;
+      final transfer = lease.transferId;
       if (matches.length == 1 &&
           matches.single.batchId == transfer &&
-          lease['request'] != null &&
-          lease['receipt'] == null &&
+          lease.request != null &&
+          lease.receipt == null &&
           matches.single.sources.containsAll(paths) &&
           _validId(matches.single.batchId)) {
         await _finished(
-          lease['shareId'] as String,
+          lease.shareId,
           FilePublicationReceipt(
             batchId: matches.single.batchId,
             status: FileTransferAdmission.submitted,
@@ -619,19 +595,17 @@ final class FileShareLedger implements FilePublicationLeases {
       final expired = _batches.values
           .where(
             (batch) =>
-                _now().millisecondsSinceEpoch - (batch['created'] as int) >
+                _now().millisecondsSinceEpoch - (batch.created) >
                     limits.pendingExpiry.inMilliseconds &&
-                batch['status'] != 'importing' &&
+                batch.status != ShareBatchStatus.importing &&
                 (coveredSources == null ||
                     coveredSources.containsAll(_paths(batch))) &&
-                !_leases.values.any(
-                  (lease) => lease['shareId'] == batch['id'],
-                ) &&
+                !_leases.values.any((lease) => lease.shareId == batch.id) &&
                 !_paths(
                   batch,
                 ).any((path) => rows.any((row) => row.sources.contains(path))),
           )
-          .map((batch) => batch['id'] as String)
+          .map((batch) => batch.id)
           .toList();
       for (final id in expired) {
         await _consume(id);
@@ -743,7 +717,7 @@ final class FileShareLedger implements FilePublicationLeases {
             _object(lease['receipt']),
           ).toJson();
         }
-        await _saveLease(lease);
+        await _saveLease(ShareLeaseRecord.fromJson(lease));
       } on FileFailure {
         rethrow;
       } on Object {
@@ -751,17 +725,17 @@ final class FileShareLedger implements FilePublicationLeases {
       }
     }
     for (final batch in _batches.values.toList()) {
-      if (batch['status'] != 'importing') continue;
-      if (_leases.values.any((lease) => lease['shareId'] == batch['id'])) {
+      if (batch.status != ShareBatchStatus.importing) continue;
+      if (_leases.values.any((lease) => lease.shareId == batch.id)) {
         _uncertain = true;
         continue;
       }
       // open 的调用方已先排空旧 scope；这里只收尾已中断的业务日志。
-      await _fail(batch['id'] as String, '上次分享导入已中断，请重新分享。');
+      await _fail(batch.id, '上次分享导入已中断，请重新分享。');
     }
   }
 
-  Future<Map<String, dynamic>> _loadBatch(String id) async {
+  Future<ShareBatchRecord> _loadBatch(String id) async {
     final bytes = await _storage.read(_batchFile(id), 8 * 1024 * 1024);
     final Map<String, dynamic> batch;
     if (bytes.isNotEmpty && bytes.first == 123) {
@@ -835,10 +809,10 @@ final class FileShareLedger implements FilePublicationLeases {
     }
     batch['bytes'] = total;
     await _storage.persist(() => _storage.write(_batchFile(id), batch));
-    return batch;
+    return ShareBatchRecord.fromJson(batch);
   }
 
-  Map<String, dynamic> _requireBatch(String id) =>
+  ShareBatchRecord _requireBatch(String id) =>
       _batches[id] ??
       (throw const FileFailure('share_source_invalid', '分享来源已不存在。'));
 }
