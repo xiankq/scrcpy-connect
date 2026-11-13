@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/core/files/models/platform_share_notice.dart';
 import 'package:scrcpy_connect/core/devices/device_reconnect_service.dart';
 import 'package:scrcpy_connect/core/devices/models/connections_stopped.dart';
 import 'package:scrcpy_connect/core/events/models/app_event.dart';
@@ -19,7 +20,7 @@ class PlatformEventHandler {
   final DeviceReconnectService reconnections;
   final bool Function() isDisposed;
   final void Function(AppEvent) emit;
-  final Future<void> Function(Map<String, dynamic>) handleShare;
+  final Future<void> Function(PlatformShareNotice) handleShare;
   final Future<void> Function(AudioPlatformEvent) handleAudio;
   final Future<void> Function() stopMedia;
   final Future<void> Function() stopConnections;
@@ -40,10 +41,7 @@ class PlatformEventHandler {
       return;
     }
     if (event['type'] == 'share.platform.pending') {
-      final data = event['data'] is Map
-          ? Map<String, dynamic>.from(event['data'] as Map)
-          : const <String, dynamic>{};
-      await handleShare(data);
+      await handleShare(PlatformShareNotice.fromJson(event['data']));
     } else if (decodeAudioPlatformEvent(event) case final audio?) {
       if (audio case AudioVisibilityChanged(:final visible)) {
         reconnections.setVisible(visible);

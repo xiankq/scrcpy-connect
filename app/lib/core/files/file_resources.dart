@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:adb/adb.dart' show NativeAdbLocalFileApi;
 import 'package:scrcpy/scrcpy.dart'
     show createNativeScrcpyLocalFiles, readNativeScrcpyLocalStorageFreeBytes;
+import 'package:scrcpy_connect/core/files/models/platform_share_notice.dart';
 import 'package:scrcpy_connect/core/content/content_cache.dart';
 import 'package:scrcpy_connect/core/content/content_cache_gate.dart';
 import 'package:scrcpy_connect/core/content/content_preview.dart';
@@ -288,7 +289,7 @@ final class FileResources {
   }
 
   /// 平台分享仍由原文件所有者接收；失败不改变其资源回收与重试责任。
-  Future<void> receiveShare(Map<String, dynamic> data) async {
+  Future<void> receiveShare(PlatformShareNotice data) async {
     if (_closed || isDisposed()) return;
     try {
       await sharing?.receive(data);

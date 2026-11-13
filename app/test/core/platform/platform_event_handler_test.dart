@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/core/files/file_failure.dart';
+import 'package:scrcpy_connect/core/files/models/platform_share_notice.dart';
+
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -81,7 +84,7 @@ void main() {
     );
     addTearDown(reconnections.dispose);
     final published = <AppEvent>[];
-    final shares = <Map<String, dynamic>>[];
+    final shares = <PlatformShareNotice>[];
     final audio = <AudioPlatformEvent>[];
     final handler = PlatformEventHandler(
       reconnections: reconnections,
@@ -94,7 +97,7 @@ void main() {
     );
     const share = {
       'type': 'share.platform.pending',
-      'data': {'shareId': 'one'},
+      'data': {'shareId': 'one', 'sourceCount': 0},
     };
     const focus = {
       'type': 'audio.platform.focus',
@@ -103,7 +106,16 @@ void main() {
     await handler.handle(share);
     await handler.handle(focus);
     await handler.handle(const {'type': 'unknown'});
-    expect(shares, [share['data']]);
+    expect(shares.single.shareId, 'one');
+    expect(shares.single.sourceCount, 0);
+    await expectLater(
+      handler.handle(const {
+        'type': 'share.platform.pending',
+        'data': {'shareId': 'bad', 'sourceCount': '1'},
+      }),
+      throwsA(isA<FileFailure>()),
+    );
+    expect(shares, hasLength(1));
     expect(
       audio.single,
       isA<AudioFocusChanged>()

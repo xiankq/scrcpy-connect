@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:path/path.dart' as p;
+import 'package:scrcpy_connect/core/files/models/platform_share_notice.dart';
 import 'package:scrcpy_connect/core/files/file_failure.dart';
 import 'package:scrcpy_connect/core/files/file_publication_leases.dart';
 import 'package:scrcpy_connect/core/files/file_share_ledger.dart';
@@ -175,15 +176,14 @@ final class FileShareService implements FilePublicationLeases, IncomingShares {
     final shares = response['shares'];
     if (shares is! List) throw const FileFailure('invalid_share', '分享队列格式无效。');
     for (final raw in shares) {
-      if (raw is Map) await receive(Map<String, dynamic>.from(raw));
+      await receive(PlatformShareNotice.fromJson(raw));
     }
   }
 
   /// 同一分享合并交付；不同分享串行复制，既有限额计算与 SDK 稳定 scope 均只有一位写者。
-  Future<IncomingShare> receive(Map<String, dynamic> share) {
+  Future<IncomingShare> receive(PlatformShareNotice share) {
     _checkIntake();
-    final id = share['shareId'];
-    if (id is! String) throw const FileFailure('invalid_share', '分享标识无效。');
+    final id = share.shareId;
     if (_stoppingShares.contains(id)) {
       throw const FileFailure('cancelled', '此分享正在停止或移除。');
     }
@@ -191,7 +191,6 @@ final class FileShareService implements FilePublicationLeases, IncomingShares {
     if (_intents.length >= limits.pending) {
       throw const FileFailure('share_cache_busy', '分享导入队列已满，请稍后重试。');
     }
-    final captured = Map<String, dynamic>.from(share);
     final intent = _ImportIntent();
     _intents[id] = intent;
     void retire() {
@@ -204,7 +203,7 @@ final class FileShareService implements FilePublicationLeases, IncomingShares {
       _serialize(() async {
         intent.started = true;
         intent.cancellation.check();
-        return _receive(id, captured, intent);
+        return _receive(id, share, intent);
       }).then<void>(
         (value) {
           retire();
@@ -223,7 +222,7 @@ final class FileShareService implements FilePublicationLeases, IncomingShares {
 
   Future<IncomingShare> _receive(
     String id,
-    Map<String, dynamic> share,
+    PlatformShareNotice share,
     _ImportIntent intent,
   ) async {
     _checkIntake();
@@ -240,23 +239,16 @@ final class FileShareService implements FilePublicationLeases, IncomingShares {
       await _consumePlatform(id, _owner!.leaseId);
       return existing;
     }
-    await store.reserve(
-      id,
-      text: share['text'] as String?,
-      mime: share['mime'] as String?,
-    );
+    await store.reserve(id, text: share.text, mime: share.mime);
     final job = _ImportJob(id, _owner!, intent.cancellation);
     _jobs[id] = job;
     try {
       job.cancellation.check();
-      final count = share['sourceCount'];
-      if (share['status'] == 'error') {
-        throw FileFailure(
-          'share_open_failed',
-          (share['errors'] as List? ?? const []).join('；'),
-        );
+      final count = share.sourceCount;
+      if (share.rejected) {
+        throw FileFailure('share_open_failed', share.errors.join('；'));
       }
-      if (count is! int || count < 0 || count > limits.sources) {
+      if (count < 0 || count > limits.sources) {
         throw const FileFailure('share_source_limit', '一次最多分享32个来源。');
       }
       job.openingScope = job.owner.openScope(await _files()).catchError((
@@ -283,8 +275,11 @@ final class FileShareService implements FilePublicationLeases, IncomingShares {
           'openId': openId,
           'ownerLeaseId': job.owner.leaseId,
         }).timeout(limits.timeout);
-        // 迟到回执必须先登记，取消检查不能跳过原始 PFD 的关闭责任。
-        job.descriptors.add(Map<String, dynamic>.from(descriptor));
+        // 迟到回执先登记租约再检查取消；无效回执仍由已登记的 openId 负责排空。
+        if (descriptor['fdLeaseId'] case final String lease
+            when lease.isNotEmpty) {
+          job.descriptorLeases.add(lease);
+        }
         job.cancellation.check();
         final fd = descriptor['fd'];
         final fdLease = descriptor['fdLeaseId'];
@@ -392,10 +387,10 @@ final class FileShareService implements FilePublicationLeases, IncomingShares {
         failureStack ??= stack;
       }
     }
-    for (final descriptor in job.descriptors.toList()) {
+    for (final lease in job.descriptorLeases.toList()) {
       try {
         final receipt = await _request('sharing.platform.release', {
-          'fdLeaseId': descriptor['fdLeaseId'],
+          'fdLeaseId': lease,
           'ownerLeaseId': job.owner.leaseId,
         });
         if (receipt['released'] != true) {
@@ -404,7 +399,7 @@ final class FileShareService implements FilePublicationLeases, IncomingShares {
             '分享原始描述符尚未确认释放。',
           );
         }
-        job.descriptors.remove(descriptor);
+        job.descriptorLeases.remove(lease);
       } catch (error, stack) {
         failure ??= error;
         failureStack ??= stack;
@@ -573,7 +568,7 @@ final class _ImportJob {
   final AdbCancellation cancellation;
   final executionFinished = Completer<void>();
   final openIds = <String>{};
-  final descriptors = <Map<String, dynamic>>[];
+  final descriptorLeases = <String>{};
   final files = <SharedSourceFile>[];
   Future<LocalFileScope>? openingScope;
   LocalFileScope? scope;
