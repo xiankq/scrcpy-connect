@@ -19,6 +19,7 @@ import 'package:scrcpy_connect/core/files/models/file_catalog_entry.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/pages/files/file_actions.dart';
+import 'package:scrcpy_connect/pages/files/file_actions_notifier.dart';
 import 'package:scrcpy_connect/pages/files/widgets/file_breadcrumbs.dart';
 import 'package:scrcpy_connect/pages/files/widgets/file_browser_entry.dart';
 import 'package:scrcpy_connect/pages/files/widgets/file_entry_sliver.dart';
@@ -121,31 +122,29 @@ class FilesPage extends HookConsumerWidget {
       selecting.value = false;
       return null;
     }, [owner]);
-    final busyOwner = useState<Object?>(null);
-    final busy = identical(busyOwner.value, owner);
+    final actionScope = useMemoized(Object.new);
+    final actionsProvider = fileActionsProvider((
+      deviceId: sourceId,
+      path: path.value,
+    ), scope: actionScope);
+    final actionState = ref.watch(actionsProvider);
+    final actions = ref.read(actionsProvider.notifier);
+    ref.listen(actionsProvider, (_, next) {
+      if (next.error case final error?) feedback(context, error);
+    });
+    final busy = actionState.busy;
     final typeFilter = useState(FileTypeFilter.all);
 
-    Future<bool> mutate(Future<void> Function() action) async {
+    Future<bool> mutate(Future<bool> Function() action) async {
       if (!ownsView()) return false;
       if (!canSubmit()) {
         feedback(context, '设备已断开或目录尚未重新核验，请重连后再试。');
         return false;
       }
-      busyOwner.value = owner;
-      try {
-        await action();
-        if (!ownsView()) return false;
-        unawaited(refresh());
-        selected.value = {};
-        return true;
-      } catch (error) {
-        if (context.mounted && ownsView()) feedback(context, '$error');
-        return false;
-      } finally {
-        if (context.mounted && identical(busyOwner.value, owner)) {
-          busyOwner.value = null;
-        }
-      }
+      final completed = await action();
+      if (!ownsView()) return false;
+      if (completed) selected.value = {};
+      return completed;
     }
 
     void openDirectory(String next) {
@@ -179,11 +178,7 @@ class FilesPage extends HookConsumerWidget {
         feedback(context, '所选文件没有可读取的本机路径，请从系统文件位置重新选择。');
         return;
       }
-      final submitted = await mutate(() async {
-        await transfers.startTransfer(
-          FileTransferPlan(deviceId: sourceId, direction: .push, items: items),
-        );
-      });
+      final submitted = await mutate(() => actions.send(items));
       if (submitted && context.mounted) {
         TransferCenterRoute().push<void>(context);
       }
@@ -203,20 +198,14 @@ class FilesPage extends HookConsumerWidget {
           feedback(context, '请选择有明确名称的文件夹');
           return;
         }
-        final submitted = await mutate(() async {
-          await transfers.startTransfer(
-            FileTransferPlan(
-              deviceId: sourceId,
-              direction: .push,
-              items: [
-                FileTransferSelection(
-                  source: source,
-                  destination: p.posix.join(path.value, name),
-                ),
-              ],
+        final submitted = await mutate(
+          () => actions.send([
+            FileTransferSelection(
+              source: source,
+              destination: p.posix.join(path.value, name),
             ),
-          );
-        });
+          ]),
+        );
         if (submitted && context.mounted) {
           TransferCenterRoute().push<void>(context);
         }
@@ -254,10 +243,7 @@ class FilesPage extends HookConsumerWidget {
         sourceStamp: final expected?,
       )) {
         await mutate(
-          () => mutations.rename(sourceId, (
-            path: path,
-            expected: expected,
-          ), destination: p.posix.join(p.posix.dirname(path), name)),
+          () => actions.rename((path: path, expected: expected), name),
         );
       } else if (ownsView()) {
         feedback(context, '缺少所选文件身份，请重新选择。');
@@ -438,10 +424,7 @@ class FilesPage extends HookConsumerWidget {
                                     return;
                                   }
                                   await mutate(
-                                    () => mutations.createDirectory(
-                                      sourceId,
-                                      p.posix.join(path.value, name),
-                                    ),
+                                    () => actions.createDirectory(name),
                                   );
                                 },
                         ),
@@ -521,9 +504,7 @@ class FilesPage extends HookConsumerWidget {
                                 }
                                 return;
                               }
-                              await mutate(
-                                () => mutations.delete(sourceId, sources),
-                              );
+                              await mutate(() => actions.delete(sources));
                             }
                           },
                     deleteReason: !connected
