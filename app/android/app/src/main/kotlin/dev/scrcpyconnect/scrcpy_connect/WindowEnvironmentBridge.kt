@@ -4,6 +4,8 @@ import android.app.Activity
 import android.graphics.Rect
 import androidx.core.content.ContextCompat
 import androidx.core.util.Consumer
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.window.java.layout.WindowInfoTrackerCallbackAdapter
 import androidx.window.layout.DisplayFeature
 import androidx.window.layout.FoldingFeature
@@ -103,7 +105,22 @@ internal class WindowEnvironmentBridge(
             "windowId" to windowId(),
             "mode" to windowMode(),
             "posture" to posture,
+            "insets" to insetsPayload(),
             "displayFeatures" to projectedFeatures,
+        )
+    }
+
+    private fun insetsPayload(): Map<String, Any> {
+        val insets = ViewCompat.getRootWindowInsets(activity.window.decorView)
+            ?.getInsetsIgnoringVisibility(
+                WindowInsetsCompat.Type.systemBars() or
+                    WindowInsetsCompat.Type.displayCutout(),
+            )
+        return mapOf(
+            "left" to (insets?.left ?: 0) / activity.resources.displayMetrics.density,
+            "top" to (insets?.top ?: 0) / activity.resources.displayMetrics.density,
+            "right" to (insets?.right ?: 0) / activity.resources.displayMetrics.density,
+            "bottom" to (insets?.bottom ?: 0) / activity.resources.displayMetrics.density,
         )
     }
 
