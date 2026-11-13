@@ -129,6 +129,39 @@ void main() {
     expect(observed?.verticalPaneDivider, isNotNull);
   });
 
+  testWidgets(
+    'uses desktop engine identity when the host projection is absent',
+    (tester) async {
+      WindowEnvironment? observed;
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(size: Size(1200, 800)),
+          child: WindowEnvironmentScope(
+            readHostEnvironment: () async => null,
+            readDesktopWindowIdentity: () async => const WindowEnvironment(
+              width: 1,
+              height: 1,
+              windowId: 'desktop:window-7',
+              mode: WindowMode.freeform,
+            ),
+            child: Builder(
+              builder: (context) {
+                observed = context.windowEnvironment;
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(observed?.windowId, 'desktop:window-7');
+      expect(observed?.mode, WindowMode.freeform);
+      expect(observed?.width, 1200);
+      expect(observed?.height, 800);
+    },
+  );
+
   testWidgets('refreshes host posture when the window metrics change', (
     tester,
   ) async {

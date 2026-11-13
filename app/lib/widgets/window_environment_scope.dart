@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:scrcpy_connect/core/platform/platform_channels.dart';
 import 'package:scrcpy_connect/core/platform/window_environment.dart';
 import 'package:scrcpy_connect/core/platform/window_environment_codec.dart';
@@ -17,10 +19,12 @@ final class WindowEnvironmentScope extends StatefulWidget {
     super.key,
     required this.child,
     this.readHostEnvironment = _readHostEnvironment,
+    this.readDesktopWindowIdentity = _readDesktopWindowIdentity,
   });
 
   final Widget child;
   final Future<WindowEnvironment?> Function() readHostEnvironment;
+  final Future<WindowEnvironment?> Function() readDesktopWindowIdentity;
 
   @override
   State<WindowEnvironmentScope> createState() => _WindowEnvironmentScopeState();
@@ -66,7 +70,9 @@ final class _WindowEnvironmentScopeState extends State<WindowEnvironmentScope>
 
   Future<void> _loadHostEnvironment() async {
     final requestGeneration = ++_requestGeneration;
-    final environment = await widget.readHostEnvironment();
+    final environment =
+        await widget.readHostEnvironment() ??
+        await widget.readDesktopWindowIdentity();
     if (!mounted || requestGeneration != _requestGeneration) return;
     if (_sameEnvironment(_hostEnvironment, environment)) return;
     setState(() {
@@ -158,6 +164,27 @@ Future<WindowEnvironment?> _readHostEnvironment() async {
   } on MissingPluginException {
     return null;
   } on PlatformException {
+    return null;
+  }
+}
+
+Future<WindowEnvironment?> _readDesktopWindowIdentity() async {
+  const desktopPlatforms = {
+    TargetPlatform.linux,
+    TargetPlatform.macOS,
+    TargetPlatform.windows,
+  };
+  if (!desktopPlatforms.contains(defaultTargetPlatform)) return null;
+  try {
+    final controller = await WindowController.fromCurrentEngine();
+    if (controller.windowId.isEmpty) return null;
+    return WindowEnvironment(
+      width: 1,
+      height: 1,
+      windowId: 'desktop:${controller.windowId}',
+      mode: WindowMode.freeform,
+    );
+  } on Exception {
     return null;
   }
 }
