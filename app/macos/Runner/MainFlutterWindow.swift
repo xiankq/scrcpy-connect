@@ -3,6 +3,7 @@ import FlutterMacOS
 
 class MainFlutterWindow: NSWindow {
   private var visualPreferences: SystemVisualPreferences?
+  private var platformMethods: FlutterMethodChannel?
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -12,11 +13,27 @@ class MainFlutterWindow: NSWindow {
 
     RegisterGeneratedPlugins(registry: flutterViewController)
     visualPreferences = SystemVisualPreferences(messenger: flutterViewController.engine.binaryMessenger)
+    let platform = FlutterMethodChannel(
+      name: "dev.scrcpyconnect/platform", binaryMessenger: flutterViewController.engine.binaryMessenger)
+    platform.setMethodCallHandler { call, result in
+      guard call.method == "window.openIndependent" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      result([
+        "supported": false,
+        "reason": "macOS 原生独立窗口需独立 Flutter 引擎；当前回退为同页控制会话",
+      ])
+    }
+    platformMethods = platform
 
     super.awakeFromNib()
   }
 
-  deinit { visualPreferences?.dispose() }
+  deinit {
+    platformMethods?.setMethodCallHandler(nil)
+    visualPreferences?.dispose()
+  }
 }
 
 private final class SystemVisualPreferences: NSObject, FlutterStreamHandler {
@@ -34,13 +51,6 @@ private final class SystemVisualPreferences: NSObject, FlutterStreamHandler {
       name: "dev.scrcpyconnect/visual_preferences/events", binaryMessenger: messenger)
     super.init()
     methods.setMethodCallHandler { [weak self] call, result in
-      if call.method == "window.openIndependent" {
-        result([
-          "supported": false,
-          "reason": "macOS 原生窗口需独立 Flutter 引擎；当前回退为同页控制会话",
-        ])
-        return
-      }
       guard call.method == "read" else {
         result(FlutterMethodNotImplemented)
         return

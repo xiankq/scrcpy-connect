@@ -14,6 +14,18 @@ import UserNotifications
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    let platform = FlutterMethodChannel(
+      name: "dev.scrcpyconnect/platform", binaryMessenger: engineBridge.applicationRegistrar.messenger())
+    platform.setMethodCallHandler { call, result in
+      guard call.method == "window.openIndependent" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      result([
+        "supported": false,
+        "reason": "iOS 独立场景需宿主提供独立 Flutter 引擎；当前回退为同页控制会话",
+      ])
+    }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SystemVisualPreferences") {
       SystemVisualPreferences.register(with: registrar)
     }
