@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
@@ -59,7 +58,7 @@ final class ContentPreview implements ContentReader {
   Future<void>? _closing;
   final _stoppingDevices = <String>{};
   final _deviceClosings = <String, Future<void>>{};
-  static const _maxThumbnail = 256 * 1024;
+  static const _maxThumbnail = ThumbnailImage.maxBytes;
 
   @override
   Future<CachedContent> preview({
@@ -251,7 +250,11 @@ final class ContentPreview implements ContentReader {
     if (failure != null) Error.throwWithStackTrace(failure, failureStack!);
   }
 
-  Future<Map<String, dynamic>> _rpc(ThumbnailJob job, _Operation task) async {
+  Future<T> _runJob<T>(
+    ThumbnailJob job,
+    _Operation task,
+    Future<T> Function(ThumbnailJob) execute,
+  ) async {
     task.check();
     final id = job.operationId;
     Future<void>? cancelling;
@@ -260,7 +263,7 @@ final class ContentPreview implements ContentReader {
       unawaited(cancelling!.catchError((Object _) {}));
     });
     try {
-      final result = await jobs.run(job);
+      final result = await execute(job);
       task.check();
       return result;
     } finally {
@@ -408,24 +411,19 @@ final class ContentPreview implements ContentReader {
         '此路径的媒体类型尚未识别，不能自动下载原内容作为缩略图。',
       );
     }
-    Future<Map<String, dynamic>> request(ThumbnailPhase phase) => _rpc(
-      ThumbnailJob(
-        deviceId: device,
-        path: path,
-        kind: kind,
-        maxSize: maxSize,
-        ownerOperationId: operation,
-        operationId: _uuid(null),
-        phase: phase,
-      ),
-      task,
+    ThumbnailJob request() => ThumbnailJob(
+      deviceId: device,
+      path: path,
+      kind: kind,
+      maxSize: maxSize,
+      ownerOperationId: operation,
+      operationId: _uuid(null),
     );
-    final before = await request(ThumbnailPhase.stat);
-    final source = _source(before['sourceStamp']);
+    final source = await _runJob(request(), task, jobs.readSource);
     final key = _hash(
       utf8.encode('thumbnail-v1\u0000$device\u0000$path\u0000$maxSize'),
     );
-    final version = _hash(utf8.encode(jsonEncode(source)));
+    final version = _hash(utf8.encode(jsonEncode(source.toJson())));
     final directory = Directory(
       p.join(cache.root.path, 'media', 'thumbnails', '$key-$version'),
     );
@@ -441,7 +439,7 @@ final class ContentPreview implements ContentReader {
       final metadata = await _metadata(directory);
       if (metadata != null &&
           metadata['version'] == 1 &&
-          _same(metadata['source'], source)) {
+          _same(metadata['source'], source.toJson())) {
         final target = _artifact(directory, metadata['artifact']);
         if (target != null &&
             await _validFile(
@@ -485,48 +483,27 @@ final class ContentPreview implements ContentReader {
       sourceLabel: device,
       sourcePath: path,
     );
-    final response = await request(ThumbnailPhase.thumbnail);
-    if (!_same(_source(response['sourceStamp']), source) ||
-        response['thumbnail'] != true ||
-        response['mime'] != 'image/jpeg') {
+    final image = await _runJob(request(), task, jobs.render);
+    if (image.source != source) {
       throw const RequestFailure('source_changed', '生成期间媒体源或缩略图类型发生变化。');
     }
-    final encoded = response['data'];
-    if (encoded is! String || encoded.length > ((_maxThumbnail + 2) ~/ 3) * 4) {
-      throw const RequestFailure('invalid_thumbnail', '缩略图数据缺失或超过大小限制。');
-    }
-    final Uint8List jpeg;
-    try {
-      jpeg = base64Decode(encoded);
-    } on FormatException {
-      throw const RequestFailure('invalid_thumbnail', '缩略图编码无效。');
-    }
-    final digest = _hash(jpeg);
-    final (:width, :height) = _jpeg(jpeg);
-    if (jpeg.length > _maxThumbnail ||
-        response['sha256'] != digest ||
-        response['jpegBytes'] != jpeg.length ||
-        response['width'] != width ||
-        response['height'] != height ||
-        width > maxSize ||
-        height > maxSize) {
-      throw const RequestFailure('invalid_thumbnail', '缩略图摘要、大小或尺寸不一致。');
-    }
-    final after = await request(ThumbnailPhase.stat);
-    if (!_same(_source(after['sourceStamp']), source)) {
+    final after = await _runJob(request(), task, jobs.readSource);
+    if (after != source) {
       throw const RequestFailure('source_changed', '媒体源已经变化，请重新获取缩略图。');
     }
     task.check();
     await directory.create(recursive: true);
-    final target = File(p.join(directory.path, '${_uuid(null)}-$digest.jpg'));
-    await target.writeAsBytes(jpeg, flush: true);
+    final target = File(
+      p.join(directory.path, '${_uuid(null)}-${image.digest}.jpg'),
+    );
+    await target.writeAsBytes(image.jpeg, flush: true);
     await _publish(directory, {
       'version': 1,
-      'source': source,
-      'sha256': digest,
-      'jpegBytes': jpeg.length,
-      'width': width,
-      'height': height,
+      'source': source.toJson(),
+      'sha256': image.digest,
+      'jpegBytes': image.jpeg.length,
+      'width': image.width,
+      'height': image.height,
       'artifact': p.basename(target.path),
     });
     task.check();
@@ -610,90 +587,16 @@ final class ContentPreview implements ContentReader {
     }
   }
 
-  static Map<String, dynamic> _source(Object? value) {
-    if (value is! Map<String, dynamic>) {
-      throw const RequestFailure('invalid_data', '缩略图源元数据无效。');
-    }
-    final mode = value['mode'], size = value['size'];
-    if (mode is! int ||
-        mode & 0xf000 != 0x8000 ||
-        size is! int ||
-        size < 0 ||
-        size > 64 * 1024 * 1024 * 1024 ||
-        value['device'] is! String ||
-        int.tryParse(value['device'] as String) == null ||
-        value['inode'] is! String ||
-        int.tryParse(value['inode'] as String) == null ||
-        value['modifiedSeconds'] is! int ||
-        value['changedSeconds'] is! int) {
-      throw const RequestFailure('invalid_data', '缩略图源元数据无效。');
-    }
-    for (final key in ['modifiedNanos', 'changedNanos']) {
-      final nanos = value[key];
-      if (nanos != null &&
-          (nanos is! int || nanos < 0 || nanos >= 1000000000)) {
-        throw const RequestFailure('invalid_data', '缩略图源时间精度无效。');
-      }
-    }
-    return {
-      for (final key in [
-        'device',
-        'inode',
-        'mode',
-        'size',
-        'modifiedSeconds',
-        'changedSeconds',
-        'modifiedNanos',
-        'changedNanos',
-      ])
-        key: value[key],
-    };
-  }
-
   static Future<({int width, int height})?> _cachedDimensions(
     File target,
   ) async {
     try {
-      return _jpeg(await target.readAsBytes());
+      return ThumbnailImage.readDimensions(await target.readAsBytes());
     } on RequestFailure {
       return null;
     } on FileSystemException {
       return null;
     }
-  }
-
-  static ({int width, int height}) _jpeg(List<int> bytes) {
-    const invalid = RequestFailure('invalid_thumbnail', '缩略图 JPEG 结构或尺寸无效。');
-    if (bytes.length < 4 ||
-        bytes[0] != 255 ||
-        bytes[1] != 216 ||
-        bytes[bytes.length - 2] != 255 ||
-        bytes.last != 217) {
-      throw invalid;
-    }
-    var offset = 2;
-    while (offset + 4 <= bytes.length) {
-      if (bytes[offset] != 255) throw invalid;
-      while (offset < bytes.length && bytes[offset] == 255) {
-        offset++;
-      }
-      if (offset >= bytes.length) throw invalid;
-      final marker = bytes[offset++];
-      if (marker == 218 || marker == 217) throw invalid;
-      if (marker == 1 || marker >= 208 && marker <= 216) continue;
-      if (offset + 2 > bytes.length) throw invalid;
-      final length = bytes[offset] * 256 + bytes[offset + 1];
-      if (length < 2 || offset + length > bytes.length) throw invalid;
-      if (marker >= 192 && marker <= 194) {
-        if (length < 8 || bytes[offset + 2] != 8) throw invalid;
-        final height = bytes[offset + 3] * 256 + bytes[offset + 4],
-            width = bytes[offset + 5] * 256 + bytes[offset + 6];
-        if (width == 0 || height == 0) throw invalid;
-        return (width: width, height: height);
-      }
-      offset += length;
-    }
-    throw invalid;
   }
 
   static bool _same(Object? a, Object? b) => jsonEncode(a) == jsonEncode(b);

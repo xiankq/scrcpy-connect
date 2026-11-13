@@ -47,7 +47,32 @@ final class ThumbnailJobService implements ThumbnailJobs {
   }
 
   @override
-  Future<Json> run(ThumbnailJob request, {AdbCancellation? cancellation}) {
+  Future<ThumbnailSource> readSource(
+    ThumbnailJob request, {
+    AdbCancellation? cancellation,
+  }) async {
+    final reply = await _execute(
+      request,
+      'media.stat',
+      cancellation: cancellation,
+    );
+    return ThumbnailSource.fromJson(reply['sourceStamp']);
+  }
+
+  @override
+  Future<ThumbnailImage> render(
+    ThumbnailJob request, {
+    AdbCancellation? cancellation,
+  }) async => ThumbnailImage.fromJson(
+    await _execute(request, 'media.thumbnail', cancellation: cancellation),
+    maxSize: request.maxSize,
+  );
+
+  Future<Map<String, Object?>> _execute(
+    ThumbnailJob request,
+    String command, {
+    AdbCancellation? cancellation,
+  }) {
     final device = _device(request.deviceId);
     final operation = _uuid(request.operationId);
     final key = '$device:$operation';
@@ -58,7 +83,6 @@ final class ThumbnailJobService implements ThumbnailJobs {
     final size = request.maxSize;
     final owner = _uuid(request.ownerOperationId);
     final allowStart = request.allowStart;
-    final execution = request.phase.name;
     if (size < 64 || size > 512) {
       throw const RequestFailure('invalid_argument', '媒体类型或尺寸无效。');
     }
@@ -84,7 +108,7 @@ final class ThumbnailJobService implements ThumbnailJobs {
     _active[key] = job;
     return _run(
       job,
-      'media.$execution',
+      command,
       {
         'operationId': operation,
         'ownerOperationId': owner,

@@ -27,20 +27,20 @@ $ThumbnailJobCopyWith<ThumbnailJob> get copyWith => _$ThumbnailJobCopyWithImpl<T
 @override
 bool operator ==(Object other) {
   final _this = this as ThumbnailJob;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ThumbnailJob&&(identical(other.deviceId, _this.deviceId) || other.deviceId == _this.deviceId)&&(identical(other.operationId, _this.operationId) || other.operationId == _this.operationId)&&(identical(other.ownerOperationId, _this.ownerOperationId) || other.ownerOperationId == _this.ownerOperationId)&&(identical(other.path, _this.path) || other.path == _this.path)&&(identical(other.kind, _this.kind) || other.kind == _this.kind)&&(identical(other.maxSize, _this.maxSize) || other.maxSize == _this.maxSize)&&(identical(other.phase, _this.phase) || other.phase == _this.phase)&&(identical(other.allowStart, _this.allowStart) || other.allowStart == _this.allowStart));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ThumbnailJob&&(identical(other.deviceId, _this.deviceId) || other.deviceId == _this.deviceId)&&(identical(other.operationId, _this.operationId) || other.operationId == _this.operationId)&&(identical(other.ownerOperationId, _this.ownerOperationId) || other.ownerOperationId == _this.ownerOperationId)&&(identical(other.path, _this.path) || other.path == _this.path)&&(identical(other.kind, _this.kind) || other.kind == _this.kind)&&(identical(other.maxSize, _this.maxSize) || other.maxSize == _this.maxSize)&&(identical(other.allowStart, _this.allowStart) || other.allowStart == _this.allowStart));
 }
 
 
 @override
 int get hashCode {
   final _this = this as ThumbnailJob;
-  return Object.hash(runtimeType,_this.deviceId,_this.operationId,_this.ownerOperationId,_this.path,_this.kind,_this.maxSize,_this.phase,_this.allowStart);
+  return Object.hash(runtimeType,_this.deviceId,_this.operationId,_this.ownerOperationId,_this.path,_this.kind,_this.maxSize,_this.allowStart);
 }
 
 @override
 String toString() {
   final _this = this as ThumbnailJob;
-  return 'ThumbnailJob(deviceId: ${_this.deviceId}, operationId: ${_this.operationId}, ownerOperationId: ${_this.ownerOperationId}, path: ${_this.path}, kind: ${_this.kind}, maxSize: ${_this.maxSize}, phase: ${_this.phase}, allowStart: ${_this.allowStart})';
+  return 'ThumbnailJob(deviceId: ${_this.deviceId}, operationId: ${_this.operationId}, ownerOperationId: ${_this.ownerOperationId}, path: ${_this.path}, kind: ${_this.kind}, maxSize: ${_this.maxSize}, allowStart: ${_this.allowStart})';
 }
 
 
@@ -51,7 +51,7 @@ abstract mixin class $ThumbnailJobCopyWith<$Res>  {
   factory $ThumbnailJobCopyWith(ThumbnailJob value, $Res Function(ThumbnailJob) _then) = _$ThumbnailJobCopyWithImpl;
 @useResult
 $Res call({
- String deviceId, String operationId, String ownerOperationId, String path, ThumbnailKind kind, int maxSize, ThumbnailPhase phase, bool allowStart
+ String deviceId, String operationId, String ownerOperationId, String path, ThumbnailKind kind, int maxSize, bool allowStart
 });
 
 
@@ -68,7 +68,7 @@ class _$ThumbnailJobCopyWithImpl<$Res>
 
 /// Create a copy of ThumbnailJob
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? deviceId = null,Object? operationId = null,Object? ownerOperationId = null,Object? path = null,Object? kind = null,Object? maxSize = null,Object? phase = null,Object? allowStart = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? deviceId = null,Object? operationId = null,Object? ownerOperationId = null,Object? path = null,Object? kind = null,Object? maxSize = null,Object? allowStart = null,}) {
   return _then(ThumbnailJob(
 deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
 as String,operationId: null == operationId ? _self.operationId : operationId // ignore: cast_nullable_to_non_nullable
@@ -76,8 +76,7 @@ as String,ownerOperationId: null == ownerOperationId ? _self.ownerOperationId : 
 as String,path: null == path ? _self.path : path // ignore: cast_nullable_to_non_nullable
 as String,kind: null == kind ? _self.kind : kind // ignore: cast_nullable_to_non_nullable
 as ThumbnailKind,maxSize: null == maxSize ? _self.maxSize : maxSize // ignore: cast_nullable_to_non_nullable
-as int,phase: null == phase ? _self.phase : phase // ignore: cast_nullable_to_non_nullable
-as ThumbnailPhase,allowStart: null == allowStart ? _self.allowStart : allowStart // ignore: cast_nullable_to_non_nullable
+as int,allowStart: null == allowStart ? _self.allowStart : allowStart // ignore: cast_nullable_to_non_nullable
 as bool,
   ));
 }

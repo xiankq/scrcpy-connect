@@ -4,8 +4,6 @@ part 'thumbnail_job.freezed.dart';
 
 enum ThumbnailKind { image, video }
 
-enum ThumbnailPhase { stat, thumbnail }
-
 @freezed
 class ThumbnailJob with _$ThumbnailJob {
   const ThumbnailJob({
@@ -15,12 +13,10 @@ class ThumbnailJob with _$ThumbnailJob {
     required this.path,
     required this.kind,
     required this.maxSize,
-    required this.phase,
     this.allowStart = true,
   });
   final String deviceId, operationId, ownerOperationId, path;
   final ThumbnailKind kind;
   final int maxSize;
-  final ThumbnailPhase phase;
   final bool allowStart;
 }
