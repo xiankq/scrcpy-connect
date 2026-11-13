@@ -86,6 +86,24 @@ final class WindowEnvironment {
         feature.type == WindowDisplayFeatureType.cutout,
   );
 
+  /// A full-height fold or hinge that can divide a two-pane workspace.
+  ///
+  /// Cutouts and small camera regions are handled by [insets]; they must not
+  /// turn the whole workspace into two columns.
+  WindowDisplayFeature? get verticalPaneDivider {
+    for (final feature in displayFeatures) {
+      final spansHeight =
+          feature.top <= 0 &&
+          feature.top + feature.height >= height &&
+          feature.height > feature.width;
+      final isFoldOrHinge =
+          feature.type == WindowDisplayFeatureType.fold ||
+          feature.type == WindowDisplayFeatureType.hinge;
+      if (spansHeight && isFoldOrHinge) return feature;
+    }
+    return null;
+  }
+
   static WindowSizeClass sizeClassFor(double width) {
     if (width < 600) return WindowSizeClass.compact;
     if (width < 840) return WindowSizeClass.medium;

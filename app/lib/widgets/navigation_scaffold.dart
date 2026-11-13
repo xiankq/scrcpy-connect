@@ -170,95 +170,131 @@ class AppNavigationShell extends StatelessWidget {
                   body: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      SafeArea(
-                        child: SizedBox(
-                          key: const ValueKey('app-sidebar'),
-                          width: compactSidebar || short
+                      Builder(
+                        builder: (context) {
+                          final divider = windowEnvironmentOf(context)
+                              .verticalPaneDivider;
+                          final requestedWidth = compactSidebar || short
                               ? DesignTokens.componentSidebarCompactWidth
-                              : DesignTokens.componentSidebarWidth,
-                          child: Padding(
-                            padding: EdgeInsets.all(
-                              short
-                                  ? DesignTokens.spacingXs
-                                  : DesignTokens.spacingMd,
-                            ),
-                            child: ContentSurface(
-                              padding: const EdgeInsets.all(
-                                DesignTokens.spacingXs,
-                              ),
-                              child: SingleChildScrollView(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (!compactSidebar && !short)
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: DesignTokens.spacingXl,
-                                          horizontal: DesignTokens.spacingSm,
-                                        ),
-                                        child: Text(
-                                          '邻接',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .headlineMedium,
+                              : DesignTokens.componentSidebarWidth;
+                          final sidebarWidth = divider == null
+                              ? requestedWidth
+                              : requestedWidth.clamp(0.0, divider.left);
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SafeArea(
+                                child: SizedBox(
+                                  key: const ValueKey('app-sidebar'),
+                                  width: sidebarWidth,
+                                  child: Padding(
+                                    padding: EdgeInsets.all(
+                                      short
+                                          ? DesignTokens.spacingXs
+                                          : DesignTokens.spacingMd,
+                                    ),
+                                    child: ContentSurface(
+                                      padding: const EdgeInsets.all(
+                                        DesignTokens.spacingXs,
+                                      ),
+                                      child: SingleChildScrollView(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            if (!compactSidebar && !short)
+                                              Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: DesignTokens
+                                                          .spacingXl,
+                                                      horizontal: DesignTokens
+                                                          .spacingSm,
+                                                    ),
+                                                child: Text(
+                                                  '邻接',
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .headlineMedium,
+                                                ),
+                                              ),
+                                            for (
+                                              var i = 0;
+                                              i < appDestinations.length;
+                                              i++
+                                            )
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  bottom:
+                                                      DesignTokens.spacingXs,
+                                                ),
+                                                child: GlassPressFeedback(
+                                                  child: ListTile(
+                                                    minTileHeight: short
+                                                        ? DesignTokens
+                                                              .componentIconButtonSize
+                                                        : null,
+                                                    minVerticalPadding: short
+                                                        ? 0
+                                                        : null,
+                                                    contentPadding:
+                                                        compactSidebar || short
+                                                        ? const EdgeInsets.symmetric(
+                                                            horizontal:
+                                                                DesignTokens
+                                                                    .spacingXs,
+                                                          )
+                                                        : null,
+                                                    horizontalTitleGap:
+                                                        compactSidebar || short
+                                                        ? DesignTokens.spacingXs
+                                                        : null,
+                                                    shape:
+                                                        const StadiumBorder(),
+                                                    selected: tab == i,
+                                                    selectedTileColor:
+                                                        Theme.of(context)
+                                                                .brightness ==
+                                                            Brightness.dark
+                                                        ? DesignTokens
+                                                              .colorGlassSelectedDark
+                                                        : DesignTokens
+                                                              .colorGlassSelected,
+                                                    leading: Icon(
+                                                      appDestinations[i].$1,
+                                                    ),
+                                                    title: compactSidebar
+                                                        ? null
+                                                        : Text(
+                                                            appDestinations[i]
+                                                                .$2,
+                                                          ),
+                                                    onTap: () => context.go(
+                                                      appDestinations[i].$3,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
                                         ),
                                       ),
-                                    for (
-                                      var i = 0;
-                                      i < appDestinations.length;
-                                      i++
-                                    )
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: DesignTokens.spacingXs,
-                                        ),
-                                        child: GlassPressFeedback(
-                                          child: ListTile(
-                                            minTileHeight: short
-                                                ? DesignTokens
-                                                      .componentIconButtonSize
-                                                : null,
-                                            minVerticalPadding: short
-                                                ? 0
-                                                : null,
-                                            contentPadding:
-                                                compactSidebar || short
-                                                ? const EdgeInsets.symmetric(
-                                                    horizontal:
-                                                        DesignTokens.spacingXs,
-                                                  )
-                                                : null,
-                                            horizontalTitleGap:
-                                                compactSidebar || short
-                                                ? DesignTokens.spacingXs
-                                                : null,
-                                            shape: const StadiumBorder(),
-                                            selected: tab == i,
-                                            selectedTileColor:
-                                                Theme.of(context).brightness ==
-                                                    Brightness.dark
-                                                ? DesignTokens
-                                                      .colorGlassSelectedDark
-                                                : DesignTokens
-                                                      .colorGlassSelected,
-                                            leading: Icon(
-                                              appDestinations[i].$1,
-                                            ),
-                                            title: compactSidebar
-                                                ? null
-                                                : Text(appDestinations[i].$2),
-                                            onTap: () => context.go(
-                                              appDestinations[i].$3,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                  ],
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                        ),
+                              if (divider != null) ...[
+                                if (divider.left > sidebarWidth)
+                                  SizedBox(width: divider.left - sidebarWidth),
+                                SizedBox(
+                                  key: const ValueKey(
+                                    'display-feature-reserved',
+                                  ),
+                                  width: divider.width,
+                                ),
+                              ],
+                            ],
+                          );
+                        },
                       ),
                       Expanded(child: child),
                     ],

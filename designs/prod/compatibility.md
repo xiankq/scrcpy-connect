@@ -10,7 +10,9 @@
 
 连接屏幕的独立窗口属于控制会话的窗口实例。每个实例拥有唯一窗口身份、设备身份、应用任务、视频捕获和输入焦点；关闭只撤销自己的会话，迟到回执不能更新已关闭窗口。平板、桌面、移动端和鸿蒙分别由宿主的 Android Activity/WindowManager、iPadOS/macOS scene/window、HarmonyOS WindowStage 或对应插件创建和销毁；Flutter 官方 view／multi-engine 能力不等于统一的原生窗口 API。宿主不支持额外窗口时回退为同页分栏，但继续使用同一窗口身份和状态边界。
 
-这些是适配目标，不代表当前每个宿主均已交付。实现时必须为各平台能力建立 adapter，并在真实窗口创建、调整大小、折叠姿态、切换、恢复、关闭和迟到回执链路中验证；不支持的能力显示实际替代路径，不以统一入口暗示已可用。
+Flutter 侧已交付 `WindowEnvironment`、`WindowEnvironmentCodec` 与显示特征保留区布局：引擎能提供的 Android／折叠特征直接由 `MediaQuery` 消费，iPhone Duo 与 HarmonyOS 宿主可将 scene／FoldSplitContainer 投影为同一 payload；桌面工作区和折叠导航会为全高折痕／铰链留下真实空区。原生独立窗口仍由宿主 adapter 决定，当前 Android、iOS、macOS 明确返回同页回退，未实现的 Linux、Windows、HarmonyOS 也只能走同一回退，不以统一入口暗示第二原生窗口已经可用。
+
+实现时必须在真实窗口创建、调整大小、折叠姿态、切换、恢复、关闭和迟到回执链路中验证；不支持的能力显示实际替代路径，不自动重放打开请求。
 
 ## 功能条件与替代路径
 

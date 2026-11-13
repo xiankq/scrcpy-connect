@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scrcpy_connect/core/platform/window_environment_codec.dart';
 import 'package:scrcpy_connect/core/platform/window_environment.dart';
 
 void main() {
@@ -55,5 +56,58 @@ void main() {
     );
 
     expect(environment.hasReservedDisplayFeature, isTrue);
+    expect(environment.verticalPaneDivider, isNotNull);
+  });
+
+  test('a camera cutout does not split the workspace into panes', () {
+    const environment = WindowEnvironment(
+      width: 840,
+      height: 700,
+      displayFeatures: [
+        WindowDisplayFeature(
+          left: 400,
+          top: 0,
+          width: 40,
+          height: 24,
+          type: WindowDisplayFeatureType.cutout,
+        ),
+      ],
+    );
+
+    expect(environment.verticalPaneDivider, isNull);
+  });
+
+  test('decodes a HarmonyOS window projection without vendor types', () {
+    final environment = WindowEnvironmentCodec.decode({
+      'width': 1200,
+      'height': 800,
+      'mode': 'split',
+      'posture': 'book',
+      'windowId': 'stage-7',
+      'insets': {'left': 12, 'top': 24, 'right': 12, 'bottom': 16},
+      'input': {'touch': true, 'keyboard': true, 'pointer': true},
+      'displayFeatures': [
+        {
+          'left': 598,
+          'top': 0,
+          'width': 4,
+          'height': 800,
+          'type': 'hinge',
+          'state': 'book',
+        },
+      ],
+    });
+
+    expect(environment, isNotNull);
+    expect(environment!.windowId, 'stage-7');
+    expect(environment.mode, WindowMode.split);
+    expect(environment.posture, WindowPosture.book);
+    expect(environment.insets.top, 24);
+    expect(environment.input.pointer, isTrue);
+    expect(environment.verticalPaneDivider, isNotNull);
+  });
+
+  test('rejects an incomplete host projection', () {
+    expect(WindowEnvironmentCodec.decode({'width': 1200}), isNull);
   });
 }

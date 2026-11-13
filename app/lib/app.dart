@@ -20,6 +20,7 @@ import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/app_lifecycle_observer.dart';
 import 'package:scrcpy_connect/widgets/app_presentation_host.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
+import 'package:scrcpy_connect/widgets/adaptive_window.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
 import 'package:scrcpy_connect/widgets/models/device_audio_view_snapshot.dart';
 
@@ -124,14 +125,17 @@ class ConnectApp extends HookConsumerWidget {
         child: AppPresentationHost(
           navigator: navigator,
           router: router,
-          child: liquid.GlassTheme(
-            data: GlassMaterial.theme(context),
-            child: liquid.GlassAccessibilityScope(
-              reduceTransparency:
-                  systemVisualPreferences.reduceTransparency ||
-                  MediaQuery.highContrastOf(context) ||
-                  liquid.GlassAccessibilityData.of(context).reduceTransparency,
-              child: child!,
+          child: WindowEnvironmentScope(
+            child: liquid.GlassTheme(
+              data: GlassMaterial.theme(context),
+              child: liquid.GlassAccessibilityScope(
+                reduceTransparency:
+                    systemVisualPreferences.reduceTransparency ||
+                    MediaQuery.highContrastOf(context) ||
+                    liquid.GlassAccessibilityData.of(context)
+                        .reduceTransparency,
+                child: child!,
+              ),
             ),
           ),
         ),
