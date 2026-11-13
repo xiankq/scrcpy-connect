@@ -111,8 +111,8 @@ void main() {
     addTearDown(fixture.media.dispose);
     await fixture.media.setVisible(true);
     await fixture.media.startAudio('device');
-    fixture.player.notifications.add({'kind': 'failed'});
-    fixture.player.notifications.add({'kind': 'failed'});
+    fixture.player.notifications.add(const MediaPlayerFailed());
+    fixture.player.notifications.add(const MediaPlayerFailed());
     await _flush();
     final failure = fixture.events.whereType<AudioOutputFailed>().single;
     expect(failure.sourceId, 'source');
@@ -232,15 +232,18 @@ class _Capture implements MediaCapture {
 }
 
 class _Player implements AudioPlayer {
-  final notifications = StreamController<AudioJson>.broadcast(sync: true);
+  final notifications = StreamController<MediaPlayerEvent>.broadcast(
+    sync: true,
+  );
   int _position = 0;
   int releases = 0;
   @override
-  Stream<AudioJson> get events => notifications.stream;
+  Stream<MediaPlayerEvent> get events => notifications.stream;
   @override
   int get positionMs => (_position += 20);
   @override
-  AudioJson get outputStatus => {'nativeReady': true, 'bytesWritten': 4096};
+  AudioPlayerStatus get outputStatus =>
+      const AudioPlayerStatus(nativeReady: true, bytesWritten: 4096);
   @override
   Future<AudioFormat> open(MediaCodecSource source) async =>
       const AudioFormat('pcm_s16le', 48000, 2);
@@ -249,9 +252,9 @@ class _Player implements AudioPlayer {
   @override
   Future<void> volume(double value, bool muted) async {}
   @override
-  Future<AudioJson> release() async {
+  Future<MediaOutputRelease> release() async {
     releases++;
     await notifications.close();
-    return {'nativeDeleteConfirmed': true};
+    return const MediaOutputRelease(nativeDeleteConfirmed: true);
   }
 }

@@ -1,16 +1,28 @@
 import 'package:media_codec/media_codec.dart';
 import 'package:scrcpy_connect/core/media/models/audio_format.dart';
 
+import 'models/audio_player_status.dart';
+import 'models/media_output_release.dart';
+import 'models/media_player_event.dart';
+
+export 'models/audio_player_status.dart';
+export 'models/media_output_release.dart';
+export 'models/media_player_event.dart';
+
 /// 远程声音采用 PCM16，本输出无需创建压缩音频解码器。
 final class _NativeAudioPlayer implements AudioPlayer {
   final _controller = MediaCodecController.audio();
 
   @override
-  Stream<AudioJson> get events => _controller.events;
+  Stream<MediaPlayerEvent> get events => _controller.events
+      .map(MediaPlayerEvent.decode)
+      .where((event) => event != null)
+      .cast<MediaPlayerEvent>();
   @override
   int get positionMs => _controller.positionMs;
   @override
-  AudioJson get outputStatus => _controller.currentStatus;
+  AudioPlayerStatus get outputStatus =>
+      AudioPlayerStatus.fromProtocol(_controller.currentStatus);
 
   @override
   Future<AudioFormat> open(MediaCodecSource source) async {
@@ -24,22 +36,22 @@ final class _NativeAudioPlayer implements AudioPlayer {
   Future<void> volume(double value, bool muted) =>
       _controller.setVolume(value, muted: muted);
   @override
-  Future<AudioJson> release() => _controller.dispose();
+  Future<MediaOutputRelease> release() async =>
+      MediaOutputRelease.fromProtocol(await _controller.dispose());
 }
 
-typedef AudioJson = Map<String, dynamic>;
 typedef AudioPlayerFactory = AudioPlayer Function();
 
 /// 播放器接口，不负责 PCM 复制或系统焦点策略。
 abstract interface class AudioPlayer {
   factory AudioPlayer() = _NativeAudioPlayer;
-  Stream<AudioJson> get events;
+  Stream<MediaPlayerEvent> get events;
   Future<AudioFormat> open(MediaCodecSource source);
   Future<void> setPaused(bool paused);
   Future<void> volume(double value, bool muted);
   int get positionMs;
 
   /// 来自系统输出的证据，与收到的源数据包独立。
-  AudioJson get outputStatus;
-  Future<AudioJson> release();
+  AudioPlayerStatus get outputStatus;
+  Future<MediaOutputRelease> release();
 }

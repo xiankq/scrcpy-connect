@@ -114,63 +114,54 @@ class VideoOutputService {
     if (endpoint.codec != entry.codec) {
       throw const RequestFailure('invalid_endpoint', '媒体输入类型或实际编码与视频输出不一致。');
     }
-    entry.observer = entry.player.events.listen((event) {
-      if (!_owns(entry) || entry.closed || _disposed || isDisposed()) return;
-      _diagnostics.playerEvent(
-        DiagnosticArea.video,
-        entry.id,
-        event,
-        generation: entry.generation,
-      );
-      if (entry.diagnostics.length < 24 && event['kind'] == 'diagnostic') {
-        entry.diagnostics.add({...event});
-      }
-      if (event['kind'] == 'metadata' &&
-          event['category'] == 'video.dimensions') {
-        _dimensions(entry, event);
-      }
-      if (event['category'] == 'decoder.video') {
-        entry.decoder = entry.decoder.copyWith(
-          decoderName: event['decoderName'] as String?,
-          hardwareAccelerated: event['hardwareAccelerated'] as bool?,
-          hardwareVerification: event['hardwareVerification'] as String?,
-          backendHardwareFrames: event['backendHardwareFrames'] as bool?,
+    entry.observer = entry.player.events.listen(
+      (event) {
+        if (!_owns(entry) || entry.closed || _disposed || isDisposed()) return;
+        _diagnostics.playerEvent(
+          DiagnosticArea.video,
+          entry.id,
+          event,
+          generation: entry.generation,
         );
-      }
-      if (event['category'] == 'video.presentation' &&
-          event['generation'] == entry.generation &&
-          event['textureId'] == entry.texture?.id) {
-        entry.decoder = entry.decoder.copyWith(
-          platformTexturePrepared: event['platformTexturePrepared'] == true,
-          presentedSequence: event['presentedSequence'] as int?,
-          presentationPath: event['presentationPath'] as String?,
-        );
-        if (identical(_entries[entry.id], entry) &&
-            !_pending.containsKey(entry.id)) {
-          emit(VideoOutputFrame(_receipt(entry)));
+        if (entry.diagnostics.length < 24 && event.diagnostic) {
+          entry.diagnostics.add(event);
         }
-      }
-      final elapsed = event['elapsedMs'];
-      if (event['kind'] == 'diagnostic' &&
-          const {
-            'video.prepare',
-            'video.texture',
-          }.contains(event['category']) &&
-          elapsed is int) {
-        entry.startupTimingMs[event['category'] as String] = elapsed;
-      }
-      if (event['kind'] == 'failed' && entry.texture != null) {
-        emit(
-          VideoOutputFailed(
-            sessionId: entry.id,
-            deviceId: entry.device,
-            generation: entry.generation,
-            captureGeneration: entry.captureGeneration,
-            reason: event['reason'] as String? ?? '视频输入已结束。',
-          ),
-        );
-      }
-    });
+        switch (event) {
+          case VideoPlayerDimensions():
+            _dimensions(entry, event);
+          case MediaDecoderSelected(audio: false):
+            entry.decoder = entry.decoder.copyWith(
+              decoderName: event.decoderName,
+              hardwareAccelerated: event.hardwareAccelerated,
+              hardwareVerification: event.hardwareVerification,
+              backendHardwareFrames: event.backendHardwareFrames,
+            );
+          case VideoPlayerPresented():
+            if (event.generation != entry.generation ||
+                event.textureId != entry.texture?.id) {
+              return;
+            }
+            entry.decoder = entry.decoder.copyWith(
+              platformTexturePrepared: event.platformTexturePrepared,
+              presentedSequence: event.presentedSequence,
+              presentationPath: event.presentationPath,
+            );
+            if (identical(_entries[entry.id], entry) &&
+                !_pending.containsKey(entry.id)) {
+              emit(VideoOutputFrame(_receipt(entry)));
+            }
+          case VideoPlayerTiming(elapsedMs: final elapsed?):
+            entry.startupTimingMs[event.diagnosticCategory] = elapsed;
+          case MediaPlayerFailed():
+            _playerFailed(entry, event.reason ?? '视频输入已结束。');
+          default:
+            break;
+        }
+      },
+      onError: (Object _, StackTrace _) {
+        _playerFailed(entry, '视频播放器事件连接已中断或数据无效。');
+      },
+    );
     final opening = entry.player.open(endpoint);
     // 原生创建可能先分离输入，MethodChannel 错误随后才到达 Dart。
     // 即使捕获清理先结束等待，也保留迟到创建的真实错误，不能用通用取消掩盖诊断。
@@ -213,20 +204,34 @@ class VideoOutputService {
     return _receipt(entry);
   }
 
-  void _dimensions(_Output entry, VideoJson event) {
+  void _playerFailed(_Output entry, String reason) {
+    if (!_owns(entry) || entry.closed || _disposed || isDisposed()) return;
+    entry.terminalFailure = RequestFailure('video_failed', reason);
+    entry.cancel();
+    if (entry.texture != null) {
+      emit(
+        VideoOutputFailed(
+          sessionId: entry.id,
+          deviceId: entry.device,
+          generation: entry.generation,
+          captureGeneration: entry.captureGeneration,
+          reason: reason,
+        ),
+      );
+    }
+  }
+
+  void _dimensions(_Output entry, VideoPlayerDimensions event) {
     final texture = entry.texture;
-    final width = event['width'], height = event['height'];
-    final frames = event['frameCount'];
+    final width = event.width, height = event.height;
+    final frames = event.frameCount;
     if (texture == null ||
-        event['generation'] != entry.generation ||
-        event['textureId'] != texture.id ||
-        width is! int ||
-        height is! int ||
+        event.generation != entry.generation ||
+        event.textureId != texture.id ||
         width < 1 ||
         height < 1 ||
         width > 16384 ||
         height > 16384 ||
-        frames is! int ||
         frames <= entry.frameCount) {
       return;
     }
@@ -481,7 +486,7 @@ class VideoOutputService {
       ),
   ]);
 
-  Future<VideoJson> stop(String id, {RequestFailure? failure}) async {
+  Future<MediaOutputStop> stop(String id, {RequestFailure? failure}) async {
     _stopped.add(id);
     if (_stopped.length > 4096) _stopped.remove(_stopped.first);
     final entries = [
@@ -494,7 +499,7 @@ class VideoOutputService {
       entry.cancel();
     }
     final cleanup = await Future.wait(entries.map(_release));
-    return {'sessionId': id, 'status': 'stopped', 'outputs': cleanup};
+    return MediaOutputStop(id, cleanup);
   }
 
   Future<void> stopDevice(String deviceId) async {
@@ -533,13 +538,12 @@ class VideoOutputService {
     }
   }
 
-  Future<VideoJson> _release(_Output entry) {
+  Future<MediaOutputRelease> _release(_Output entry) {
     entry.cancel();
     _retiring.add(entry);
     final future = entry.releasing ??= _releaseOnce(entry).then((receipt) {
       entry.releasing = null;
-      if (receipt['nativeDeleteConfirmed'] == true &&
-          receipt['cleanupUnconfirmed'] != true) {
+      if (receipt.confirmed) {
         _retiring.remove(entry);
       }
       return receipt;
@@ -547,21 +551,14 @@ class VideoOutputService {
     // 等待期限只约束调用方；真实释放仍在登记中，迟到回执前不能重复启动。
     return future.timeout(
       operationTimeout,
-      onTimeout: () => {
-        'disposeRequested': true,
-        'nativeDeleteConfirmed': false,
-        'cleanupUnconfirmed': true,
-      },
+      onTimeout: () => const MediaOutputRelease.unknown(disposeRequested: true),
     );
   }
 
-  Future<VideoJson> _releaseOnce(_Output entry) async {
+  Future<MediaOutputRelease> _releaseOnce(_Output entry) async {
     var released =
         entry.releaseReceipt ??
-        <String, dynamic>{
-          'disposeRequested': true,
-          'nativeDeleteConfirmed': false,
-        };
+        const MediaOutputRelease.unknown(disposeRequested: true);
     var failed = false;
     try {
       await Future.wait([
@@ -572,8 +569,7 @@ class VideoOutputService {
         Future<void>.sync(() async {
           if (entry.releaseReceipt != null) return;
           released = await entry.player.release();
-          if (released['nativeDeleteConfirmed'] == true &&
-              released['cleanupUnconfirmed'] != true) {
+          if (released.confirmed) {
             entry.releaseReceipt = released;
           }
         }),
@@ -581,11 +577,9 @@ class VideoOutputService {
     } catch (_) {
       failed = true;
     }
-    released = {
-      ...released,
-      if (failed || released['nativeDeleteConfirmed'] != true)
-        'cleanupUnconfirmed': true,
-    };
+    if (failed || !released.nativeDeleteConfirmed) {
+      released = released.markUnconfirmed();
+    }
     _diagnostics.release(DiagnosticArea.video, entry.id, released);
     return released;
   }
@@ -641,7 +635,10 @@ class VideoOutputService {
       entry.terminalFailure ??
       (entry.timedOut
           ? RequestFailure('video_timeout', '视频准备超过时限，已有画面保持不变。', {
-              'diagnostics': entry.diagnostics,
+              'diagnostics': [
+                for (final event in entry.diagnostics)
+                  event.toDiagnosticFields(),
+              ],
             })
           : _cancelled());
   RequestFailure _failure(Object error, _Output entry) =>
@@ -657,7 +654,11 @@ class VideoOutputService {
       : RequestFailure(
           error is TimeoutException ? 'video_timeout' : 'decoder_error',
           error is TimeoutException ? '视频输出未在时限内确认。' : '视频输出未能完成，请检查实际媒体输入。',
-          {'diagnostics': entry.diagnostics},
+          {
+            'diagnostics': [
+              for (final event in entry.diagnostics) event.toDiagnosticFields(),
+            ],
+          },
         );
 
   _Output _entry(String id) {
@@ -702,15 +703,15 @@ class _Output {
   final bool Function()? cancelled;
   final _Playback playback;
   final cancellation = StreamController<void>.broadcast(sync: true);
-  final diagnostics = <VideoJson>[];
+  final diagnostics = <MediaPlayerEvent>[];
   VideoDecoderMetadata decoder = const VideoDecoderMetadata();
   final startupClock = Stopwatch()..start();
   final startupTimingMs = <String, int>{};
   Future<VideoOutputReceipt>? ready;
-  Future<VideoJson>? releasing;
-  VideoJson? releaseReceipt;
+  Future<MediaOutputRelease>? releasing;
+  MediaOutputRelease? releaseReceipt;
   String? relay;
-  StreamSubscription<VideoJson>? observer;
+  StreamSubscription<MediaPlayerEvent>? observer;
   VideoTexture? texture;
   RequestFailure? terminalFailure;
   bool closed = false, snapshotBusy = false;

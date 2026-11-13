@@ -419,14 +419,17 @@ class _Output {
 }
 
 class _Player implements AudioPlayer {
-  final eventsController = StreamController<AudioJson>.broadcast(sync: true);
+  final eventsController = StreamController<MediaPlayerEvent>.broadcast(
+    sync: true,
+  );
   var releases = 0, position = 0;
   @override
-  Stream<AudioJson> get events => eventsController.stream;
+  Stream<MediaPlayerEvent> get events => eventsController.stream;
   @override
   int get positionMs => position += 20;
   @override
-  AudioJson get outputStatus => {'nativeReady': true, 'bytesWritten': 4096};
+  AudioPlayerStatus get outputStatus =>
+      const AudioPlayerStatus(nativeReady: true, bytesWritten: 4096);
   @override
   Future<AudioFormat> open(MediaCodecSource source) async =>
       const AudioFormat('pcm_s16le', 48000, 2);
@@ -435,10 +438,10 @@ class _Player implements AudioPlayer {
   @override
   Future<void> volume(double value, bool muted) async {}
   @override
-  Future<AudioJson> release() async {
+  Future<MediaOutputRelease> release() async {
     releases++;
     await eventsController.close();
-    return {'nativeDeleteConfirmed': true};
+    return const MediaOutputRelease(nativeDeleteConfirmed: true);
   }
 }
 

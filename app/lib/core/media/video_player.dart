@@ -2,12 +2,21 @@ import 'package:media_codec/media_codec.dart';
 import 'package:scrcpy_connect/core/media/models/video_pixels.dart';
 import 'package:scrcpy_connect/core/media/models/video_texture.dart';
 
+import 'models/media_output_release.dart';
+import 'models/media_player_event.dart';
+
+export 'models/media_output_release.dart';
+export 'models/media_player_event.dart';
+
 /// 控制器只通过 Dart 传递源能力和控制信息；Rust 直接向原生 FFmpeg 解码器提交压缩包。
 final class _NativeVideoPlayer implements VideoPlayer {
   final _controller = MediaCodecController.video();
 
   @override
-  Stream<VideoJson> get events => _controller.events;
+  Stream<MediaPlayerEvent> get events => _controller.events
+      .map(MediaPlayerEvent.decode)
+      .where((event) => event != null)
+      .cast<MediaPlayerEvent>();
 
   @override
   Future<VideoTexture> open(MediaCodecSource source) async {
@@ -38,16 +47,16 @@ final class _NativeVideoPlayer implements VideoPlayer {
   }
 
   @override
-  Future<VideoJson> release() => _controller.dispose();
+  Future<MediaOutputRelease> release() async =>
+      MediaOutputRelease.fromProtocol(await _controller.dispose());
 }
 
-typedef VideoJson = Map<String, dynamic>;
 typedef VideoPlayerFactory = VideoPlayer Function();
 
 /// 只提供会话所有者需要的操作；测试通过此接口覆盖取消和迟到回执，生产实现使用原生媒体包解码器。
 abstract interface class VideoPlayer {
   factory VideoPlayer() = _NativeVideoPlayer;
-  Stream<VideoJson> get events;
+  Stream<MediaPlayerEvent> get events;
 
   /// 解码并分配纹理后完成；Flutter 挂载纹理后另行观察平台的延迟导入。
   Future<VideoTexture> open(MediaCodecSource source);
@@ -55,5 +64,5 @@ abstract interface class VideoPlayer {
   /// 暂停本地输出，不重新启动捕获。
   Future<void> setPaused(bool paused);
   Future<VideoPixels?> snapshot({required int width, required int height});
-  Future<VideoJson> release();
+  Future<MediaOutputRelease> release();
 }

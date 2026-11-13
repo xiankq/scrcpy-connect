@@ -118,9 +118,9 @@ class AudioOutputService {
         (event) {
           if (!_owns(entry) || entry.closed) return;
           _diagnostics.playerEvent(DiagnosticArea.audio, entry.id, event);
-          if (event['kind'] == 'diagnostic' && entry.diagnostics.length < 24) {
-            entry.diagnostics.add({...event});
-          } else if (event['kind'] == 'failed') {
+          if (event.diagnostic && entry.diagnostics.length < 24) {
+            entry.diagnostics.add(event);
+          } else if (event is MediaPlayerFailed) {
             _fail(
               entry,
               const RequestFailure('audio_failed', '声音播放器报告媒体输入失败。'),
@@ -631,7 +631,7 @@ class AudioOutputService {
     );
   }
 
-  Future<AudioJson> stop(String id) async {
+  Future<MediaOutputStop> stop(String id) async {
     _stopped.add(id);
     if (_stopped.length > 4096) _stopped.remove(_stopped.first);
     final entry =
@@ -639,9 +639,9 @@ class AudioOutputService {
         _retiring.where((entry) => entry.id == id).firstOrNull;
     _invalidateEmptyFocus();
     entry?.cancel();
-    final cleanup = entry == null ? <String, dynamic>{} : await _release(entry);
+    final cleanup = entry == null ? null : await _release(entry);
     await _retireUnused();
-    return {'sourceId': id, 'status': 'stopped', 'cleanup': cleanup};
+    return MediaOutputStop(id, [?cleanup]);
   }
 
   Future<void> stopDevice(String deviceId) async {
@@ -704,7 +704,7 @@ class AudioOutputService {
     }
   }
 
-  Future<AudioJson> _release(_AudioOutput entry) {
+  Future<MediaOutputRelease> _release(_AudioOutput entry) {
     // 同步保存具体输出并撤销准入；等待超时不等于实际清理操作结束。
     _retiring.add(entry);
     if (_owns(entry)) _entries.remove(entry.id);
@@ -712,13 +712,15 @@ class AudioOutputService {
     entry.cancel();
     var operation = entry.releasing;
     if (operation == null) {
-      operation = Future<AudioJson>.microtask(() => _releaseOnce(entry));
+      operation = Future<MediaOutputRelease>.microtask(
+        () => _releaseOnce(entry),
+      );
       entry.releasing = operation;
       final owned = operation;
       unawaited(
         owned.then<void>(
           (receipt) {
-            if (_cleanupConfirmed(receipt)) _retiring.remove(entry);
+            if (receipt.confirmed) _retiring.remove(entry);
             if (identical(entry.releasing, owned)) entry.releasing = null;
           },
           onError: (Object _, StackTrace _) {
@@ -730,9 +732,9 @@ class AudioOutputService {
     return operation.timeout(operationTimeout, onTimeout: _unknownCleanup);
   }
 
-  Future<AudioJson> _releaseOnce(_AudioOutput entry) async {
+  Future<MediaOutputRelease> _releaseOnce(_AudioOutput entry) async {
     var observerConfirmed = true;
-    AudioJson receipt = entry.playerRelease ?? _unknownCleanup();
+    MediaOutputRelease receipt = entry.playerRelease ?? _unknownCleanup();
     await Future.wait<void>([
       () async {
         final observer = entry.observer;
@@ -749,28 +751,21 @@ class AudioOutputService {
         if (entry.playerRelease != null) return;
         try {
           receipt = await entry.player.release();
-          if (_cleanupConfirmed(receipt)) entry.playerRelease = receipt;
+          if (receipt.confirmed) entry.playerRelease = receipt;
         } catch (_) {
           receipt = _unknownCleanup();
         }
       }(),
     ]);
-    if (!observerConfirmed || !_cleanupConfirmed(receipt)) {
-      receipt = {...receipt, 'cleanupUnconfirmed': true};
+    if (!observerConfirmed || !receipt.confirmed) {
+      receipt = receipt.markUnconfirmed();
     }
     _diagnostics.release(DiagnosticArea.audio, entry.id, receipt);
     return receipt;
   }
 
-  static bool _cleanupConfirmed(AudioJson receipt) =>
-      receipt['nativeDeleteConfirmed'] == true &&
-      receipt['cleanupUnconfirmed'] != true;
-
-  static AudioJson _unknownCleanup() => {
-    'disposeRequested': false,
-    'nativeDeleteConfirmed': false,
-    'cleanupUnconfirmed': true,
-  };
+  static MediaOutputRelease _unknownCleanup() =>
+      const MediaOutputRelease.unknown();
 
   Future<void> _delay(_AudioOutput entry) =>
       _await(entry, Future<void>.delayed(pollInterval));
@@ -829,7 +824,11 @@ class AudioOutputService {
       : RequestFailure(
           error is TimeoutException ? 'audio_timeout' : 'audio_failed',
           '声音输出尚未完成确认。',
-          {'diagnostics': entry.diagnostics},
+          {
+            'diagnostics': [
+              for (final event in entry.diagnostics) event.toDiagnosticFields(),
+            ],
+          },
         );
   void _emit(AudioOutputEvent event) {
     if (!_disposed && !isDisposed()) {
@@ -839,8 +838,7 @@ class AudioOutputService {
 
   bool _nativeOutputReady(_AudioOutput entry) {
     final status = entry.player.outputStatus;
-    final written = status['bytesWritten'];
-    return status['nativeReady'] == true && written is int && written > 0;
+    return status.nativeReady && status.bytesWritten > 0;
   }
 
   AudioOutputReceipt _receipt(_AudioOutput entry) => AudioOutputReceipt(
@@ -848,8 +846,8 @@ class AudioOutputService {
     deviceId: entry.device,
     relayId: entry.relay,
     backend: 'media_codec',
-    nativeReady: entry.player.outputStatus['nativeReady'] == true,
-    bytesWritten: entry.player.outputStatus['bytesWritten'] as int? ?? 0,
+    nativeReady: entry.player.outputStatus.nativeReady,
+    bytesWritten: entry.player.outputStatus.bytesWritten,
     revision: entry.appliedRevision,
     applied: entry.appliedState != null,
     playState: AudioPlayState.values.byName(entry.appliedState ?? 'starting'),
@@ -883,12 +881,12 @@ class _AudioOutput {
   final AudioPlayer player;
   final bool Function()? cancelled;
   final cancellation = StreamController<void>.broadcast(sync: true);
-  final diagnostics = <AudioJson>[];
+  final diagnostics = <MediaPlayerEvent>[];
   Future<AudioOutputReceipt>? ready;
-  Future<AudioJson>? releasing;
-  AudioJson? playerRelease;
+  Future<MediaOutputRelease>? releasing;
+  MediaOutputRelease? playerRelease;
   Future<void> control = Future.value();
-  StreamSubscription<AudioJson>? observer;
+  StreamSubscription<MediaPlayerEvent>? observer;
   Timer? startTimer;
   String? relay, appliedState;
   String reason = 'starting';

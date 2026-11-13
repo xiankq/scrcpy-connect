@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/core/media/models/media_player_event.dart';
+import 'package:scrcpy_connect/core/media/models/media_output_release.dart';
 import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:scrcpy_connect/core/devices/models/connections_stopped.dart';
 import 'package:scrcpy_connect/core/media/models/video_session_view.dart';
@@ -265,10 +267,11 @@ class DiagnosticReporter {
   void playerEvent(
     DiagnosticArea area,
     String id,
-    Map<String, dynamic> event, {
+    MediaPlayerEvent value, {
     int? generation,
   }) {
     if (log == null) return;
+    final event = value.toDiagnosticFields();
     final category = event['category'];
     final error = event['error'];
     if (category == 'decoder.video' || category == 'decoder.audio') {
@@ -457,17 +460,18 @@ class DiagnosticReporter {
     );
   }
 
-  void release(DiagnosticArea area, String id, Map<String, dynamic> receipt) {
+  void release(DiagnosticArea area, String id, MediaOutputRelease receipt) {
     _presentations.remove(id);
     log?.record(
       area,
       'output.released',
-      level:
-          receipt['disposeDeferred'] == true ||
-              receipt['cleanupUnconfirmed'] == true
+      level: receipt.disposeDeferred == true || receipt.cleanupUnconfirmed
           ? LogLevel.warning
           : LogLevel.info,
-      fields: {...receipt, if (log != null) 'scope': log!.scope(id)},
+      fields: {
+        ...receipt.toDiagnosticFields(),
+        if (log != null) 'scope': log!.scope(id),
+      },
     );
   }
 }
