@@ -72,6 +72,14 @@ void main() {
       const WindowEnvironment(
         width: 720,
         height: 900,
+        mode: WindowMode.floating,
+      ).usesWorkspaceToolbar,
+      isTrue,
+    );
+    expect(
+      const WindowEnvironment(
+        width: 720,
+        height: 900,
         mode: WindowMode.split,
       ).usesWorkspaceToolbar,
       isFalse,

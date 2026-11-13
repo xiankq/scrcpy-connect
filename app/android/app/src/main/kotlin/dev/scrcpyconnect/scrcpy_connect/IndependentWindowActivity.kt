@@ -40,6 +40,11 @@ class IndependentWindowActivity : FlutterActivity() {
             "width" to bounds.width() / density,
             "height" to bounds.height() / density,
             "windowId" to windowId,
+            "mode" to when {
+                isInPictureInPictureMode -> "floating"
+                isInMultiWindowMode -> "split"
+                else -> "fullScreen"
+            },
         )
     }
 

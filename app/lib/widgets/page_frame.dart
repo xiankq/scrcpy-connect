@@ -119,8 +119,11 @@ class _PageFrameState extends State<PageFrame> {
                     '/settings',
                   ].contains(router.routeInformationProvider.value.uri.path));
       final toolbarHeight = _toolbarHeight(context, constraints);
-      final workspaceToolbar =
-          widget.root && windowEnvironmentOf(context).usesWorkspaceToolbar;
+      // A desktop/freeform window owns its workspace chrome for every route,
+      // including detail pages. Keeping the root-only guard here makes a
+      // narrow desktop detail window regress to a phone-style AppBar.
+      final workspaceToolbar = windowEnvironmentOf(context)
+          .usesWorkspaceToolbar;
       final top = workspaceToolbar
           ? 0.0
           : MediaQuery.paddingOf(context).top + toolbarHeight;
@@ -222,7 +225,11 @@ class _PageFrameState extends State<PageFrame> {
                       constraints: const BoxConstraints(
                         maxWidth: DesignTokens.componentPageContentMaxWidth,
                       ),
-                      child: GlassSurfaceGroup(child: appBar),
+                      // The title plane is ordinary chrome. Only its
+                      // independently interactive buttons own glass surfaces;
+                      // a glass parent would clip their optical overshoot and
+                      // turn the whole navigation strip into a frosted panel.
+                      child: appBar,
                     ),
                   ),
                 ),

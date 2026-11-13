@@ -29,60 +29,57 @@ class MediaPreviewToolbar extends StatelessWidget {
         bottom: false,
         child: Padding(
           padding: const EdgeInsets.all(DesignTokens.spacingMd),
-          child: GlassSurfaceGroup(
-            variant: GlassVariant.clear,
-            child: Row(
-              children: [
-                Tooltip(
-                  message: MaterialLocalizations.of(context).backButtonTooltip,
-                  child: GlassIconButton(
-                    semanticLabel: MaterialLocalizations.of(context)
-                        .backButtonTooltip,
-                    size: DesignTokens.componentIconButtonSize,
-                    iconSize: DesignTokens.componentIconSize,
-                    settings: GlassMaterial.settings(
-                      context,
-                      variant: GlassVariant.clear,
-                    ),
-                    quality: GlassMaterial.quality(context),
-                    interactionScale: GlassMaterial.reduceMotion(context)
-                        ? 1
-                        : DesignTokens.componentGlassInteractionScale,
-                    anchorStretch: !GlassMaterial.reduceMotion(context),
-                    onPressed: onBack,
-                    icon: const Icon(LucideIcons.chevronLeft),
+          child: Row(
+            children: [
+              Tooltip(
+                message: MaterialLocalizations.of(context).backButtonTooltip,
+                child: GlassIconButton(
+                  semanticLabel: MaterialLocalizations.of(context)
+                      .backButtonTooltip,
+                  size: DesignTokens.componentIconButtonSize,
+                  iconSize: DesignTokens.componentIconSize,
+                  settings: GlassMaterial.settings(
+                    context,
+                    variant: GlassVariant.clear,
                   ),
+                  quality: GlassMaterial.quality(context),
+                  interactionScale: GlassMaterial.reduceMotion(context)
+                      ? 1
+                      : DesignTokens.componentGlassInteractionScale,
+                  anchorStretch: !GlassMaterial.reduceMotion(context),
+                  onPressed: onBack,
+                  icon: const Icon(LucideIcons.chevronLeft),
                 ),
-                const SizedBox(width: DesignTokens.spacingXs),
-                Expanded(
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(width: DesignTokens.spacingXs),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              const SizedBox(width: DesignTokens.spacingXs),
+              GlassToolbarGroup(
+                variant: GlassVariant.clear,
+                children: [
+                  GlassActionIcon(
+                    tooltip: '保存原文件',
+                    color: Theme.of(context).colorScheme.onSurface,
+                    onPressed: onSave,
+                    icon: const Icon(LucideIcons.download),
                   ),
-                ),
-                const SizedBox(width: DesignTokens.spacingXs),
-                GlassToolbarGroup(
-                  variant: GlassVariant.clear,
-                  children: [
+                  if (supportsSystemFileShare)
                     GlassActionIcon(
-                      tooltip: '保存原文件',
+                      tooltip: '系统分享',
                       color: Theme.of(context).colorScheme.onSurface,
-                      onPressed: onSave,
-                      icon: const Icon(LucideIcons.download),
+                      onPressed: onShare,
+                      icon: const Icon(LucideIcons.share2),
                     ),
-                    if (supportsSystemFileShare)
-                      GlassActionIcon(
-                        tooltip: '系统分享',
-                        color: Theme.of(context).colorScheme.onSurface,
-                        onPressed: onShare,
-                        icon: const Icon(LucideIcons.share2),
-                      ),
-                  ],
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ),
         ),
       ),

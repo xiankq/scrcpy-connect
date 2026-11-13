@@ -150,7 +150,8 @@ final class WindowEnvironment {
   /// phone-style status/header strip. A desktop window can be narrower than
   /// the expanded breakpoint, so its window mode must take precedence over a
   /// width-only classification.
-  bool get usesWorkspaceToolbar => isExpanded || mode == WindowMode.freeform;
+  bool get usesWorkspaceToolbar =>
+      isExpanded || mode == WindowMode.freeform || mode == WindowMode.floating;
 
   /// A feature that physically divides or blocks content must be treated as a
   /// reserved region by pane layout.

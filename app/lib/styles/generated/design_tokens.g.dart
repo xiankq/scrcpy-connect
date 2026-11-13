@@ -298,9 +298,6 @@ abstract final class DesignTokens {
   static const componentNavigationDarkBackgroundColor = Color(0x991c1c1e);
   static const componentNavigationDarkTextColor = Color(0xffffffff);
   static const componentNavigationHeight = 64.0;
-  static const componentNavigationLensOpticalDepth = 20.0;
-  static const componentNavigationLensRefractionIndex = 1.1;
-  static const componentNavigationLensSpecularIntensity = 2.0;
   static const componentNavigationPadding = 8.0;
   static const componentNavigationRounded = 999.0;
   static const componentNotificationCardHeight = 190.0;

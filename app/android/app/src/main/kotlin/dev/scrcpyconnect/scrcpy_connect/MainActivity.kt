@@ -124,6 +124,11 @@ class MainActivity : FlutterActivity() {
             "width" to bounds.width() / density,
             "height" to bounds.height() / density,
             "windowId" to componentName.flattenToShortString(),
+            "mode" to when {
+                isInPictureInPictureMode -> "floating"
+                isInMultiWindowMode -> "split"
+                else -> "fullScreen"
+            },
         )
     }
 
