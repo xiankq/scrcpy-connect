@@ -95,7 +95,7 @@ class NavigationScaffold extends HookConsumerWidget {
                         : DesignTokens.colorGlassSelected,
                     settings: GlassMaterial.navigationBarSettings(context),
                     quality: GlassMaterial.quality(context),
-                    indicatorSettings: GlassMaterial.navigationLensSettings(
+                    indicatorSettings: GlassMaterial.navigationIndicatorSettings(
                       context,
                     ),
                     pressScale: reducedMotion
