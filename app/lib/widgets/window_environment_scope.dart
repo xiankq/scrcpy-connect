@@ -7,8 +7,8 @@ import 'package:scrcpy_connect/core/platform/platform_channels.dart';
 import 'package:scrcpy_connect/core/platform/window_environment.dart';
 import 'package:scrcpy_connect/core/platform/window_environment_codec.dart';
 
-/// Loads optional native window metadata once and merges it with Flutter's
-/// live MediaQuery geometry.
+/// Tracks optional native window metadata and merges it with Flutter's live
+/// MediaQuery geometry as the window or application lifecycle changes.
 ///
 /// The native payload supplies identity, mode and vendor-specific posture;
 /// MediaQuery remains authoritative for the current Flutter view dimensions.
