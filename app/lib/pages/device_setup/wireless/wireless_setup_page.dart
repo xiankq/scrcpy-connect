@@ -1,15 +1,11 @@
-import 'dart:async';
-import 'dart:io';
-
 import 'package:material_ui/material_ui.dart';
-import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/devices/connection_validation.dart';
-import 'package:scrcpy_connect/core/devices/device_inspection.dart';
+import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
-import 'package:scrcpy_connect/core/errors/request_failure.dart';
-import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
+import 'package:scrcpy_connect/pages/device_setup/wireless/models/wireless_setup_state.dart';
+import 'package:scrcpy_connect/pages/device_setup/wireless/wireless_setup_notifier.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
@@ -24,187 +20,66 @@ class WirelessSetupPage extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final inspection = ref.watch(deviceInspectionProvider);
-    final deviceManagement = ref.watch(deviceManagementProvider);
-    final setup = ref.watch(deviceSetupProvider);
+    final scope = useMemoized(Object.new, [device.id]);
+    final currentScope = useRef(scope)..value = scope;
+    final provider = wirelessSetupProvider(deviceId: device.id, scope: scope);
+    final state = ref.watch(provider);
+    final actions = ref.read(provider.notifier);
     final form = useMemoized(GlobalKey<FormState>.new);
     final port = useTextEditingController(text: '5555');
-    final addresses = useState<List<DeviceNetworkAddress>>([]);
     final selected = useState<String?>(null);
-    final loading = useState(false);
-    final busy = useState(false);
-    final requestStarted = useState(false);
-    final error = useState<String?>(null);
-    final notice = useState<String?>(null);
-    final done = useState(false);
-    final generation = useRef(0);
-    final attempt = useRef<String?>(null);
-    final deviceId = device.id;
-    bool ownsScope() =>
+    final selectionNotice = useState<String?>(null);
+    bool current() =>
         context.mounted &&
-        identical(inspection, ref.read(deviceInspectionProvider)) &&
-        identical(setup, ref.read(deviceSetupProvider)) &&
-        identical(deviceManagement, ref.read(deviceManagementProvider));
-
-    Future<DeviceReading<DeviceNetworkInfo>?> readAddresses() async {
-      final revision = ++generation.value;
-      loading.value = true;
-      error.value = null;
-      try {
-        final current = ref.read(deviceListProvider.notifier).current(device);
-        if (current.status != DeviceConnectionStatus.connected) {
-          throw const RequestFailure('disconnected', '请先连接此设备，再读取网络地址。');
-        }
-        final result = await inspection.readNetwork(deviceId);
-        if (!context.mounted || generation.value != revision || !ownsScope()) {
-          return null;
-        }
-        final latest = ref.read(deviceListProvider.notifier).current(device);
-        if (result.deviceId != deviceId ||
-            (result.connectionId ?? '').isEmpty ||
-            latest.status != DeviceConnectionStatus.connected ||
-            ((latest.connectionId ?? '').isNotEmpty &&
-                result.connectionId != latest.connectionId)) {
-          throw const RequestFailure('connection_changed', '设备连接已变化，请重新获取地址。');
-        }
-        final candidates = <String, DeviceNetworkAddress>{};
-        for (final item in result.value.addresses) {
-          final address = item.address;
-          if (address.isNotEmpty &&
-              validateAddress(address) == null &&
-              InternetAddress.tryParse(address.split('%').first) != null) {
-            candidates.putIfAbsent(address, () => item);
-          }
-        }
-        addresses.value = candidates.values.toList();
-        if (!candidates.containsKey(selected.value)) {
-          final changed = selected.value != null;
-          selected.value = candidates.length == 1
-              ? candidates.keys.single
-              : null;
-          if (changed) notice.value = '目标设备的网络地址已变化，请重新选择。';
-        }
-        return result;
-      } catch (failure) {
-        if (context.mounted && generation.value == revision && ownsScope()) {
-          addresses.value = [];
-          selected.value = null;
-          error.value = '$failure';
-        }
-        return null;
-      } finally {
-        if (context.mounted && generation.value == revision && ownsScope()) {
-          loading.value = false;
-        }
-      }
-    }
-
+        identical(currentScope.value, scope) &&
+        identical(ref.read(provider.notifier), actions);
+    final choice = state.addresses.any((item) => item.address == selected.value)
+        ? selected.value
+        : state.addresses.length == 1
+        ? state.addresses.single.address
+        : null;
     useEffect(() {
-      Future.microtask(() async {
-        if (!context.mounted || !ownsScope()) {
-          return;
+      Future.microtask(() {
+        if (!current()) return;
+        final addresses = ref.read(provider).addresses;
+        if (addresses.any((item) => item.address == selected.value)) return;
+        if (selected.value != null && !ref.read(provider).loading) {
+          selectionNotice.value = '目标设备的网络地址已变化，请重新选择。';
         }
-        attempt.value = null;
-        addresses.value = [];
-        selected.value = null;
-        busy.value = false;
-        requestStarted.value = false;
-        notice.value = null;
-        done.value = false;
-        await readAddresses();
+        selected.value = addresses.length == 1
+            ? addresses.single.address
+            : null;
       });
-      return () {
-        generation.value++;
-        final id = attempt.value;
-        if (id != null) {
-          deviceManagement.cancelConnectionAttempt(id).ignore();
-        }
-      };
-    }, [deviceId, inspection, deviceManagement, setup]);
-
-    Future<void> cancel() async {
-      final id = attempt.value;
-      if (id == null) return;
-      try {
-        await deviceManagement.cancelConnectionAttempt(id);
-        if (!ownsScope() || attempt.value != id) return;
-        attempt.value = null;
-        generation.value++;
-        loading.value = false;
-        busy.value = false;
-        requestStarted.value = false;
-        notice.value = '已取消切换。调试服务可能已重启，请核对当前连接状态。';
-        await ref.read(deviceListProvider.notifier).refresh();
-      } catch (failure) {
-        if (context.mounted) error.value = '$failure';
-      }
-    }
+      return null;
+    }, [state.addresses.map((item) => item.address).join(','), scope]);
 
     Future<void> submit() async {
-      if (busy.value || loading.value || !form.currentState!.validate()) return;
-      final current = ref.read(deviceListProvider.notifier).current(device);
-      if (current.status != DeviceConnectionStatus.connected) {
-        await offerDeviceConnection(context, ref, current);
+      if (state.busy || state.loading || !form.currentState!.validate()) return;
+      final currentDevice = ref
+          .read(deviceListProvider.notifier)
+          .current(device);
+      if (currentDevice.status != DeviceConnectionStatus.connected) {
+        await offerDeviceConnection(context, ref, currentDevice);
         return;
       }
-      final id = 'ip-${DateTime.now().microsecondsSinceEpoch}-$deviceId';
-      attempt.value = id;
-      final address = selected.value;
-      final parsedPort = int.parse(port.text.trim());
-      busy.value = true;
-      done.value = false;
-      notice.value = null;
+      selectionNotice.value = null;
+      final request = await actions.prepare(
+        address: choice!,
+        port: int.parse(port.text.trim()),
+      );
+      bool ownsConfirmation() =>
+          current() && identical(ref.read(provider).confirmation, request);
+      if (request == null || !context.mounted || !ownsConfirmation()) return;
       try {
-        final network = await readAddresses();
-        if (!context.mounted || network == null || attempt.value != id) return;
-        if (selected.value != address ||
-            !addresses.value.any((item) => item.address == address)) {
-          notice.value = '目标设备的网络地址已变化，请重新选择。';
-          return;
-        }
-        if (!await confirmConnectionChange(
-              context,
-              '切换并连接？',
-              '将在当前授权设备上开启 $parsedPort 端口，再连接 $address。当前连接、画面和活动将中断；此方式不使用无线调试加密，仅在可信网络使用。验证成功后才更新设备记录。',
-              action: '切换并连接',
-            ) ||
-            !context.mounted) {
-          return;
-        }
-        if (attempt.value != id) return;
-        requestStarted.value = true;
-        final result = await setup.enableWireless(
-          deviceId,
-          address!,
-          port: parsedPort,
-          attemptId: id,
+        final accepted = await confirmConnectionChange(
+          context,
+          '切换并连接？',
+          '将在当前授权设备上开启 ${request.port} 端口，再连接 ${request.address}。当前连接、画面和活动将中断；此方式不使用无线调试加密，仅在可信网络使用。验证成功后才更新设备记录。',
+          action: '切换并连接',
         );
-        if (!context.mounted || attempt.value != id || !ownsScope()) {
-          return;
-        }
-        if (!result.connected || result.deviceId != deviceId) {
-          throw const RequestFailure(
-            'ip_switch_unverified',
-            '尚未验证 IP 连接，请检查设备连接状态。',
-          );
-        }
-        await ref.read(deviceListProvider.notifier).refresh();
-        if (ownsScope() && attempt.value == id) done.value = true;
-      } catch (failure) {
-        if (!ownsScope()) {
-          return;
-        }
-        await ref.read(deviceListProvider.notifier).refresh();
-        if (ownsScope() && attempt.value == id) {
-          error.value = '$failure';
-          notice.value = '设备记录未确认更新，调试服务可能已重启，请核对连接状态。';
-        }
+        if (accepted && ownsConfirmation()) await actions.submit(request);
       } finally {
-        if (ownsScope() && attempt.value == id) {
-          busy.value = false;
-          requestStarted.value = false;
-          attempt.value = null;
-        }
+        if (current()) actions.dismiss(request);
       }
     }
 
@@ -225,19 +100,19 @@ class WirelessSetupPage extends HookConsumerWidget {
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: DesignTokens.spacingMd),
-                    if (loading.value) const ContentLoadingIndicator(),
+                    if (state.loading) const ContentLoadingIndicator(),
                     DropdownButtonFormField<String>(
                       key: ValueKey(
-                        '${addresses.value.map((a) => a.address).join(',')}:${selected.value}',
+                        '${state.addresses.map((a) => a.address).join(',')}:$choice',
                       ),
-                      initialValue: selected.value,
+                      initialValue: choice,
                       isExpanded: true,
                       decoration: const InputDecoration(labelText: '目标设备网络地址'),
                       hint: Text(
-                        addresses.value.isEmpty ? '暂无可用地址' : '选择目标设备的网络地址',
+                        state.addresses.isEmpty ? '暂无可用地址' : '选择目标设备的网络地址',
                       ),
                       items: [
-                        for (final candidate in addresses.value)
+                        for (final candidate in state.addresses)
                           DropdownMenuItem(
                             value: candidate.address,
                             child: Text(
@@ -247,45 +122,55 @@ class WirelessSetupPage extends HookConsumerWidget {
                           ),
                       ],
                       onChanged:
-                          busy.value || loading.value || addresses.value.isEmpty
+                          state.busy || state.loading || state.addresses.isEmpty
                           ? null
                           : (next) => selected.value = next,
                       validator: (next) =>
                           next == null ? '请选择此设备当前的网络地址' : null,
                     ),
-                    if (!loading.value &&
-                        error.value == null &&
-                        addresses.value.isEmpty)
+                    if (!state.loading &&
+                        state.error == null &&
+                        state.addresses.isEmpty)
                       const StateNote('此设备当前没有可用的网络地址。连接网络后重新获取。'),
                     TextButton(
-                      onPressed: busy.value || loading.value
+                      onPressed: state.busy || state.loading
                           ? null
-                          : readAddresses,
-                      child: Text(loading.value ? '正在获取…' : '重新获取地址'),
+                          : actions.refresh,
+                      child: Text(state.loading ? '正在获取…' : '重新获取地址'),
                     ),
                     const SizedBox(height: DesignTokens.spacingMd),
                     TextFormField(
                       controller: port,
-                      enabled: !busy.value,
+                      enabled: !state.busy,
                       validator: validatePort,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(labelText: '连接端口'),
                     ),
-                    if (error.value != null) StateNote(error.value!),
-                    if (notice.value != null) StateNote(notice.value!),
-                    if (done.value) const StateNote('已转为 IP 连接'),
+                    if (state.error != null) StateNote(state.error!),
+                    if (state.notice != null) StateNote(state.notice!),
+                    if (selectionNotice.value != null &&
+                        selectionNotice.value != state.notice)
+                      StateNote(selectionNotice.value!),
+                    if (state.phase == WirelessSetupPhase.completed)
+                      const StateNote('已转为 IP 连接'),
                     const SizedBox(height: DesignTokens.spacingSectionTitle),
                     FilledButton(
                       onPressed:
-                          busy.value || loading.value || addresses.value.isEmpty
+                          state.busy || state.loading || state.addresses.isEmpty
                           ? null
                           : submit,
-                      child: Text(busy.value ? '正在切换…' : '切换并连接'),
+                      child: Text(state.busy ? '正在切换…' : '切换并连接'),
                     ),
-                    if (busy.value && requestStarted.value)
+                    if (state.busy && state.canCancel)
                       TextButton(
-                        onPressed: cancel,
-                        child: const Text('取消本次切换'),
+                        onPressed: state.phase == WirelessSetupPhase.cancelling
+                            ? null
+                            : actions.cancel,
+                        child: Text(switch (state.phase) {
+                          WirelessSetupPhase.cancelling => '正在取消…',
+                          WirelessSetupPhase.cleanupRequired => '重试取消',
+                          _ => '取消本次切换',
+                        }),
                       ),
                   ],
                 ),

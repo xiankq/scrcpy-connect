@@ -11,7 +11,9 @@ import 'package:scrcpy_connect/core/devices/device_connection.dart';
 import 'package:scrcpy_connect/core/devices/device_connection_service.dart';
 import 'package:scrcpy_connect/core/devices/device_discovery.dart';
 import 'package:scrcpy_connect/core/devices/device_resources.dart';
+import 'package:scrcpy_connect/core/devices/device_service.dart';
 import 'package:scrcpy_connect/core/devices/device_setup.dart';
+import 'package:scrcpy_connect/core/devices/models/device_endpoint.dart';
 import 'package:scrcpy_connect/core/devices/usb_authorization.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_change.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
@@ -34,6 +36,56 @@ import 'package:scrcpy_connect/core/settings/app_settings.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 
 void main() {
+  test('无线切换拒绝已被替换的确认来源，不查询或重启后继连接', () async {
+    final resources = await _resources();
+    final api = _WirelessFacts();
+    final client = _WirelessClient(api);
+    final devices = DeviceService(
+      records: resources.records,
+      identities: resources.identities,
+      clientForIdentity: (_) => client,
+      prepareConnection: (_, _, _, _) async {},
+      stopActivities: (_, _) async {},
+    );
+    addTearDown(client.services.close);
+    addTearDown(devices.close);
+    const endpoint = DeviceEndpoint(address: '192.0.2.1', port: 5555);
+    final record = await devices.addDevice(endpoint);
+    final original = await devices.connectDevice(record.id);
+    final successor = await devices.configureDevice(record.id, endpoint);
+    expect(original.device.connectionId, 'connection-0');
+    expect(successor.device.connectionId, 'connection-1');
+    final discovery = DeviceDiscovery();
+    await discovery.close();
+    final setup = DeviceConnectionService(
+      devices: devices,
+      discovery: discovery,
+      clientForIdentity: (_) => throw StateError('不应取得候选客户端'),
+      releaseIdentityClient: (_) async => throw StateError('没有候选需要释放'),
+      policy: const ConnectionPolicy(),
+      isStateUnverified: () => false,
+    );
+    addTearDown(setup.dispose);
+    await expectLater(
+      setup.enableWireless(
+        record.id,
+        endpoint.address,
+        connectionId: original.device.connectionId!,
+        attemptId: 'original-confirmation',
+      ),
+      throwsA(
+        isA<RequestFailure>().having((e) => e.code, 'code', 'stale_connection'),
+      ),
+    );
+    expect(
+      devices.readDevice(record.id).connectionId,
+      successor.device.connectionId,
+    );
+    expect(client.disconnected, ['connection-0']);
+    expect(client.identityQueries, 2);
+    expect(client.connects, 2);
+  });
+
   test('元数据导入不创建配对、发现、重连或原生查询执行者', () async {
     final changes = <DeviceListChanged>[];
     final resources = await _resources(onDevicesChanged: changes.add);
@@ -677,6 +729,77 @@ class _UnusedClient implements AdbClient {
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw StateError('未使用的连接不应查询或执行原生命令：${invocation.memberName}');
+}
+
+final class _WirelessFacts implements NativeAdbApi {
+  @override
+  Future<AdbConnectionFacts> connectionFacts(String id) async =>
+      AdbConnectionFacts(
+        officialServer: false,
+        closed: false,
+        features: const [],
+        connectionId: id,
+      );
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw StateError('旧确认不应调用原生命令：${invocation.memberName}');
+}
+
+final class _WirelessClient implements AdbClient {
+  _WirelessClient(_WirelessFacts api) {
+    services = AdbServices(() => api, (device) async => device, () {});
+  }
+  @override
+  late final AdbServices services;
+  @override
+  final capabilities = const AdbCapabilities(
+    officialServer: false,
+    suppressAuthorizationPrompt: true,
+    forceTlsWithoutMdns: true,
+    androidUsbFd: false,
+  );
+  var connects = 0, identityQueries = 0;
+  final disconnected = <String>[];
+  @override
+  Future<AdbDevice> connect(
+    String address, {
+    bool requireTls = false,
+    bool authorize = true,
+    Duration timeout = const Duration(seconds: 15),
+    AdbConnectOptions? directOptions,
+    AdbCancellation? cancellation,
+  }) async => AdbDevice(
+    id: 'connection-${connects++}',
+    serial: 'phone',
+    state: 'device',
+  );
+
+  @override
+  Future<void> disconnect(AdbDevice device) async =>
+      disconnected.add(device.id);
+
+  @override
+  Stream<AdbShellEvent> shell(
+    AdbDevice device,
+    String command, {
+    Duration timeout = const Duration(minutes: 5),
+    AdbCancellation? cancellation,
+  }) async* {
+    expect(command, contains('ro.serialno'));
+    identityQueries++;
+    yield AdbShellEvent(
+      .stdout,
+      Uint8List.fromList(
+        utf8.encode('phone\x00phone\x00Phone\x0014\x0034\x00\x00'),
+      ),
+    );
+    yield AdbShellEvent(.exit, Uint8List(0), exitCode: 0);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw StateError('不应调用其他连接能力：${invocation.memberName}');
 }
 
 final class _QueryUpload implements NativeAdbApi {

@@ -154,11 +154,12 @@ class DeviceConnectionService implements DeviceSetup {
     String deviceId,
     String address, {
     int port = 5555,
+    required String connectionId,
     String? attemptId,
   }) async => _start(
     deviceId: deviceId,
     attemptId: attemptId,
-    action: (flow) => _tcpip(flow, address, port),
+    action: (flow) => _tcpip(flow, address, port, connectionId: connectionId),
   ).result;
 
   ({_SetupFlow flow, Future<T> result}) _start<T>({
@@ -678,8 +679,9 @@ class DeviceConnectionService implements DeviceSetup {
   Future<WirelessReceipt> _tcpip(
     _SetupFlow flow,
     String address,
-    int port,
-  ) async {
+    int port, {
+    required String connectionId,
+  }) async {
     final id = flow.deviceId;
     if (id == null) {
       throw const RequestFailure('invalid_argument', '缺少设备标识。');
@@ -690,6 +692,9 @@ class DeviceConnectionService implements DeviceSetup {
       original.device,
     );
     _check(flow);
+    if (facts.connectionId != connectionId) {
+      throw const RequestFailure('stale_connection', '目标设备连接已变化，请重新获取地址。');
+    }
     final network = await devices.readNetwork(
       id,
       connectionId: facts.connectionId,

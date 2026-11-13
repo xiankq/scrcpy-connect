@@ -36,6 +36,7 @@ abstract interface class DeviceSetup {
     String deviceId,
     String address, {
     int port = 5555,
+    required String connectionId,
     String? attemptId,
   });
 }

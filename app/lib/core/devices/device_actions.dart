@@ -133,6 +133,7 @@ final class DeviceActions
     String deviceId,
     String address, {
     int port = 5555,
+    required String connectionId,
     String? attemptId,
   }) => _setupAction(
     'devices.wireless',
@@ -140,6 +141,7 @@ final class DeviceActions
       deviceId,
       address,
       port: port,
+      connectionId: connectionId,
       attemptId: attemptId,
     ),
     deviceId: deviceId,
