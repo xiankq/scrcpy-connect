@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import desktop_multi_window
 
 class MainFlutterWindow: NSWindow {
   private var visualPreferences: SystemVisualPreferences?
@@ -12,6 +13,9 @@ class MainFlutterWindow: NSWindow {
     self.setFrame(windowFrame, display: true)
 
     RegisterGeneratedPlugins(registry: flutterViewController)
+    FlutterMultiWindowPlugin.setOnWindowCreatedCallback { controller in
+      RegisterGeneratedPlugins(registry: controller)
+    }
     visualPreferences = SystemVisualPreferences(messenger: flutterViewController.engine.binaryMessenger)
     let platform = FlutterMethodChannel(
       name: "dev.scrcpyconnect/platform", binaryMessenger: flutterViewController.engine.binaryMessenger)

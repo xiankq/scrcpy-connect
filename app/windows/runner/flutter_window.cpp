@@ -7,6 +7,7 @@
 #include <flutter/standard_method_codec.h>
 
 #include "flutter/generated_plugin_registrant.h"
+#include <desktop_multi_window/desktop_multi_window_plugin.h>
 #include "utils.h"
 
 class SystemTypography {
@@ -99,6 +100,11 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  DesktopMultiWindowSetWindowCreatedCallback([](void* controller) {
+    auto* flutter_view_controller =
+        reinterpret_cast<flutter::FlutterViewController*>(controller);
+    RegisterPlugins(flutter_view_controller->engine());
+  });
   system_typography_ = std::make_unique<SystemTypography>(
       flutter_controller_->engine()->messenger());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());

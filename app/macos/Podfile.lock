@@ -1,4 +1,6 @@
 PODS:
+  - desktop_multi_window (0.0.1):
+    - FlutterMacOS
   - file_picker_darwin (1.0.0):
     - Flutter
     - FlutterMacOS
@@ -13,6 +15,7 @@ PODS:
     - FlutterMacOS
 
 DEPENDENCIES:
+  - desktop_multi_window (from `Flutter/ephemeral/.symlinks/plugins/desktop_multi_window/macos`)
   - file_picker_darwin (from `Flutter/ephemeral/.symlinks/plugins/file_picker_darwin/darwin`)
   - flutter_local_notifications (from `Flutter/ephemeral/.symlinks/plugins/flutter_local_notifications/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
@@ -21,6 +24,8 @@ DEPENDENCIES:
   - share_plus (from `Flutter/ephemeral/.symlinks/plugins/share_plus/macos`)
 
 EXTERNAL SOURCES:
+  desktop_multi_window:
+    :path: Flutter/ephemeral/.symlinks/plugins/desktop_multi_window/macos
   file_picker_darwin:
     :path: Flutter/ephemeral/.symlinks/plugins/file_picker_darwin/darwin
   flutter_local_notifications:
@@ -35,6 +40,7 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/share_plus/macos
 
 SPEC CHECKSUMS:
+  desktop_multi_window: ea8bb43f17f12cf60220d6ebd6b249dcd82e8279
   file_picker_darwin: 4c2b9a50ea44cb3b071381ea0cf48591bdd80251
   flutter_local_notifications: 1fc7ffb10a83d6a2eeeeddb152d43f1944b0aad0
   FlutterMacOS: c232990155153907050900a2e175c7773903ba4e
