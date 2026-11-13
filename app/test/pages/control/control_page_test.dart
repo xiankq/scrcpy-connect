@@ -5,7 +5,9 @@ import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
 import 'package:adb/adb.dart' show AdbCancellation;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:scrcpy_connect/core/clipboard/clipboard_focus_notifier.dart';
 import 'package:scrcpy_connect/core/control/control_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
 import 'package:scrcpy_connect/core/control/models/session_activity.dart';
@@ -14,6 +16,7 @@ import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/control/video_display.dart';
 import 'package:scrcpy_connect/core/devices/device_apps.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/devices/current_device_notifier.dart';
 import 'package:scrcpy_connect/core/devices/device_inspection.dart';
 import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
@@ -30,11 +33,123 @@ import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart
 import 'package:scrcpy_connect/core/settings/settings_management.dart';
 import 'package:scrcpy_connect/pages/control/control_page.dart';
 import 'package:scrcpy_connect/pages/control/widgets/remote_surface.dart';
+import 'package:scrcpy_connect/router/route_observers.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/models/device_audio_view_snapshot.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
 
 void main() {
+  testWidgets('声明式路由覆盖和恢复控制页时安全转移剪贴板焦点', (tester) async {
+    final videos = _Videos();
+    final dependencies = _Session();
+    final container = ProviderContainer(
+      overrides: [
+        appSessionProvider.overrideWithValue(dependencies),
+        deviceReaderProvider.overrideWithValue(dependencies.devices),
+        settingsManagementProvider.overrideWithValue(dependencies.settings),
+        runtimeEventsProvider.overrideWithValue(const Stream.empty()),
+        videoSessionsProvider.overrideWithValue(videos),
+        remoteControlProvider.overrideWithValue(_Control()),
+        deviceInspectionProvider.overrideWithValue(_Inspection()),
+        deviceAppsProvider.overrideWithValue(_Apps()),
+        videoDisplayProvider.overrideWithValue(_Displays()),
+      ],
+    );
+    final views = RemoteViews(
+      videos: videos,
+      audio: _Audio(),
+      events: const Stream.empty(),
+      current: () => true,
+      readSnapshot: () => const DeviceAudioViewSnapshot(
+        devices: [],
+        reconciliationPending: false,
+      ),
+      onAudioError: (_) {},
+    );
+    final router = GoRouter(
+      observers: [sessionRouteObserver],
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, _) => const ControlPage(device: _device),
+        ),
+        GoRoute(
+          path: '/screenshot',
+          builder: (_, _) => const Scaffold(body: Text('截图')),
+        ),
+      ],
+    );
+    videos.starting.complete(
+      VideoSessionView(
+        session: const VideoSessionSnapshot(
+          sessionId: 'session',
+          deviceId: 'device',
+          name: 'Phone',
+          kind: .screen,
+          status: .streaming,
+          captureGeneration: 2,
+          generation: 3,
+          width: 100,
+          height: 200,
+        ),
+        wake: const KeepAwakeSnapshot(deviceId: 'device'),
+        output: _output(),
+      ),
+    );
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: RemoteViewsScope(
+          views: views,
+          child: MaterialApp.router(
+            theme: ConnectTokens.theme(Brightness.light),
+            routerConfig: router,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(container.read(clipboardFocusProvider)?.sessionId, 'session');
+    expect(container.read(currentDeviceProvider), 'device');
+    unawaited(router.push<void>('/screenshot'));
+    await tester.pumpAndSettle();
+    expect(container.read(clipboardFocusProvider), isNull);
+    expect(videos.pauses, ['session']);
+    expect(tester.takeException(), isNull);
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(container.read(clipboardFocusProvider)?.sessionId, 'session');
+    expect(container.read(currentDeviceProvider), 'device');
+    expect(videos.resumes, ['session']);
+    expect(videos.starts, 1);
+    container.updateOverrides([
+      appSessionProvider.overrideWithValue(dependencies),
+      deviceReaderProvider.overrideWithValue(dependencies.devices),
+      settingsManagementProvider.overrideWithValue(dependencies.settings),
+      runtimeEventsProvider.overrideWithValue(const Stream.empty()),
+      videoSessionsProvider.overrideWithValue(_Videos()),
+      remoteControlProvider.overrideWithValue(
+        container.read(remoteControlProvider),
+      ),
+      deviceInspectionProvider.overrideWithValue(
+        container.read(deviceInspectionProvider),
+      ),
+      deviceAppsProvider.overrideWithValue(container.read(deviceAppsProvider)),
+      videoDisplayProvider.overrideWithValue(
+        container.read(videoDisplayProvider),
+      ),
+    ]);
+    await tester.pump();
+    expect(container.read(clipboardFocusProvider), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    expect(container.read(clipboardFocusProvider), isNull);
+    views.dispose();
+    router.dispose();
+    container.dispose();
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('控制页直接消费类型化输出及会话，丢弃旧捕获失败并等待画质双回执', (tester) async {
     final videos = _Videos();
     final events = StreamController<RuntimeEvent>.broadcast(sync: true);
@@ -323,6 +438,8 @@ class _Session implements AppSession {
 class _Videos implements VideoSessions {
   final starting = Completer<VideoSessionView>();
   final stops = <String>[];
+  final pauses = <String>[];
+  final resumes = <String>[];
   int starts = 0, reads = 0;
   @override
   Future<List<VideoSessionView>> readVideoSessions({String? deviceId}) async {
@@ -344,6 +461,32 @@ class _Videos implements VideoSessions {
     stops.add(target.sessionId!);
     return VideoStopReceipt(sessionId: target.sessionId!);
   }
+
+  @override
+  Future<VideoPlaybackReceipt> pauseVideo(ControlTarget target) async {
+    pauses.add(target.sessionId!);
+    return _playback(target.sessionId!, .paused);
+  }
+
+  @override
+  Future<VideoPlaybackReceipt> resumeVideo(ControlTarget target) async {
+    resumes.add(target.sessionId!);
+    return _playback(target.sessionId!, .streaming);
+  }
+
+  VideoPlaybackReceipt _playback(String id, VideoSessionStatus status) =>
+      VideoPlaybackReceipt(
+        session: VideoSessionSnapshot(
+          sessionId: id,
+          deviceId: 'device',
+          name: 'Phone',
+          kind: .screen,
+          status: status,
+          captureGeneration: 2,
+          generation: 3,
+        ),
+        output: _output().copyWith(paused: status == .paused),
+      );
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

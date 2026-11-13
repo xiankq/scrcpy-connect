@@ -210,6 +210,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
   late final Stream<RuntimeEvent> _events;
   late final VideoSessions _videos;
   late final ClipboardFocusLease _clipboardFocus;
+  int _clipboardFocusRevision = 0;
   bool _retired = false;
   bool get _sourcesCurrent => mounted && window.isCurrent;
 
@@ -621,7 +622,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
     trace(
       'reconcile.unknown reason=$reason session=$sessionId visibility=${presentation.visibilityEpoch}',
     );
-    _clipboardFocus.focus(sessionId, false);
+    updateClipboardFocus(sessionId, false);
     final epoch = presentation.beginReconciliation(
       initialSession: initialSession,
       reason: reason,
@@ -703,7 +704,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
   }
 
   Future<void> pauseView() async {
-    _clipboardFocus.focus(sessionId, false);
+    updateClipboardFocus(sessionId, false);
     final operation = window.pause(releaseInputs);
     if (mounted) setState(() {});
     await operation;
@@ -712,7 +713,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
 
   void focusVisibleDevice() {
     if (!_sourcesCurrent) {
-      _clipboardFocus.focus(sessionId, false);
+      updateClipboardFocus(sessionId, false);
       return;
     }
     // 保留页面可能在其他设备可见后才完成启动或恢复，只有当前路由和会话所有者可设置焦点。
@@ -724,15 +725,36 @@ class _ControlPageState extends ConsumerState<ControlPage>
         presentation.sessionEnded ||
         view?.isCurrent != true ||
         ModalRoute.of(context)?.isCurrent == false) {
-      _clipboardFocus.focus(sessionId, false);
+      updateClipboardFocus(sessionId, false);
       return;
     }
-    final deviceId = widget.device.id;
-    _clipboardFocus.focus(sessionId, keyboardFocus.hasFocus && canSendInput);
-    if (ref.read(currentDeviceProvider) == deviceId) {
-      return;
-    }
-    unawaited(ref.read(currentDeviceProvider.notifier).focus(deviceId));
+    updateClipboardFocus(
+      sessionId,
+      keyboardFocus.hasFocus && canSendInput,
+      selectDevice: true,
+    );
+  }
+
+  void updateClipboardFocus(
+    String sessionId,
+    bool focused, {
+    bool selectDevice = false,
+  }) {
+    final revision = ++_clipboardFocusRevision;
+    // 路由覆盖、换源及销毁可发生在构建中；视图先撤输入准入，焦点只发布最新意图。
+    scheduleMicrotask(() {
+      if (!mounted ||
+          focused && _retired ||
+          revision != _clipboardFocusRevision) {
+        return;
+      }
+      _clipboardFocus.focus(sessionId, focused);
+      if (selectDevice && _sourcesCurrent) {
+        unawaited(
+          ref.read(currentDeviceProvider.notifier).focus(widget.device.id),
+        );
+      }
+    });
   }
 
   Future<void> resumeView() async {
@@ -836,8 +858,9 @@ class _ControlPageState extends ConsumerState<ControlPage>
   @override
   void dispose() {
     _retired = true;
+    _clipboardFocusRevision++;
     notices.dispose();
-    _clipboardFocus.dispose();
+    scheduleMicrotask(_clipboardFocus.dispose);
     displaySizing.dispose();
     screenState.dispose();
     final release = window.dispose(releaseInputs);
@@ -925,7 +948,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
           focusNode: keyboardFocus,
           onKeyEvent: key,
           onFocusChange: (focused) {
-            _clipboardFocus.focus(
+            updateClipboardFocus(
               sessionId,
               focused && canSendInput && !presentation.covered,
             );
