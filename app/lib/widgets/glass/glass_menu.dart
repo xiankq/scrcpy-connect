@@ -8,6 +8,51 @@ import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_press_feedback.dart';
 
+/// 顶部独立按钮使用自己的采样层，避免按压放大被标题栏边界裁切。
+///
+/// 工具栏按钮仍然是官方 `GlassIconButton`，但不把交互光晕扩散到标题平面；
+/// 多按钮集合继续由 [GlassToolbarGroup] 共享一个玻璃平面。
+class GlassToolbarIconButton extends StatelessWidget {
+  const GlassToolbarIconButton({
+    super.key,
+    required this.icon,
+    required this.onPressed,
+    required this.semanticLabel,
+    this.variant = GlassVariant.regular,
+    this.size = DesignTokens.componentIconButtonSize,
+    this.iconSize = DesignTokens.componentIconSize,
+    this.interactionScale = 1,
+    this.anchorStretch = false,
+  });
+
+  final Widget icon;
+  final VoidCallback? onPressed;
+  final String semanticLabel;
+  final GlassVariant variant;
+  final double size;
+  final double iconSize;
+  final double interactionScale;
+  final bool anchorStretch;
+
+  @override
+  Widget build(BuildContext context) {
+    return liquid.GlassIconButton(
+      icon: icon,
+      onPressed: onPressed,
+      semanticLabel: semanticLabel,
+      size: size,
+      iconSize: iconSize,
+      settings: GlassMaterial.settings(context, variant: variant),
+      quality: GlassMaterial.quality(context),
+      useOwnLayer: true,
+      glowColor: Colors.transparent,
+      glowRadius: 0,
+      interactionScale: interactionScale,
+      anchorStretch: anchorStretch,
+    );
+  }
+}
+
 /// 已有的单个应用动作，不了解设备或路由。
 @immutable
 class GlassMenuAction {
