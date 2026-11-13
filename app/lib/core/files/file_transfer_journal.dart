@@ -1,4 +1,5 @@
 import 'package:scrcpy_connect/core/files/file_failure.dart';
+import 'package:scrcpy_connect/core/files/models/file_transfer_record.dart';
 
 import 'dart:convert';
 import 'dart:io';
@@ -15,7 +16,7 @@ class FileTransferJournal {
   int _records = 0, _bytes = 0;
   final _rows = <String, Map<String, Object?>>{};
   Future<void> _pending = Future.value();
-  Future<Map<String, Map<String, Object?>>> load() async {
+  Future<Map<String, FileTransferRecord>> load() async {
     final tasks = <String, Map<String, Object?>>{};
     if (await file.exists()) {
       final bytes = await file.readAsBytes();
@@ -49,7 +50,7 @@ class FileTransferJournal {
       _rows.addAll(
         tasks.map((id, task) => MapEntry(id, Map<String, Object?>.from(task))),
       );
-      return tasks;
+      return _decodeRecords(tasks);
     }
     // 只读旧 Rust 检查点和日志，不修改或删除它们。
     final checkpoint = File(p.join(root.path, 'transfers.json')),
@@ -125,14 +126,46 @@ class FileTransferJournal {
     }
     await root.create(recursive: true);
     // 在未发布文件内完成迁移；崩溃时保留旧存储。
+    final records = _decodeRecords(tasks);
     await _writeSnapshot(tasks, 'migration');
     _rows.addAll(
       tasks.map((id, task) => MapEntry(id, Map<String, Object?>.from(task))),
     );
-    return tasks;
+    return records;
   }
 
-  Future<void> upsert(Map<String, Object?> task) => _enqueue({'task': task});
+  Map<String, FileTransferRecord> _decodeRecords(
+    Map<String, Map<String, Object?>> tasks,
+  ) {
+    try {
+      return tasks.map((id, row) {
+        final data = Map<String, dynamic>.from(row);
+        if (data['batchId'] == null || data['batchId'] == '') {
+          data['batchId'] = id;
+        }
+        final stamp = data['sourceStamp'];
+        if (data['direction'] == 'push' &&
+            stamp is Map &&
+            stamp['mode'] == 0 &&
+            const {null, 'file', 'directory'}.contains(data['kind'])) {
+          data['sourceStamp'] = {
+            ...Map<String, dynamic>.from(stamp),
+            'mode': data['kind'] == 'directory' ? 0x4000 : 0x8000,
+          };
+        }
+        final record = FileTransferRecord.fromJson(data);
+        if (record.id != id || record.generation < 0) {
+          throw const FormatException('任务身份或尝试代际无效。');
+        }
+        return MapEntry(id, record);
+      });
+    } catch (error) {
+      throw FileFailure('transfer_storage_corrupt', '任务记录无法恢复：$error');
+    }
+  }
+
+  Future<void> upsert(FileTransferRecord task) =>
+      _enqueue({'task': task.toJson()});
   Future<void> removeMany(List<String> ids) => _enqueue({'removed': ids});
   Future<void> _enqueue(Map<String, Object?> change) {
     final write = _pending.then((_) => _append(change));

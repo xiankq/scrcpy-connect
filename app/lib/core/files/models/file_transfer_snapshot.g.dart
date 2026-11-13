@@ -137,6 +137,8 @@ const _$FileTransferDestinationEnumMap = {
 const _$FileTransferKindEnumMap = {
   FileTransferKind.file: 'file',
   FileTransferKind.directory: 'directory',
+  FileTransferKind.symlink: 'symlink',
+  FileTransferKind.unsupported: 'unsupported',
 };
 
 const _$FileTransferStatusEnumMap = {

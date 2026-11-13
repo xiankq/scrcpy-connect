@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/core/files/models/file_transfer_record.dart';
+import 'package:scrcpy_connect/core/files/models/file_transfer_outcome.dart';
+
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -53,7 +56,7 @@ class FileTransferService implements FileTransfers {
   }
 
   final FileTransferJournal _journal;
-  final Map<String, Map<String, Object?>> _tasks;
+  final Map<String, _TransferTask> _tasks;
   final _events = StreamController<FileTransferEvent>.broadcast(sync: true);
   // worker 结算不等于执行资源退出；精确句柄只在 close 确认后撤销。
   final _transferCleanups = <String, _TransferCleanup>{};
@@ -73,7 +76,9 @@ class FileTransferService implements FileTransfers {
     FilePublicationLeases? publication,
   }) async {
     final journal = FileTransferJournal(dataDirectory);
-    final tasks = await journal.load();
+    final tasks = (await journal.load()).map(
+      (id, record) => MapEntry(id, _TransferTask(record)),
+    );
     final owner = FileTransferService._(
       executor,
       journal,
@@ -93,50 +98,40 @@ class FileTransferService implements FileTransfers {
       }
     }
     for (final task in tasks.values) {
-      if (task['batchId'] == null || task['batchId'] == '') {
-        task['batchId'] = task['id'];
-      }
-      task['generation'] ??= 0;
-      task['kind'] ??= 'file';
-      task['destinationScope'] ??= 'localPath';
-      task['itemIndex'] ??= 0;
-      task['itemCount'] ??= 1;
-      if (task['direction'] == 'push' && task['sourceStamp'] is Map) {
-        final stamp = Map<String, Object?>.from(task['sourceStamp']! as Map);
-        if (stamp['mode'] == 0) {
-          stamp['mode'] = task['kind'] == 'directory' ? 0x4000 : 0x8000;
-        }
-        task['sourceStamp'] = stamp;
-      }
-      final status = task['status'];
+      final status = task.record.status;
       if (const [
-            'queued',
-            'running',
-            'finalizing',
-            'cancelling',
-            'conflict',
+            FileTransferStatus.queued,
+            FileTransferStatus.running,
+            FileTransferStatus.finalizing,
+            FileTransferStatus.cancelling,
+            FileTransferStatus.conflict,
           ].contains(status) ||
-          task['kind'] == 'directory' &&
-              status == 'completed' &&
-              task['treeVerified'] != true) {
-        task['status'] = 'interrupted';
-        if (status == 'finalizing' || status == 'cancelling') {
-          task['errorCode'] = 'result_unknown';
-          task['partialDestinationPossible'] = true;
-          task['error'] = '上次提交或取消未取得回执，请核对目标；不会自动重试。';
-        }
+          task.record.kind == FileTransferKind.directory &&
+              status == FileTransferStatus.completed &&
+              task.record.treeVerified != true) {
+        final uncertain =
+            status == FileTransferStatus.finalizing ||
+            status == FileTransferStatus.cancelling;
+        task.record = task.record.copyWith(
+          status: FileTransferStatus.interrupted,
+          errorCode: uncertain ? 'result_unknown' : task.record.errorCode,
+          partialDestinationPossible:
+              uncertain || task.record.partialDestinationPossible,
+          error: uncertain ? '上次提交或取消未取得回执，请核对目标；不会自动重试。' : task.record.error,
+        );
         await owner._save(task);
       }
-      if (task['cleanupPending'] == true && executor is ScopedFileExecutor) {
+      if (task.record.cleanupPending == true &&
+          executor is ScopedFileExecutor) {
         final scope = executor as ScopedFileExecutor;
         if (scope.fileScopeKey.isNotEmpty &&
             scope.fileScopeId.isNotEmpty &&
-            task['cleanupScopeKey'] == scope.fileScopeKey &&
-            task['cleanupScopeId'] is String &&
-            (task['cleanupScopeId']! as String).isNotEmpty &&
-            task['cleanupScopeId'] != scope.fileScopeId) {
+            task.record.cleanupScopeKey == scope.fileScopeKey &&
+            task.record.cleanupScopeId is String &&
+            task.record.cleanupScopeId!.isNotEmpty &&
+            task.record.cleanupScopeId != scope.fileScopeId) {
           // 同一技术域的新句柄已排空前代；这不证明提交结果，仍保持 result_unknown。
-          task['cleanupPending'] = false;
+          task.record = task.record.copyWith(cleanupPending: false);
           await owner._save(task);
         }
       }
@@ -145,27 +140,30 @@ class FileTransferService implements FileTransfers {
       final protectedBatches = tasks.values
           .where(
             (t) =>
-                t['direction'] == 'pull' &&
-                t['destinationScope'] == 'privateCache' &&
-                (t['partialDestinationPossible'] == true ||
-                    t['errorCode'] == 'result_unknown' ||
-                    t['kind'] == 'directory' && t['treeVerified'] != true),
+                t.record.direction == FileTransferDirection.pull &&
+                t.record.destinationScope ==
+                    FileTransferDestination.privateCache &&
+                (t.record.partialDestinationPossible == true ||
+                    t.record.errorCode == 'result_unknown' ||
+                    t.record.kind == FileTransferKind.directory &&
+                        t.record.treeVerified != true),
           )
-          .map((t) => t['batchId'] as String? ?? t['id']! as String)
+          .map((t) => t.record.batchId)
           .toSet();
       for (final batch in protectedBatches) {
         if (owner._batchStates[batch]?.lease != null) continue;
         final records = tasks.values
             .where(
               (t) =>
-                  (t['batchId'] ?? t['id']) == batch &&
-                  (t['parentId'] == null || !tasks.containsKey(t['parentId'])),
+                  (t.record.batchId) == batch &&
+                  (t.record.parentId == null ||
+                      !tasks.containsKey(t.record.parentId)),
             )
             .expand(
               (t) => [
-                FileCacheReservation(t['destination']! as String, 0),
-                if (t['temporaryPath'] is String)
-                  FileCacheReservation(t['temporaryPath']! as String, 0),
+                FileCacheReservation(t.record.destination, 0),
+                if (t.record.temporaryPath is String)
+                  FileCacheReservation(t.record.temporaryPath!, 0),
               ],
             )
             .toList();
@@ -204,19 +202,19 @@ class FileTransferService implements FileTransfers {
     state.device ??=
         device ??
         _tasks.values
-            .where((task) => (task['batchId'] ?? task['id']) == batch)
-            .map((task) => task['deviceId']! as String)
+            .where((task) => (task.record.batchId) == batch)
+            .map((task) => task.record.deviceId)
             .firstOrNull;
     return state;
   }
 
-  Future<void> _save(Map<String, Object?> task) {
-    final snapshot = Map<String, Object?>.from(task);
+  Future<void> _save(_TransferTask task) {
+    final snapshot = task.record;
     final result = _writes.then((_) => _journal.upsert(snapshot));
     _writes = result;
     return result.then((_) {
       if (!_events.isClosed) {
-        _events.add(FileTransferChanged(snapshot['id']! as String));
+        _events.add(FileTransferChanged(snapshot.id));
       }
     });
   }
@@ -278,12 +276,12 @@ class FileTransferService implements FileTransfers {
       preparation.cancellation.cancel();
     }
     final transfers = _cancelTasks(
-      _tasks.values.where((t) => t['deviceId'] == device).toList(),
+      _tasks.values.where((t) => t.record.deviceId == device).toList(),
     );
     final prepared = (() async {
       await Future.wait(preparing.map(_closePreparation));
       await _cancelTasks(
-        _tasks.values.where((t) => t['deviceId'] == device).toList(),
+        _tasks.values.where((t) => t.record.deviceId == device).toList(),
       );
     })();
     await Future.wait([
@@ -321,8 +319,10 @@ class FileTransferService implements FileTransfers {
     );
     await Future.wait(preparing.map(_closePreparation));
     // 准备阶段可能已提交首条日志；排空后再收束迟到登记的未启动任务。
-    for (final task in _tasks.values.where((t) => t['status'] == 'queued')) {
-      task['status'] = 'cancelled';
+    for (final task in _tasks.values.where(
+      (t) => t.record.status == FileTransferStatus.queued,
+    )) {
+      task.record = task.record.copyWith(status: FileTransferStatus.cancelled);
       await _save(task);
     }
     for (final state in _batchStates.values) {
@@ -344,16 +344,9 @@ class FileTransferService implements FileTransfers {
     }
   }
 
-  static bool _terminal(Object? status) => const [
-    'completed',
-    'skipped',
-    'failed',
-    'cancelled',
-    'interrupted',
-  ].contains(status);
-  Map<String, Object?> transfers() => {
-    'transfers': _tasks.values.map(_project).toList(),
-    'batches': _batches().map((batch) => batch.toJson()).toList(),
+  static bool _terminal(FileTransferStatus status) => switch (status) {
+    .completed || .skipped || .failed || .cancelled || .interrupted => true,
+    _ => false,
   };
   ({
     bool canRestart,
@@ -364,42 +357,47 @@ class FileTransferService implements FileTransfers {
     String? localPath,
     String? partialLocalPath,
   })
-  _projection(Map<String, Object?> task) {
+  _projection(_TransferTask task) {
     final uncertain =
-        task['errorCode'] == 'result_unknown' ||
-        task['errorCode'] == 'source_changed' ||
-        task['cleanupPending'] == true;
-    final lifecycle = _batchStates[task['batchId']];
+        task.record.errorCode == 'result_unknown' ||
+        task.record.errorCode == 'source_changed' ||
+        task.record.cleanupPending == true;
+    final lifecycle = _batchStates[task.record.batchId];
     final changing =
         lifecycle != null &&
         (lifecycle.edit != null ||
             lifecycle.releasing != null ||
             lifecycle.stopping > 0);
     final canRestart =
-        const ['failed', 'cancelled', 'interrupted'].contains(task['status']) &&
+        const [
+          FileTransferStatus.failed,
+          FileTransferStatus.cancelled,
+          FileTransferStatus.interrupted,
+        ].contains(task.record.status) &&
         !uncertain &&
         !changing;
     final canCancel =
-        !_terminal(task['status']) || task['cleanupPending'] == true;
+        !_terminal(task.record.status) || task.record.cleanupPending == true;
     final canExport =
-        task['direction'] == 'pull' &&
-        task['status'] == 'completed' &&
+        task.record.direction == FileTransferDirection.pull &&
+        task.record.status == FileTransferStatus.completed &&
         !uncertain &&
-        (task['kind'] == 'file' ||
-            task['treeVerified'] == true && task['treeComplete'] == true);
+        (task.record.kind == FileTransferKind.file ||
+            task.record.treeVerified == true &&
+                task.record.treeComplete == true);
     final canExportPartial =
-        task['direction'] == 'pull' &&
+        task.record.direction == FileTransferDirection.pull &&
         !uncertain &&
-        task['kind'] == 'directory' &&
-        task['treeVerified'] == true &&
-        task['treeComplete'] != true &&
-        task['saveMode'] == 'directoryMerge';
+        task.record.kind == FileTransferKind.directory &&
+        task.record.treeVerified == true &&
+        task.record.treeComplete != true &&
+        task.record.saveMode == 'directoryMerge';
     final evicted =
-        task['direction'] == 'pull' &&
-        task['destinationScope'] == 'privateCache' &&
-        _terminal(task['status']) &&
+        task.record.direction == FileTransferDirection.pull &&
+        task.record.destinationScope == FileTransferDestination.privateCache &&
+        _terminal(task.record.status) &&
         FileSystemEntity.typeSync(
-              task['destination']! as String,
+              task.record.destination,
               followLinks: false,
             ) ==
             FileSystemEntityType.notFound;
@@ -409,61 +407,41 @@ class FileTransferService implements FileTransfers {
       canExport: canExport && !evicted,
       canExportPartial: canExportPartial && !evicted,
       cacheEvicted: evicted,
-      localPath: canExport && !evicted ? task['destination'] as String? : null,
+      localPath: canExport && !evicted ? task.record.destination : null,
       partialLocalPath: canExportPartial && !evicted
-          ? task['destination'] as String?
+          ? task.record.destination
           : null,
     );
   }
 
-  Map<String, Object?> _project(Map<String, Object?> task) {
-    final projection = _projection(task);
-    return {
-      ...task,
-      'canResume': false,
-      'canRestart': projection.canRestart,
-      'restartFromBeginning': true,
-      'restartRequiresSourceCheck': true,
-      'canCancel': projection.canCancel,
-      'canExport': projection.canExport,
-      'canExportPartial': projection.canExportPartial,
-      'cacheEvicted': projection.cacheEvicted,
-      'localPath': ?projection.localPath,
-      'partialLocalPath': ?projection.partialLocalPath,
-    };
-  }
-
-  FileTransferSnapshot _snapshot(Map<String, Object?> task) {
+  FileTransferSnapshot _snapshot(_TransferTask task) {
+    final record = task.record;
     final projection = _projection(task);
     return FileTransferSnapshot(
-      id: task['id']! as String,
-      deviceId: task['deviceId'] as String? ?? '',
-      batchId: task['batchId'] as String?,
-      parentId: task['parentId'] as String?,
-      name: task['name'] as String? ?? '文件传输',
-      source: task['source'] as String? ?? '',
-      destination: task['destination'] as String? ?? '',
-      direction: FileTransferDirection.values.byName(
-        task['direction']! as String,
-      ),
-      destinationScope: FileTransferDestination.values.byName(
-        task['destinationScope'] as String? ?? 'localPath',
-      ),
-      kind: FileTransferKind.values.byName(task['kind'] as String? ?? 'file'),
-      status: _status(task['status']),
-      policy: FileTransferConflict.parse(task['policy'] as String? ?? 'ask'),
-      generation: task['generation'] as int? ?? 0,
-      itemIndex: task['itemIndex'] as int? ?? 0,
-      itemCount: task['itemCount'] as int? ?? 1,
-      transferred: task['transferred'] as int? ?? 0,
-      total: task['total'] as int?,
-      error: task['error'] as String?,
-      errorCode: task['errorCode'] as String?,
-      saveMode: task['saveMode'] as String?,
-      cleanupPending: task['cleanupPending'] == true,
-      partialDestinationPossible: task['partialDestinationPossible'] == true,
-      treeVerified: task['treeVerified'] == true,
-      treeComplete: task['treeComplete'] == true,
+      id: record.id,
+      deviceId: record.deviceId,
+      batchId: record.batchId,
+      parentId: record.parentId,
+      name: record.name,
+      source: record.source,
+      destination: record.destination,
+      direction: record.direction,
+      destinationScope: record.destinationScope,
+      kind: record.kind,
+      status: record.status,
+      policy: record.policy,
+      generation: record.generation,
+      itemIndex: record.itemIndex,
+      itemCount: record.itemCount,
+      transferred: record.transferred,
+      total: record.total,
+      error: record.error,
+      errorCode: record.errorCode,
+      saveMode: record.saveMode,
+      cleanupPending: record.cleanupPending,
+      partialDestinationPossible: record.partialDestinationPossible,
+      treeVerified: record.treeVerified,
+      treeComplete: record.treeComplete,
       canRestart: projection.canRestart,
       canCancel: projection.canCancel,
       canExport: projection.canExport,
@@ -473,12 +451,6 @@ class FileTransferService implements FileTransfers {
       partialLocalPath: projection.partialLocalPath,
     );
   }
-
-  FileTransferStatus _status(Object? value) =>
-      FileTransferStatus.values
-          .where((status) => status.name == value)
-          .firstOrNull ??
-      .unknown;
 
   @override
   Future<FileTransferCollection> readTransfers() async =>
@@ -494,134 +466,108 @@ class FileTransferService implements FileTransfers {
     return _snapshot(task).copyWith(
       items:
           _tasks.values
-              .where((item) => item['batchId'] == task['batchId'])
+              .where((item) => item.record.batchId == task.record.batchId)
               .map(_snapshot)
               .toList()
             ..sort((a, b) => a.itemIndex.compareTo(b.itemIndex)),
       batch: _batches()
-          .where((batch) => batch.batchId == task['batchId'])
+          .where((batch) => batch.batchId == task.record.batchId)
           .firstOrNull,
     );
   }
 
   List<FileTransferBatch> _batches() {
-    final groups = <String, List<Map<String, Object?>>>{};
+    final groups = <String, List<_TransferTask>>{};
     for (final task in _tasks.values) {
-      groups
-          .putIfAbsent(
-            task['batchId'] as String? ?? task['id']! as String,
-            () => [],
-          )
-          .add(task);
+      groups.putIfAbsent(task.record.batchId, () => []).add(task);
     }
     return groups.entries.map((g) {
       final tasks = g.value;
-      int count(String status) =>
-          tasks.where((t) => t['status'] == status).length;
+      int count(FileTransferStatus status) =>
+          tasks.where((t) => t.record.status == status).length;
       final active = tasks.any(
         (t) =>
-            !_terminal(t['status']) ||
-            t['kind'] == 'directory' &&
-                t['status'] == 'completed' &&
-                t['treeVerified'] != true,
+            !_terminal(t.record.status) ||
+            t.record.kind == FileTransferKind.directory &&
+                t.record.status == FileTransferStatus.completed &&
+                t.record.treeVerified != true,
       );
-      final status = count('conflict') > 0
-          ? 'conflict'
+      final status = count(FileTransferStatus.conflict) > 0
+          ? FileTransferStatus.conflict
           : active
-          ? 'running'
-          : count('failed') > 0
-          ? 'partialFailure'
-          : count('interrupted') > 0
-          ? 'interrupted'
-          : count('cancelled') > 0
-          ? 'cancelled'
-          : count('skipped') > 0
-          ? 'completedWithSkips'
-          : 'completed';
+          ? FileTransferStatus.running
+          : count(FileTransferStatus.failed) > 0
+          ? FileTransferStatus.partialFailure
+          : count(FileTransferStatus.interrupted) > 0
+          ? FileTransferStatus.interrupted
+          : count(FileTransferStatus.cancelled) > 0
+          ? FileTransferStatus.cancelled
+          : count(FileTransferStatus.skipped) > 0
+          ? FileTransferStatus.completedWithSkips
+          : FileTransferStatus.completed;
       return FileTransferBatch(
         batchId: g.key,
-        deviceId: tasks.first['deviceId'] as String? ?? '',
-        direction: FileTransferDirection.values.byName(
-          tasks.first['direction']! as String,
-        ),
-        destinationScope: FileTransferDestination.values.byName(
-          tasks.first['destinationScope'] as String? ?? 'localPath',
-        ),
-        status: _status(status),
+        deviceId: tasks.first.record.deviceId,
+        direction: tasks.first.record.direction,
+        destinationScope: tasks.first.record.destinationScope,
+        status: status,
         itemCount: tasks.length,
-        fileCount: tasks.where((t) => t['kind'] == 'file').length,
-        directoryCount: tasks.where((t) => t['kind'] == 'directory').length,
-        completed: count('completed'),
-        failed: count('failed'),
-        cancelled: count('cancelled'),
-        skipped: count('skipped'),
-        interrupted: count('interrupted'),
-        transferred: tasks.fold<int>(
-          0,
-          (n, t) => n + (t['transferred'] as int? ?? 0),
-        ),
-        total: tasks.fold<int>(0, (n, t) => n + (t['total'] as int? ?? 0)),
-        canCancel: active || tasks.any((t) => t['cleanupPending'] == true),
-        selectedRootCount: tasks.where((t) => t['parentId'] == null).length,
+        fileCount: tasks
+            .where((t) => t.record.kind == FileTransferKind.file)
+            .length,
+        directoryCount: tasks
+            .where((t) => t.record.kind == FileTransferKind.directory)
+            .length,
+        completed: count(FileTransferStatus.completed),
+        failed: count(FileTransferStatus.failed),
+        cancelled: count(FileTransferStatus.cancelled),
+        skipped: count(FileTransferStatus.skipped),
+        interrupted: count(FileTransferStatus.interrupted),
+        transferred: tasks.fold<int>(0, (n, t) => n + (t.record.transferred)),
+        total: tasks.fold<int>(0, (n, t) => n + (t.record.total ?? 0)),
+        canCancel: active || tasks.any((t) => t.record.cleanupPending == true),
+        selectedRootCount: tasks.where((t) => t.record.parentId == null).length,
       );
     }).toList();
   }
 
-  Map<String, Object?> transfer(String id) {
-    final task = _tasks[id];
-    if (task == null) throw const FileFailure('not_found', '传输任务不存在。');
-    return {
-      ..._project(task),
-      'items':
-          _tasks.values
-              .where((t) => t['batchId'] == task['batchId'])
-              .map(_project)
-              .toList()
-            ..sort(
-              (a, b) => (a['itemIndex'] as int? ?? 0).compareTo(
-                b['itemIndex'] as int? ?? 0,
-              ),
-            ),
-      'batch': _batches()
-          .where((b) => b.batchId == task['batchId'])
-          .firstOrNull
-          ?.toJson(),
-    };
-  }
-
-  void _retainExecution(Map<String, Object?> task, Object error) {
+  void _retainExecution(_TransferTask task, Object error) {
     if (error is FileExecutionCleanupFailure) {
       final cleanup = _transferCleanups.putIfAbsent(
-        task['id']! as String,
+        task.record.id,
         _TransferCleanup.new,
       );
       cleanup.resources.add(error.execution);
     }
   }
 
-  void _markCleanupPending(Map<String, Object?> task, Object error) {
-    task['cleanupPending'] = true;
-    task['status'] = 'failed';
-    task['errorCode'] = 'result_unknown';
-    task['partialDestinationPossible'] = true;
-    task['error'] = '$error';
+  void _markCleanupPending(_TransferTask task, Object error) {
+    task.record = task.record.copyWith(
+      cleanupPending: true,
+      status: FileTransferStatus.failed,
+      errorCode: 'result_unknown',
+      partialDestinationPossible: true,
+      error: '$error',
+    );
     if (executor case final ScopedFileExecutor scope) {
-      task['cleanupScopeKey'] = scope.fileScopeKey;
-      task['cleanupScopeId'] = scope.fileScopeId;
+      task.record = task.record.copyWith(
+        cleanupScopeKey: scope.fileScopeKey,
+        cleanupScopeId: scope.fileScopeId,
+      );
     }
   }
 
   Future<void> _retryTransferCleanups(
-    Iterable<Map<String, Object?>> tasks, {
+    Iterable<_TransferTask> tasks, {
     bool requireRecoverable = true,
   }) async {
     Object? failure;
     StackTrace? failureStack;
     final selected = tasks.toList();
     for (final task in selected) {
-      final cleanup = _transferCleanups[task['id']];
+      final cleanup = _transferCleanups[task.record.id];
       if (cleanup == null) {
-        if (requireRecoverable && task['cleanupPending'] == true) {
+        if (requireRecoverable && task.record.cleanupPending == true) {
           failure ??= const FileFailure(
             'result_unknown',
             '上次执行的清理回执未知；当前所有者没有原句柄，不能确认取消成功。',
@@ -640,14 +586,14 @@ class FileTransferService implements FileTransfers {
         failureStack ??= stack;
       }
     }
-    for (final batch in selected.map((t) => t['batchId']! as String).toSet()) {
+    for (final batch in selected.map((t) => t.record.batchId).toSet()) {
       await _releaseBatchLeaseIfSafe(batch);
     }
     if (failure != null) Error.throwWithStackTrace(failure, failureStack!);
   }
 
   Future<void> _retryTransferCleanup(
-    Map<String, Object?> task,
+    _TransferTask task,
     _TransferCleanup cleanup,
   ) async {
     Object? failure;
@@ -663,7 +609,7 @@ class FileTransferService implements FileTransfers {
     if ((failure, cleanup.partPath) case (null, final String path)) {
       try {
         await executor.mutate(
-          task['deviceId']! as String,
+          task.record.deviceId,
           'releasePart',
           path,
           local: true,
@@ -686,10 +632,19 @@ class FileTransferService implements FileTransfers {
       throw FileFailure('file_cleanup_unconfirmed', '原传输资源尚未确认释放：$failure');
     }
     // 只恢复当时已经明确的结果；提交回执未知不会因 close 成功变为取消成功。
-    task.addAll(cleanup.outcome!);
-    task['cleanupPending'] = false;
+    final outcome = cleanup.outcome!;
+    task.record = task.record.copyWith(
+      status: outcome.status,
+      errorCode: outcome.errorCode,
+      error: outcome.error,
+      partialDestinationPossible: outcome.partialDestinationPossible,
+      temporaryPath: outcome.clearTemporaryPath
+          ? null
+          : task.record.temporaryPath,
+      cleanupPending: false,
+    );
     await _save(task);
-    _transferCleanups.remove(task['id']);
+    _transferCleanups.remove(task.record.id);
   }
 
   Future<void> _releaseBatchLeaseIfSafe(String batch) async {
@@ -699,14 +654,14 @@ class FileTransferService implements FileTransfers {
       await pending;
       return;
     }
-    final tasks = _tasks.values.where((t) => t['batchId'] == batch);
+    final tasks = _tasks.values.where((t) => t.record.batchId == batch);
     if (tasks.every(
       (t) =>
-          _terminal(t['status']) &&
-          t['cleanupPending'] != true &&
-          !_transferCleanups.containsKey(t['id']) &&
-          t['partialDestinationPossible'] != true &&
-          t['errorCode'] != 'result_unknown',
+          _terminal(t.record.status) &&
+          t.record.cleanupPending != true &&
+          !_transferCleanups.containsKey(t.record.id) &&
+          t.record.partialDestinationPossible != true &&
+          t.record.errorCode != 'result_unknown',
     )) {
       final lease = previous?.lease;
       if (lease != null) {
@@ -831,11 +786,11 @@ class FileTransferService implements FileTransfers {
   }
 
   Future<void> _stopBatchEdits(
-    List<Map<String, Object?>> tasks,
-    Future<void> Function(List<Map<String, Object?>>) action, {
+    List<_TransferTask> tasks,
+    Future<void> Function(List<_TransferTask>) action, {
     Iterable<String> additionalBatches = const [],
   }) async {
-    final batches = tasks.map((task) => task['batchId']! as String).toSet()
+    final batches = tasks.map((task) => task.record.batchId).toSet()
       ..addAll(additionalBatches);
     final held = <String, _TransferBatch>{};
     for (final batch in batches) {
@@ -865,9 +820,9 @@ class FileTransferService implements FileTransfers {
         }
       }
       if (failure != null) Error.throwWithStackTrace(failure, failureStack!);
-      // 删除可能已在原编辑中确认，不能拿脱离任务表的旧 Map 再追加日志。
+      // 删除可能已在原编辑中确认，不能拿脱离任务表的旧任务对象再追加日志。
       await action(
-        tasks.where((task) => identical(_tasks[task['id']], task)).toList(),
+        tasks.where((task) => identical(_tasks[task.record.id], task)).toList(),
       );
     } finally {
       for (final entry in held.entries) {
@@ -877,40 +832,48 @@ class FileTransferService implements FileTransfers {
     }
   }
 
-  Future<void> _cancelTasks(List<Map<String, Object?>> tasks) =>
+  Future<void> _cancelTasks(List<_TransferTask> tasks) =>
       _stopBatchEdits(tasks, _cancelSettledTasks);
 
-  Future<void> _cancelSettledTasks(List<Map<String, Object?>> tasks) async {
-    final active = tasks.where((t) => !_terminal(t['status'])).toList();
+  Future<void> _cancelSettledTasks(List<_TransferTask> tasks) async {
+    final active = tasks.where((t) => !_terminal(t.record.status)).toList();
     for (final task in active) {
-      final running = _batchStates[task['batchId']]?.activeTask;
-      final token = running?.taskId == task['id']
+      final running = _batchStates[task.record.batchId]?.activeTask;
+      final token = running?.taskId == task.record.id
           ? running?.cancellation
           : null;
-      task['status'] = token == null ? 'cancelled' : 'cancelling';
+      task.record = task.record.copyWith(
+        status: token == null
+            ? FileTransferStatus.cancelled
+            : FileTransferStatus.cancelling,
+      );
       token?.cancel();
     }
     for (final task in active) {
       await _save(task);
     }
     // 任务终态不代表 worker 的来源核验收尾完成，停止仍须等待原批次。
-    final batches = tasks.map((t) => t['batchId']).toSet();
+    final batches = tasks.map((t) => t.record.batchId).toSet();
     await Future.wait(
       batches.map((b) => _batchStates[b]?.worker).whereType<Future<void>>(),
     );
     await _retryTransferCleanups(tasks);
-    for (final task in active.where((t) => t['status'] == 'cancelling')) {
-      task['status'] = 'cancelled';
-      if (task['saveMode'] == 'committing') {
-        task['errorCode'] = 'result_unknown';
-        task['partialDestinationPossible'] = true;
+    for (final task in active.where(
+      (t) => t.record.status == FileTransferStatus.cancelling,
+    )) {
+      task.record = task.record.copyWith(status: FileTransferStatus.cancelled);
+      if (task.record.saveMode == 'committing') {
+        task.record = task.record.copyWith(errorCode: 'result_unknown');
+        task.record = task.record.copyWith(partialDestinationPossible: true);
       }
       await _save(task);
     }
   }
 
   Future<void> _cancelBatch(String batch) async {
-    final tasks = _tasks.values.where((t) => t['batchId'] == batch).toList();
+    final tasks = _tasks.values
+        .where((t) => t.record.batchId == batch)
+        .toList();
     if (tasks.isEmpty) throw const FileFailure('not_found', '批任务不存在。');
     await _cancelTasks(tasks);
   }
@@ -918,18 +881,18 @@ class FileTransferService implements FileTransfers {
   /// 暂存呈现只读取现有任务，不改变其进度、授权或保护寿命。
   List<CacheProtection> get cacheSources => [
     for (final task in _tasks.values)
-      if (task['direction'] == 'pull' &&
-          task['destinationScope'] == 'privateCache')
+      if (task.record.direction == FileTransferDirection.pull &&
+          task.record.destinationScope == FileTransferDestination.privateCache)
         CacheProtection(
-          path: task['destination'] as String,
-          name: task['name'] as String?,
-          sourceLabel: task['deviceId'] as String?,
-          sourcePath: task['source'] as String?,
-          transferId: task['id'] as String?,
-          canExport: _project(task)['canExport'] == true,
+          path: task.record.destination,
+          name: task.record.name,
+          sourceLabel: task.record.deviceId,
+          sourcePath: task.record.source,
+          transferId: task.record.id,
+          canExport: _projection(task).canExport,
           reason:
-              task['errorCode'] == 'result_unknown' ||
-                  task['partialDestinationPossible'] == true
+              task.record.errorCode == 'result_unknown' ||
+                  task.record.partialDestinationPossible == true
               ? '原件取回结果待核对'
               : '预览、传输或准备仍在使用',
         ),
@@ -952,9 +915,9 @@ class FileTransferService implements FileTransfers {
   }) async {
     final device = plan.deviceId;
     final push = plan.direction == FileTransferDirection.push;
-    final selections = plan.items.map((item) => item.toJson()).toList();
-    final policy = plan.conflict.name;
-    final destinationScope = plan.destination.name;
+    final selections = plan.items;
+    final policy = plan.conflict;
+    final destinationScope = plan.destination;
     _checkTransferAdmission(device);
     if (selections.isEmpty || selections.length > 1000) {
       throw const FileFailure('invalid_argument', '传输选择或冲突策略无效。');
@@ -967,7 +930,7 @@ class FileTransferService implements FileTransfers {
         (shareId == null ||
             _batchStates.containsKey(publicationBatchId) ||
             _tasks.values.any(
-              (task) => task['batchId'] == publicationBatchId,
+              (task) => task.record.batchId == publicationBatchId,
             ))) {
       throw const FileFailure('invalid_argument', '发布必须使用尚未创建的独立批次。');
     }
@@ -977,7 +940,7 @@ class FileTransferService implements FileTransfers {
         Queue<
           ({String source, String destination, String? parent, int depth})
         >();
-    final selected = <Map<String, Object?>>[];
+    final selected = <_TransferTask>[];
     final destinations = <String>{};
     var pathBytes = 0;
     void enqueue(String source, String destination, String? parent, int depth) {
@@ -1001,8 +964,7 @@ class FileTransferService implements FileTransfers {
     }
 
     for (final item in selections) {
-      final source = item['source']! as String,
-          destination = item['destination']! as String;
+      final source = item.source, destination = item.destination;
       if (push) {
         if (!p.isAbsolute(source)) {
           throw const FileFailure('invalid_path', '源必须为本机绝对路径。');
@@ -1027,9 +989,7 @@ class FileTransferService implements FileTransfers {
           shareId == null &&
           publication is ManagedFilePublicationLeases) {
         final owner = await (publication! as ManagedFilePublicationLeases)
-            .ownerForSources(
-              selections.map((item) => item['source']! as String).toList(),
-            );
+            .ownerForSources(selections.map((item) => item.source).toList());
         token.check();
         _check();
         if (owner != null) {
@@ -1048,30 +1008,29 @@ class FileTransferService implements FileTransfers {
           cancellation: token,
         );
         final id = const Uuid().v4();
-        final task = <String, Object?>{
-          'id': id,
-          'shareId': ?shareId,
-          'deviceId': device,
-          'direction': push ? 'push' : 'pull',
-          'source': source,
-          'destination': destination,
-          'name': push ? p.basename(source) : p.posix.basename(source),
-          'status': stamp.isFile || stamp.isDirectory ? 'queued' : 'skipped',
-          'transferred': 0,
-          'total': stamp.isFile ? stamp.size : 0,
-          'policy': policy,
-          'createdAt': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-          'batchId': batch,
-          'itemIndex': selected.length,
-          'generation': 0,
-          'sourceStamp': stamp.toJson(),
-          'kind': stamp.kind,
-          'parentId': parent,
-          'treeVerified': false,
-          'treeComplete': false,
-          'destinationScope': destinationScope,
-          'partialDestinationPossible': false,
-        };
+        final task = _TransferTask(
+          FileTransferRecord(
+            id: id,
+            shareId: shareId,
+            deviceId: device,
+            direction: plan.direction,
+            source: source,
+            destination: destination,
+            name: push ? p.basename(source) : p.posix.basename(source),
+            status: stamp.isFile || stamp.isDirectory
+                ? FileTransferStatus.queued
+                : FileTransferStatus.skipped,
+            total: stamp.isFile ? stamp.size : 0,
+            policy: policy,
+            createdAt: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            batchId: batch,
+            itemIndex: selected.length,
+            sourceStamp: stamp,
+            kind: FileTransferKind.values.byName(stamp.kind),
+            parentId: parent,
+            destinationScope: destinationScope,
+          ),
+        );
         selected.add(task);
         if (stamp.isDirectory) {
           final remaining = 10000 - selected.length - pending.length;
@@ -1104,30 +1063,30 @@ class FileTransferService implements FileTransfers {
           }
         }
       }
-      if (!push && destinationScope == 'privateCache') {
+      if (!push && destinationScope == FileTransferDestination.privateCache) {
         final reservations = <FileCacheReservation>[];
         final totals = <String, int>{};
         for (final task in selected.reversed) {
-          final id = task['id']! as String;
-          final size = (totals[id] ?? 0) + (task['total'] as int? ?? 0);
+          final id = task.record.id;
+          final size = (totals[id] ?? 0) + (task.record.total ?? 0);
           totals[id] = size;
-          final parent = task['parentId'];
+          final parent = task.record.parentId;
           if (parent is String) totals[parent] = (totals[parent] ?? 0) + size;
         }
-        for (final root in selected.where((t) => t['parentId'] == null)) {
-          final size = totals[root['id']]!;
+        for (final root in selected.where((t) => t.record.parentId == null)) {
+          final size = totals[root.record.id]!;
           reservations.add(
             FileCacheReservation(
-              root['destination']! as String,
-              root['kind'] == 'file' ? 0 : size,
+              root.record.destination,
+              root.record.kind == FileTransferKind.file ? 0 : size,
             ),
           );
-          if (root['kind'] == 'file') {
+          if (root.record.kind == FileTransferKind.file) {
             reservations.add(
               FileCacheReservation(
                 p.join(
-                  p.dirname(root['destination']! as String),
-                  '.interop-${root['id']}-${root['generation']}.part',
+                  p.dirname(root.record.destination),
+                  '.interop-${root.record.id}-${root.record.generation}.part',
                 ),
                 size,
               ),
@@ -1147,8 +1106,8 @@ class FileTransferService implements FileTransfers {
       // 首个日志提交后可能结果未知，预算转交批次，不能再按未发布释放。
       preparation.lease = null;
       for (final task in selected) {
-        task['itemCount'] = selected.length;
-        _tasks[task['id']! as String] = task;
+        task.record = task.record.copyWith(itemCount: selected.length);
+        _tasks[task.record.id] = task;
         await _save(task);
       }
     } finally {
@@ -1166,7 +1125,7 @@ class FileTransferService implements FileTransfers {
     _schedule(batch);
     return FileTransferSubmission(
       batchId: batch,
-      transferId: selected.first['id'] as String,
+      transferId: selected.first.record.id,
       status: FileTransferAdmission.queued,
       itemCount: selected.length,
     );
@@ -1184,10 +1143,14 @@ class FileTransferService implements FileTransfers {
           state.worker = null;
           if (!_closed &&
               _tasks.values.any(
-                (t) => t['batchId'] == batch && t['status'] == 'queued',
+                (t) =>
+                    t.record.batchId == batch &&
+                    t.record.status == FileTransferStatus.queued,
               ) &&
               !_tasks.values.any(
-                (t) => t['batchId'] == batch && t['status'] == 'conflict',
+                (t) =>
+                    t.record.batchId == batch &&
+                    t.record.status == FileTransferStatus.conflict,
               )) {
             _schedule(batch);
           }
@@ -1212,61 +1175,67 @@ class FileTransferService implements FileTransfers {
     if (_closed) return;
     _activeBatches++;
     try {
-      final tasks = _tasks.values.where((t) => t['batchId'] == batch).toList()
-        ..sort(
-          (a, b) => (a['itemIndex']! as int).compareTo(b['itemIndex']! as int),
-        );
+      final tasks =
+          _tasks.values.where((t) => t.record.batchId == batch).toList()
+            ..sort((a, b) => a.record.itemIndex.compareTo(b.record.itemIndex));
       for (final task in tasks) {
-        if (_closed || task['status'] == 'conflict') break;
-        if (task['status'] != 'queued') continue;
+        if (_closed || task.record.status == FileTransferStatus.conflict) break;
+        if (task.record.status != FileTransferStatus.queued) continue;
         final token = FileCancellation();
-        state.activeTask = (taskId: task['id']! as String, cancellation: token);
+        state.activeTask = (taskId: task.record.id, cancellation: token);
         try {
           await _runTask(task, token);
         } on FileFailure catch (e) {
           _retainExecution(task, e);
-          task['status'] = e.code == 'conflict'
-              ? 'conflict'
-              : e.code == 'cancelled'
-              ? 'cancelled'
-              : 'failed';
-          task['errorCode'] =
-              task['status'] == 'failed' && task['saveMode'] == 'committing' ||
-                  task['status'] == 'cancelled' &&
-                      task['saveMode'] == 'committing'
+          final status = switch (e.code) {
+            'conflict' => FileTransferStatus.conflict,
+            'cancelled' => FileTransferStatus.cancelled,
+            _ => FileTransferStatus.failed,
+          };
+          final errorCode =
+              (status == FileTransferStatus.failed ||
+                      status == FileTransferStatus.cancelled) &&
+                  task.record.saveMode == 'committing'
               ? 'result_unknown'
               : e.code;
-          task['partialDestinationPossible'] =
-              task['errorCode'] == 'result_unknown';
-          task['error'] = e.message;
+          task.record = task.record.copyWith(
+            status: status,
+            errorCode: errorCode,
+            partialDestinationPossible: errorCode == 'result_unknown',
+            error: e.message,
+          );
           _retainFailedTaskOutcome(task, token);
           await _save(task);
         } catch (e) {
-          task['status'] = 'failed';
-          task['errorCode'] = task['saveMode'] == 'committing'
-              ? 'result_unknown'
-              : 'transfer_failed';
-          task['partialDestinationPossible'] =
-              task['errorCode'] == 'result_unknown';
-          task['error'] = '$e';
+          final unknown = task.record.saveMode == 'committing';
+          task.record = task.record.copyWith(
+            status: FileTransferStatus.failed,
+            errorCode: unknown ? 'result_unknown' : 'transfer_failed',
+            partialDestinationPossible: unknown,
+            error: '$e',
+          );
           _retainFailedTaskOutcome(task, token);
           await _save(task);
         } finally {
           state.activeTask = null;
         }
-        if (task['status'] == 'conflict') break;
+        if (task.record.status == FileTransferStatus.conflict) break;
       }
       final children = _children(tasks);
       for (final task in tasks.reversed.where(
-        (t) => t['kind'] == 'directory' && t['status'] == 'completed',
+        (t) =>
+            t.record.kind == FileTransferKind.directory &&
+            t.record.status == FileTransferStatus.completed,
       )) {
-        task['treeVerified'] = true;
-        task['treeComplete'] = (children[task['id']] ?? const []).every(
-          (child) =>
-              child['status'] == 'completed' &&
-              (child['kind'] != 'directory' ||
-                  child['treeVerified'] == true &&
-                      child['treeComplete'] == true),
+        task.record = task.record.copyWith(
+          treeVerified: true,
+          treeComplete: (children[task.record.id] ?? const []).every(
+            (child) =>
+                child.record.status == FileTransferStatus.completed &&
+                (child.record.kind != FileTransferKind.directory ||
+                    child.record.treeVerified == true &&
+                        child.record.treeComplete == true),
+          ),
         );
         await _save(task);
       }
@@ -1281,55 +1250,50 @@ class FileTransferService implements FileTransfers {
     }
   }
 
-  Map<String, Object?> _taskOutcome(Map<String, Object?> task) => {
-    'status': task['status'],
-    'errorCode': task['errorCode'],
-    'error': task['error'],
-    'partialDestinationPossible': task['partialDestinationPossible'],
-  };
-
   void _retainFailedTaskOutcome(
-    Map<String, Object?> task,
+    _TransferTask task,
     FileCancellation cancellation,
   ) {
-    final cleanup = _transferCleanups[task['id']];
+    final cleanup = _transferCleanups[task.record.id];
     if (cleanup == null) return;
     if (cleanup.outcome == null) {
       // 提交前取消且原资源真正排空后，可以确认取消；提交阶段继续保留未知结果。
-      if (cancellation.isCancelled && task['saveMode'] != 'committing') {
-        cleanup.outcome = {
-          'status': 'cancelled',
-          'errorCode': 'cancelled',
-          'error': '文件任务已取消。',
-          'partialDestinationPossible': false,
-        };
+      if (cancellation.isCancelled && task.record.saveMode != 'committing') {
+        cleanup.outcome = const FileTransferOutcome(
+          status: FileTransferStatus.cancelled,
+          errorCode: 'cancelled',
+          error: '文件任务已取消。',
+          partialDestinationPossible: false,
+        );
       } else {
-        cleanup.outcome = _taskOutcome(task);
+        cleanup.outcome = FileTransferOutcome.fromRecord(task.record);
         if (cleanup.executionFailure case final FileFailure original) {
           final unknown =
-              task['saveMode'] == 'committing' ||
+              task.record.saveMode == 'committing' ||
               original.code == 'result_unknown';
-          cleanup.outcome!.addAll({
-            'status': original.code == 'cancelled' ? 'cancelled' : 'failed',
-            'errorCode': unknown ? 'result_unknown' : original.code,
-            'error': original.message,
-            'partialDestinationPossible': unknown,
-          });
+          cleanup.outcome = FileTransferOutcome(
+            status: original.code == 'cancelled'
+                ? FileTransferStatus.cancelled
+                : FileTransferStatus.failed,
+            errorCode: unknown ? 'result_unknown' : original.code,
+            error: original.message,
+            partialDestinationPossible: unknown,
+          );
         }
       }
     }
-    _markCleanupPending(task, task['error'] ?? '文件执行资源尚未确认释放。');
+    _markCleanupPending(task, task.record.error ?? '文件执行资源尚未确认释放。');
   }
 
   Future<FileStamp?> _destination(
-    Map<String, Object?> task,
+    _TransferTask task,
     FileCancellation token,
   ) async {
     try {
       return await executor.stat(
-        task['deviceId']! as String,
-        task['destination']! as String,
-        local: task['direction'] == 'pull',
+        task.record.deviceId,
+        task.record.destination,
+        local: task.record.direction == FileTransferDirection.pull,
         cancellation: token,
       );
     } on FileFailure catch (e) {
@@ -1338,23 +1302,23 @@ class FileTransferService implements FileTransfers {
     }
   }
 
-  Future<void> _runTask(
-    Map<String, Object?> task,
-    FileCancellation token,
-  ) async {
-    final device = task['deviceId']! as String,
-        source = task['source']! as String;
-    final push = task['direction'] == 'push';
-    final parent = _tasks[task['parentId']];
-    if (parent != null && parent['status'] != 'completed') {
-      task['status'] = 'skipped';
-      task['errorCode'] = 'parent_incomplete';
+  Future<void> _runTask(_TransferTask task, FileCancellation token) async {
+    final device = task.record.deviceId, source = task.record.source;
+    final push = task.record.direction == FileTransferDirection.push;
+    final parent = _tasks[task.record.parentId];
+    if (parent != null &&
+        parent.record.status != FileTransferStatus.completed) {
+      task.record = task.record.copyWith(
+        status: FileTransferStatus.skipped,
+        errorCode: 'parent_incomplete',
+      );
       await _save(task);
       return;
     }
-    final expected = FileStamp.fromJson(
-      Map<String, Object?>.from(task['sourceStamp']! as Map),
-    );
+    final expected = task.record.sourceStamp;
+    if (expected == null) {
+      throw const FileFailure('source_changed', '原来源身份缺失，需重新选择。');
+    }
     if (await executor.stat(
           device,
           source,
@@ -1369,36 +1333,40 @@ class FileTransferService implements FileTransfers {
     for (var depth = 0; ancestor != null && depth < 64; depth++) {
       final state = await executor.stat(
         device,
-        ancestor['destination']! as String,
+        ancestor.record.destination,
         local: !push,
         cancellation: token,
       );
       if (!state.isDirectory) {
         throw const FileFailure('source_changed', '目标父目录已变化，不能沿链接或特殊文件写入。');
       }
-      ancestor = _tasks[ancestor['parentId']];
+      ancestor = _tasks[ancestor.record.parentId];
     }
     var existing = await _destination(task, token);
     if (existing != null && !(expected.isDirectory && existing.isDirectory)) {
-      switch (task['policy']) {
-        case 'skip':
-          task['status'] = 'skipped';
+      switch (task.record.policy) {
+        case FileTransferConflict.skip:
+          task.record = task.record.copyWith(
+            status: FileTransferStatus.skipped,
+          );
           await _save(task);
           return;
-        case 'ask':
+        case FileTransferConflict.ask:
           throw const FileFailure('conflict', '目标存在，请选择冲突处理方式。');
-        case 'replace':
+        case FileTransferConflict.replace:
           if (expected.isDirectory || !existing.isFile) {
             throw const FileFailure('conflict', '不能替换目录、链接或特殊文件。');
           }
-        case 'keepBoth':
-          final original = task['destination']! as String;
+        case FileTransferConflict.keepBoth:
+          final original = task.record.destination;
           var found = false;
           for (var i = 1; i <= 10000; i++) {
             final context = push ? p.posix : p.context;
-            task['destination'] = context.join(
-              context.dirname(original),
-              '${context.basenameWithoutExtension(original)} ($i)${context.extension(original)}',
+            task.record = task.record.copyWith(
+              destination: context.join(
+                context.dirname(original),
+                '${context.basenameWithoutExtension(original)} ($i)${context.extension(original)}',
+              ),
             );
             if (await _destination(task, token) == null) {
               found = true;
@@ -1408,14 +1376,13 @@ class FileTransferService implements FileTransfers {
           }
           if (!found) throw const FileFailure('conflict', '无法找到空闲目标名称。');
           if (expected.isDirectory) {
-            final replacement = task['destination']! as String;
+            final replacement = task.record.destination;
             final context = push ? p.posix : p.context;
             for (final child in _subtree([task]).skip(1)) {
-              child['destination'] = context.join(
-                replacement,
-                context.relative(
-                  child['destination']! as String,
-                  from: original,
+              child.record = child.record.copyWith(
+                destination: context.join(
+                  replacement,
+                  context.relative(child.record.destination, from: original),
                 ),
               );
               await _save(child);
@@ -1424,10 +1391,12 @@ class FileTransferService implements FileTransfers {
       }
     }
     token.check();
-    final destination = task['destination']! as String;
+    final destination = task.record.destination;
     if (expected.isDirectory) {
-      task['status'] = 'finalizing';
-      task['saveMode'] = 'committing';
+      task.record = task.record.copyWith(
+        status: FileTransferStatus.finalizing,
+        saveMode: 'committing',
+      );
       await _save(task);
       if (existing == null) {
         await executor.mutate(
@@ -1438,19 +1407,23 @@ class FileTransferService implements FileTransfers {
           cancellation: token,
         );
       }
-      task['saveMode'] = 'directoryMerge';
-      task['status'] = 'completed';
+      task.record = task.record.copyWith(
+        saveMode: 'directoryMerge',
+        status: FileTransferStatus.completed,
+      );
       await _save(task);
       return;
     }
     final temporary = push
-        ? '$destination.interop-${task['id']}-${task['generation']}.part'
+        ? '$destination.interop-${task.record.id}-${task.record.generation}.part'
         : p.join(
             p.dirname(destination),
-            '.interop-${task['id']}-${task['generation']}.part',
+            '.interop-${task.record.id}-${task.record.generation}.part',
           );
-    task['temporaryPath'] = temporary;
-    task['status'] = 'running';
+    task.record = task.record.copyWith(
+      temporaryPath: temporary,
+      status: FileTransferStatus.running,
+    );
     await _save(task);
     Object? executionFailure;
     var committed = false;
@@ -1463,35 +1436,38 @@ class FileTransferService implements FileTransfers {
         expected: expected,
         cancellation: token,
         onProgress: (bytes) {
-          task['transferred'] = bytes;
+          task.record = task.record.copyWith(transferred: bytes);
           if (!_events.isClosed) {
-            _events.add(FileTransferProgress(task['id']! as String, bytes));
+            _events.add(FileTransferProgress(task.record.id, bytes));
           }
         },
       );
-      task['transferred'] = count;
-      task['status'] = 'finalizing';
-      task['saveMode'] = 'committing';
+      task.record = task.record.copyWith(
+        transferred: count,
+        status: FileTransferStatus.finalizing,
+        saveMode: 'committing',
+      );
       await _save(task);
       token.check();
-      task['saveMode'] = await executor.mutate(
+      final saveMode = await executor.mutate(
         device,
         'commit',
         temporary,
         destination: destination,
         local: !push,
-        replace: task['policy'] == 'replace',
+        replace: task.record.policy == FileTransferConflict.replace,
         cancellation: token,
       );
+      task.record = task.record.copyWith(saveMode: saveMode);
       committed = true;
     } catch (error) {
       executionFailure = error;
       _retainExecution(task, error);
-      _transferCleanups[task['id']]?.executionFailure = error;
+      _transferCleanups[task.record.id]?.executionFailure = error;
       rethrow;
     } finally {
       if (!push) {
-        final retained = _transferCleanups[task['id']];
+        final retained = _transferCleanups[task.record.id];
         if (retained != null) {
           retained.partPath = temporary;
         } else {
@@ -1506,19 +1482,19 @@ class FileTransferService implements FileTransfers {
           } catch (error) {
             _retainExecution(task, error);
             final cleanup = _transferCleanups.putIfAbsent(
-              task['id']! as String,
+              task.record.id,
               _TransferCleanup.new,
             );
             cleanup.partPath = temporary;
             cleanup.executionFailure = executionFailure;
             if (committed) {
-              cleanup.outcome = {
-                'status': 'completed',
-                'temporaryPath': null,
-                'errorCode': null,
-                'error': null,
-                'partialDestinationPossible': false,
-              };
+              cleanup.outcome = const FileTransferOutcome(
+                status: FileTransferStatus.completed,
+                errorCode: null,
+                error: null,
+                partialDestinationPossible: false,
+                clearTemporaryPath: true,
+              );
             }
             throw FileFailure(
               'file_cleanup_unconfirmed',
@@ -1528,32 +1504,34 @@ class FileTransferService implements FileTransfers {
         }
       }
     }
-    task['status'] = 'completed';
-    task['temporaryPath'] = null;
+    task.record = task.record.copyWith(
+      status: FileTransferStatus.completed,
+      temporaryPath: null,
+    );
     await _save(task);
   }
 
-  static Map<String, List<Map<String, Object?>>> _children(
-    Iterable<Map<String, Object?>> tasks,
+  static Map<String, List<_TransferTask>> _children(
+    Iterable<_TransferTask> tasks,
   ) {
-    final children = <String, List<Map<String, Object?>>>{};
+    final children = <String, List<_TransferTask>>{};
     for (final task in tasks) {
-      final parent = task['parentId'];
+      final parent = task.record.parentId;
       if (parent is String) children.putIfAbsent(parent, () => []).add(task);
     }
     return children;
   }
 
-  List<Map<String, Object?>> _subtree(Iterable<Map<String, Object?>> roots) {
+  List<_TransferTask> _subtree(Iterable<_TransferTask> roots) {
     final children = _children(_tasks.values);
-    final pending = Queue<Map<String, Object?>>()..addAll(roots);
-    final selected = <Map<String, Object?>>[];
+    final pending = Queue<_TransferTask>()..addAll(roots);
+    final selected = <_TransferTask>[];
     final seen = <String>{};
     while (pending.isNotEmpty) {
       final task = pending.removeFirst();
-      if (!seen.add(task['id']! as String)) continue;
+      if (!seen.add(task.record.id)) continue;
       selected.add(task);
-      pending.addAll(children[task['id']] ?? const []);
+      pending.addAll(children[task.record.id] ?? const []);
     }
     return selected;
   }
@@ -1598,36 +1576,37 @@ class FileTransferService implements FileTransfers {
     _check();
     final task = _tasks[id];
     if (task == null) throw const FileFailure('not_found', '传输任务不存在。');
-    _checkTransferAdmission(task['deviceId']! as String);
-    if (task['cleanupPending'] == true) {
+    _checkTransferAdmission(task.record.deviceId);
+    if (task.record.cleanupPending == true) {
       throw const FileFailure('restart_unavailable', '原传输资源尚未确认释放，不能重放任务。');
     }
-    if (task['status'] != 'conflict' &&
+    if (task.record.status != FileTransferStatus.conflict &&
         (!restart || !_projection(task).canRestart)) {
       throw const FileFailure('restart_unavailable', '此任务不能安全重试，请核对结果或重新选择。');
     }
-    final selectedPolicy =
-        policy ??
-        FileTransferConflict.parse(task['policy'] as String? ?? 'ask');
-    final batch = task['batchId']! as String;
+    final selectedPolicy = policy ?? task.record.policy;
+    final batch = task.record.batchId;
     final edit = _beginBatchEdit(batch, _BatchEditKind.restart);
     try {
-      if (task['direction'] == 'pull' &&
-          task['destinationScope'] == 'privateCache' &&
+      if (task.record.direction == FileTransferDirection.pull &&
+          task.record.destinationScope ==
+              FileTransferDestination.privateCache &&
           _batchStates[batch]?.lease == null) {
-        final next = (task['generation'] as int? ?? 0) + 1;
+        final next = (task.record.generation) + 1;
         final lease = await cache!.reserve([
           FileCacheReservation(
-            task['destination']! as String,
-            task['kind'] == 'directory' ? task['total'] as int? ?? 0 : 0,
+            task.record.destination,
+            task.record.kind == FileTransferKind.directory
+                ? task.record.total ?? 0
+                : 0,
           ),
-          if (task['kind'] == 'file')
+          if (task.record.kind == FileTransferKind.file)
             FileCacheReservation(
               p.join(
-                p.dirname(task['destination']! as String),
-                '.interop-${task['id']}-$next.part',
+                p.dirname(task.record.destination),
+                '.interop-${task.record.id}-$next.part',
               ),
-              task['total'] as int? ?? 0,
+              task.record.total ?? 0,
             ),
         ]);
         edit.lease = lease;
@@ -1635,12 +1614,14 @@ class FileTransferService implements FileTransfers {
       }
       edit.cancellation.check();
       _check();
-      task['policy'] = selectedPolicy.name;
-      task['generation'] = (task['generation'] as int? ?? 0) + 1;
-      task['status'] = 'queued';
-      task['error'] = null;
-      task['errorCode'] = null;
-      task['transferred'] = 0;
+      task.record = task.record.copyWith(
+        policy: selectedPolicy,
+        generation: task.record.generation + 1,
+        status: FileTransferStatus.queued,
+        error: null,
+        errorCode: null,
+        transferred: 0,
+      );
       // 排队状态开始提交后，预算归持久批次保护，不再属于可撤回的准备阶段。
       edit.lease = null;
       await _save(task);
@@ -1648,15 +1629,17 @@ class FileTransferService implements FileTransfers {
       _check();
       if (applyToAll) {
         for (final candidate in _tasks.values.where(
-          (t) => t['batchId'] == task['batchId'] && t['status'] == 'queued',
+          (t) =>
+              t.record.batchId == task.record.batchId &&
+              t.record.status == FileTransferStatus.queued,
         )) {
-          candidate['policy'] = selectedPolicy.name;
+          candidate.record = candidate.record.copyWith(policy: selectedPolicy);
           await _save(candidate);
         }
       }
       edit.cancellation.check();
       _check();
-      _schedule(task['batchId']! as String);
+      _schedule(task.record.batchId);
       return _snapshot(task);
     } finally {
       await _endBatchEdit(batch, edit);
@@ -1673,20 +1656,20 @@ class FileTransferService implements FileTransfers {
     final root = _tasks[id];
     final selected = _subtree(
       batch
-          ? _tasks.values.where((t) => t['batchId'] == id)
+          ? _tasks.values.where((t) => t.record.batchId == id)
           : root == null
-          ? const <Map<String, Object?>>[]
+          ? const <_TransferTask>[]
           : [root],
     );
-    final ids = selected.map((t) => t['id']! as String).toSet();
-    final batches = selected.map((t) => t['batchId']! as String).toSet();
+    final ids = selected.map((t) => t.record.id).toSet();
+    final batches = selected.map((t) => t.record.batchId).toSet();
     final edits = _beginBatchEdits(batches, _BatchEditKind.remove);
     try {
       if (_tasks.values.any(
         (t) =>
-            batches.contains(t['batchId']) &&
-            (t['cleanupPending'] == true ||
-                _transferCleanups.containsKey(t['id'])),
+            batches.contains(t.record.batchId) &&
+            (t.record.cleanupPending == true ||
+                _transferCleanups.containsKey(t.record.id)),
       )) {
         throw const FileFailure(
           'file_cleanup_unconfirmed',
@@ -1694,7 +1677,8 @@ class FileTransferService implements FileTransfers {
         );
       }
       if (_tasks.values.any(
-        (t) => batches.contains(t['batchId']) && !_terminal(t['status']),
+        (t) =>
+            batches.contains(t.record.batchId) && !_terminal(t.record.status),
       )) {
         throw const FileFailure('transfer_active', '请先停止整批任务。');
       }
@@ -1704,7 +1688,7 @@ class FileTransferService implements FileTransfers {
         _tasks.remove(taskId);
       }
       for (final batchId in batches) {
-        if (!_tasks.values.any((t) => t['batchId'] == batchId)) {
+        if (!_tasks.values.any((t) => t.record.batchId == batchId)) {
           final lease = _batchStates[batchId]?.lease;
           if (lease != null) {
             final edit = edits[batchId]!;
@@ -1786,7 +1770,7 @@ class FileTransferService implements FileTransfers {
         itemCount:
             previous.itemCount ??
             _tasks.values
-                .where((task) => task['batchId'] == previous.batchId)
+                .where((task) => task.record.batchId == previous.batchId)
                 .length,
         status: previous.status,
         reusedTransfer: true,
@@ -1813,7 +1797,7 @@ class FileTransferService implements FileTransfers {
       return receipt;
     } catch (error, stack) {
       final unpublished = !_tasks.values.any(
-        (task) => task['batchId'] == batch,
+        (task) => task.record.batchId == batch,
       );
       try {
         await leases.finish(
@@ -1834,18 +1818,18 @@ class FileTransferService implements FileTransfers {
     _check();
     final task = _tasks[transferId];
     if (task == null ||
-        task['direction'] != 'pull' ||
-        task['destinationScope'] != 'privateCache' ||
+        task.record.direction != FileTransferDirection.pull ||
+        task.record.destinationScope != FileTransferDestination.privateCache ||
         cache == null) {
       throw const FileFailure('invalid_argument', '仅可持有取回到私有缓存的传输。');
     }
-    if (_project(task)['cacheEvicted'] == true) {
+    if (_projection(task).cacheEvicted) {
       throw const FileFailure('cache_evicted', '缓存已清理。');
     }
     return cache!.reserve([
-      FileCacheReservation(task['destination']! as String, 0),
-      if (task['temporaryPath'] is String)
-        FileCacheReservation(task['temporaryPath']! as String, 0),
+      FileCacheReservation(task.record.destination, 0),
+      if (task.record.temporaryPath is String)
+        FileCacheReservation(task.record.temporaryPath!, 0),
     ]);
   }
 
@@ -1878,14 +1862,16 @@ class FileTransferService implements FileTransfers {
     final batches = _tasks.values
         .where(
           (task) =>
-              task['direction'] == 'push' &&
-              rootsFor(task['source']).isNotEmpty,
+              task.record.direction == FileTransferDirection.push &&
+              rootsFor(task.record.source).isNotEmpty,
         )
-        .map((task) => task['batchId'] as String? ?? task['id']! as String)
+        .map((task) => task.record.batchId)
         .toSet();
-    final groups = <String, List<Map<String, Object?>>>{};
-    for (final task in _tasks.values.where((t) => t['direction'] == 'push')) {
-      final batch = task['batchId'] as String? ?? task['id']! as String;
+    final groups = <String, List<_TransferTask>>{};
+    for (final task in _tasks.values.where(
+      (t) => t.record.direction == FileTransferDirection.push,
+    )) {
+      final batch = task.record.batchId;
       if (!batches.contains(batch)) continue;
       groups.putIfAbsent(batch, () => []).add(task);
     }
@@ -1898,10 +1884,10 @@ class FileTransferService implements FileTransfers {
             DurableFilePublication(
               batchId: group.key,
               completed: group.value.every(
-                (task) => task['status'] == 'completed',
+                (task) => task.record.status == FileTransferStatus.completed,
               ),
               sources: group.value
-                  .expand((task) => rootsFor(task['source']))
+                  .expand((task) => rootsFor(task.record.source))
                   .toSet(),
             ),
         ],
@@ -1914,7 +1900,7 @@ class FileTransferService implements FileTransfers {
 final class _TransferCleanup {
   final resources = Set<FileExecutionResource>.identity();
   String? partPath;
-  Map<String, Object?>? outcome;
+  FileTransferOutcome? outcome;
   Object? executionFailure;
   Future<void>? closing;
 }
@@ -1982,4 +1968,10 @@ final class _ShareSubmission {
   final cancellation = FileCancellation();
   final result = Completer<FileTransferSubmission>();
   final finished = Completer<void>();
+}
+
+/// worker 和取消持有稳定身份，状态更新替换不可变记录；旧任务不能重新写回任务表。
+final class _TransferTask {
+  _TransferTask(this.record);
+  FileTransferRecord record;
 }

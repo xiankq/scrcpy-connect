@@ -36,7 +36,7 @@ enum FileTransferStatus {
   };
 }
 
-enum FileTransferKind { file, directory }
+enum FileTransferKind { file, directory, symlink, unsupported }
 
 /// 查询只交付不可变快照；任务执行及资源回收仍由传输所有者管理。
 @freezed
