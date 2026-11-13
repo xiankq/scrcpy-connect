@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +7,62 @@ import 'package:scrcpy_connect/core/platform/window_environment.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
 
 void main() {
+  testWidgets('applies a host posture event without a metrics change', (
+    tester,
+  ) async {
+    final events = StreamController<WindowEnvironment?>();
+    addTearDown(events.close);
+    WindowEnvironment? observed;
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(size: Size(700, 500)),
+        child: WindowEnvironmentScope(
+          readHostEnvironment: () async => const WindowEnvironment(
+            width: 700,
+            height: 500,
+            windowId: 'stage-7',
+          ),
+          watchHostEnvironment: () => events.stream,
+          child: Builder(
+            builder: (context) {
+              observed = context.windowEnvironment;
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(observed?.posture, WindowPosture.normal);
+
+    events.add(
+      const WindowEnvironment(
+        width: 700,
+        height: 500,
+        windowId: 'stage-7',
+        posture: WindowPosture.book,
+        postureProvided: true,
+        displayFeaturesProvided: true,
+        displayFeatures: [
+          WindowDisplayFeature(
+            left: 349,
+            top: 0,
+            width: 2,
+            height: 500,
+            type: WindowDisplayFeatureType.fold,
+            state: WindowPosture.book,
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(observed?.posture, WindowPosture.book);
+    expect(observed?.verticalPaneDivider, isNotNull);
+  });
+
   testWidgets('projects MediaQuery fold posture without a host override', (
     tester,
   ) async {

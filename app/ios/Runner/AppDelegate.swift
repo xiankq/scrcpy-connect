@@ -46,6 +46,24 @@ import UserNotifications
     windowProvider: @escaping () -> UIWindow?,
     windowIdProvider: @escaping () -> String?
   ) {
+    let environmentEvents = WindowEnvironmentEvents { [weak self] in
+      self?.readEnvironment(
+        windowProvider: windowProvider,
+        windowIdProvider: windowIdProvider)
+    }
+    let environmentChannel = FlutterEventChannel(
+      name: "dev.scrcpyconnect/window_environment/events",
+      binaryMessenger: messenger)
+    environmentChannel.setStreamHandler(environmentEvents)
+    if #available(iOS 27.1, *) {
+      DispatchQueue.main.async { [weak environmentEvents] in
+        guard let view = windowProvider()?.rootViewController?.view else { return }
+        let interaction = UIHingeInteraction { _, _ in
+          environmentEvents?.emit()
+        }
+        view.addInteraction(interaction)
+      }
+    }
     let platform = FlutterMethodChannel(
       name: "dev.scrcpyconnect/platform", binaryMessenger: messenger)
     platform.setMethodCallHandler { [weak self] call, result in
@@ -54,42 +72,11 @@ import UserNotifications
         return
       }
       if call.method == "window.readEnvironment" {
-        guard let window = windowProvider(), let scene = window.windowScene else {
+        guard let environment = self.readEnvironment(
+          windowProvider: windowProvider,
+          windowIdProvider: windowIdProvider) else {
           result(nil)
           return
-        }
-        let bounds = window.bounds
-        let safe = window.safeAreaInsets
-        var environment: [String: Any] = [
-          "width": bounds.width,
-          "height": bounds.height,
-          "windowId": windowIdProvider() ?? scene.session.persistentIdentifier,
-          "insets": [
-            "left": safe.left,
-            "top": safe.top,
-            "right": safe.right,
-            "bottom": safe.bottom,
-          ],
-        ]
-        if #available(iOS 27.1, *) {
-          let divisions = window
-            .reservedRegions(kind: .division, options: [])
-            .filter { $0.isActive }
-          environment["displayFeatures"] = divisions.map { region in
-            let frame = region.frame
-            return [
-              "left": frame.minX,
-              "top": frame.minY,
-              "width": frame.width,
-              "height": frame.height,
-              "type": "fold",
-              "state": frame.width >= frame.height ? "tabletop" : "book",
-            ] as [String: Any]
-          }
-          environment["posture"] = divisions.first.map { region in
-            let frame = region.frame
-            return frame.width >= frame.height ? "tabletop" : "book"
-          } ?? "normal"
         }
         result(environment)
         return
@@ -103,6 +90,49 @@ import UserNotifications
     if let registrar = registry.registrar(forPlugin: "SystemVisualPreferences") {
       SystemVisualPreferences.register(with: registrar)
     }
+  }
+
+  private func readEnvironment(
+    windowProvider: @escaping () -> UIWindow?,
+    windowIdProvider: @escaping () -> String?
+  ) -> [String: Any]? {
+    guard let window = windowProvider(), let scene = window.windowScene else {
+      return nil
+    }
+    let bounds = window.bounds
+    let safe = window.safeAreaInsets
+    var environment: [String: Any] = [
+      "width": bounds.width,
+      "height": bounds.height,
+      "windowId": windowIdProvider() ?? scene.session.persistentIdentifier,
+      "insets": [
+        "left": safe.left,
+        "top": safe.top,
+        "right": safe.right,
+        "bottom": safe.bottom,
+      ],
+    ]
+    if #available(iOS 27.1, *) {
+      let divisions = window
+        .reservedRegions(kind: .division, options: [])
+        .filter { $0.isActive }
+      environment["displayFeatures"] = divisions.map { region in
+        let frame = region.frame
+        return [
+          "left": frame.minX,
+          "top": frame.minY,
+          "width": frame.width,
+          "height": frame.height,
+          "type": "fold",
+          "state": frame.width >= frame.height ? "tabletop" : "book",
+        ] as [String: Any]
+      }
+      environment["posture"] = divisions.first.map { region in
+        let frame = region.frame
+        return frame.width >= frame.height ? "tabletop" : "book"
+      } ?? "normal"
+    }
+    return environment
   }
 
   private func openIndependentScene(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -134,6 +164,33 @@ import UserNotifications
       .compactMap { $0 as? UIWindowScene }
       .first { $0.activationState != .unattached }
     return scene?.windows.first { $0.isKeyWindow } ?? scene?.windows.first
+  }
+}
+
+private final class WindowEnvironmentEvents: NSObject, FlutterStreamHandler {
+  private let snapshot: () -> [String: Any]?
+  private var sink: FlutterEventSink?
+
+  init(snapshot: @escaping () -> [String: Any]?) {
+    self.snapshot = snapshot
+    super.init()
+  }
+
+  func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink)
+    -> FlutterError?
+  {
+    sink = events
+    events(snapshot())
+    return nil
+  }
+
+  func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    sink = nil
+    return nil
+  }
+
+  func emit() {
+    sink?(snapshot())
   }
 }
 
