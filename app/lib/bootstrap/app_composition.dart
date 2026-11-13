@@ -93,7 +93,7 @@ final class AppComposition {
     metadata: _connections.metadata,
     applyBackgroundPolicy: (enabled) =>
         _background.apply(enabled, automatic: false),
-    onChanged: (preferences) => lifecycle.settingsChanged(preferences),
+    onChanged: _events.publishEvent,
   );
 
   CaptureResources? _captureInstance;
@@ -165,7 +165,10 @@ final class AppComposition {
     onState: (event) => _diagnostics.applicationEvent(event),
     onLocalStateChanged: () => _stateRecovery.noteLocalStateChange(),
     beforePublish: (event) => _connections.handleEvent(event),
-    afterState: (event) => _media.handleApplicationEvent(event),
+    afterState: (event) {
+      _media.handleApplicationEvent(event);
+      _captureInstance?.handleApplicationEvent(event);
+    },
     handlePlatform: (event) => _platformEvents.handle(event),
     isDisposed: () => _isDisposed,
   );

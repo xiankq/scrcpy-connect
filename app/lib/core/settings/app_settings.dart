@@ -15,6 +15,7 @@ import 'package:scrcpy_connect/core/settings/preference_codec.dart';
 import 'package:scrcpy_connect/core/settings/preference_schema.dart';
 import 'package:scrcpy_connect/core/settings/settings_management.dart';
 import 'package:scrcpy_connect/core/settings/settings_storage.dart';
+import 'package:scrcpy_connect/core/settings/models/settings_changed.dart';
 
 const _devicePreferences = {'deviceQuality', 'deviceSettings', 'appOpenModes'};
 
@@ -29,7 +30,7 @@ final class AppSettings implements MetadataManagement, SettingsManagement {
   }) : _appliedBackground = preferences.current.values.backgroundKeepAlive;
   final SettingsStorage preferences;
   final DeviceMetadataTransfer metadata;
-  final void Function(Preferences settings) onChanged;
+  final void Function(SettingsChanged event) onChanged;
   final Future<void> Function(bool enabled)? applyBackgroundPolicy;
   final bool Function()? isDisposed;
   bool _appliedBackground;
@@ -344,7 +345,7 @@ final class AppSettings implements MetadataManagement, SettingsManagement {
     final saved = settings;
     try {
       _requireActive();
-      onChanged(saved);
+      onChanged(SettingsChanged(saved));
       final background = saved.backgroundKeepAlive;
       if (forceBackgroundPolicy || background != _appliedBackground) {
         _requireActive();

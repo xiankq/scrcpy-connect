@@ -23,6 +23,7 @@ import 'package:scrcpy_connect/core/media/models/recovered_video_session.dart';
 import 'package:scrcpy_connect/core/media/models/video_session_view.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/core/settings/app_settings.dart';
+import 'package:scrcpy_connect/core/settings/models/settings_changed.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 
 /// 控制捕获、设备音源与共享唤醒租约的所有者。
@@ -223,7 +224,8 @@ final class CaptureResources {
     }
   }
 
-  void settingsChanged() {
+  void handleApplicationEvent(RuntimeEvent event) {
+    if (_closed || isDisposed() || event.data is! SettingsChanged) return;
     if (_wake case final wake?) {
       observeCleanup(
         wake.settingsChanged(

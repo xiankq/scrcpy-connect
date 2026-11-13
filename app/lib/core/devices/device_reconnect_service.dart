@@ -148,13 +148,6 @@ class DeviceReconnectService {
     _sync();
   }
 
-  /// 本地持久偏好由偏好所有者明确更新。
-  void updateBackgroundKeepAlive(bool enabled) {
-    if (_disposed) return;
-    _backgroundKeepAlive = enabled;
-    _sync();
-  }
-
   /// 系统 Task Manager 或显式停止也约束附着期间的快照，不能因新发现设备 ID 而撤销。
   void stopAutomaticConnections() {
     _hostStopped = true;

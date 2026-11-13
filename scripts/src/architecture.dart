@@ -127,6 +127,33 @@ List<String> checkArchitecture(
         }
         // 生命周期与状态组合层没有通用操作端口；真实平台/伴生协议适配在所属能力目录。
         final parts = p.split(path);
+        if (parts.first == 'bootstrap') {
+          for (final declaration
+              in parsed.unit.declarations.whereType<ClassDeclaration>()) {
+            final fields = declaration.body.members
+                .whereType<FieldDeclaration>()
+                .toList();
+            final lifecycleFields = {
+              for (final field in fields)
+                if (field.fields.type?.toSource().replaceAll('?', '') ==
+                    'AppLifecycle')
+                  for (final variable in field.fields.variables)
+                    variable.name.lexeme,
+            };
+            if (lifecycleFields.isEmpty) continue;
+            for (final field in fields) {
+              for (final variable in field.fields.variables) {
+                final references = _FieldReferences(lifecycleFields);
+                variable.initializer?.accept(references);
+                if (references.found) {
+                  problems.add(
+                    '${relative(file.path)}: 功能字段初始化不回调应用生命周期，领域变化由所属能力的类型化事件交付',
+                  );
+                }
+              }
+            }
+          }
+        }
         if (!const {
           'core/companion/companion_client.dart',
           'core/companion/companion_service.dart',
@@ -422,6 +449,18 @@ final class _RawApplicationEventStreams extends RecursiveAstVisitor<void> {
       found = true;
     }
     super.visitNamedType(node);
+  }
+}
+
+final class _FieldReferences extends RecursiveAstVisitor<void> {
+  _FieldReferences(this.names);
+  final Set<String> names;
+  bool found = false;
+
+  @override
+  void visitSimpleIdentifier(SimpleIdentifier node) {
+    if (node.parent is! Label && names.contains(node.name)) found = true;
+    super.visitSimpleIdentifier(node);
   }
 }
 

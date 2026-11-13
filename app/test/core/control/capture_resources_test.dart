@@ -13,6 +13,8 @@ import 'package:scrcpy_connect/core/devices/scrcpy_server_queries.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/settings/app_settings.dart';
+import 'package:scrcpy_connect/core/settings/models/settings_changed.dart';
+import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 
 void main() {
   test('持久化待核对记录进入活动及恢复投影，不创建捕获子资源', () async {
@@ -112,9 +114,14 @@ void main() {
     expect(await captures.readRecoverySessions(), isEmpty);
     expect(await captures.readActivitySessions(), isEmpty);
     expect(captures.audioSnapshots(), isEmpty);
-    captures.settingsChanged();
+    captures.handleApplicationEvent(
+      SettingsChanged(Preferences()).toApplicationEvent(sequence: 1),
+    );
     await captures.close();
     await captures.close();
+    captures.handleApplicationEvent(
+      SettingsChanged(Preferences()).toApplicationEvent(sequence: 2),
+    );
     expect(() => captures.capture, throwsA(isA<RequestFailure>()));
     expect(() => captures.sessions, throwsA(isA<RequestFailure>()));
     expect(() => captures.keepAwake, throwsA(isA<RequestFailure>()));
