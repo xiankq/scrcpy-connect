@@ -17,6 +17,30 @@ import UserNotifications
     let platform = FlutterMethodChannel(
       name: "dev.scrcpyconnect/platform", binaryMessenger: engineBridge.applicationRegistrar.messenger())
     platform.setMethodCallHandler { call, result in
+      if call.method == "window.readEnvironment" {
+        let scene = UIApplication.shared.connectedScenes
+          .compactMap { $0 as? UIWindowScene }
+          .first { $0.activationState != .unattached }
+        let window = scene?.windows.first { $0.isKeyWindow } ?? scene?.windows.first
+        guard let window = window, let scene = scene else {
+          result(nil)
+          return
+        }
+        let bounds = window.bounds
+        let safe = window.safeAreaInsets
+        result([
+          "width": bounds.width,
+          "height": bounds.height,
+          "windowId": scene.session.persistentIdentifier,
+          "insets": [
+            "left": safe.left,
+            "top": safe.top,
+            "right": safe.right,
+            "bottom": safe.bottom,
+          ],
+        ])
+        return
+      }
       guard call.method == "window.openIndependent" else {
         result(FlutterMethodNotImplemented)
         return
