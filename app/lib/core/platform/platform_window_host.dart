@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/platform/independent_window_receipt.dart';
 import 'package:scrcpy_connect/core/platform/platform_channels.dart';
+import 'package:scrcpy_connect/core/platform/window_launch_route.dart';
 
 /// Host boundary for native Activity/scene/window creation.
 ///
@@ -22,6 +23,11 @@ final class PlatformWindowHost {
     required String packageName,
     required String sessionId,
   }) async {
+    final initialRoute = independentWindowLaunchRoute(
+      deviceId: deviceId,
+      packageName: packageName,
+      sessionId: sessionId,
+    );
     if (request == null &&
         (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
       final desktop = await _openDesktopWindow(
@@ -37,6 +43,7 @@ final class PlatformWindowHost {
         'deviceId': deviceId,
         'packageName': packageName,
         'sessionId': sessionId,
+        'initialRoute': initialRoute,
       });
       if (response?['supported'] == true &&
           response?['windowId'] is String &&
@@ -60,6 +67,11 @@ final class PlatformWindowHost {
     required String packageName,
     required String sessionId,
   }) async {
+    final initialRoute = independentWindowLaunchRoute(
+      deviceId: deviceId,
+      packageName: packageName,
+      sessionId: sessionId,
+    );
     try {
       final controller = await WindowController.create(
         WindowConfiguration(
@@ -69,6 +81,7 @@ final class PlatformWindowHost {
             'deviceId': deviceId,
             'packageName': packageName,
             'sessionId': sessionId,
+            'initialRoute': initialRoute,
           }),
         ),
       );
