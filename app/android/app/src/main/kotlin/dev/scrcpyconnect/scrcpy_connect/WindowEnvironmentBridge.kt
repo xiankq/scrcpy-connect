@@ -77,12 +77,22 @@ internal class WindowEnvironmentBridge(
                 else -> "normal"
             }
         } ?: "normal"
+        val projectedFeatures = folding.map { feature ->
+            featurePayload(feature, density)
+        }.toMutableList()
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            val cutouts = activity.window.decorView.rootWindowInsets
+                ?.displayCutout
+                ?.boundingRects
+                .orEmpty()
+            projectedFeatures += cutouts.map { rect -> cutoutPayload(rect, density) }
+        }
         return mapOf(
             "width" to bounds.width() / density,
             "height" to bounds.height() / density,
             "windowId" to windowId(),
             "posture" to posture,
-            "displayFeatures" to folding.map { feature -> featurePayload(feature, density) },
+            "displayFeatures" to projectedFeatures,
         )
     }
 
@@ -112,4 +122,12 @@ internal class WindowEnvironmentBridge(
             "state" to state,
         )
     }
+
+    private fun cutoutPayload(rect: Rect, density: Float): Map<String, Any> = mapOf(
+        "left" to rect.left / density,
+        "top" to rect.top / density,
+        "width" to rect.width() / density,
+        "height" to rect.height() / density,
+        "type" to "cutout",
+    )
 }
