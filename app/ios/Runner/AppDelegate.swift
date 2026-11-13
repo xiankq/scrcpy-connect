@@ -72,7 +72,9 @@ import UserNotifications
           ],
         ]
         if #available(iOS 27.1, *) {
-          let divisions = window.reservedRegions(kind: .division, options: [])
+          let divisions = window
+            .reservedRegions(kind: .division, options: [])
+            .filter { $0.isActive }
           environment["displayFeatures"] = divisions.map { region in
             let frame = region.frame
             return [
