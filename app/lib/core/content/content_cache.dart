@@ -165,7 +165,10 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
       );
       await _validateConfiguration(next);
       if (_configuration.outgoingDirectory != null &&
-          next.outgoingDirectory != _configuration.outgoingDirectory) {
+          next.outgoingDirectory != _configuration.outgoingDirectory &&
+          !await _canReplaceMissingOutgoingDirectory(
+            _configuration.outgoingDirectory!,
+          )) {
         throw const ContentCacheFailure(
           'cache_configuration_conflict',
           '已登记的原件缓存目录不能被另一目录替换。',
@@ -381,6 +384,20 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
       }
     }
     await _plainPath(p.join(root.path, 'media'));
+  }
+
+  Future<bool> _canReplaceMissingOutgoingDirectory(String previous) async {
+    if (_configuration.retainedShares.isNotEmpty || _leases.isNotEmpty) {
+      return false;
+    }
+    final protected = await _protectedPaths();
+    if (protected.any((path) => _overlaps(previous, path))) {
+      return false;
+    }
+    final missing =
+        await FileSystemEntity.type(previous, followLinks: false) ==
+        FileSystemEntityType.notFound;
+    return missing;
   }
 
   Future<Set<String>> _protections() async => {
