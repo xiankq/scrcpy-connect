@@ -56,6 +56,9 @@ List<String> checkArchitecture(
   String relative(String path) => p.relative(path, from: root.path);
   final problems = <String>[];
   final application = packages['scrcpy_connect'];
+  final eventAliases = _ApplicationEventAliases(
+    application == null ? null : Directory(application.lib),
+  );
   if (application != null) {
     problems.addAll(_checkApplicationBoundary(application.directory, relative));
   }
@@ -158,11 +161,11 @@ List<String> checkArchitecture(
           'core/companion/companion_client.dart',
           'core/companion/companion_service.dart',
         }.contains(p.posix.joinAll(parts))) {
-          final streams = _RawApplicationEventStreams();
+          final streams = _RawApplicationEventStreams(eventAliases, file.path);
           parsed.unit.accept(streams);
           if (streams.found) {
             problems.add(
-              '${relative(file.path)}: 应用事件流使用 RuntimeEvent，原始协议流归实际协议适配',
+              '${relative(file.path)}: 应用事件流使用所属能力的类型化事实，原始协议流归实际协议适配',
             );
           }
         }
@@ -439,15 +442,168 @@ List<String> checkArchitecture(
   return problems..sort();
 }
 
+const _eventStreamTypes = {'Stream', 'StreamController', 'StreamSubscription'};
+
+// 检查显式容器及应用内 typedef 链，不能通过将 Map 改名绕过事件契约。
+final class _ApplicationEventAliases {
+  _ApplicationEventAliases(Directory? lib) : _lib = lib?.absolute.path {
+    if (lib == null || !lib.existsSync()) return;
+    for (final file
+        in lib
+            .listSync(recursive: true, followLinks: false)
+            .whereType<File>()) {
+      if (!file.path.endsWith('.dart') ||
+          file.path.endsWith('.g.dart') ||
+          file.path.endsWith('.freezed.dart')) {
+        continue;
+      }
+      final unit = parseString(
+        content: file.readAsStringSync(),
+        path: file.path,
+      ).unit;
+      _libraries[p.normalize(file.absolute.path)] = unit;
+    }
+  }
+  final String? _lib;
+  final _libraries = <String, CompilationUnit>{};
+
+  bool isRawStream(NamedType type, String path) =>
+      _isStream(type, path, {}) && _containsRaw(type, path, {});
+
+  bool _isStream(TypeAnnotation type, String path, Set<String> seen) {
+    if (type is! NamedType) return false;
+    if (_eventStreamTypes.contains(type.name.lexeme)) return true;
+    final alias = _resolve(type, path);
+    if (alias == null || seen.contains(alias.key)) return false;
+    return _isStream(alias.type, alias.path, {...seen, alias.key});
+  }
+
+  bool _containsRaw(TypeAnnotation type, String path, Set<String> seen) {
+    if (type is! NamedType) return false;
+    if (type.name.lexeme == 'Map') return true;
+    if (type.typeArguments?.arguments.any(
+          (argument) => _containsRaw(argument, path, seen),
+        ) ??
+        false) {
+      return true;
+    }
+    final alias = _resolve(type, path);
+    if (alias == null || seen.contains(alias.key)) return false;
+    return _containsRaw(alias.type, alias.path, {...seen, alias.key});
+  }
+
+  _EventTypeAlias? _resolve(NamedType type, String path) {
+    path = p.normalize(p.absolute(path));
+    final unit = _libraries[path];
+    if (unit == null) return null;
+    final name = type.name.lexeme;
+    final prefix = type.importPrefix?.name.lexeme;
+    if (prefix == null && _declares(unit, name)) {
+      return _local(unit, name, path);
+    }
+    for (final directive in unit.directives.whereType<ImportDirective>()) {
+      if (directive.prefix?.name != prefix || !_exposes(directive, name)) {
+        continue;
+      }
+      for (final target in _targets(directive, path)) {
+        final alias = _exported(target, name, {});
+        if (alias != null) return alias;
+      }
+    }
+    return null;
+  }
+
+  _EventTypeAlias? _exported(String path, String name, Set<String> seen) {
+    if (name.startsWith('_') || seen.contains(path)) return null;
+    final unit = _libraries[path];
+    if (unit == null) return null;
+    if (_declares(unit, name)) return _local(unit, name, path);
+    for (final directive in unit.directives.whereType<ExportDirective>()) {
+      if (!_exposes(directive, name)) continue;
+      for (final target in _targets(directive, path)) {
+        final alias = _exported(target, name, {...seen, path});
+        if (alias != null) return alias;
+      }
+    }
+    return null;
+  }
+
+  bool _declares(CompilationUnit unit, String name) => unit.declarations.any(
+    (declaration) => switch (declaration) {
+      GenericTypeAlias() => declaration.name.lexeme == name,
+      ClassDeclaration() => declaration.namePart.typeName.lexeme == name,
+      EnumDeclaration() => declaration.namePart.typeName.lexeme == name,
+      MixinDeclaration() => declaration.name.lexeme == name,
+      ClassTypeAlias() => declaration.name.lexeme == name,
+      ExtensionTypeDeclaration() =>
+        declaration.namePart.typeName.lexeme == name,
+      _ => false,
+    },
+  );
+
+  _EventTypeAlias? _local(CompilationUnit unit, String name, String path) {
+    for (final alias in unit.declarations.whereType<GenericTypeAlias>()) {
+      if (alias.name.lexeme == name) {
+        return _EventTypeAlias(path, name, alias.type);
+      }
+    }
+    return null;
+  }
+
+  bool _exposes(NamespaceDirective directive, String name) =>
+      directive.combinators.every(
+        (combinator) => switch (combinator) {
+          ShowCombinator() => combinator.shownNames.any(
+            (shown) => shown.name == name,
+          ),
+          HideCombinator() => !combinator.hiddenNames.any(
+            (hidden) => hidden.name == name,
+          ),
+        },
+      );
+
+  Iterable<String> _targets(NamespaceDirective directive, String path) sync* {
+    for (final literal in [
+      directive.uri.stringValue,
+      ...directive.configurations.map(
+        (configuration) => configuration.uri.stringValue,
+      ),
+    ].whereType<String>()) {
+      final target = _target(literal, path);
+      if (target != null) yield target;
+    }
+  }
+
+  String? _target(String literal, String path) {
+    final uri = Uri.tryParse(literal);
+    if (uri == null) return null;
+    if (!uri.hasScheme) {
+      return p.normalize(p.absolute(p.join(p.dirname(path), uri.path)));
+    }
+    if (uri.scheme == 'package' &&
+        uri.pathSegments.firstOrNull == 'scrcpy_connect') {
+      return p.normalize(p.joinAll([_lib!, ...uri.pathSegments.skip(1)]));
+    }
+    return null;
+  }
+}
+
+final class _EventTypeAlias {
+  _EventTypeAlias(this.path, this.name, this.type);
+  final String path, name;
+  final TypeAnnotation type;
+  String get key => '$path:$name';
+}
+
 final class _RawApplicationEventStreams extends RecursiveAstVisitor<void> {
+  _RawApplicationEventStreams(this.aliases, this.path);
+  final _ApplicationEventAliases aliases;
+  final String path;
   bool found = false;
 
   @override
   void visitNamedType(NamedType node) {
-    if (RegExp(r'^Stream(?:Controller|Subscription)?\s*<\s*(?:Json\b|Map\s*<)')
-        .hasMatch(node.toSource())) {
-      found = true;
-    }
+    if (aliases.isRawStream(node, path)) found = true;
     super.visitNamedType(node);
   }
 }

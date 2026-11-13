@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 export TMPDIR="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
 flutter pub get --enforce-lockfile
 dart --disable-dart-dev scripts/check_architecture.dart
+dart --disable-dart-dev test/architecture_test.dart
 python3 -m unittest discover -s packages/media_codec/test -p '*_test.py'
 case "$(uname -s)" in
   Linux*)
@@ -19,7 +20,7 @@ esac
 npm ci --ignore-scripts --prefix scripts/design_tokens
 dart --disable-dart-dev servers/build.dart --check vendor companion helpers
 dart --disable-dart-dev scripts/generate.dart --check
-dart format --output=none --set-exit-if-changed app/lib app/test scripts servers packages
+dart format --output=none --set-exit-if-changed app/lib app/test test scripts servers packages
 cargo fmt --all --check
 cargo fmt --manifest-path rust/media_codec/Cargo.toml --check
 cargo clippy --workspace --lib --bins -- -D warnings
