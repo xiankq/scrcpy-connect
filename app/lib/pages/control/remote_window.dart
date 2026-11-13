@@ -1,5 +1,10 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
+import 'package:scrcpy_connect/core/media/models/video_output.dart';
+import 'package:scrcpy_connect/core/media/models/video_playback_resumed.dart';
+import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
+
 import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/control/models/video_session.dart';
 import 'package:scrcpy_connect/core/devices/device_apps.dart';
@@ -13,6 +18,7 @@ import 'package:scrcpy_connect/core/control/models/app_launch_record.dart';
 import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
 
 import 'models/remote_window_close.dart';
+import 'models/remote_video_update.dart';
 
 export 'models/remote_window_close.dart';
 
@@ -52,6 +58,94 @@ class RemoteWindow {
   bool get isCurrent => !_disposed && _current();
   SessionViewLease? get view => _view;
   bool get recoveringConnection => _opening?.recoveringConnection == true;
+
+  /// 异设备、异会话、旧捕获及核验中的回执不能改变窗口或触发视图工作。
+  /// 返回值只描述 Widget 需要执行的工作，不转移输入和布局的所有权。
+  RemoteVideoUpdate? acceptVideoEvent(RuntimeEvent event) {
+    if (!isCurrent ||
+        presentation.appLaunchUnknown ||
+        presentation.stateUnverified ||
+        (presentation.reconcileOnly && view?.isCurrent != true)) {
+      return null;
+    }
+    bool belongs(String id, String device) =>
+        id == presentation.sessionId &&
+        device == deviceId &&
+        (event.deviceId == null || event.deviceId == device);
+    final payload = event.data;
+    switch (payload) {
+      case VideoOutputReady(:final output) ||
+          VideoOutputChanged(:final output) ||
+          VideoOutputFrame(:final output):
+        if (!belongs(output.sessionId, output.deviceId) ||
+            !presentation.output(
+              output,
+              verified: payload is! VideoOutputFrame,
+            )) {
+          return null;
+        }
+        return const RemoteVideoUpdate(geometryChanged: true);
+      case VideoPlaybackResumed(
+        receipt: VideoPlaybackReceipt(:final session, :final output),
+      ):
+        if (!belongs(session.sessionId, session.deviceId) ||
+            !presentation.output(output, verified: true)) {
+          return null;
+        }
+        return const RemoteVideoUpdate(geometryChanged: true);
+      case VideoOutputFailed(
+        :final sessionId,
+        :final deviceId,
+        :final captureGeneration,
+        :final generation,
+        :final reason,
+      ):
+        if (!belongs(sessionId, deviceId) ||
+            !presentation.acceptsFailure(
+              captureGeneration: captureGeneration,
+              generation: generation,
+            )) {
+          return null;
+        }
+        presentation.disconnect(reason);
+        return const RemoteVideoUpdate(releaseInputs: true);
+      case VideoSessionChanged(view: final sessionView):
+        final session = sessionView.session;
+        if (event.telemetry || !belongs(session.sessionId, session.deviceId)) {
+          return null;
+        }
+        final outgoing = presentation.binding;
+        final noticeIsCurrent =
+            view?.isCurrent == true &&
+            presentation.acceptsFailure(
+              captureGeneration: session.captureGeneration,
+              generation: session.generation,
+            );
+        var releaseInputs = false;
+        RemoteBinding? previousBinding;
+        if (!session.live) {
+          if (!noticeIsCurrent) return null;
+          presentation.updateSession(sessionView);
+          presentation.disconnect(
+            session.reason ??
+                presentation.error ??
+                '连接已中断，当前画面已暂停。恢复首帧后才能继续操作。',
+          );
+          releaseInputs = true;
+          previousBinding = outgoing;
+        } else if (presentation.updateSession(sessionView)) {
+          releaseInputs = true;
+          previousBinding = outgoing != presentation.binding ? outgoing : null;
+        }
+        return RemoteVideoUpdate(
+          releaseInputs: releaseInputs,
+          previousBinding: previousBinding,
+          wake: noticeIsCurrent ? sessionView.wake : null,
+        );
+      default:
+        return const RemoteVideoUpdate(changed: false);
+    }
+  }
 
   /// 选择既有会话或提交一次打开；迟到回执仍由借用原能力的窗口清理。
   /// 页面提供尺寸及明确唤醒的准备工作，不参与会话选择或回执归属判断。

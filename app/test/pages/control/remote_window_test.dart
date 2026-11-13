@@ -8,12 +8,97 @@ import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/devices/device_apps.dart';
 import 'package:scrcpy_connect/core/devices/device_inspection.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
+import 'package:scrcpy_connect/core/media/models/video_output.dart';
+import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
 import 'package:scrcpy_connect/core/media/video_sessions.dart';
 import 'package:scrcpy_connect/pages/control/remote_window.dart';
 import 'package:scrcpy_connect/widgets/models/device_audio_view_snapshot.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
 
 void main() {
+  test('窗口只接受当前设备会话及捕获代次的失败回执', () async {
+    final fixture = _Window();
+    fixture.videos.listed = [
+      _view().copyWith(
+        session: _view().session.copyWith(captureGeneration: 2, generation: 3),
+      ),
+    ];
+    await fixture.open();
+    VideoOutputFailed failure({
+      String session = 'session',
+      String device = 'device',
+      int capture = 2,
+      int generation = 3,
+    }) => VideoOutputFailed(
+      sessionId: session,
+      deviceId: device,
+      captureGeneration: capture,
+      generation: generation,
+      reason: 'decoder failed',
+    );
+    for (final event in [
+      failure(session: 'other'),
+      failure(device: 'other'),
+      failure(capture: 1, generation: 99),
+      failure(generation: 2),
+    ]) {
+      expect(
+        fixture.window.acceptVideoEvent(event.toApplicationEvent()),
+        isNull,
+      );
+      expect(fixture.window.presentation.error, isNull);
+    }
+    final update = fixture.window.acceptVideoEvent(
+      failure().toApplicationEvent(),
+    );
+    expect(update!.releaseInputs, isTrue);
+    expect(update.geometryChanged, isFalse);
+    expect(fixture.window.presentation.error, 'decoder failed');
+    expect(fixture.window.presentation.paused, isTrue);
+    expect(fixture.videos.starts, 0);
+  });
+
+  test('会话结束回执只要求释放旧绑定输入，帧遥测不能代替结束回执', () async {
+    final fixture = _Window();
+    final original = _view();
+    fixture.videos.listed = [original];
+    await fixture.open();
+    final binding = fixture.window.presentation.binding;
+    final stopped = original.copyWith(
+      session: original.session.copyWith(status: .stopped, reason: 'ended'),
+    );
+    expect(
+      fixture.window.acceptVideoEvent(
+        VideoSessionChanged(.frame, stopped).toApplicationEvent(),
+      ),
+      isNull,
+    );
+    expect(fixture.window.presentation.session!.session.live, isTrue);
+    final update = fixture.window.acceptVideoEvent(
+      VideoSessionChanged(.stopped, stopped).toApplicationEvent(),
+    );
+    expect(update!.releaseInputs, isTrue);
+    expect(update.previousBinding, binding);
+    expect(update.wake, stopped.wake);
+    expect(fixture.window.presentation.session!.session.live, isFalse);
+    expect(fixture.window.presentation.error, 'ended');
+  });
+
+  test('待核验或窗口已销毁时迟到媒体事件不能产生输入和提示工作', () async {
+    final fixture = _Window();
+    fixture.videos.listed = [_view()];
+    await fixture.open();
+    final stopped = VideoSessionChanged(
+      .stopped,
+      _view(status: .stopped),
+    ).toApplicationEvent();
+    fixture.window.presentation.beginReconciliation();
+    expect(fixture.window.acceptVideoEvent(stopped), isNull);
+    expect(fixture.window.presentation.session!.session.live, isTrue);
+    await fixture.window.dispose(() async {});
+    expect(fixture.window.acceptVideoEvent(stopped), isNull);
+  });
+
   test('输出失败保留类型化的未知打开身份，核对不重放原启动', () async {
     final fixture = _Window();
     final native = Completer<VideoSessionView>();

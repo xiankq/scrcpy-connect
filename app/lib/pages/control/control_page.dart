@@ -1,10 +1,7 @@
 import 'dart:async';
 
 import 'package:scrcpy_connect/core/events/models/app_event.dart';
-import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
-import 'package:scrcpy_connect/core/media/models/video_playback_resumed.dart';
 import 'package:scrcpy_connect/core/control/models/app_launch_record.dart';
-import 'package:scrcpy_connect/core/media/models/video_output.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:material_ui/material_ui.dart';
@@ -15,8 +12,6 @@ import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/control/remote_display_settings.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
-import 'package:scrcpy_connect/core/devices/models/device_disconnect_requested.dart';
-import 'package:scrcpy_connect/core/media/models/video_stop_requested.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/clipboard/clipboard_focus_notifier.dart';
 import 'package:scrcpy_connect/core/control/control_capabilities_provider.dart';
@@ -492,7 +487,12 @@ class _ControlPageState extends ConsumerState<ControlPage>
 
   void onEvent(RuntimeEvent event) {
     if (!_sourcesCurrent) return;
-    final payload = event.data;
+    final stopped = connectionRecovery.acceptEvent(
+      event,
+      deviceId: widget.device.id,
+      sessionId: sessionId,
+      phoneScreen: widget.packageName == null,
+    );
     if (event.data case DeviceListChanged(:final devices)) {
       final updated = devices
           .where((d) => d.id == widget.device.id)
@@ -501,21 +501,10 @@ class _ControlPageState extends ConsumerState<ControlPage>
         screenState.invalidate();
       }
       if (widget.packageName == null) {
-        if (updated == null) {
-          connectionRecovery.stop();
-        } else {
-          connectionRecovery.observe(
-            updated.status,
-            autoReconnect: updated.autoReconnect,
-          );
-          recoverConnection();
-        }
+        recoverConnection();
       }
     }
-    if ((payload is VideoStopRequested && payload.sessionId == sessionId) ||
-        (payload is DeviceDisconnectRequested &&
-            payload.deviceId == widget.device.id)) {
-      connectionRecovery.stop();
+    if (stopped) {
       if (window.recoveringConnection) {
         // 替换会话取得新身份前接受的停止，不能被迟到列表或启动回执撤销。
         setState(window.cancelRecovery);
@@ -534,87 +523,14 @@ class _ControlPageState extends ConsumerState<ControlPage>
       applyReconciledState(snapshot);
       return;
     }
-    if (presentation.appLaunchUnknown ||
-        presentation.stateUnverified ||
-        (presentation.reconcileOnly && view?.isCurrent != true)) {
-      return;
+    final update = window.acceptVideoEvent(event);
+    if (update == null) return;
+    if (update.releaseInputs) {
+      unawaited(releaseInputs(binding: update.previousBinding));
     }
-    bool belongs(String id, String deviceId) =>
-        id == sessionId &&
-        deviceId == widget.device.id &&
-        (event.deviceId == null || event.deviceId == deviceId);
-    switch (payload) {
-      case VideoOutputReady(:final output) ||
-          VideoOutputChanged(:final output) ||
-          VideoOutputFrame(:final output):
-        if (!belongs(output.sessionId, output.deviceId) ||
-            !presentation.output(
-              output,
-              verified: payload is! VideoOutputFrame,
-            )) {
-          return;
-        }
-        setState(() {});
-        displaySizing.observeGeometry();
-      case VideoPlaybackResumed(
-        receipt: VideoPlaybackReceipt(:final session, :final output),
-      ):
-        if (!belongs(session.sessionId, session.deviceId) ||
-            !presentation.output(output, verified: true)) {
-          return;
-        }
-        setState(() {});
-        displaySizing.observeGeometry();
-      case VideoOutputFailed(
-        :final sessionId,
-        :final deviceId,
-        :final captureGeneration,
-        :final generation,
-        :final reason,
-      ):
-        if (!belongs(sessionId, deviceId) ||
-            !presentation.acceptsFailure(
-              captureGeneration: captureGeneration,
-              generation: generation,
-            )) {
-          return;
-        }
-        presentation.disconnect(reason);
-        unawaited(releaseInputs());
-        setState(() {});
-      case VideoSessionChanged(view: final sessionView):
-        final session = sessionView.session, wake = sessionView.wake;
-        if (event.telemetry || !belongs(session.sessionId, session.deviceId)) {
-          return;
-        }
-        final outgoing = presentation.binding;
-        final noticeIsCurrent =
-            view?.isCurrent == true &&
-            presentation.acceptsFailure(
-              captureGeneration: session.captureGeneration,
-              generation: session.generation,
-            );
-        if (!session.live) {
-          if (!noticeIsCurrent) return;
-          presentation.updateSession(sessionView);
-          presentation.disconnect(
-            session.reason ??
-                presentation.error ??
-                '连接已中断，当前画面已暂停。恢复首帧后才能继续操作。',
-          );
-          unawaited(releaseInputs(binding: outgoing));
-        } else if (presentation.updateSession(sessionView)) {
-          unawaited(
-            releaseInputs(
-              binding: outgoing != presentation.binding ? outgoing : null,
-            ),
-          );
-        }
-        if (noticeIsCurrent) notices.consume(wake);
-        setState(() {});
-      default:
-        break;
-    }
+    if (update.changed) setState(() {});
+    if (update.geometryChanged) displaySizing.observeGeometry();
+    if (update.wake case final wake?) notices.consume(wake);
     focusVisibleDevice();
   }
 
