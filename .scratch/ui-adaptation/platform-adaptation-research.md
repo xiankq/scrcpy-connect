@@ -46,7 +46,7 @@
 - `module.json5` 的 `supportWindowMode` 可声明 `fullscreen`/`split`/`floating`；手机、折叠屏与平板支持矩阵不同，折叠屏展开态还可能进入左右或上下分屏。([多窗口支持](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/multi-window-support/)、[窗口模式矩阵](https://developer.huawei.com/consumer/cn/doc/best-practices/bpta-multi-device-window-mode/))
 - Stage 模型中 UIAbility 对应 WindowStage，WindowStage 管理一个应用主窗；辅助窗口由应用自行管理。窗口模式和可见性变化应由窗口事件监听驱动，而不是假定页面生命周期等于窗口生命周期。([窗口生命周期](https://developer.huawei.com/consumer/cn/doc/HarmonyOS-Guides/window-lifecycle/))
 - 折叠屏指南要求展开态/平板横竖屏适配、悬停态折痕避让、竖向/横向悬浮窗、上下/左右分屏，以及自由窗口尺寸变化；折叠开合过程中不能出现截断、错位、闪屏或交互中止。([折叠屏开发指南](https://developer.huawei.com/consumer/cn/doc/best-practices-V14/bpta-foldable-guide-V14/)、[智慧多窗布局适配](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides-V14/multi-window-layout-adapt-V14/))
-- ArkUI `FoldSplitContainer`/`HoverModeStatus` 提供折叠状态、悬停状态、旋转角度和窗口状态（全屏/分屏/自由窗口）的组合信息，可直接作为 `WindowEnvironment` 的 HarmonyOS 适配源。([FoldSplitContainer API](https://developer.huawei.com/consumer/cn/doc/harmonyos-references/ohos-arkui-advanced-foldsplitcontainer/))
+- ArkUI API 12+ 的 `FoldSplitContainer`/`HoverModeStatus` 提供展开、悬停和折叠态的分栏区域，以及折叠状态、悬停状态、旋转角度和窗口状态（全屏/分屏/自由窗口）的组合信息，可作为 `WindowEnvironment` 的 HarmonyOS 适配源。布局断点仍由 `windowSizeChange` 和当前窗口宽高驱动；`foldStatusChange` 只服务悬停等物理形态行为，不能替代尺寸变化。([FoldSplitContainer API](https://developer.huawei.com/consumer/cn/doc/harmonyos-references/ohos-arkui-advanced-foldsplitcontainer/)、[多窗布局适配](https://developer.huawei.com/consumer/en/doc/harmonyos-guides/multi-window-layout-adapt/))
 - **可执行约束：** ArkUI 页面先用连续约束保证任意窗口尺寸可用，再用断点切换导航/多栏；窗口适配代码监听 window/fold/visibility 事件，不能在页面首次构建时缓存屏幕宽高；主窗和辅助窗的资源/状态所有权分开。
 
 ### Flutter：官方能力与边界
