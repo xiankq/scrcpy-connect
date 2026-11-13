@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/files/document_operation_notifier.dart';
 import 'package:scrcpy_connect/core/files/file_transfers.dart';
 import 'package:scrcpy_connect/core/files/system_documents.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -11,7 +12,7 @@ import 'package:scrcpy_connect/utils/formatters.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
-import 'package:scrcpy_connect/widgets/documents/document_operation.dart';
+import 'package:scrcpy_connect/hooks/use_document_picker.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
@@ -32,14 +33,19 @@ class DocumentImportPage extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final transfers = ref.watch(fileTransfersProvider);
-    final operation = useDocumentOperationController(ref);
-    final reviewed = useValueNotifier(false, [operation, transfers]);
+    final scope = useMemoized(Object.new);
+    final provider = documentOperationProvider(scope: scope);
+    final operation = ref.watch(provider);
+    final actions = ref.read(provider.notifier);
+    final currentOperation = actions.captureScope();
+    useDocumentPicker(ref, actions);
+    final reviewed = useValueNotifier(false, [operation.result, transfers]);
     useValueListenable(reviewed);
-    final sending = useValueNotifier(false, [operation, transfers]);
+    final sending = useValueNotifier(false, [operation.result, transfers]);
     useValueListenable(sending);
     bool ownsScope() =>
         context.mounted &&
-        !operation.disposed &&
+        currentOperation() &&
         identical(ref.read(fileTransfersProvider), transfers);
     final result = operation.result;
     final partial = result?.status == DocumentOutcomeStatus.partial;
@@ -135,7 +141,7 @@ class DocumentImportPage extends HookConsumerWidget {
                   ? null
                   : () {
                       reviewed.value = false;
-                      operation.importDirectory();
+                      actions.importDirectory();
                     },
               icon: const Icon(LucideIcons.folderOpen),
               label: Text(result == null ? '选择文件夹' : '重新选择文件夹'),
@@ -198,7 +204,7 @@ class DocumentImportPage extends HookConsumerWidget {
         const ContentLoadingIndicator(),
         const StateNote('正在等待系统选择或读取实际内容…'),
         TextButton(
-          onPressed: operation.cancelling ? null : operation.cancel,
+          onPressed: operation.cancelling ? null : actions.cancel,
           child: Text(operation.cancelling ? '正在取消…' : '取消本次读取'),
         ),
       ],

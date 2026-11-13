@@ -1,12 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/events/runtime_events.dart';
+import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
+import 'package:scrcpy_connect/core/files/document_operation_notifier.dart';
+import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/files/models/document_event.dart';
 import 'package:scrcpy_connect/core/files/models/document_selection.dart';
 import 'package:scrcpy_connect/core/files/system_documents.dart';
-import 'package:scrcpy_connect/widgets/documents/document_operation.dart';
+import 'package:scrcpy_connect/hooks/use_document_picker.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -15,7 +20,7 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
   for (final leaveBeforeReply in [false, true]) {
-    test('系统选择回执只交还原任务，离页=$leaveBeforeReply', () async {
+    testWidgets('系统选择回执只交还原任务，离页=$leaveBeforeReply', (tester) async {
       final platform = Completer<Map<String, Object?>>();
       final requested = Completer<MethodCall>();
       messenger.setMockMethodCallHandler(channel, (call) {
@@ -27,25 +32,37 @@ void main() {
       final documents = _Documents();
       final receipts =
           <({String operationId, DocumentSelectionResult result})>[];
-      final controller = DocumentOperationController(
-        documents: documents,
-        events: events.stream,
-        completeSelection: (id, result) {
-          receipts.add((operationId: id, result: result));
-          return true;
-        },
+      final scope = Object();
+      final provider = documentOperationProvider(scope: scope);
+      final container = ProviderContainer(
+        overrides: [
+          systemDocumentsProvider.overrideWithValue(documents),
+          runtimeEventsProvider.overrideWithValue(events.stream),
+          documentSelectionResponderProvider.overrideWithValue((id, result) {
+            receipts.add((operationId: id, result: result));
+            return true;
+          }),
+        ],
       );
       addTearDown(() async {
-        if (!controller.disposed) controller.dispose();
+        container.dispose();
         if (!documents.result.isCompleted) {
           documents.result.complete(const DocumentOutcome(status: .cancelled));
         }
         await events.close();
       });
-      final importing = controller.importDirectory();
-      await Future<void>.delayed(Duration.zero);
-      final id = controller.operationId!;
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _PickerView(scope: scope),
+        ),
+      );
+      final actions = container.read(provider.notifier);
+      final importing = actions.importDirectory();
+      await tester.pump();
+      final id = container.read(provider).operationId!;
       expect(documents.operations, [id]);
+      expect(documents.kinds, [DocumentImportKind.directory]);
       events.add(
         DocumentSelectionRequested(
           DocumentSelectionRequest(
@@ -55,6 +72,7 @@ void main() {
           ),
         ).toApplicationEvent(),
       );
+      await tester.pump();
       final call = await requested.future;
       expect(call.method, 'documents.platform.picker');
       expect(call.arguments, {
@@ -63,7 +81,13 @@ void main() {
         'mode': 'importDirectory',
       });
       if (leaveBeforeReply) {
-        controller.dispose();
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: const SizedBox.shrink(),
+          ),
+        );
+        await tester.pump();
         expect(documents.cancelled, [id]);
       }
       platform.complete({
@@ -72,7 +96,7 @@ void main() {
           {'handle': 'original-document', 'uri': 'content://provider/document'},
         ],
       });
-      await Future<void>.delayed(Duration.zero);
+      await tester.pump();
       expect(receipts.single.operationId, id);
       if (leaveBeforeReply) {
         expect(receipts.single.result, isA<DocumentSelectionCancelled>());
@@ -83,14 +107,35 @@ void main() {
         expect(() => selected.documents.clear(), throwsUnsupportedError);
       }
       documents.result.complete(const DocumentOutcome(status: .cancelled));
+      await tester.pump();
       await importing;
-      expect(controller.error, isNull);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const SizedBox.shrink(),
+        ),
+      );
+      expect(tester.takeException(), isNull);
     });
+  }
+}
+
+class _PickerView extends HookConsumerWidget {
+  const _PickerView({required this.scope});
+  final Object scope;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final provider = documentOperationProvider(scope: scope);
+    ref.watch(provider);
+    useDocumentPicker(ref, ref.read(provider.notifier));
+    return const SizedBox.shrink();
   }
 }
 
 final class _Documents implements SystemDocuments {
   final operations = <String>[];
+  final kinds = <DocumentImportKind>[];
   final cancelled = <String>[];
   final result = Completer<DocumentOutcome>();
 
@@ -99,7 +144,7 @@ final class _Documents implements SystemDocuments {
     String operationId,
     DocumentImportKind kind,
   ) {
-    expect(kind, DocumentImportKind.directory);
+    kinds.add(kind);
     operations.add(operationId);
     return result.future;
   }

@@ -2,14 +2,15 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/files/document_operation_notifier.dart';
 import 'package:scrcpy_connect/core/files/system_documents.dart';
+import 'package:scrcpy_connect/hooks/use_document_picker.dart';
 import 'package:scrcpy_connect/hooks/use_transfer_cache_lease.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/utils/formatters.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart' show confirm;
 import 'package:scrcpy_connect/widgets/documents/document_conflict_panel.dart';
-import 'package:scrcpy_connect/widgets/documents/document_operation.dart';
 import 'package:scrcpy_connect/widgets/documents/file_delivery_path.dart';
 import 'package:scrcpy_connect/widgets/documents/original_file_header.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
@@ -48,14 +49,19 @@ class DocumentExportForm extends HookConsumerWidget {
       );
     }
     final cacheLease = useTransferCacheLease(ref, transferId);
-    final operation = useDocumentOperationController(
-      ref,
+    final scope = useMemoized(Object.new);
+    final provider = documentOperationProvider(
+      scope: scope,
       exportSource: DocumentSource(
         sourceId: transferId == null ? 'local' : 'transfer:$transferId',
         localPath: localPath,
         kind: DocumentKind.values.byName(kind),
       ),
     );
+    final operation = ref.watch(provider);
+    final actions = ref.read(provider.notifier);
+    final currentOperation = actions.captureScope();
+    useDocumentPicker(ref, actions);
     final reviewedOperation = useState<String?>(null);
     final acknowledgedUnknown =
         operation.recordOperationId != null &&
@@ -109,7 +115,7 @@ class DocumentExportForm extends HookConsumerWidget {
         const ContentLoadingIndicator(),
         const StateNote('正在等待系统选择或实际写入结果…'),
         TextButton(
-          onPressed: operation.cancelling ? null : operation.cancel,
+          onPressed: operation.cancelling ? null : actions.cancel,
           child: Text(operation.cancelling ? '正在取消…' : '取消本次保存'),
         ),
         if ((operation.operationId ?? operation.recordOperationId)
@@ -121,7 +127,7 @@ class DocumentExportForm extends HookConsumerWidget {
       if (operation.refreshing) const StateNote('正在核验这份原件的系统保存记录…'),
       if (!operation.loaded || status == 'pending' || unknown)
         TextButton(
-          onPressed: operation.refreshing ? null : operation.refresh,
+          onPressed: operation.refreshing ? null : actions.refresh,
           child: const Text('重新核验系统保存'),
         ),
       if (result != null)
@@ -178,7 +184,7 @@ class DocumentExportForm extends HookConsumerWidget {
               : () {
                   final reviewed = acknowledgedUnknown;
                   reviewedOperation.value = null;
-                  operation.export(name, reviewed: reviewed);
+                  actions.export(name, reviewed: reviewed);
                 },
           child: Text(result == null ? '选择系统位置并保存' : '重新选择系统位置'),
         ),
@@ -193,10 +199,11 @@ class DocumentExportForm extends HookConsumerWidget {
                         '已经保存过这份原件。继续会重新选择系统位置并保存额外副本，不会自动覆盖已有内容。',
                         action: '选择新位置',
                       ) ||
-                      !context.mounted) {
+                      !context.mounted ||
+                      !currentOperation()) {
                     return;
                   }
-                  await operation.export(name, additionalCopy: true);
+                  await actions.export(name, additionalCopy: true);
                 },
           child: const Text('再保存一份'),
         ),
