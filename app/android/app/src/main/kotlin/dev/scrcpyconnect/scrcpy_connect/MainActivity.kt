@@ -112,6 +112,21 @@ class MainActivity : FlutterActivity() {
         acceptIncoming(intent, true)
     }
 
+    internal fun readWindowEnvironment(): Map<String, Any> {
+        val bounds = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            windowManager.currentWindowMetrics.bounds
+        } else {
+            @Suppress("DEPRECATION")
+            android.graphics.Rect(0, 0, window.decorView.width, window.decorView.height)
+        }
+        val density = resources.displayMetrics.density
+        return mapOf(
+            "width" to bounds.width() / density,
+            "height" to bounds.height() / density,
+            "windowId" to componentName.flattenToShortString(),
+        )
+    }
+
     private fun emit(event: Map<String, Any?>) = ProcessFlutterHost.emit(event)
 
     private fun acceptIncoming(intent: Intent?, renewed: Boolean) {

@@ -6,6 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_press_feedback.dart';
+import 'package:scrcpy_connect/widgets/overlays.dart';
 
 class ExitHandle extends StatefulWidget {
   const ExitHandle({
@@ -190,7 +191,7 @@ class _ExitHandleState extends State<ExitHandle>
                 constraints: BoxConstraints(
                   maxHeight: math.max(48, dragBounds.bottom - panelTop + 52),
                 ),
-                child: Glass(
+                child: ContentSurface(
                   key: const ValueKey('remote-tool-panel'),
                   radius: DesignTokens.roundedLg,
                   child: SingleChildScrollView(

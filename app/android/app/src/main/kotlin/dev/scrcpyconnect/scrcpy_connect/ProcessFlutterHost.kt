@@ -1,7 +1,6 @@
 package dev.scrcpyconnect.scrcpy_connect
 
 import android.content.Context
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import io.flutter.embedding.engine.FlutterEngine
@@ -15,6 +14,7 @@ internal object ProcessFlutterHost {
     private var engine: FlutterEngine? = null
     private var activity: WeakReference<MainActivity>? = null
     private val sinks = IdentityHashMap<FlutterEngine, EventChannel.EventSink>()
+    private val environmentBridges = IdentityHashMap<FlutterEngine, WindowEnvironmentBridge>()
     private val main = Handler(Looper.getMainLooper())
 
     fun engine(context: Context, shellArgs: Array<String>): FlutterEngine {
@@ -53,18 +53,10 @@ internal object ProcessFlutterHost {
                                 else IndependentWindowActivity.openFrom(host, call, result)
                             }
                             "window.readEnvironment" -> {
-                                val host = activity?.get()
-                                if (host == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-                                    result.success(null)
-                                } else {
-                                    val bounds = host.windowManager.currentWindowMetrics.bounds
-                                    val density = host.resources.displayMetrics.density
-                                    result.success(mapOf(
-                                        "width" to bounds.width() / density,
-                                        "height" to bounds.height() / density,
-                                        "windowId" to host.componentName.flattenToShortString()
-                                    ))
-                                }
+                                result.success(
+                                    environmentBridges[created]?.readEnvironment()
+                                        ?: activity?.get()?.readWindowEnvironment(),
+                                )
                             }
                             else -> if (!audio.handle(call, result)) {
                                 val host = activity?.get()
@@ -87,13 +79,22 @@ internal object ProcessFlutterHost {
                     audio.stopAll()
                     IncomingShares.unbind(this@ProcessFlutterHost)
                     sinks.remove(created)
+                    environmentBridges.remove(created)?.close()
                     if (engine === created) engine = null
                 }
             })
         }
     }
-    fun attach(host: MainActivity) { activity = WeakReference(host) }
-    fun detach(host: MainActivity) { if (activity?.get() === host) activity = null }
+    fun attach(host: MainActivity) {
+        activity = WeakReference(host)
+        engine?.let { attachEnvironmentBridge(host, it) }
+    }
+    fun detach(host: MainActivity) {
+        if (activity?.get() === host) {
+            activity = null
+            engine?.let { environmentBridges.remove(it)?.close() }
+        }
+    }
     fun attachIndependent(host: IndependentWindowActivity, created: FlutterEngine) {
         val audio = NativeAudioRuntime.get(host.applicationContext)
         EventChannel(created.dartExecutor.binaryMessenger, "dev.scrcpyconnect/media_events")
@@ -105,7 +106,10 @@ internal object ProcessFlutterHost {
             .setMethodCallHandler { call, result ->
                 try {
                     when (call.method) {
-                        "window.readEnvironment" -> result.success(host.readWindowEnvironment())
+                        "window.readEnvironment" -> result.success(
+                            environmentBridges[created]?.readEnvironment()
+                                ?: host.readWindowEnvironment(),
+                        )
                         "window.openIndependent" -> host.openIndependent(call, result)
                         else -> if (!audio.handle(call, result)) {
                             val mainHost = activity?.get()
@@ -118,13 +122,36 @@ internal object ProcessFlutterHost {
                 }
             }
         created.addEngineLifecycleListener(object : FlutterEngine.EngineLifecycleListener {
-            override fun onPreEngineRestart() { sinks.remove(created) }
-            override fun onEngineWillDestroy() {
+            override fun onPreEngineRestart() {
                 sinks.remove(created)
             }
+            override fun onEngineWillDestroy() {
+                sinks.remove(created)
+                environmentBridges.remove(created)?.close()
+            }
         })
+        attachEnvironmentBridge(host, created)
     }
-    fun detachIndependent(created: FlutterEngine) { sinks.remove(created) }
+    fun detachIndependent(created: FlutterEngine) {
+        sinks.remove(created)
+        environmentBridges.remove(created)?.close()
+    }
+
+    private fun attachEnvironmentBridge(
+        host: android.app.Activity,
+        created: FlutterEngine,
+    ) {
+        environmentBridges.remove(created)?.close()
+        environmentBridges[created] = WindowEnvironmentBridge(
+            host,
+            created.dartExecutor.binaryMessenger,
+            when (host) {
+                is MainActivity -> { { host.componentName.flattenToShortString() } }
+                is IndependentWindowActivity -> host::readWindowId
+                else -> { { host.componentName.flattenToShortString() } }
+            },
+        )
+    }
     fun emit(event: Map<String, Any?>) { main.post { sinks.values.toList().forEach { it.success(event) } } }
     fun stopRequested(context: Context) {
         NativeAudioRuntime.get(context).stopAll()
