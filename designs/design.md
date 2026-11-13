@@ -208,6 +208,9 @@ components:
     height: 54px
   page-header:
     height: 56px
+  remote-navigation:
+    height: 56px
+    padding: 67.5px
   page-body:
     height: 632px
   page-content:

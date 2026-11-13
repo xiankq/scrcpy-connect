@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 
@@ -35,32 +37,46 @@ class RemoteNavigationBar extends StatelessWidget {
             ),
           ),
           child: SizedBox(
-            height: DesignTokens.componentPageHeaderHeight,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _button(
-                  tooltip: '返回',
-                  enabled: enabled,
-                  onPressed: onBack,
-                  glyph: _RemoteNavigationGlyph.back,
-                  color: iconColor,
-                ),
-                _button(
-                  tooltip: '主屏幕',
-                  enabled: enabled,
-                  onPressed: onHome,
-                  glyph: _RemoteNavigationGlyph.home,
-                  color: iconColor,
-                ),
-                _button(
-                  tooltip: '最近任务',
-                  enabled: enabled,
-                  onPressed: onRecent,
-                  glyph: _RemoteNavigationGlyph.recent,
-                  color: iconColor,
-                ),
-              ],
+            height: DesignTokens.componentRemoteNavigationHeight,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                const buttonWidth = DesignTokens.componentIconButtonSize;
+                final edgePadding = math
+                    .min(
+                      DesignTokens.componentRemoteNavigationPadding,
+                      math.max(0, (constraints.maxWidth - buttonWidth * 3) / 4),
+                    )
+                    .toDouble();
+                return Padding(
+                  padding: EdgeInsets.symmetric(horizontal: edgePadding),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _button(
+                        tooltip: '返回',
+                        enabled: enabled,
+                        onPressed: onBack,
+                        glyph: _RemoteNavigationGlyph.back,
+                        color: iconColor,
+                      ),
+                      _button(
+                        tooltip: '主屏幕',
+                        enabled: enabled,
+                        onPressed: onHome,
+                        glyph: _RemoteNavigationGlyph.home,
+                        color: iconColor,
+                      ),
+                      _button(
+                        tooltip: '最近任务',
+                        enabled: enabled,
+                        onPressed: onRecent,
+                        glyph: _RemoteNavigationGlyph.recent,
+                        color: iconColor,
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ),
