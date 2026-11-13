@@ -71,7 +71,10 @@ void main() {
       routes: [
         GoRoute(
           path: '/',
-          builder: (_, _) => const ControlPage(device: _device),
+          builder: (_, _) => const ControlPage(
+            device: _device,
+            packageName: 'com.example.remote',
+          ),
         ),
         GoRoute(
           path: '/screenshot',
@@ -86,6 +89,7 @@ void main() {
           deviceId: 'device',
           name: 'Phone',
           kind: .screen,
+          packageName: 'com.example.remote',
           status: .streaming,
           captureGeneration: 2,
           generation: 3,
@@ -122,6 +126,9 @@ void main() {
     expect(container.read(currentDeviceProvider), 'device');
     expect(videos.resumes, ['session']);
     expect(videos.starts, 1);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.detached);
+    await tester.pump();
+    expect(videos.stops, ['session']);
     container.updateOverrides([
       appSessionProvider.overrideWithValue(dependencies),
       deviceReaderProvider.overrideWithValue(dependencies.devices),
