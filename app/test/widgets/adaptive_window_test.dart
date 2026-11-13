@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/core/platform/window_environment.dart';
@@ -46,4 +48,87 @@ void main() {
     expect(observed?.posture, WindowPosture.book);
     expect(observed?.verticalPaneDivider, isNotNull);
   });
+
+  testWidgets('refreshes host posture when the window metrics change', (
+    tester,
+  ) async {
+    var posture = WindowPosture.normal;
+    var reads = 0;
+    WindowEnvironment? observed;
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(size: Size(700, 500)),
+        child: WindowEnvironmentScope(
+          readHostEnvironment: () async {
+            reads++;
+            return WindowEnvironment(
+              width: 1200,
+              height: 800,
+              posture: posture,
+              windowId: 'stage-7',
+            );
+          },
+          child: Builder(
+            builder: (context) {
+              observed = context.windowEnvironment;
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(observed?.posture, WindowPosture.normal);
+    expect(reads, 1);
+
+    posture = WindowPosture.tabletop;
+    tester.binding.handleMetricsChanged();
+    await tester.pump();
+    await tester.pump();
+
+    expect(reads, 2);
+    expect(observed?.posture, WindowPosture.tabletop);
+  });
+
+  testWidgets(
+    'keeps a live fold posture when the host only identifies a window',
+    (tester) async {
+      WindowEnvironment? observed;
+      await tester.pumpWidget(
+        MediaQuery(
+          data: MediaQueryData(
+            size: const Size(700, 500),
+            displayFeatures: const [
+              DisplayFeature(
+                bounds: Rect.fromLTWH(349, 0, 2, 500),
+                type: DisplayFeatureType.fold,
+                state: DisplayFeatureState.postureHalfOpened,
+              ),
+            ],
+          ),
+          child: WindowEnvironmentScope(
+            readHostEnvironment: () async => const WindowEnvironment(
+              width: 700,
+              height: 500,
+              windowId: 'stage-7',
+            ),
+            child: Builder(
+              builder: (context) {
+                expect(
+                  MediaQuery.of(context).displayFeatures.single.state,
+                  DisplayFeatureState.postureHalfOpened,
+                );
+                observed = context.windowEnvironment;
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(observed?.posture, WindowPosture.book);
+      expect(observed?.displayFeatures, hasLength(1));
+    },
+  );
 }

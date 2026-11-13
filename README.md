@@ -22,7 +22,7 @@ flutter run -d <device>
 | `app/` | Flutter应用、业务与平台runner |
 | `packages/`、`rust/` | 同名通用能力包及原生实现 |
 | `servers/` | 被控临时执行产物及来源 |
-| `designs/` | 产品与视觉规范、pen 只读对照源文件 |
+| `designs/` | 产品与视觉规范、Ardot 对照资料 |
 | `scripts/` | 生成、检查与构建 |
 
 入口：[产品](designs/prod/README.md) · [视觉](designs/design.md) · [应用约束](app/lib/AGENTS.md) · [脚本](scripts/README.md) · [词表](GLOSSARY.md)。

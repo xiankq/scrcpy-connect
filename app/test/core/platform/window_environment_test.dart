@@ -10,14 +10,14 @@ void main() {
     expect(WindowEnvironment.sizeClassFor(840), WindowSizeClass.expanded);
   });
 
-  test('workspace toolbar only applies to a usable expanded window', () {
+  test('workspace toolbar follows the expanded width breakpoint', () {
     expect(
       const WindowEnvironment(width: 1200, height: 479).usesWorkspaceToolbar,
-      isFalse,
+      isTrue,
     );
     expect(
-      const WindowEnvironment(width: 1200, height: 480).usesWorkspaceToolbar,
-      isTrue,
+      const WindowEnvironment(width: 839, height: 900).usesWorkspaceToolbar,
+      isFalse,
     );
   });
 
@@ -82,7 +82,6 @@ void main() {
       'width': 1200,
       'height': 800,
       'mode': 'split',
-      'posture': 'book',
       'windowId': 'stage-7',
       'insets': {'left': 12, 'top': 24, 'right': 12, 'bottom': 16},
       'input': {'touch': true, 'keyboard': true, 'pointer': true},
