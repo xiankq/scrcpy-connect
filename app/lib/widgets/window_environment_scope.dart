@@ -20,11 +20,13 @@ final class WindowEnvironmentScope extends StatefulWidget {
     required this.child,
     this.readHostEnvironment = _readHostEnvironment,
     this.readDesktopWindowIdentity = _readDesktopWindowIdentity,
+    this.watchHostEnvironment = _watchHostEnvironment,
   });
 
   final Widget child;
   final Future<WindowEnvironment?> Function() readHostEnvironment;
   final Future<WindowEnvironment?> Function() readDesktopWindowIdentity;
+  final Stream<WindowEnvironment?> Function() watchHostEnvironment;
 
   @override
   State<WindowEnvironmentScope> createState() => _WindowEnvironmentScopeState();
@@ -33,6 +35,7 @@ final class WindowEnvironmentScope extends StatefulWidget {
 final class _WindowEnvironmentScopeState extends State<WindowEnvironmentScope>
     with WidgetsBindingObserver {
   WindowEnvironment? _hostEnvironment;
+  StreamSubscription<WindowEnvironment?>? _hostEnvironmentSubscription;
   int _requestGeneration = 0;
   bool _reloadQueued = false;
 
@@ -40,12 +43,17 @@ final class _WindowEnvironmentScopeState extends State<WindowEnvironmentScope>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _hostEnvironmentSubscription = widget.watchHostEnvironment().listen(
+      _applyHostEnvironment,
+      onError: (_, _) {},
+    );
     unawaited(_loadHostEnvironment());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(_hostEnvironmentSubscription?.cancel());
     super.dispose();
   }
 
@@ -74,6 +82,19 @@ final class _WindowEnvironmentScopeState extends State<WindowEnvironmentScope>
         await widget.readHostEnvironment() ??
         await widget.readDesktopWindowIdentity();
     if (!mounted || requestGeneration != _requestGeneration) return;
+    _applyHostEnvironment(environment, requestGeneration: requestGeneration);
+  }
+
+  void _applyHostEnvironment(
+    WindowEnvironment? environment, {
+    int? requestGeneration,
+  }) {
+    if (!mounted) return;
+    if (requestGeneration != null && requestGeneration != _requestGeneration) {
+      return;
+    }
+    // An event is a newer host fact than every in-flight metrics read.
+    if (requestGeneration == null) _requestGeneration++;
     if (_sameEnvironment(_hostEnvironment, environment)) return;
     setState(() {
       _hostEnvironment = environment;
@@ -165,6 +186,17 @@ Future<WindowEnvironment?> _readHostEnvironment() async {
     return null;
   } on PlatformException {
     return null;
+  }
+}
+
+Stream<WindowEnvironment?> _watchHostEnvironment() {
+  try {
+    return const PlatformChannels().windowEnvironmentEvents.map((payload) {
+      if (payload is! Map) return null;
+      return WindowEnvironmentCodec.decode(Map<String, dynamic>.from(payload));
+    });
+  } on Exception {
+    return const Stream<WindowEnvironment?>.empty();
   }
 }
 

@@ -6,8 +6,14 @@ final class PlatformChannels {
   const PlatformChannels();
   static const _methods = MethodChannel('dev.scrcpyconnect/platform');
   static const _events = EventChannel('dev.scrcpyconnect/media_events');
+  static const _windowEnvironmentEvents = EventChannel(
+    'dev.scrcpyconnect/window_environment/events',
+  );
 
   Stream<dynamic> get events => _events.receiveBroadcastStream();
+
+  Stream<dynamic> get windowEnvironmentEvents =>
+      _windowEnvironmentEvents.receiveBroadcastStream();
 
   Future<Json?> requestOptional(String command, Json params) async {
     final result = await _methods.invokeMethod<Map<dynamic, dynamic>>(
