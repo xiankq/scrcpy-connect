@@ -4,6 +4,8 @@ import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+  private let engineGroup = FlutterEngineGroup(name: "scrcpy_connect", project: nil)
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -14,15 +16,42 @@ import UserNotifications
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    registerPlatformChannels(
+      messenger: engineBridge.applicationRegistrar.messenger(),
+      registry: engineBridge.pluginRegistry,
+      windowProvider: { AppDelegate.activeWindow() })
+  }
+
+  func makeEngine(initialRoute: String?) -> FlutterEngine {
+    let engine = engineGroup.makeEngine(
+      withEntrypoint: nil,
+      libraryURI: nil,
+      initialRoute: initialRoute)
+    GeneratedPluginRegistrant.register(with: engine)
+    return engine
+  }
+
+  func configure(engine: FlutterEngine, window: UIWindow) {
+    registerPlatformChannels(
+      messenger: engine.binaryMessenger,
+      registry: engine,
+      windowProvider: { [weak window] in window })
+  }
+
+  private func registerPlatformChannels(
+    messenger: FlutterBinaryMessenger,
+    registry: FlutterPluginRegistry,
+    windowProvider: @escaping () -> UIWindow?
+  ) {
     let platform = FlutterMethodChannel(
-      name: "dev.scrcpyconnect/platform", binaryMessenger: engineBridge.applicationRegistrar.messenger())
-    platform.setMethodCallHandler { call, result in
+      name: "dev.scrcpyconnect/platform", binaryMessenger: messenger)
+    platform.setMethodCallHandler { [weak self] call, result in
+      guard let self = self else {
+        result(FlutterError(code: "app_unavailable", message: "应用宿主已结束。", details: nil))
+        return
+      }
       if call.method == "window.readEnvironment" {
-        let scene = UIApplication.shared.connectedScenes
-          .compactMap { $0 as? UIWindowScene }
-          .first { $0.activationState != .unattached }
-        let window = scene?.windows.first { $0.isKeyWindow } ?? scene?.windows.first
-        guard let window = window, let scene = scene else {
+        guard let window = windowProvider(), let scene = window.windowScene else {
           result(nil)
           return
         }
@@ -45,14 +74,42 @@ import UserNotifications
         result(FlutterMethodNotImplemented)
         return
       }
-      result([
-        "supported": false,
-        "reason": "iOS 独立场景需宿主提供独立 Flutter 引擎；当前回退为同页控制会话",
-      ])
+      self.openIndependentScene(call, result: result)
     }
-    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SystemVisualPreferences") {
+    if let registrar = registry.registrar(forPlugin: "SystemVisualPreferences") {
       SystemVisualPreferences.register(with: registrar)
     }
+  }
+
+  private func openIndependentScene(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let arguments = call.arguments as? [String: Any],
+      let deviceId = arguments["deviceId"] as? String,
+      let packageName = arguments["packageName"] as? String,
+      let sessionId = arguments["sessionId"] as? String,
+      let initialRoute = arguments["initialRoute"] as? String,
+      !deviceId.isEmpty, !packageName.isEmpty, !sessionId.isEmpty,
+      !initialRoute.isEmpty else {
+      result(FlutterError(code: "invalid_window_request", message: "独立窗口参数不完整。", details: nil))
+      return
+    }
+    let windowId = UUID().uuidString
+    let activity = NSUserActivity(activityType: "dev.scrcpyconnect.remote-window")
+    activity.userInfo = [
+      "initialRoute": initialRoute,
+      "windowId": windowId,
+    ]
+    UIApplication.shared.requestSceneSessionActivation(
+      nil, userActivity: activity, options: nil) { _ in }
+    // UIKit only calls the error handler on failure and has no success callback;
+    // this response confirms that the scene request was accepted by the host.
+    result(["supported": true, "windowId": windowId])
+  }
+
+  private static func activeWindow() -> UIWindow? {
+    let scene = UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .first { $0.activationState != .unattached }
+    return scene?.windows.first { $0.isKeyWindow } ?? scene?.windows.first
   }
 }
 

@@ -17,6 +17,7 @@ import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/core/notifications/local_notification_sink.dart';
 import 'package:scrcpy_connect/core/notifications/system_notification_sink_provider.dart';
+import 'package:scrcpy_connect/core/platform/window_launch_route.dart';
 
 Future<void> main([List<String> args = const []]) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -66,6 +67,17 @@ final class _WindowLaunch {
 }
 
 Future<_WindowLaunch> _windowLaunch() async {
+  final requestedRoute =
+      WidgetsBinding.instance.platformDispatcher.defaultRouteName;
+  final mobileWindow = decodeIndependentWindowLaunchRoute(requestedRoute);
+  if (mobileWindow != null) {
+    return _WindowLaunch(
+      RemoteAppRoute(
+        deviceId: mobileWindow['deviceId']!,
+        packageName: mobileWindow['packageName']!,
+      ).location,
+    );
+  }
   if (!Platform.isLinux && !Platform.isMacOS && !Platform.isWindows) {
     return const _WindowLaunch('/devices');
   }
