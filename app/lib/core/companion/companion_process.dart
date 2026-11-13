@@ -43,11 +43,25 @@ Future<void> stopCompanionProcess(
   CompanionDeploymentIdentity identity, {
   required Duration timeout,
 }) async {
-  final signal = await companionShell(
-    connection,
-    _terminateCommand(identity),
-    timeout: timeout,
-  );
+  final String signal;
+  try {
+    signal = await companionShell(
+      connection,
+      _terminateCommand(identity),
+      timeout: timeout,
+    );
+  } on CompanionException catch (failure) {
+    if (failure.code != 'remote_process_error') rethrow;
+    // stdin 监督器可能正在回收 Java，/proc 读取或发信号会与退出竞态。
+    // 只重新核验原 PID/starttime，不重发信号；仍存活或无法核验就保留失败。
+    final status = await companionShell(
+      connection,
+      '${_readIdentity(identity)}\nprint -r -- pending',
+      timeout: timeout,
+    );
+    if (!status.startsWith('released:')) rethrow;
+    return;
+  }
   if (!signal.startsWith('released:') && signal.trim() != 'signalled') {
     throw const CompanionException('process_identity', '原互联服务身份未能确认，未继续清理。');
   }
