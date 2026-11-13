@@ -78,8 +78,12 @@ class IndependentWindowActivity : FlutterActivity() {
             result.error("invalid_window_request", "独立窗口参数不完整。", null)
             return
         }
-        launch(this, deviceId, packageName, sessionId, route)
-        result.success(mapOf("supported" to true, "windowId" to windowId))
+        // A child window must receive its own identity. Returning this
+        // Activity's id would make two native windows share one session
+        // boundary when a remote window opens another remote window.
+        val childWindowId = UUID.randomUUID().toString()
+        launch(this, deviceId, packageName, sessionId, route, childWindowId)
+        result.success(mapOf("supported" to true, "windowId" to childWindowId))
     }
 
     companion object {
