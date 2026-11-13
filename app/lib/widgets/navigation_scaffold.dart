@@ -55,7 +55,10 @@ class NavigationScaffold extends HookConsumerWidget {
                     DesignTokens.spacingMd,
                   ),
                   child: liquid.GlassTabBar.bottom(
-                    key: ValueKey(reducedMotion),
+                    // Keep the package-owned platter alive when accessibility
+                    // preferences change; replacing the glass layer here can
+                    // drop its sampled surface during the next frame.
+                    key: const ValueKey('app-bottom-navigation'),
                     tabs: [
                       for (final destination in destinations)
                         liquid.GlassTab(
@@ -95,9 +98,8 @@ class NavigationScaffold extends HookConsumerWidget {
                         : DesignTokens.colorGlassSelected,
                     settings: GlassMaterial.navigationBarSettings(context),
                     quality: GlassMaterial.quality(context),
-                    indicatorSettings: GlassMaterial.navigationIndicatorSettings(
-                      context,
-                    ),
+                    indicatorSettings:
+                        GlassMaterial.navigationIndicatorSettings(context),
                     pressScale: reducedMotion
                         ? 1
                         : DesignTokens.componentGlassInteractionScale,
