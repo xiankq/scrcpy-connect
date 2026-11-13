@@ -18,6 +18,10 @@ final class WindowEnvironmentCodec {
     }
     final insets = _insets(payload['insets']);
     final features = _features(payload['displayFeatures']);
+    final postureProvided =
+        payload.containsKey('posture') &&
+        _posture(payload['posture'], allowNull: true) != null;
+    final displayFeaturesProvided = payload['displayFeatures'] is List;
     final input = _input(payload['input']);
     final mode = _mode(payload['mode']);
     final posture =
@@ -36,6 +40,8 @@ final class WindowEnvironmentCodec {
       mode: mode,
       posture: posture,
       input: input,
+      postureProvided: postureProvided,
+      displayFeaturesProvided: displayFeaturesProvided,
     );
   }
 
