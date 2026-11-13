@@ -6,16 +6,18 @@ import 'dart:math';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/core/content/content_cache_failure.dart';
 import 'package:scrcpy_connect/core/content/content_cache_gate.dart';
+import 'package:scrcpy_connect/core/content/models/cache_configuration.dart';
+import 'package:scrcpy_connect/core/content/models/cache_inventory.dart';
 import 'package:scrcpy_connect/core/content/models/cache_status.dart';
 import 'package:scrcpy_connect/core/files/file_cache_leases.dart';
 import 'package:scrcpy_connect/core/files/models/file_cache_reservation.dart';
 import 'package:uuid/uuid.dart';
 
+export 'package:scrcpy_connect/core/content/models/cache_configuration.dart'
+    show defaultMediaCacheBudget;
 export 'package:scrcpy_connect/core/content/models/cache_status.dart';
 
-const defaultMediaCacheBudget = 512 * 1024 * 1024;
 const _maximumConfigurationBytes = 1024 * 1024;
-const _maximumInteger = 0x7fffffffffffffff;
 final _random = Random.secure();
 
 typedef CacheProtectedPaths = FutureOr<Iterable<String>> Function();
@@ -71,7 +73,7 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
   final CacheProtectionDetails? _protectionDetails;
   final void Function()? _onChanged;
   final bool Function()? _isDisposed;
-  late _Configuration _configuration;
+  late CacheConfiguration _configuration;
   List<int>? _storedConfigurationBytes;
   bool _storageUnknown = false;
   static const _unknownStorage = ContentCacheFailure(
@@ -113,7 +115,7 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
         try {
           final bytes = await _boundedRead(file);
           final document = jsonDecode(utf8.decode(bytes));
-          owner._configuration = _Configuration.parse(document);
+          owner._configuration = CacheConfiguration.fromJson(document);
           owner._storedConfigurationBytes = bytes;
         } on FormatException {
           throw const ContentCacheFailure(
@@ -130,7 +132,7 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
             '缓存配置不是普通文件。',
           );
         }
-        owner._configuration = const _Configuration();
+        owner._configuration = CacheConfiguration();
       }
       await _plainPath(file.path);
       await owner._validateConfiguration(owner._configuration);
@@ -155,21 +157,22 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
     await gate.runExclusive(() async {
       _requireActive();
       _requireConfirmedStorage();
-      final next = _Configuration(
-        budget: budgetBytes ?? _configuration.budget,
-        outgoing: outgoingDirectory ?? _configuration.outgoing,
-        retained: _configuration.retained,
+      final next = CacheConfiguration(
+        budgetBytes: budgetBytes ?? _configuration.budgetBytes,
+        outgoingDirectory:
+            outgoingDirectory ?? _configuration.outgoingDirectory,
+        retainedShares: _configuration.retainedShares,
       );
       await _validateConfiguration(next);
-      if (_configuration.outgoing != null &&
-          next.outgoing != _configuration.outgoing) {
+      if (_configuration.outgoingDirectory != null &&
+          next.outgoingDirectory != _configuration.outgoingDirectory) {
         throw const ContentCacheFailure(
           'cache_configuration_conflict',
           '已登记的原件缓存目录不能被另一目录替换。',
         );
       }
-      if (next.outgoing != null) {
-        await Directory(next.outgoing!).create(recursive: true);
+      if (next.outgoingDirectory != null) {
+        await Directory(next.outgoingDirectory!).create(recursive: true);
       }
       await _writeConfiguration(next);
       _configuration = next;
@@ -182,7 +185,7 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
     final deleted = await gate.runExclusive(() async {
       _requireActive();
       final snapshot = await _snapshot();
-      return _delete(snapshot, _maximumInteger);
+      return _delete(snapshot, maximumCacheBytes);
     });
     _onChanged?.call();
     return deleted;
@@ -206,10 +209,10 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
           type != FileSystemEntityType.directory) {
         throw const ContentCacheFailure('invalid_argument', '只能保留普通文件或目录。');
       }
-      final next = _Configuration(
-        budget: _configuration.budget,
-        outgoing: _configuration.outgoing,
-        retained: {..._configuration.retained, p.normalize(path)},
+      final next = CacheConfiguration(
+        budgetBytes: _configuration.budgetBytes,
+        outgoingDirectory: _configuration.outgoingDirectory,
+        retainedShares: {..._configuration.retainedShares, p.normalize(path)},
       );
       await _writeConfiguration(next);
       _configuration = next;
@@ -260,7 +263,7 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
             '写入预算不能重复覆盖同一路径或其子树。',
           );
         }
-        requested = _add(requested, reservation.bytes);
+        requested = addCacheBytes(requested, reservation.bytes);
         records.add(
           _Reservation(
             path,
@@ -285,8 +288,11 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
       }
       // 选中的现存原件在准入驱逐前就受到保护，不能为新字节腾挪而删除本次目标。
       if (snapshot != null) {
-        snapshot.protected.addAll(records.map((record) => record.path));
-        await _admit(snapshot, requested);
+        final admission = CacheInventory(snapshot.files, {
+          ...snapshot.protectedPaths,
+          for (final record in records) record.path,
+        }, snapshot.reservedBytes);
+        await _admit(admission, requested);
       }
       final id = const Uuid().v4();
       _leases[id] = records;
@@ -341,32 +347,33 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
 
   List<String> get _roots => [
     p.join(root.path, 'media'),
-    ?_configuration.outgoing,
+    ?_configuration.outgoingDirectory,
   ];
-  bool _managed(String path) => _roots.any((root) => _contains(root, path));
-  Future<void> _validateConfiguration(_Configuration configuration) async {
-    _size(configuration.budget);
-    if (configuration.budget == 0) {
+  bool _managed(String path) =>
+      _roots.any((root) => cacheContainsPath(root, path));
+  Future<void> _validateConfiguration(CacheConfiguration configuration) async {
+    _size(configuration.budgetBytes);
+    if (configuration.budgetBytes == 0) {
       throw const ContentCacheFailure('invalid_argument', '缓存预算必须为正整数。');
     }
-    final outgoing = configuration.outgoing;
+    final outgoing = configuration.outgoingDirectory;
     if (outgoing != null) {
       await _plainPath(outgoing);
       if (p.basename(outgoing) != 'outgoing' ||
-          _contains(outgoing, root.path) ||
-          _contains(p.join(root.path, 'media'), outgoing)) {
+          cacheContainsPath(outgoing, root.path) ||
+          cacheContainsPath(p.join(root.path, 'media'), outgoing)) {
         throw const ContentCacheFailure(
           'invalid_argument',
           '仅可登记应用缓存中的 outgoing 目录，不能登记应用根目录。',
         );
       }
     }
-    for (final retained in configuration.retained) {
+    for (final retained in configuration.retainedShares) {
       await _plainPath(retained);
       if (![
         p.join(root.path, 'media'),
         ?outgoing,
-      ].any((root) => _contains(root, retained))) {
+      ].any((root) => cacheContainsPath(root, retained))) {
         throw const ContentCacheFailure(
           'cache_storage_invalid',
           '保留路径不属于受管缓存目录。',
@@ -377,11 +384,11 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
   }
 
   Future<Set<String>> _protections() async => {
-    ..._configuration.retained,
+    ..._configuration.retainedShares,
     ..._leases.values.expand((records) => records.map((record) => record.path)),
     for (final path in await _protectedPaths()) p.normalize(path),
   };
-  Future<_Snapshot> _snapshot() async {
+  Future<CacheInventory> _snapshot() async {
     _requireConfirmedStorage();
     for (final root in _roots) {
       await _plainPath(root);
@@ -396,9 +403,9 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
     var reserved = 0;
     for (final record in records) {
       final growth = max(0, totals[record.path]! - record.baseline);
-      reserved = _add(reserved, max(0, record.bytes - growth));
+      reserved = addCacheBytes(reserved, max(0, record.bytes - growth));
     }
-    return _Snapshot(files, protected, reserved);
+    return CacheInventory(files, protected, reserved);
   }
 
   Future<int?> _readFreeBytes() async {
@@ -427,28 +434,33 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
     final free = await _readFreeBytes();
     final budgetAvailable = max(
       0,
-      _configuration.budget - snapshot.protectedBytes - snapshot.reserved,
+      _configuration.budgetBytes -
+          snapshot.protectedBytes -
+          snapshot.reservedBytes,
     );
-    final roots = snapshot.protected.toList()
+    final roots = snapshot.protectedPaths.toList()
       ..sort((a, b) => a.length.compareTo(b.length));
     final groups = <String>[];
     for (final path in roots) {
-      if (!groups.any((parent) => _contains(parent, path))) groups.add(path);
+      if (!groups.any((parent) => cacheContainsPath(parent, path))) {
+        groups.add(path);
+      }
     }
     final items = <ProtectedCacheItem>[];
     for (final path in groups) {
       final files = snapshot.files
-          .where((file) => _contains(path, file.path))
+          .where((file) => cacheContainsPath(path, file.path))
           .toList();
       if (files.isEmpty) continue;
       final matching = details
           .where(
             (detail) =>
-                _contains(path, detail.path) || _contains(detail.path, path),
+                cacheContainsPath(path, detail.path) ||
+                cacheContainsPath(detail.path, path),
           )
           .toList();
       final source = matching.firstOrNull;
-      final external = _configuration.retained.any(
+      final external = _configuration.retainedShares.any(
         (retained) => _overlaps(retained, path),
       );
       final reasons = matching
@@ -463,7 +475,10 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
           sourceLabel: source?.sourceLabel ?? '来源暂不可核验',
           sourcePath: source?.sourcePath,
           transferId: source?.transferId,
-          bytes: files.fold<int>(0, (total, file) => _add(total, file.bytes)),
+          bytes: files.fold<int>(
+            0,
+            (total, file) => addCacheBytes(total, file.bytes),
+          ),
           reason: external
               ? '系统分享或打开后的读取寿命未知，继续保留原件'
               : reasons.isNotEmpty
@@ -479,11 +494,11 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
       );
     }
     return CacheStatus(
-      budgetBytes: _configuration.budget,
-      usedBytes: snapshot.used,
+      budgetBytes: _configuration.budgetBytes,
+      usedBytes: snapshot.usedBytes,
       protectedBytes: snapshot.protectedBytes,
-      reclaimableBytes: snapshot.used - snapshot.protectedBytes,
-      reservedBytes: snapshot.reserved,
+      reclaimableBytes: snapshot.usedBytes - snapshot.protectedBytes,
+      reservedBytes: snapshot.reservedBytes,
       freeBytes: free,
       availableBytes: free == null
           ? budgetAvailable
@@ -492,24 +507,26 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
               max(
                 0,
                 free +
-                    snapshot.used -
+                    snapshot.usedBytes -
                     snapshot.protectedBytes -
-                    snapshot.reserved,
+                    snapshot.reservedBytes,
               ),
             ),
       spaceVerified: _freeBytes == null || free != null,
       protectedItems: items,
-      retainedShareCount: _configuration.retained.length,
-      retentionReason: _configuration.retained.isEmpty
+      retainedShareCount: _configuration.retainedShares.length,
+      retentionReason: _configuration.retainedShares.isEmpty
           ? null
           : '系统分享尚无可靠的读取完成回执，已分享的缓存会继续保留。',
     );
   }
 
-  Future<void> _admit(_Snapshot snapshot, int bytes) async {
+  Future<void> _admit(CacheInventory snapshot, int bytes) async {
     final budgetAvailable = max(
       0,
-      _configuration.budget - snapshot.protectedBytes - snapshot.reserved,
+      _configuration.budgetBytes -
+          snapshot.protectedBytes -
+          snapshot.reservedBytes,
     );
     final free = await _readFreeBytes();
     if (_freeBytes != null && free == null) {
@@ -518,22 +535,28 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
         '需要 ${_storageSize(bytes)}，当前无法核验本机可用空间，请检查存储后重试。',
       );
     }
-    final reclaimable = snapshot.used - snapshot.protectedBytes;
+    final reclaimable = snapshot.usedBytes - snapshot.protectedBytes;
     final available = free == null
         ? budgetAvailable
-        : min(budgetAvailable, max(0, free + reclaimable - snapshot.reserved));
+        : min(
+            budgetAvailable,
+            max(0, free + reclaimable - snapshot.reservedBytes),
+          );
     if (bytes > available) {
       throw ContentCacheFailure(
         'cache_budget_exceeded',
         '需要 ${_storageSize(bytes)}，当前可用 ${_storageSize(available)}。${reclaimable > 0 ? '可清理 ${_storageSize(reclaimable)} 的可回收暂存，或减少选择后重试。' : '当前没有可清理项目；可减少选择、在原手机打开，或使用已有的其他传输方式。'}受保护原件会继续保留。',
       );
     }
-    final required = _add(_add(snapshot.used, snapshot.reserved), bytes);
+    final required = addCacheBytes(
+      addCacheBytes(snapshot.usedBytes, snapshot.reservedBytes),
+      bytes,
+    );
     final needed = max(
       0,
       max(
-        required - _configuration.budget,
-        free == null ? 0 : bytes + snapshot.reserved - free,
+        required - _configuration.budgetBytes,
+        free == null ? 0 : bytes + snapshot.reservedBytes - free,
       ),
     );
     if (needed > 0) await _delete(snapshot, needed);
@@ -545,12 +568,20 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
         '需要 ${_storageSize(bytes)}，当前无法核验本机可用空间，请检查存储后重试。',
       );
     }
-    if (_add(_add(after.used, after.reserved), bytes) > _configuration.budget ||
+    if (addCacheBytes(
+              addCacheBytes(after.usedBytes, after.reservedBytes),
+              bytes,
+            ) >
+            _configuration.budgetBytes ||
         _freeBytes != null &&
-            (remainingFree == null || bytes + after.reserved > remainingFree)) {
+            (remainingFree == null ||
+                bytes + after.reservedBytes > remainingFree)) {
       final remaining = min(
-        max(0, _configuration.budget - after.used - after.reserved),
-        remainingFree == null ? 0 : max(0, remainingFree - after.reserved),
+        max(
+          0,
+          _configuration.budgetBytes - after.usedBytes - after.reservedBytes,
+        ),
+        remainingFree == null ? 0 : max(0, remainingFree - after.reservedBytes),
       );
       throw ContentCacheFailure(
         'cache_budget_exceeded',
@@ -559,15 +590,18 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
     }
   }
 
-  Future<int> _delete(_Snapshot snapshot, int wanted) async {
-    snapshot.files.sort((a, b) {
-      final byTime = a.modified.compareTo(b.modified);
-      return byTime == 0 ? a.path.compareTo(b.path) : byTime;
-    });
+  Future<int> _delete(CacheInventory snapshot, int wanted) async {
+    final files = snapshot.files.toList()
+      ..sort((a, b) {
+        final byTime = a.modified.compareTo(b.modified);
+        return byTime == 0 ? a.path.compareTo(b.path) : byTime;
+      });
     var deleted = 0;
-    for (final file in snapshot.files) {
+    for (final file in files) {
       if (deleted >= wanted) break;
-      if (snapshot.protected.any((path) => _contains(path, file.path))) {
+      if (snapshot.protectedPaths.any(
+        (path) => cacheContainsPath(path, file.path),
+      )) {
         continue;
       }
       await _plainPath(file.path);
@@ -578,7 +612,7 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
       try {
         final length = await File(file.path).length();
         await File(file.path).delete();
-        deleted = _add(deleted, length);
+        deleted = addCacheBytes(deleted, length);
       } on PathNotFoundException {
         /* 并发消失不计入本次实际删除量。 */
       }
@@ -586,7 +620,7 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
     return deleted;
   }
 
-  Future<void> _writeConfiguration(_Configuration configuration) async {
+  Future<void> _writeConfiguration(CacheConfiguration configuration) async {
     _requireConfirmedStorage();
     final bytes = utf8.encode(jsonEncode(configuration.toJson()));
     if (bytes.length > _maximumConfigurationBytes) {
@@ -650,47 +684,6 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
 
 enum _CommitOutcome { committed, unchanged, unknown }
 
-final class _Configuration {
-  const _Configuration({
-    this.budget = defaultMediaCacheBudget,
-    this.outgoing,
-    this.retained = const {},
-  });
-  factory _Configuration.parse(Object? value) {
-    if (value is! Map ||
-        value.keys.any(
-          (key) => !const {
-            'budgetBytes',
-            'outgoingDirectory',
-            'retainedShares',
-          }.contains(key),
-        ) ||
-        value['budgetBytes'] is! int ||
-        value['retainedShares'] is! List ||
-        value['outgoingDirectory'] != null &&
-            value['outgoingDirectory'] is! String) {
-      throw const ContentCacheFailure('cache_storage_invalid', '媒体缓存所有权记录损坏。');
-    }
-    final retained = value['retainedShares'] as List;
-    if (retained.any((path) => path is! String)) {
-      throw const ContentCacheFailure('cache_storage_invalid', '媒体缓存保留路径无效。');
-    }
-    return _Configuration(
-      budget: value['budgetBytes'] as int,
-      outgoing: value['outgoingDirectory'] as String?,
-      retained: Set<String>.unmodifiable(retained.cast<String>()),
-    );
-  }
-  final int budget;
-  final String? outgoing;
-  final Set<String> retained;
-  Map<String, Object?> toJson() => {
-    'budgetBytes': budget,
-    'outgoingDirectory': outgoing,
-    'retainedShares': retained.toList()..sort(),
-  };
-}
-
 final class _Reservation {
   _Reservation(
     this.path,
@@ -703,19 +696,6 @@ final class _Reservation {
   final int bytes;
   final String? name, sourceLabel, sourcePath;
   int baseline = 0;
-}
-
-typedef _CacheFile = ({String path, int bytes, DateTime modified});
-
-final class _Snapshot(
-  final List<_CacheFile> files,
-  final Set<String> protected,
-  final int reserved,
-) {
-  int get used => files.fold(0, (sum, file) => _add(sum, file.bytes));
-  int get protectedBytes => files
-      .where((file) => protected.any((path) => _contains(path, file.path)))
-      .fold(0, (sum, file) => _add(sum, file.bytes));
 }
 
 Future<void> _plainPath(String path) async {
@@ -736,13 +716,11 @@ Future<void> _plainPath(String path) async {
   }
 }
 
-bool _contains(String parent, String child) =>
-    p.equals(parent, child) || p.isWithin(parent, child);
 bool _overlaps(String first, String second) =>
-    _contains(first, second) || _contains(second, first);
+    cacheContainsPath(first, second) || cacheContainsPath(second, first);
 // 每个文件只遍历祖先组件一次，避免每条租约重复扫描完整缓存。
 Map<String, int> _bytesUnderPaths(
-  List<_CacheFile> files,
+  List<CacheFileUsage> files,
   Iterable<String> paths,
 ) {
   final totals = {for (final path in paths) path: 0};
@@ -750,7 +728,7 @@ Map<String, int> _bytesUnderPaths(
     var ancestor = file.path;
     while (true) {
       if (totals.containsKey(ancestor)) {
-        totals[ancestor] = _add(totals[ancestor]!, file.bytes);
+        totals[ancestor] = addCacheBytes(totals[ancestor]!, file.bytes);
       }
       final parent = p.dirname(ancestor);
       if (parent == ancestor) break;
@@ -760,15 +738,16 @@ Map<String, int> _bytesUnderPaths(
   return totals;
 }
 
-Future<List<_CacheFile>> _scan(List<String> roots) async {
+Future<List<CacheFileUsage>> _scan(List<String> roots) async {
   final unique = roots.toSet();
   final pending = unique
       .where(
-        (path) =>
-            !unique.any((other) => other != path && _contains(other, path)),
+        (path) => !unique.any(
+          (other) => other != path && cacheContainsPath(other, path),
+        ),
       )
       .toList();
-  final files = <_CacheFile>[];
+  final files = <CacheFileUsage>[];
   while (pending.isNotEmpty) {
     final path = pending.removeLast();
     final type = await FileSystemEntity.type(path, followLinks: false);
@@ -785,16 +764,9 @@ Future<List<_CacheFile>> _scan(List<String> roots) async {
 }
 
 void _size(int bytes) {
-  if (bytes < 0 || bytes > _maximumInteger) {
+  if (bytes < 0 || bytes > maximumCacheBytes) {
     throw const ContentCacheFailure('invalid_argument', '缓存字节数必须为非负整数。');
   }
-}
-
-int _add(int first, int second) {
-  if (first > _maximumInteger - second) {
-    throw const ContentCacheFailure('invalid_argument', '缓存字节数超过容量。');
-  }
-  return first + second;
 }
 
 Future<List<int>> _boundedRead(File file) async {
