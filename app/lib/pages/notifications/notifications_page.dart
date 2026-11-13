@@ -29,7 +29,7 @@ class NotificationsPage extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final alerts = useSystemNotifications(context, ref);
-    useListenable(alerts.changes);
+    useStream(alerts.changes);
     final settings = ref.watch(
       preferencesProvider.select((state) => state.values),
     );

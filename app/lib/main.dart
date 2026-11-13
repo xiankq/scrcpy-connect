@@ -9,8 +9,8 @@ import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
 import 'package:scrcpy_connect/pages/startup_error/startup_error_page.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
-import 'package:scrcpy_connect/widgets/system_notification_sink.dart';
-import 'package:scrcpy_connect/widgets/system_notifications.dart';
+import 'package:scrcpy_connect/core/notifications/local_notification_sink.dart';
+import 'package:scrcpy_connect/core/notifications/system_notification_sink_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

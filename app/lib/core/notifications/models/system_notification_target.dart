@@ -1,11 +1,8 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
-
 import 'system_notice.dart';
 
 /// 只向系统交付定位信息，不把它作为授权回执。
-@immutable
 class SystemNotificationTarget {
   const SystemNotificationTarget({
     required this.kind,
@@ -59,7 +56,6 @@ class SystemNotificationTarget {
   }
 }
 
-@immutable
 class SystemNotificationActivation {
   const SystemNotificationActivation({
     required this.target,

@@ -66,7 +66,7 @@ final class MetadataOperationNotifierProvider
 }
 
 String _$metadataOperationNotifierHash() =>
-    r'19a4250c604fdbba22bd90fd72d873006927ac93';
+    r'ce879e3518f93a613897260b5a655d7647b231a4';
 
 /// 同页串行迁移记录；选择器和预览由页面呈现，离页不撤销已提交的导入。
 

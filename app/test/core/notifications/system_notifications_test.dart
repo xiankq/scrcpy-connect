@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/core/notifications/system_notification_sink.dart';
+
 import 'dart:async';
 
 import 'package:scrcpy_connect/core/events/models/app_event.dart';
@@ -13,8 +15,8 @@ import 'package:scrcpy_connect/core/devices/models/observed_device_snapshot.dart
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
-import 'package:scrcpy_connect/widgets/models/system_notification_snapshot.dart';
-import 'package:scrcpy_connect/widgets/system_notifications.dart';
+import 'package:scrcpy_connect/core/notifications/models/system_notification_snapshot.dart';
+import 'package:scrcpy_connect/core/notifications/system_notifications.dart';
 
 void main() {
   final snapshot = SystemNotificationSnapshot(

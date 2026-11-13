@@ -42,7 +42,7 @@ class BackgroundPage extends HookConsumerWidget {
       return lifecycle.dispose;
     }, const []);
     final alerts = useSystemNotifications(context, ref);
-    useListenable(alerts.changes);
+    useStream(alerts.changes);
     final alertStatus = alerts.status;
     Future<void> updateAlert(PreferenceChanges changes) async {
       if (changing.value) return;

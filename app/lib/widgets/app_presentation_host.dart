@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/core/notifications/models/system_notice.dart';
+
 import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
@@ -43,7 +45,7 @@ class AppPresentationHost extends HookConsumerWidget {
     final shareCycle = useState(0);
     final lifecycle = useAppLifecycleState();
     final systemNotifications = useSystemNotifications(context, ref);
-    useListenable(systemNotifications.changes);
+    useStream(systemNotifications.changes);
     useOnAppLifecycleStateChange((previous, current) {
       // 暂停后可能不再绘制下一帧，因此在生命周期回调中立即更新提醒资格。
       systemNotifications.setForeground(current == AppLifecycleState.resumed);

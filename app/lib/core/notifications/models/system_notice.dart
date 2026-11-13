@@ -1,11 +1,8 @@
-import 'package:flutter/foundation.dart';
-
 enum SystemNotificationKind { notification, call }
 
 const systemNotificationIdMin = 100000;
 const systemNotificationIdMax = 199999;
 
-@immutable
 class SystemNotificationStatus {
   const SystemNotificationStatus({
     this.supported = false,
@@ -25,7 +22,6 @@ class SystemNotificationStatus {
   final String reason;
 }
 
-@immutable
 class SystemNotice {
   const SystemNotice({
     required this.id,

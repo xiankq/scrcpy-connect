@@ -10,6 +10,9 @@ import 'package:scrcpy_connect/core/clipboard/remote_clipboard.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/models/device_call.dart';
+import 'package:scrcpy_connect/core/devices/models/device_notification.dart';
+import 'package:scrcpy_connect/core/devices/models/device_observation_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/observed_device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/models/device_observation_event.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
@@ -20,7 +23,8 @@ import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart
 import 'package:scrcpy_connect/core/settings/settings_management.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/app_presentation_host.dart';
-import 'package:scrcpy_connect/widgets/system_notifications.dart';
+import 'package:scrcpy_connect/core/notifications/system_notification_sink.dart';
+import 'package:scrcpy_connect/core/notifications/system_notification_sink_provider.dart';
 
 void main() {
   testWidgets('类型化来电呈现电话入口，后台前迟到的呈现不打开，新回执可重试', (tester) async {
@@ -127,6 +131,119 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+  testWidgets('系统提醒点击经核心变更流通知宿主，后台等待，前台只打开当前目标一次', (tester) async {
+    final events = StreamController<RuntimeEvent>.broadcast(sync: true);
+    final sink = _NotificationSink();
+    final navigator = GlobalKey<NavigatorState>();
+    final router = GoRouter(
+      navigatorKey: navigator,
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, _) => const Scaffold(body: Text('首页')),
+        ),
+        GoRoute(
+          path: '/devices/:deviceId/notifications',
+          builder: (_, state) =>
+              Scaffold(body: Text('通知目标：${state.pathParameters['deviceId']}')),
+        ),
+      ],
+    );
+    final container = ProviderContainer(
+      overrides: [
+        appSessionProvider.overrideWithValue(
+          AppSession(
+            events: events.stream,
+            initialize: false,
+            initialState: AppState(
+              devices: [const DeviceSnapshot(id: 'device', status: .connected)],
+              loading: false,
+              settings: Preferences(notificationAlerts: true),
+            ),
+          ),
+        ),
+        deviceReaderProvider.overrideWithValue(_Devices()),
+        settingsManagementProvider.overrideWithValue(_Settings()),
+        incomingSharesProvider.overrideWithValue(_Shares()),
+        remoteClipboardProvider.overrideWithValue(_Clipboard()),
+        systemNotificationSinkProvider.overrideWithValue(sink),
+      ],
+    );
+    addTearDown(() async {
+      container.dispose();
+      router.dispose();
+      await events.close();
+      await sink.clicks.close();
+    });
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(
+          theme: ConnectTokens.theme(Brightness.light),
+          routerConfig: router,
+          builder: (_, child) => AppPresentationHost(
+            navigator: navigator,
+            router: router,
+            child: child!,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    const baseline = DeviceNotificationsSnapshot(
+      deviceId: 'device',
+      live: true,
+      observationEnabled: true,
+      observationEpoch: 1,
+    );
+    events.add(
+      DeviceObservationChanged(
+        ObservedDeviceSnapshot(
+          observation: const DeviceObservationSnapshot(
+            deviceId: 'device',
+            wanted: true,
+            phase: .observing,
+            generation: 1,
+          ),
+          notifications: baseline,
+          calls: const DeviceCallsSnapshot(deviceId: 'device'),
+        ),
+      ).toApplicationEvent(),
+    );
+    events.add(
+      DeviceNotificationsChanged(
+        baseline.copyWith(
+          notifications: [
+            const DeviceNotification(
+              id: 'notice',
+              key: 'notice',
+              revision: 'one',
+              body: 'private body',
+            ),
+          ],
+        ),
+      ).toApplicationEvent(),
+    );
+    await tester.pumpAndSettle();
+    expect(sink.shown, hasLength(1));
+    expect(sink.shown.single.body, isNot(contains('private body')));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    sink.clicks.add(sink.shown.single.payload);
+    await tester.pump();
+    expect(find.text('通知目标：device'), findsNothing);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(find.text('通知目标：device'), findsOneWidget);
+    router.pop();
+    await tester.pumpAndSettle();
+    sink.clicks.add(sink.shown.single.payload);
+    await tester.pumpAndSettle();
+    expect(find.text('首页'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 }
 
 final class _Devices implements DeviceReader {
@@ -151,4 +268,16 @@ final class _Clipboard implements RemoteClipboard {
   ) => () {};
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _NotificationSink extends NoopSystemNotificationSink {
+  final clicks = StreamController<String>.broadcast(sync: true);
+  final shown = <SystemNotice>[];
+  @override
+  Stream<String> get activations => clicks.stream;
+  @override
+  Future<SystemNotificationStatus> status() async =>
+      const SystemNotificationStatus(supported: true, permissionGranted: true);
+  @override
+  Future<void> show(SystemNotice notice) async => shown.add(notice);
 }
