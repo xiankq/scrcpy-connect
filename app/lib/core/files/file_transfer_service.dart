@@ -12,6 +12,7 @@ import 'package:scrcpy_connect/core/content/models/cache_status.dart';
 import 'package:scrcpy_connect/core/files/file_cache_leases.dart';
 import 'package:scrcpy_connect/core/files/models/file_cache_reservation.dart';
 import 'package:scrcpy_connect/core/files/file_cancellation.dart';
+import 'package:scrcpy_connect/core/files/file_directories.dart';
 import 'package:scrcpy_connect/core/files/file_executor.dart';
 import 'package:scrcpy_connect/core/files/file_failure.dart';
 import 'package:scrcpy_connect/core/files/file_paths.dart';
@@ -69,6 +70,7 @@ class FileTransferService implements FileTransfers {
   // worker 结算不等于执行资源退出；精确句柄只在 close 确认后撤销。
   final _transferCleanups = <String, _TransferCleanup>{};
   final _batchStates = <String, _TransferBatch>{};
+  final _changedDirectories = <FileDirectoryTarget>{};
   final _deviceStops = <String, Future<void>>{};
   bool _closed = false;
   bool _closeConfirmed = false;
@@ -1133,12 +1135,23 @@ class FileTransferService implements FileTransfers {
     if (_closed) return;
     final state = _batchState(batch);
     if (state.worker != null) return;
+    // 在执行前固定归属；结束前删除历史也不能丢掉目录变更通知。
+    state.directories = {
+      for (final task in _tasks.values)
+        if (task.record.batchId == batch &&
+            task.record.direction == FileTransferDirection.push)
+          (
+            deviceId: task.record.deviceId,
+            path: p.posix.dirname(task.record.destination),
+          ),
+    };
     final job = Future<void>(() => _runBatch(batch, state));
     state.worker = job;
     unawaited(
       job.then<void>(
         (_) {
           state.worker = null;
+          _changedDirectories.addAll(state.directories);
           if (!_closed &&
               _tasks.values.any(
                 (t) =>
@@ -1153,16 +1166,33 @@ class FileTransferService implements FileTransfers {
             _schedule(batch);
           }
           _forgetIdleBatch(batch, state);
+          _notifyChangedDirectories();
         },
         onError: (Object error, StackTrace stack) {
           state.worker = null;
+          _changedDirectories.addAll(state.directories);
           _forgetIdleBatch(batch, state);
+          _notifyChangedDirectories();
           if (!_events.isClosed) {
             _events.add(FileTransferFailed(batch, error));
           }
         },
       ),
     );
+  }
+
+  void _notifyChangedDirectories() {
+    if (_closed || _events.isClosed) return;
+    final writing = {
+      for (final state in _batchStates.values)
+        if (state.worker != null) ...state.directories,
+    };
+    for (final target in _changedDirectories.toList()) {
+      // 两个批次并发写同一目录时，等最后一个执行者收尾再通知。
+      if (writing.contains(target)) continue;
+      _changedDirectories.remove(target);
+      _events.add(FileTransferDirectoryChanged(target.deviceId, target.path));
+    }
   }
 
   Future<void> _runBatch(String batch, _TransferBatch state) async {
@@ -1746,6 +1776,7 @@ final class _TransferCleanup {
 
 /// 同一批次的准备、worker、当前执行、缓存租约与变更准入共用唯一登记。
 final class _TransferBatch {
+  Set<FileDirectoryTarget> directories = {};
   String? device;
   _TransferPreparation? preparation;
   Future<void>? worker;

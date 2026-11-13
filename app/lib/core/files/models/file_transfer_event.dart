@@ -29,3 +29,15 @@ final class FileTransferFailed extends FileTransferEvent {
   @override
   String get type => 'transfers.failed';
 }
+
+/// 本机传输已停止写入该目录；浏览者重新读取，不复用提交前的列表。
+final class FileTransferDirectoryChanged extends FileTransferEvent {
+  const FileTransferDirectoryChanged(this.deviceId, this.path);
+
+  @override
+  final String deviceId;
+  final String path;
+
+  @override
+  String get type => 'files.directory.changed';
+}

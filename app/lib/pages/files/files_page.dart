@@ -211,11 +211,10 @@ class FilesPage extends HookConsumerWidget {
         }
         return;
       }
-      final submitted = await DocumentImportRoute(
+      await DocumentImportRoute(
         deviceId: device.id,
         destination: path.value,
       ).push<bool>(context);
-      if (submitted == true && context.mounted) unawaited(refresh());
     }
 
     void toggleEntry(FileCatalogEntry entry) {

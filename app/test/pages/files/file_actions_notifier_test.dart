@@ -75,6 +75,31 @@ void main() {
     expect(await retried, isTrue);
   });
 
+  test('发送回执只表示已登记，不在传输仍写入时刷新目录', () async {
+    final sent = actions.send([
+      const FileTransferSelection(
+        source: '/local/file',
+        destination: '/sdcard/Download/file',
+      ),
+    ]);
+    transfers.pending.complete(
+      const FileTransferSubmission(
+        batchId: 'batch',
+        transferId: 'task',
+        itemCount: 1,
+        status: .queued,
+      ),
+    );
+    expect(await sent, isTrue);
+    expect(container.read(provider).busy, isFalse);
+    expect(
+      (container.read(
+        fileDirectoryProvider(_target).notifier,
+      ) as _Directory)._refreshes,
+      0,
+    );
+  });
+
   test('未核验目录或离线设备拒绝新操作，不调用核心执行能力', () async {
     (container.read(fileDirectoryProvider(_target).notifier) as _Directory)
         .invalidateDirectory();

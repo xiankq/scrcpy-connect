@@ -4,10 +4,14 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/core/devices/device_readiness_provider.dart';
 import 'package:scrcpy_connect/core/events/runtime_events.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/core/files/file_cancellation.dart';
+import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/files/file_changes_provider.dart';
+import 'package:scrcpy_connect/core/files/file_directories.dart';
+import 'package:scrcpy_connect/core/files/file_directory_notifier.dart';
 import 'package:scrcpy_connect/core/files/file_executor.dart';
 import 'package:scrcpy_connect/core/files/file_failure.dart';
 import 'package:scrcpy_connect/core/files/file_publication_leases.dart';
@@ -258,6 +262,10 @@ void main() {
     final settled = transfers.events
         .asyncMap((_) => transfers.readTransfer(submitted.transferId!))
         .firstWhere((snapshot) => snapshot.errorCode == 'result_unknown');
+    final directoryChanged = transfers.events
+        .where((event) => event is FileTransferDirectoryChanged)
+        .cast<FileTransferDirectoryChanged>()
+        .first;
     executor.copied.complete(3);
     final unknown = await settled;
     expect(unknown.status, FileTransferStatus.failed);
@@ -265,6 +273,7 @@ void main() {
     expect(unknown.partialDestinationPossible, isTrue);
     expect(unknown.canRestart, isFalse);
     expect(unknown.canExport, isFalse);
+    expect((await directoryChanged).path, '/sdcard');
     await transfers.close();
     final durable = (await FileTransferJournal(directory)
         .load())[submitted.transferId]!;
@@ -273,6 +282,51 @@ void main() {
     expect(durable.transferred, 3);
     expect(durable.errorCode, 'result_unknown');
     expect(executor.copyCalls, 1);
+  });
+
+  test('同目录并发批次等最后一个执行者退出才通知，取消也结算目录变化', () async {
+    final directory = await Directory.systemTemp.createTemp('transfer-list-');
+    final executor = _ConcurrentExecutor();
+    final transfers = await FileTransferService.open(
+      executor: executor,
+      dataDirectory: directory,
+    );
+    final changes = <FileTransferDirectoryChanged>[];
+    final subscription = transfers.events.listen((event) {
+      if (event is FileTransferDirectoryChanged) changes.add(event);
+    });
+    addTearDown(() async {
+      for (final copy in executor.copies) {
+        if (!copy.isCompleted) copy.complete(3);
+      }
+      await transfers.close();
+      await subscription.cancel();
+      await directory.delete(recursive: true);
+    });
+    final first = await transfers.startTransfer(_plan());
+    final second = await transfers.startTransfer(_plan());
+    await executor.bothStarted.future;
+    expect(changes, isEmpty);
+    final firstCompleted = transfers.events
+        .asyncMap((_) => transfers.readTransfer(first.transferId!))
+        .firstWhere((snapshot) => snapshot.status == .completed);
+    executor.copies.first.complete(3);
+    await firstCompleted;
+    // 等待原 worker 的真实收尾，不用延时猜测事件是否已经到达。
+    await transfers.cancelTransfer(FileTransferTarget.batch(first.batchId));
+    expect(
+      (await transfers.readTransfer(first.transferId!)).status,
+      FileTransferStatus.completed,
+    );
+    expect(changes, isEmpty);
+    await transfers.cancelTransfer(FileTransferTarget.batch(second.batchId));
+    expect(
+      (await transfers.readTransfer(second.transferId!)).status,
+      FileTransferStatus.cancelled,
+    );
+    expect(changes, hasLength(1));
+    expect(changes.single.deviceId, 'device');
+    expect(changes.single.path, '/sdcard');
   });
 
   test('实际传输所有者的持久变更和进度共用业务水位，并直接驱动文件查询失效', () async {
@@ -290,8 +344,15 @@ void main() {
       handlePlatform: (_) async {},
       isDisposed: () => false,
     );
+    final directories = _ObservedDirectories();
     final container = ProviderContainer(
-      overrides: [runtimeEventsProvider.overrideWithValue(events.stream)],
+      overrides: [
+        runtimeEventsProvider.overrideWithValue(events.stream),
+        fileDirectoriesProvider.overrideWithValue(directories),
+        deviceReadinessProvider('device').overrideWithValue(
+          const DeviceReadiness(connectionId: 'connection', status: .connected),
+        ),
+      ],
     );
     final received = <RuntimeEvent>[];
     final changes = <FileChange>[];
@@ -300,6 +361,11 @@ void main() {
         .read(fileChangesProvider)
         .listen(changes.add);
     await events.attach(files: [transfers.events]);
+    const target = (deviceId: 'device', path: '/sdcard');
+    container.listen(fileDirectoryProvider(target), (_, _) {});
+    await Future<void>.delayed(Duration.zero);
+    await container.pump();
+    expect(directories.reads, 1);
     addTearDown(() async {
       if (!executor.copied.isCompleted) executor.copied.complete(3);
       await transfers.close();
@@ -333,13 +399,25 @@ void main() {
     expect(progress.transferred, 1);
     expect(changes, isNotEmpty);
     expect(changes.every((change) => change.kind == .transfer), isTrue);
+    expect(directories.reads, 1);
 
     final completed = events.stream.firstWhere(
       (event) => event.data is FileTransferChanged && executor.committed,
     );
+    final directoryChanged = container
+        .read(fileChangesProvider)
+        .firstWhere((change) => change.kind == FileChangeKind.directory);
     executor.copied.complete(3);
     await completed;
+    final directoryChange = await directoryChanged.timeout(
+      const Duration(seconds: 5),
+    );
+    expect(directoryChange.deviceId, 'device');
+    expect(directoryChange.path, '/sdcard');
     await Future<void>.delayed(Duration.zero);
+    await container.pump();
+    expect(directories.reads, 2);
+    expect(container.read(fileDirectoryProvider(target)).verified, isTrue);
     final task = await transfers.readTransfer(submitted.transferId!);
     expect(task.status, FileTransferStatus.completed);
     expect(task.transferred, 3);
@@ -471,6 +549,64 @@ final class _Resource implements FileExecutionResource {
   Future<void> close() async {
     closes++;
     if (fail) throw StateError('原 worker 尚未退出');
+  }
+}
+
+final class _ConcurrentExecutor extends _Executor {
+  final copies = <Completer<int>>[];
+  final bothStarted = Completer<void>();
+
+  @override
+  Future<int> copy(
+    String device,
+    String source,
+    String temporary, {
+    required bool push,
+    required FileStamp expected,
+    required FileCancellation cancellation,
+    required void Function(int) onProgress,
+  }) {
+    final copied = Completer<int>();
+    copies.add(copied);
+    if (copies.length == 2) bothStarted.complete();
+    final remove = cancellation.onCancel(() {
+      if (!copied.isCompleted) {
+        copied.completeError(const FileFailure('cancelled', '已取消'));
+      }
+    });
+    return copied.future.whenComplete(remove);
+  }
+
+  @override
+  Future<String> mutate(
+    String device,
+    String action,
+    String path, {
+    String destination = '',
+    bool local = false,
+    bool replace = false,
+    required FileCancellation cancellation,
+  }) async {
+    cancellation.check();
+    return 'atomicRename';
+  }
+}
+
+final class _ObservedDirectories implements FileDirectories {
+  int reads = 0;
+
+  @override
+  Future<FileDirectorySnapshot> readDirectory(
+    FileDirectoryTarget target, {
+    FileCatalogFilter filter = .all,
+    FileDirectorySort sort = .name,
+    bool descending = false,
+    int offset = 0,
+    int limit = 10000,
+    FileCancellation? cancellation,
+  }) async {
+    reads++;
+    return FileDirectorySnapshot(deviceId: target.deviceId, path: target.path);
   }
 }
 

@@ -73,9 +73,12 @@ class FileActionsNotifier extends _$FileActionsNotifier {
         items: items,
       ),
     );
-  });
+  }, refreshDirectory: false);
 
-  Future<bool> _run(Future<void> Function() action) async {
+  Future<bool> _run(
+    Future<void> Function() action, {
+    bool refreshDirectory = true,
+  }) async {
     if (!ref.mounted || state.busy) return false;
     final generation = _generation;
     if (!ref.read(deviceReadinessProvider(target.deviceId)).ready ||
@@ -88,7 +91,9 @@ class FileActionsNotifier extends _$FileActionsNotifier {
       if (!_current(generation)) return false;
       await action();
       if (!_current(generation)) return false;
-      unawaited(ref.read(fileDirectoryProvider(target).notifier).refresh());
+      if (refreshDirectory) {
+        unawaited(ref.read(fileDirectoryProvider(target).notifier).refresh());
+      }
       return true;
     } catch (error) {
       if (_current(generation)) state = FileActionState(error: '$error');

@@ -13,6 +13,13 @@ final fileChangesProvider = Provider<Stream<FileChange>>((ref) {
       .map((event) {
         final type = event.type;
         final data = event.data;
+        if (data is FileTransferDirectoryChanged) {
+          return FileChange(
+            FileChangeKind.directory,
+            deviceId: data.deviceId,
+            path: data.path,
+          );
+        }
         final kind = data is FileTransferEvent
             ? FileChangeKind.transfer
             : data is RecoveryEvent
