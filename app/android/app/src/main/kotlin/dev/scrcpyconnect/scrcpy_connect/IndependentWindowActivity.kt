@@ -43,6 +43,8 @@ class IndependentWindowActivity : FlutterActivity() {
         )
     }
 
+    internal fun readWindowId(): String = windowId
+
     internal fun openIndependent(call: MethodCall, result: MethodChannel.Result) {
         val deviceId = call.argument<String>("deviceId")
         val packageName = call.argument<String>("packageName")
