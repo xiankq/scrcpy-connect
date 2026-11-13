@@ -15,7 +15,21 @@ class MainFlutterWindow: NSWindow {
     visualPreferences = SystemVisualPreferences(messenger: flutterViewController.engine.binaryMessenger)
     let platform = FlutterMethodChannel(
       name: "dev.scrcpyconnect/platform", binaryMessenger: flutterViewController.engine.binaryMessenger)
-    platform.setMethodCallHandler { call, result in
+    platform.setMethodCallHandler { [weak self] call, result in
+      guard let self = self else {
+        result(FlutterError(code: "unavailable", message: "Window is closed", details: nil))
+        return
+      }
+      if call.method == "window.readEnvironment" {
+        let bounds = self.contentView?.bounds ?? .zero
+        result([
+          "width": bounds.width,
+          "height": bounds.height,
+          "windowId": "macos:\(self.windowNumber)",
+          "mode": self.styleMask.contains(.fullScreen) ? "fullScreen" : "freeform",
+        ])
+        return
+      }
       guard call.method == "window.openIndependent" else {
         result(FlutterMethodNotImplemented)
         return

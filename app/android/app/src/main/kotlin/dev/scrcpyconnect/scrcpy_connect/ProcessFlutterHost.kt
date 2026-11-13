@@ -1,6 +1,7 @@
 package dev.scrcpyconnect.scrcpy_connect
 
 import android.content.Context
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import io.flutter.embedding.engine.FlutterEngine
@@ -49,6 +50,20 @@ internal object ProcessFlutterHost {
                                 "supported" to false,
                                 "reason" to "Android 原生独立 Activity 需独立 Flutter 引擎；当前回退为同页控制会话。"
                             ))
+                            "window.readEnvironment" -> {
+                                val host = activity?.get()
+                                if (host == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                                    result.success(null)
+                                } else {
+                                    val bounds = host.windowManager.currentWindowMetrics.bounds
+                                    val density = host.resources.displayMetrics.density
+                                    result.success(mapOf(
+                                        "width" to bounds.width() / density,
+                                        "height" to bounds.height() / density,
+                                        "windowId" to host.componentName.flattenToShortString()
+                                    ))
+                                }
+                            }
                             else -> if (!audio.handle(call, result)) {
                                 val host = activity?.get()
                                 if (host != null) host.handlePlatform(call, result)
