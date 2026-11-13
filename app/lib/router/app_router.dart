@@ -191,7 +191,8 @@ class RootRoute extends GoRouteData with $RootRoute {
 )
 class HomeShellRoute extends StatefulShellRouteData {
   const HomeShellRoute();
-  static const $restorationScopeId = 'home-shell';
+  // 三个分支只有入口页；位置及返回链由外层路由恢复，运行中仍由 shell 保留页面。
+  // go_router 18.1.4 的分支恢复不会在替换 bucket 时重新注册已有属性。
   @override
   Page<void> pageBuilder(
     BuildContext context,
@@ -206,17 +207,14 @@ class HomeShellRoute extends StatefulShellRouteData {
 
 class DevicesBranch extends StatefulShellBranchData {
   const DevicesBranch();
-  static const $restorationScopeId = 'devices-branch';
 }
 
 class TransfersBranch extends StatefulShellBranchData {
   const TransfersBranch();
-  static const $restorationScopeId = 'transfers-branch';
 }
 
 class SettingsBranch extends StatefulShellBranchData {
   const SettingsBranch();
-  static const $restorationScopeId = 'settings-branch';
 }
 
 class DevicesRoute extends GoRouteData with $DevicesRoute {

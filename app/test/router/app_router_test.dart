@@ -4,8 +4,13 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_list_state.dart';
+import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_state.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
+import 'package:scrcpy_connect/core/platform/platform_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/settings/models/preferences_state.dart';
+import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/pages/control/control_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/route_resource_resolver_provider.dart';
@@ -13,6 +18,60 @@ import 'package:scrcpy_connect/styles/theme.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('系统恢复保留页面位置与返回链，切换主页保留运行中的状态', (tester) async {
+    final router = createAppRouter();
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          deviceListProvider.overrideWith(_Devices.new),
+          recoveryStateProvider.overrideWith(_Recovery.new),
+          preferencesProvider.overrideWith(_Preferences.new),
+          appInfoReaderProvider.overrideWithValue(
+            () async => throw StateError('unused'),
+          ),
+        ],
+        child: MaterialApp.router(
+          restorationScopeId: 'route-test',
+          theme: ConnectTokens.theme(Brightness.light),
+          routerConfig: router,
+        ),
+      ),
+    );
+    await _settle(tester);
+    final data = await tester.getRestorationData();
+    await tester.restoreFrom(data);
+    await _settle(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.text('添加你的第一台设备'), findsOneWidget);
+    tester.widget<TextField>(find.byType(TextField)).controller!.text = 'AVD';
+    await tester.pump();
+    router.go(const SettingsRoute().location);
+    await _settle(tester);
+    router.go(const DevicesRoute().location);
+    await _settle(tester);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'AVD',
+    );
+    router.go(const SettingsRoute().location);
+    await _settle(tester);
+    await tester.restartAndRestore();
+    await _settle(tester);
+    expect(find.text('外观'), findsOneWidget);
+    unawaited(router.push<void>(const RouteErrorRoute().location));
+    await _settle(tester);
+    await tester.restartAndRestore();
+    await _settle(tester);
+    expect(find.text('页面缺少必要的记录信息，请返回设备列表重新选择。'), findsOneWidget);
+    expect(router.canPop(), isTrue);
+    router.pop();
+    await _settle(tester);
+    expect(find.text('外观'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   test('迁移后的文件、相册和传输深链仍能匹配并保留查询参数', () {
     final router = createAppRouter();
@@ -117,4 +176,14 @@ class _Resources implements RouteResourceResolver {
 class _Recovery extends RecoveryStateNotifier {
   @override
   RecoveryState build() => RecoveryState();
+}
+
+class _Devices extends DeviceListNotifier {
+  @override
+  DeviceListState build() => DeviceListState(loading: false);
+}
+
+class _Preferences extends PreferencesNotifier {
+  @override
+  PreferencesState build() => PreferencesState();
 }

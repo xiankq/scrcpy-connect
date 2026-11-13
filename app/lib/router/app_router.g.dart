@@ -86,11 +86,9 @@ mixin $RootRoute on GoRouteData {
 }
 
 RouteBase get $homeShellRoute => StatefulShellRouteData.$route(
-  restorationScopeId: HomeShellRoute.$restorationScopeId,
   factory: $HomeShellRouteExtension._fromState,
   branches: [
     StatefulShellBranchData.$branch(
-      restorationScopeId: DevicesBranch.$restorationScopeId,
       routes: [
         GoRouteData.$route(
           path: '/devices',
@@ -101,7 +99,6 @@ RouteBase get $homeShellRoute => StatefulShellRouteData.$route(
       ],
     ),
     StatefulShellBranchData.$branch(
-      restorationScopeId: TransfersBranch.$restorationScopeId,
       routes: [
         GoRouteData.$route(
           path: '/transfers',
@@ -112,7 +109,6 @@ RouteBase get $homeShellRoute => StatefulShellRouteData.$route(
       ],
     ),
     StatefulShellBranchData.$branch(
-      restorationScopeId: SettingsBranch.$restorationScopeId,
       routes: [
         GoRouteData.$route(
           path: '/settings',
