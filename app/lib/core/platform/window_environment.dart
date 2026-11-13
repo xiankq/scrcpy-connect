@@ -80,6 +80,8 @@ final class WindowEnvironment {
     this.mode = WindowMode.fullScreen,
     this.posture = WindowPosture.normal,
     this.input = const WindowInputCapabilities(),
+    this.postureProvided = false,
+    this.displayFeaturesProvided = false,
   });
 
   final double width;
@@ -91,6 +93,18 @@ final class WindowEnvironment {
   final WindowPosture posture;
   final WindowInputCapabilities input;
 
+  /// Whether a native host explicitly supplied [posture].
+  ///
+  /// A missing posture is a neutral projection and lets the live Flutter view
+  /// remain authoritative. An explicit `normal` posture clears a stale fold.
+  final bool postureProvided;
+
+  /// Whether a native host explicitly supplied [displayFeatures].
+  ///
+  /// An explicit empty list clears a stale hinge when a fold closes. A missing
+  /// field keeps the live Flutter display features as the fallback.
+  final bool displayFeaturesProvided;
+
   @override
   bool operator ==(Object other) {
     if (other is! WindowEnvironment ||
@@ -101,6 +115,8 @@ final class WindowEnvironment {
         mode != other.mode ||
         posture != other.posture ||
         input != other.input ||
+        postureProvided != other.postureProvided ||
+        displayFeaturesProvided != other.displayFeaturesProvided ||
         displayFeatures.length != other.displayFeatures.length) {
       return false;
     }
@@ -119,6 +135,8 @@ final class WindowEnvironment {
     mode,
     posture,
     input,
+    postureProvided,
+    displayFeaturesProvided,
     Object.hashAll(displayFeatures),
   );
 

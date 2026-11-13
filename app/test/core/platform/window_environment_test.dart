@@ -144,7 +144,23 @@ void main() {
     expect(environment.posture, WindowPosture.book);
     expect(environment.insets.top, 24);
     expect(environment.input.pointer, isTrue);
+    expect(environment.displayFeaturesProvided, isTrue);
+    expect(environment.postureProvided, isFalse);
     expect(environment.verticalPaneDivider, isNotNull);
+  });
+
+  test('records explicit empty host projections so a closed fold clears', () {
+    final environment = WindowEnvironmentCodec.decode({
+      'width': 700,
+      'height': 500,
+      'posture': 'normal',
+      'displayFeatures': const [],
+    });
+
+    expect(environment, isNotNull);
+    expect(environment!.postureProvided, isTrue);
+    expect(environment.displayFeaturesProvided, isTrue);
+    expect(environment.displayFeatures, isEmpty);
   });
 
   test('rejects an incomplete host projection', () {

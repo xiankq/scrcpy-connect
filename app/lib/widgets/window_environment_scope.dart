@@ -99,7 +99,8 @@ final class _WindowEnvironmentScopeState extends State<WindowEnvironmentScope>
     WindowEnvironment media,
     WindowEnvironment host,
   ) {
-    final hostHasDisplayFeatures = host.displayFeatures.isNotEmpty;
+    final hostHasDisplayFeatures =
+        host.displayFeaturesProvided || host.displayFeatures.isNotEmpty;
     final hostHasInsets =
         host.insets.left != 0 ||
         host.insets.top != 0 ||
@@ -117,10 +118,12 @@ final class _WindowEnvironmentScopeState extends State<WindowEnvironmentScope>
       // A host that only knows its window identity decodes with the neutral
       // posture. Preserve the live Flutter display-feature posture until the
       // host supplies an explicit posture or feature projection.
-      posture: host.posture != WindowPosture.normal || hostHasDisplayFeatures
+      posture: host.postureProvided || hostHasDisplayFeatures
           ? host.posture
           : media.posture,
       input: host.input,
+      postureProvided: host.postureProvided,
+      displayFeaturesProvided: host.displayFeaturesProvided,
     );
   }
 }

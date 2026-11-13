@@ -94,6 +94,7 @@ void main() {
               width: 1200,
               height: 800,
               posture: posture,
+              postureProvided: true,
               windowId: 'stage-7',
             );
           },
@@ -160,4 +161,43 @@ void main() {
       expect(observed?.displayFeatures, hasLength(1));
     },
   );
+
+  testWidgets('clears a live fold when the host explicitly closes it', (
+    tester,
+  ) async {
+    WindowEnvironment? observed;
+    await tester.pumpWidget(
+      MediaQuery(
+        data: MediaQueryData(
+          size: const Size(700, 500),
+          displayFeatures: const [
+            DisplayFeature(
+              bounds: Rect.fromLTWH(349, 0, 2, 500),
+              type: DisplayFeatureType.fold,
+              state: DisplayFeatureState.postureHalfOpened,
+            ),
+          ],
+        ),
+        child: WindowEnvironmentScope(
+          readHostEnvironment: () async => const WindowEnvironment(
+            width: 700,
+            height: 500,
+            windowId: 'stage-7',
+            postureProvided: true,
+            displayFeaturesProvided: true,
+          ),
+          child: Builder(
+            builder: (context) {
+              observed = context.windowEnvironment;
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(observed?.posture, WindowPosture.normal);
+    expect(observed?.displayFeatures, isEmpty);
+  });
 }
