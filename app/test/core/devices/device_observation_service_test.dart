@@ -6,12 +6,14 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scrcpy_connect/core/companion/companion_exception.dart';
 import 'package:scrcpy_connect/core/companion/companion_service.dart';
 import 'package:scrcpy_connect/core/companion/models/companion_config.dart';
 import 'package:scrcpy_connect/core/devices/device_connection.dart';
 import 'package:scrcpy_connect/core/devices/device_observation_service.dart';
 import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
 import 'package:scrcpy_connect/core/devices/models/device_call.dart';
+import 'package:scrcpy_connect/core/devices/models/device_capabilities.dart';
 import 'package:scrcpy_connect/core/devices/models/device_notification.dart';
 import 'package:scrcpy_connect/core/devices/models/device_observation_event.dart';
 import 'package:scrcpy_connect/core/devices/models/device_observation_snapshot.dart';
@@ -115,6 +117,83 @@ void main() {
     expect(
       (await fixture.owner.readNotifications(fixture.device)).live,
       isFalse,
+    );
+  });
+
+  test('观察事实与远端控制限制独立保留，连接失效后两者一起撤销', () async {
+    final fixture = await _Observation.open();
+    fixture.native.sectionOverrides['calls'] = {
+      'controlStatus': 'unavailable',
+      'reason': '当前只能观察通话，不能接力控制。',
+    };
+    await fixture.owner.startObservation(fixture.device);
+    final reading = await fixture.owner.readCalls(fixture.device);
+    expect(reading.status, DeviceCallAvailability.available);
+    expect(reading.live, isTrue);
+    final capability = fixture.owner
+        .currentCapabilities(fixture.device)
+        .singleWhere((value) => value.feature == DeviceFeature.calls);
+    expect(capability.status, DeviceFeatureStatus.unavailable);
+    expect(capability.reason, '当前只能观察通话，不能接力控制。');
+    fixture.connection = DeviceConnection(
+      client: fixture.client,
+      device: const AdbDevice(
+        id: 'replacement',
+        serial: 'phone',
+        state: 'device',
+      ),
+    );
+    expect((await fixture.owner.readCalls(fixture.device)).live, isFalse);
+    expect(
+      fixture.owner
+          .currentCapabilities(fixture.device)
+          .every((value) => value.status == DeviceFeatureStatus.unknown),
+      isTrue,
+    );
+    expect(fixture.owner.currentObservedDevices().single.calls.calls, isEmpty);
+  });
+
+  test('协议未知状态保持未核验，不用序列化后的默认值冒充已知能力', () async {
+    final fixture = await _Observation.open();
+    fixture.native.sectionOverrides['notifications'] = {
+      'status': 'futureStatus',
+      'reason': '远端状态尚未识别。',
+    };
+    await fixture.owner.startObservation(fixture.device);
+    expect(
+      (await fixture.owner.readNotifications(fixture.device)).status,
+      DeviceNotificationAvailability.unknown,
+    );
+    expect(
+      fixture.owner.currentCapabilities(fixture.device).first.status,
+      DeviceFeatureStatus.unverified,
+    );
+    final stopped = await fixture.owner.stopObservation(fixture.device);
+    expect(stopped.phase, DeviceObservationPhase.stopped);
+    expect((await fixture.owner.readCalls(fixture.device)).live, isFalse);
+  });
+
+  test('无效控制字段不会作为业务状态保存，动作与旧内容同时失效', () async {
+    final fixture = await _Observation.open();
+    await fixture.owner.startObservation(fixture.device);
+    fixture.native.update('calls.changed', {
+      ...fixture.native.section('calls'),
+      'controlStatus': 123,
+    });
+    await Future<void>.delayed(Duration.zero);
+    final snapshot = fixture.owner.currentObservedDevices().single;
+    expect(snapshot.observation.phase, DeviceObservationPhase.failed);
+    expect(snapshot.calls.live, isFalse);
+    expect(snapshot.calls.calls, isEmpty);
+    await expectLater(
+      fixture.owner.requestCurrentCallUi(fixture.device),
+      throwsA(
+        isA<CompanionException>().having(
+          (error) => error.code,
+          'code',
+          'observation_required',
+        ),
+      ),
     );
   });
 }
@@ -224,6 +303,7 @@ final class _Native implements NativeAdbApi {
   String? _socket, _calls;
   int epoch = 0;
   bool enabled = false, holdCalls = false;
+  final sectionOverrides = <String, Map<String, Object?>>{};
   final callsRequested = Completer<void>();
 
   String _open(String kind) {
@@ -258,6 +338,7 @@ final class _Native implements NativeAdbApi {
     'observationEnabled': enabled,
     'observationEpoch': epoch,
     name: <Object?>[],
+    ...?sectionOverrides[name],
   };
   void completeCalls() {
     if (_calls case final id?) {
@@ -333,10 +414,10 @@ final class _Native implements NativeAdbApi {
       _calls = message['requestId'] as String;
       callsRequested.complete();
     } else {
-      expect(command, 'notifications.list');
+      expect(command, anyOf('notifications.list', 'calls.list'));
       _message({
         'requestId': message['requestId'],
-        'result': section('notifications'),
+        'result': section(command == 'calls.list' ? 'calls' : 'notifications'),
       });
     }
   }
