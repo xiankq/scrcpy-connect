@@ -3,7 +3,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 
 class FileSelectionBar extends StatelessWidget {
   const FileSelectionBar({
@@ -106,7 +105,7 @@ class FileSelectionBar extends StatelessWidget {
     IconData icon,
     VoidCallback? onPressed,
     String reason,
-  ) => GlassTooltip(
+  ) => Tooltip(
     message: onPressed == null ? reason : label,
     child: TextButton(
       style: TextButton.styleFrom(

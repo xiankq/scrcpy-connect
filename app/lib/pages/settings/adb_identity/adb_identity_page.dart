@@ -13,10 +13,10 @@ import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
+import 'package:scrcpy_connect/widgets/overlays.dart';
 
 class AdbIdentityPage extends HookConsumerWidget {
   const AdbIdentityPage({super.key});
@@ -102,7 +102,7 @@ class AdbIdentityPage extends HookConsumerWidget {
               onPressed: busy.value
                   ? null
                   : () async {
-                      final pem = await showGlassDialog<String>(
+                      final pem = await showAppDialog<String>(
                         context: context,
                         builder: (_) => const _PrivateKeyInput(),
                       );
@@ -188,7 +188,7 @@ class _PrivateKeyInput extends HookWidget {
     }
 
     return ConnectionContent(
-      child: GlassAlertDialog(
+      child: AppAlertDialog(
         title: const Text('导入私钥'),
         content: Form(
           key: key,

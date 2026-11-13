@@ -33,7 +33,7 @@ class MediaPreviewToolbar extends StatelessWidget {
             variant: GlassVariant.clear,
             child: Row(
               children: [
-                GlassTooltip(
+                Tooltip(
                   message: MaterialLocalizations.of(context).backButtonTooltip,
                   child: GlassIconButton(
                     semanticLabel: MaterialLocalizations.of(context)

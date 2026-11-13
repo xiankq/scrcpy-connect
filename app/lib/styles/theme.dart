@@ -153,6 +153,15 @@ abstract final class ConnectTokens {
       surfaceTint: DesignTokens.colorTransparent,
     );
     final text = dark ? DesignTokens.colorTextDark : ink;
+    final captionStyle = systemStyle(
+      TextStyle(
+        fontSize: DesignTokens.typographyCaptionFontSize,
+        fontWeight: DesignTokens.typographyCaptionFontWeight,
+        height: DesignTokens.typographyCaptionLineHeight,
+        letterSpacing: DesignTokens.typographyCaptionLetterSpacing,
+        color: colors.onSurfaceVariant,
+      ),
+    );
     return ThemeData(
       useMaterial3: true,
       fontFamily: family,
@@ -218,6 +227,17 @@ abstract final class ConnectTokens {
         ),
         overlayColor: const WidgetStatePropertyAll(
           DesignTokens.colorTransparent,
+        ),
+      ),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
+        ),
+        textStyle: captionStyle.copyWith(color: text),
+        padding: const EdgeInsets.symmetric(
+          horizontal: DesignTokens.spacingSm,
+          vertical: DesignTokens.spacingXs,
         ),
       ),
       dialogTheme: DialogThemeData(
@@ -290,15 +310,7 @@ abstract final class ConnectTokens {
             color: text,
           ),
         ),
-        bodySmall: systemStyle(
-          TextStyle(
-            fontSize: DesignTokens.typographyCaptionFontSize,
-            fontWeight: DesignTokens.typographyCaptionFontWeight,
-            height: DesignTokens.typographyCaptionLineHeight,
-            letterSpacing: DesignTokens.typographyCaptionLetterSpacing,
-            color: dark ? DesignTokens.colorSecondaryDark : secondary,
-          ),
-        ),
+        bodySmall: captionStyle,
         labelLarge: systemStyle(
           TextStyle(
             fontSize: DesignTokens.typographyLabelFontSize,
@@ -416,6 +428,13 @@ abstract final class ConnectTokens {
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: colors.surface,
+        modalBackgroundColor: colors.surface,
+        surfaceTintColor: DesignTokens.colorTransparent,
+        dragHandleColor: colors.onSurfaceVariant,
+        dragHandleSize: const Size(
+          DesignTokens.componentSheetHandleWidth,
+          DesignTokens.componentSheetHandleHeight,
+        ),
         showDragHandle: true,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(

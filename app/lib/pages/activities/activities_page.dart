@@ -15,7 +15,6 @@ import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
@@ -117,7 +116,7 @@ class ActivitiesPage extends HookConsumerWidget {
                     key: ValueKey(activity.target),
                     icon: LucideIcons.activity,
                     title: activity.name,
-                    trailing: GlassTooltip(
+                    trailing: Tooltip(
                       message: statusText(activity.status),
                       child: TextButton(
                         onPressed: () async {

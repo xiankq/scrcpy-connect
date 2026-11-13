@@ -13,7 +13,7 @@ import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
+import 'package:scrcpy_connect/widgets/overlays.dart';
 
 Future<void> openPhoneApp(
   BuildContext context,
@@ -147,7 +147,7 @@ Future<AppOpenMode?> _chooseMode(
   BuildContext context,
   DeviceApp app, {
   required bool windowAvailable,
-}) => showGlassModalSheet<AppOpenMode>(
+}) => showAppModalSheet<AppOpenMode>(
   context: context,
   isScrollControlled: true,
   builder: (context) => SafeArea(

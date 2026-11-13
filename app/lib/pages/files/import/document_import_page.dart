@@ -14,7 +14,6 @@ import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/hooks/use_document_picker.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -184,7 +183,7 @@ class DocumentImportPage extends HookConsumerWidget {
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: DesignTokens.spacingXxs),
-                  GlassTooltip(
+                  Tooltip(
                     message: destination,
                     child: Text(
                       destinationScope,

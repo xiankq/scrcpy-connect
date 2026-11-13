@@ -34,6 +34,13 @@ private final class SystemVisualPreferences: NSObject, FlutterStreamHandler {
       name: "dev.scrcpyconnect/visual_preferences/events", binaryMessenger: messenger)
     super.init()
     methods.setMethodCallHandler { [weak self] call, result in
+      if call.method == "window.openIndependent" {
+        result([
+          "supported": false,
+          "reason": "macOS 原生窗口需独立 Flutter 引擎；当前回退为同页控制会话",
+        ])
+        return
+      }
       guard call.method == "read" else {
         result(FlutterMethodNotImplemented)
         return

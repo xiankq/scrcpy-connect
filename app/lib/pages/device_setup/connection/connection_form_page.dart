@@ -20,10 +20,10 @@ import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
+import 'package:scrcpy_connect/widgets/overlays.dart';
 
 export 'package:scrcpy_connect/pages/device_setup/connection/widgets/connection_failure_note.dart'
     show ConnectionFailureNote;
@@ -421,9 +421,9 @@ class ConnectionFormPage extends HookConsumerWidget {
                             ),
                             SliverToBoxAdapter(
                               child: TextButton(
-                                onPressed: () => showGlassDialog<void>(
+                                onPressed: () => showAppDialog<void>(
                                   context: context,
-                                  builder: (dialogContext) => GlassAlertDialog(
+                                  builder: (dialogContext) => AppAlertDialog(
                                     title: Text(
                                       '连接帮助',
                                       style: Theme.of(dialogContext)

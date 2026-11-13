@@ -2,7 +2,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 
@@ -44,7 +43,7 @@ class QualityOptionsSheet<T> extends StatelessWidget {
             );
           }
           final item = options[index - 1];
-          return GlassTooltip(
+          return Tooltip(
             message: item.reason,
             child: ListTile(
               leading: ListIconBadge(

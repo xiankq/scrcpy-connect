@@ -1,7 +1,6 @@
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -24,7 +23,7 @@ class OriginalFileHeader extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            GlassTooltip(
+            Tooltip(
               message: name,
               child: Text(
                 name,

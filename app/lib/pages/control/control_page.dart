@@ -22,6 +22,7 @@ import 'package:scrcpy_connect/core/recovery/recovery_actions_provider.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
+import 'package:scrcpy_connect/core/platform/window_host_provider.dart';
 import 'package:scrcpy_connect/pages/control/remote_session_lifecycle.dart';
 import 'package:scrcpy_connect/pages/control/remote_display_sizing.dart';
 import 'package:scrcpy_connect/pages/control/remote_input_owner.dart';
@@ -41,8 +42,7 @@ import 'package:scrcpy_connect/router/models/remote_launch_intent.dart';
 import 'package:scrcpy_connect/router/route_observers.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 
-import 'package:scrcpy_connect/widgets/dialogs.dart'
-    show confirm, glassSnackBar;
+import 'package:scrcpy_connect/widgets/dialogs.dart' show confirm, appSnackBar;
 import 'package:scrcpy_connect/widgets/remote_failure.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
 
@@ -157,11 +157,24 @@ class _ControlPageState extends ConsumerState<ControlPage>
     if (converting || widget.packageName != null || !canSendInput) return;
     setState(() => converting = true);
     try {
+      final sourceSessionId = sessionId;
       final package = await window.convertToIndependent(
         canSendInput: () => canSendInput,
         releaseInputs: releaseInputs,
       );
       if (!mounted || package == null) return;
+      final nativeWindow = await ref
+          .read(platformWindowHostProvider)
+          .open(
+            deviceId: widget.device.id,
+            packageName: package,
+            sessionId: sourceSessionId,
+          );
+      if (!mounted) return;
+      if (nativeWindow.opened) {
+        closePage<void>(context);
+        return;
+      }
       RemoteAppRoute(
         deviceId: widget.device.id,
         packageName: package,
@@ -645,12 +658,12 @@ class _ControlPageState extends ConsumerState<ControlPage>
         if (feedback?.mounted != true) return;
         if (result.lockFailure case final failure?) {
           feedback!.showSnackBar(
-            glassSnackBar('熄屏尚未确认：${remoteFailure(failure)}'),
+            appSnackBar('熄屏尚未确认：${remoteFailure(failure)}'),
           );
         }
         if (result.closeFailure case final failure?) {
           feedback!.showSnackBar(
-            glassSnackBar('关闭窗口尚未确认：${remoteFailure(failure)}'),
+            appSnackBar('关闭窗口尚未确认：${remoteFailure(failure)}'),
           );
         }
         final receipt = result.receipt;
@@ -659,7 +672,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
             keepActive != null &&
             !keepActive.cleanupConfirmed) {
           final reason = keepActive.keepActiveError?.reason ?? '请稍后重新检查。';
-          feedback!.showSnackBar(glassSnackBar('窗口已关闭，保持唤醒服务释放尚未确认：$reason'));
+          feedback!.showSnackBar(appSnackBar('窗口已关闭，保持唤醒服务释放尚未确认：$reason'));
         }
       }),
     );

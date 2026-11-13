@@ -8,8 +8,8 @@ import 'package:scrcpy_connect/pages/settings/data_preferences/widgets/metadata_
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/overlays.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -71,7 +71,7 @@ class DataPreferencesPage extends HookConsumerWidget {
                         ))?.path,
                         confirm: (preview) => !context.mounted
                             ? Future<bool?>.value(null)
-                            : showGlassModalSheet<bool>(
+                            : showAppModalSheet<bool>(
                                 context: context,
                                 isScrollControlled: true,
                                 builder: (_) =>

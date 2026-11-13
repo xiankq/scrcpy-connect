@@ -8,6 +8,8 @@ import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_press_feedback.dart';
 import 'package:scrcpy_connect/widgets/glass/navigation_selection_lens.dart';
+import 'package:scrcpy_connect/widgets/overlays.dart';
+import 'package:scrcpy_connect/widgets/adaptive_window.dart';
 
 class NavigationScaffold extends HookConsumerWidget {
   const NavigationScaffold({super.key, required this.navigationShell});
@@ -151,10 +153,14 @@ class AppNavigationShell extends StatelessWidget {
         : 0;
     return LayoutBuilder(
       builder: (context, constraints) {
+        final sizeClass = WindowEnvironment.sizeClassFor(constraints.maxWidth);
         final short =
             constraints.maxWidth > constraints.maxHeight &&
             constraints.maxHeight < DesignTokens.componentSheetShortHeight;
-        final sidebar = constraints.maxWidth >= 850 || short;
+        // A narrow phone in landscape still needs the bottom bar. Medium and
+        // expanded windows get a persistent navigation plane.
+        final sidebar = sizeClass != WindowSizeClass.compact;
+        final compactSidebar = sizeClass == WindowSizeClass.medium;
         return _NavigationLayout(
           sidebar: sidebar,
           visible: visible,
@@ -167,7 +173,7 @@ class AppNavigationShell extends StatelessWidget {
                       SafeArea(
                         child: SizedBox(
                           key: const ValueKey('app-sidebar'),
-                          width: short
+                          width: compactSidebar || short
                               ? DesignTokens.componentSidebarCompactWidth
                               : DesignTokens.componentSidebarWidth,
                           child: Padding(
@@ -176,7 +182,7 @@ class AppNavigationShell extends StatelessWidget {
                                   ? DesignTokens.spacingXs
                                   : DesignTokens.spacingMd,
                             ),
-                            child: Glass(
+                            child: ContentSurface(
                               padding: const EdgeInsets.all(
                                 DesignTokens.spacingXs,
                               ),
@@ -184,7 +190,7 @@ class AppNavigationShell extends StatelessWidget {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    if (!short)
+                                    if (!compactSidebar && !short)
                                       Padding(
                                         padding: const EdgeInsets.symmetric(
                                           vertical: DesignTokens.spacingXl,
@@ -215,13 +221,15 @@ class AppNavigationShell extends StatelessWidget {
                                             minVerticalPadding: short
                                                 ? 0
                                                 : null,
-                                            contentPadding: short
+                                            contentPadding:
+                                                compactSidebar || short
                                                 ? const EdgeInsets.symmetric(
                                                     horizontal:
                                                         DesignTokens.spacingXs,
                                                   )
                                                 : null,
-                                            horizontalTitleGap: short
+                                            horizontalTitleGap:
+                                                compactSidebar || short
                                                 ? DesignTokens.spacingXs
                                                 : null,
                                             shape: const StadiumBorder(),
@@ -236,7 +244,9 @@ class AppNavigationShell extends StatelessWidget {
                                             leading: Icon(
                                               appDestinations[i].$1,
                                             ),
-                                            title: Text(appDestinations[i].$2),
+                                            title: compactSidebar
+                                                ? null
+                                                : Text(appDestinations[i].$2),
                                             onTap: () => context.go(
                                               appDestinations[i].$3,
                                             ),

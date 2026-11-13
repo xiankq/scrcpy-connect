@@ -51,7 +51,7 @@ class GlassMenuButton extends StatelessWidget {
           2 * DesignTokens.spacingSm,
     );
     if (!enabled) {
-      return GlassTooltip(
+      return Tooltip(
         message: tooltip,
         child: liquid.GlassIconButton(
           icon: icon,

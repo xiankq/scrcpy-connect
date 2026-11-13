@@ -9,8 +9,8 @@ import 'package:scrcpy_connect/pages/control/remote_input_owner.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/ambient_loading_field.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
+import 'package:scrcpy_connect/widgets/overlays.dart';
 
 class RemoteSurface extends StatelessWidget {
   const RemoteSurface({
@@ -129,7 +129,7 @@ class RemoteStage extends StatelessWidget {
             child: SafeArea(
               child: Padding(
                 padding: EdgeInsets.all(DesignTokens.spacingMd),
-                child: Glass(
+                child: ContentSurface(
                   padding: EdgeInsets.all(DesignTokens.spacingMd),
                   child: Text('正在调整画面…'),
                 ),

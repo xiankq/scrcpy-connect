@@ -18,13 +18,13 @@ import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/choice_row.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
+import 'package:scrcpy_connect/widgets/overlays.dart';
 
 String _codecReason(VideoCodecOption? option) {
   if (option == null) return '尚未确认这台设备的编码能力。';
@@ -177,7 +177,7 @@ class ControlSettingsPage extends HookConsumerWidget {
                   IconData icon,
                   List<QualityChoice<T>> options,
                   T selected,
-                ) => showGlassModalSheet<QualityChoice<T>>(
+                ) => showAppModalSheet<QualityChoice<T>>(
                   context: context,
                   isScrollControlled: true,
                   builder: (_) => QualityOptionsSheet<T>(
