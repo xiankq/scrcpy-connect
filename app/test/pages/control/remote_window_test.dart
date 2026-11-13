@@ -2,12 +2,21 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
+import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/media/models/recovered_video_session.dart';
+import 'package:scrcpy_connect/core/media/models/video_stop_requested.dart';
+import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
+import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
+import 'package:scrcpy_connect/core/settings/models/preferences.dart';
+import 'package:scrcpy_connect/pages/control/remote_session_lifecycle.dart';
 import 'package:scrcpy_connect/core/control/models/session_activity.dart';
 import 'package:scrcpy_connect/core/control/models/video_session.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/devices/device_apps.dart';
 import 'package:scrcpy_connect/core/devices/device_inspection.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
+import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:scrcpy_connect/core/media/models/video_output.dart';
 import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
 import 'package:scrcpy_connect/core/media/video_sessions.dart';
@@ -16,6 +25,132 @@ import 'package:scrcpy_connect/widgets/models/device_audio_view_snapshot.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
 
 void main() {
+  test('启动先核验原会话，命令完成仍等待权威快照，重复快照不重复协调视图', () async {
+    final fixture = _Window();
+    fixture.videos.listed = [_view()];
+    await fixture.open();
+    fixture.reconciliationPending = true;
+    final native = Completer<void>();
+    fixture.reconciliation = () => native.future;
+    final lifecycle = fixture.lifecycle();
+    final reads = fixture.videos.reads;
+    final starting = lifecycle.start(
+      prepare: (_) async => throw StateError('不应准备新窗口'),
+    );
+    expect(fixture.window.presentation.stateUnverified, isTrue);
+    expect(fixture.blurs, 1);
+    expect(fixture.releases, 1);
+    native.complete();
+    expect(await starting, isNull);
+    expect(fixture.window.presentation.stateUnverified, isTrue);
+    expect(fixture.videos.reads, reads);
+    expect(fixture.videos.starts, 0);
+    final event = RecoveryCompleted(_snapshot()).toApplicationEvent();
+    expect(lifecycle.acceptEvent(event), RemoteSessionEvent.reconciled);
+    expect(fixture.window.presentation.stateUnverified, isFalse);
+    expect(fixture.window.presentation.paused, isTrue);
+    final changes = fixture.changes;
+    expect(lifecycle.acceptEvent(event), RemoteSessionEvent.handled);
+    expect(fixture.changes, changes);
+  });
+
+  test('核验快照先确认成功，迟到的命令错误不能覆盖成功状态', () async {
+    final fixture = _Window();
+    fixture.videos.listed = [_view()];
+    await fixture.open();
+    final native = Completer<void>();
+    fixture.reconciliation = () => native.future;
+    final lifecycle = fixture.lifecycle();
+    final checking = lifecycle.reconcileState();
+    lifecycle.acceptEvent(RecoveryCompleted(_snapshot()).toApplicationEvent());
+    expect(fixture.window.presentation.error, isNull);
+    final changes = fixture.changes;
+    native.completeError(StateError('late command error'));
+    await checking;
+    expect(fixture.window.presentation.error, isNull);
+    expect(fixture.changes, changes);
+    fixture.reconciliation = () => Future.error(StateError('current failure'));
+    await lifecycle.reconcileState();
+    expect(fixture.window.presentation.stateUnverified, isTrue);
+    expect(fixture.window.presentation.error, contains('current failure'));
+  });
+
+  test('遮挡保留一次恢复意图，明确停止作废准备中的恢复且不再启动', () async {
+    final fixture = _Window();
+    final screen = _view().copyWith(
+      session: _view().session.copyWith(packageName: null, kind: .screen),
+    );
+    fixture.videos.starting = Future.value(screen);
+    final lifecycle = fixture.lifecycle(packageName: null);
+    await lifecycle.start(
+      prepare: (_) async => const VideoSessionPlan(deviceId: 'device'),
+    );
+    lifecycle.viewed();
+    lifecycle.acceptEvent(_connection(.offline));
+    lifecycle.acceptEvent(_connection(.connected));
+    fixture.window.presentation.cover(true);
+    expect(lifecycle.takeConnectionRecovery(), isFalse);
+    expect(lifecycle.recoveryPending, isTrue);
+    fixture.window.presentation.cover(false);
+    expect(lifecycle.takeConnectionRecovery(), isTrue);
+    expect(lifecycle.takeConnectionRecovery(), isFalse);
+    final preparing = Completer<void>();
+    final viewport = Completer<void>();
+    var wakes = 0;
+    final recovering = lifecycle.start(
+      recoveringConnection: true,
+      prepare: (current) async {
+        preparing.complete();
+        await viewport.future;
+        if (!current()) return null;
+        wakes++;
+        return const VideoSessionPlan(deviceId: 'device');
+      },
+    );
+    await preparing.future;
+    expect(fixture.window.recoveringConnection, isTrue);
+    expect(
+      lifecycle.acceptEvent(
+        const VideoStopRequested('session').toApplicationEvent(),
+      ),
+      RemoteSessionEvent.handled,
+    );
+    viewport.complete();
+    expect(await recovering, isNull);
+    lifecycle.acceptEvent(_connection(.connected));
+    expect(lifecycle.takeConnectionRecovery(), isFalse);
+    expect(wakes, 0);
+    expect(fixture.videos.starts, 1);
+  });
+
+  test('未知应用打开仅核对原记录，退役后迟到核验不再发布页面状态', () async {
+    final fixture = _Window();
+    fixture.videos.listed = [_view(launch: .unknown, texture: null)];
+    final lifecycle = fixture.lifecycle();
+    Future<VideoSessionPlan?> prepare(bool Function() _) async =>
+        throw StateError('不应重放打开');
+    expect(await lifecycle.start(prepare: prepare), isNull);
+    expect(await lifecycle.start(prepare: prepare), isNull);
+    expect(fixture.videos.reads, 2);
+    expect(fixture.videos.starts, 0);
+    final native = Completer<void>();
+    fixture.reconciliation = () => native.future;
+    final checking = lifecycle.reconcileState();
+    lifecycle.retire();
+    final changes = fixture.changes;
+    native.completeError(StateError('retired'));
+    await checking;
+    expect(
+      lifecycle.acceptEvent(
+        RecoveryCompleted(_snapshot()).toApplicationEvent(),
+      ),
+      RemoteSessionEvent.handled,
+    );
+    expect(fixture.changes, changes);
+    expect(fixture.window.presentation.stateUnverified, isTrue);
+    expect(fixture.window.presentation.error, contains('画面来源已变化'));
+  });
+
   test('窗口只接受当前设备会话及捕获代次的失败回执', () async {
     final fixture = _Window();
     fixture.videos.listed = [
@@ -312,6 +447,32 @@ class _Window {
   late final RemoteViews views;
   late final RemoteWindow window;
   int preparations = 0;
+  int changes = 0, releases = 0, blurs = 0;
+  bool reconciliationPending = false;
+  Future<void> Function() reconciliation = () async {};
+
+  RemoteSessionLifecycle lifecycle({String? packageName = 'app'}) {
+    final lifecycle = RemoteSessionLifecycle(
+      window: window,
+      packageName: packageName,
+      existingSession: null,
+      foreground: () => true,
+      routeCurrent: () => true,
+      reconciliationPending: () => reconciliationPending,
+      reconcile: () => reconciliation(),
+      releaseInputs: () async {
+        releases++;
+      },
+      onChanged: () {
+        changes++;
+      },
+      onFocusLost: () {
+        blurs++;
+      },
+    );
+    addTearDown(lifecycle.dispose);
+    return lifecycle;
+  }
 
   Future<RemoteWindowOpened?> open({VideoSessionView? existing}) => window.open(
     packageName: 'app',
@@ -348,6 +509,21 @@ VideoSessionView _view({
   ),
   wake: const KeepAwakeSnapshot(deviceId: 'device'),
 );
+
+RuntimeSnapshot _snapshot() => RuntimeSnapshot(
+  sequence: 1,
+  settings: Preferences(),
+  sessions: [RecoveredVideoSession(session: _view().session)],
+);
+
+RuntimeEvent _connection(DeviceConnectionStatus status) => DeviceListChanged([
+  DeviceSnapshot(
+    id: 'device',
+    name: 'Phone',
+    status: status,
+    autoReconnect: true,
+  ),
+]).toApplicationEvent();
 
 class _Videos implements VideoSessions {
   List<VideoSessionView> listed = [];

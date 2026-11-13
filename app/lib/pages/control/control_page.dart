@@ -2,8 +2,6 @@ import 'dart:async';
 
 import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:scrcpy_connect/core/control/models/app_launch_record.dart';
-import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
-import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -11,7 +9,6 @@ import 'package:scrcpy_connect/core/control/models/video_session.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/control/remote_display_settings.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
-import 'package:scrcpy_connect/core/devices/models/device_list_changed.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/clipboard/clipboard_focus_notifier.dart';
 import 'package:scrcpy_connect/core/control/control_capabilities_provider.dart';
@@ -25,7 +22,7 @@ import 'package:scrcpy_connect/core/recovery/recovery_actions_provider.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
-import 'package:scrcpy_connect/pages/control/remote_connection_recovery.dart';
+import 'package:scrcpy_connect/pages/control/remote_session_lifecycle.dart';
 import 'package:scrcpy_connect/pages/control/remote_display_sizing.dart';
 import 'package:scrcpy_connect/pages/control/remote_input_owner.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
@@ -76,7 +73,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
   ModalRoute<dynamic>? observedRoute;
   late final RemoteWindow window;
   RemotePresentation get presentation => window.presentation;
-  final connectionRecovery = RemoteConnectionRecovery();
+  late final RemoteSessionLifecycle sessionLifecycle;
   late final notices = RemoteNotices(
     presentation: presentation,
     isVisible: () =>
@@ -185,14 +182,6 @@ class _ControlPageState extends ConsumerState<ControlPage>
     requestImeFocus();
   }
 
-  void trace(String detail) {
-    if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
-      debugPrint(
-        '[connect.remote ${DateTime.now().millisecondsSinceEpoch}] $detail',
-      );
-    }
-  }
-
   bool get acceptsInput =>
       WidgetsBinding.instance.lifecycleState == null ||
       WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
@@ -212,8 +201,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
   void _checkSources() {
     if (_retired || _sourcesCurrent) return;
     _retired = true;
-    connectionRecovery.stop();
-    markStateUnknown(reason: '画面来源已变化，请关闭本页后重新打开。');
+    sessionLifecycle.retire();
     unawaited(eventSubscription?.cancel());
     eventSubscription = null;
     screenState.dispose();
@@ -295,61 +283,60 @@ class _ControlPageState extends ConsumerState<ControlPage>
       ref.read(preferencesProvider).values.deviceSettings[widget.device.id] ??
           const DevicePreferences(),
     );
+    sessionLifecycle = RemoteSessionLifecycle(
+      window: window,
+      packageName: widget.packageName,
+      existingSession: widget.existingSession,
+      foreground: () => acceptsInput,
+      routeCurrent: () => ModalRoute.of(context)?.isCurrent != false,
+      reconciliationPending: () =>
+          ref.read(recoveryStateProvider).reconciliationPending,
+      reconcile: () => ref.read(reconcileStateProvider)(),
+      releaseInputs: releaseInputs,
+      onFocusLost: () => updateClipboardFocus(sessionId, false),
+      onChanged: () {
+        if (mounted) setState(() {});
+      },
+    );
     inputFocus.addListener(inputFocusChanged);
     WidgetsBinding.instance.addObserver(this);
     eventSubscription = _events.listen(onEvent);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     if (ref.read(recoveryStateProvider).reconciliationPending) {
-      markStateUnknown(initialSession: widget.existingSession);
+      sessionLifecycle.markStateUnknown(initialSession: widget.existingSession);
     } else {
       unawaited(start());
     }
   }
 
   Future<void> start({bool recoveringConnection = false}) async {
-    if (!_sourcesCurrent) return;
-    if (presentation.appLaunchUnknown) {
-      await checkAppLaunch();
+    final opened = await sessionLifecycle.start(
+      recoveringConnection: recoveringConnection,
+      prepare: (current) async {
+        final viewport = displaySettings.mode == 'auto'
+            ? await displaySizing.initialViewport
+            : Size.zero;
+        if (!current()) return null;
+        final dimensions = displaySettings.dimensions(viewport);
+        if (_sourcesCurrent &&
+            !recoveringConnection &&
+            displaySettings.values.wakeOnConnect != false) {
+          // 准备新窗口时消耗唤醒意图，通用重试不重放缺少回执的请求。
+          await (newWindowWake ??= requestWake());
+        }
+        return VideoSessionPlan(
+          deviceId: widget.device.id,
+          packageName: widget.packageName,
+          displaySize: dimensions,
+          displayAuto: dimensions != null && displaySettings.mode == 'auto',
+        );
+      },
+    );
+    if (opened == null ||
+        !_sourcesCurrent ||
+        !presentation.acceptsStart(opened.ticket)) {
       return;
     }
-    if ((!recoveringConnection && presentation.reconcileOnly) ||
-        ref.read(recoveryStateProvider).reconciliationPending) {
-      await reconcileState();
-      return;
-    }
-    late final Future<RemoteWindowOpened?> opening;
-    setState(() {
-      opening = window.open(
-        packageName: widget.packageName,
-        existing: widget.existingSession,
-        recoveringConnection: recoveringConnection,
-        releaseInputs: releaseInputs,
-        canProceed: () => !deferConnectionStart(recoveringConnection),
-        prepare: (current) async {
-          final viewport = displaySettings.mode == 'auto'
-              ? await displaySizing.initialViewport
-              : Size.zero;
-          if (!current()) return null;
-          final dimensions = displaySettings.dimensions(viewport);
-          if (_sourcesCurrent &&
-              !recoveringConnection &&
-              displaySettings.values.wakeOnConnect != false) {
-            // 准备新窗口时消耗唤醒意图，通用重试不重放缺少回执的请求。
-            await (newWindowWake ??= requestWake());
-          }
-          return VideoSessionPlan(
-            deviceId: widget.device.id,
-            packageName: widget.packageName,
-            displaySize: dimensions,
-            displayAuto: dimensions != null && displaySettings.mode == 'auto',
-          );
-        },
-      );
-    });
-    final opened = await opening;
-    if (!_sourcesCurrent) return;
-    setState(() {});
-    if (opened == null || !presentation.acceptsStart(opened.ticket)) return;
     try {
       displaySizing.bind(opened.view);
       if (widget.requestKeyboard && opened.view.textureId != null) {
@@ -369,9 +356,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
       if (presentation.covered) await pauseView();
       displaySizing.reconsider();
       await applyPendingInitialAction();
-      if (widget.packageName == null && !presentation.appLaunchUnknown) {
-        connectionRecovery.viewed();
-      }
+      sessionLifecycle.viewed();
       final lifecycle = WidgetsBinding.instance.lifecycleState;
       if (lifecycle != null && lifecycle != AppLifecycleState.resumed) {
         didChangeAppLifecycleState(lifecycle);
@@ -386,24 +371,6 @@ class _ControlPageState extends ConsumerState<ControlPage>
         );
       }
     }
-  }
-
-  bool get connectionStartAllowed =>
-      mounted &&
-      presentation.canRecoverConnection(
-        foreground: acceptsInput,
-        phoneScreen: widget.packageName == null,
-        reconciliationPending: ref
-            .read(recoveryStateProvider)
-            .reconciliationPending,
-        routeCurrent: ModalRoute.of(context)?.isCurrent != false,
-      );
-
-  bool deferConnectionStart(bool recovering) {
-    if (!recovering || connectionStartAllowed) return false;
-    connectionRecovery.defer();
-    setState(() => presentation.deferStart());
-    return true;
   }
 
   Future<void> applyPendingInitialAction() async {
@@ -433,14 +400,6 @@ class _ControlPageState extends ConsumerState<ControlPage>
 
   void detachForUnknownAppLaunch(AppLaunchRecord record) {
     setState(() => window.detachUnknownLaunch(record, releaseInputs));
-  }
-
-  Future<void> checkAppLaunch() async {
-    if (!_sourcesCurrent) return;
-    late final Future<void> checking;
-    setState(() => checking = window.checkAppLaunch(widget.packageName));
-    await checking;
-    if (_sourcesCurrent) setState(() {});
   }
 
   Future<void> closeUnknownAppLaunch() async {
@@ -487,41 +446,21 @@ class _ControlPageState extends ConsumerState<ControlPage>
 
   void onEvent(RuntimeEvent event) {
     if (!_sourcesCurrent) return;
-    final stopped = connectionRecovery.acceptEvent(
-      event,
-      deviceId: widget.device.id,
-      sessionId: sessionId,
-      phoneScreen: widget.packageName == null,
-    );
-    if (event.data case DeviceListChanged(:final devices)) {
-      final updated = devices
-          .where((d) => d.id == widget.device.id)
-          .firstOrNull;
-      if (updated?.status != .connected) {
-        screenState.invalidate();
-      }
-      if (widget.packageName == null) {
+    switch (sessionLifecycle.acceptEvent(event)) {
+      case RemoteSessionEvent.connected:
         recoverConnection();
-      }
-    }
-    if (stopped) {
-      if (window.recoveringConnection) {
-        // 替换会话取得新身份前接受的停止，不能被迟到列表或启动回执撤销。
-        setState(window.cancelRecovery);
-      }
-      return;
-    }
-    if (event.data is RecoveryStarted) {
-      markStateUnknown();
-      return;
-    }
-    if (event.data case RecoveryFailed(:final reason)) {
-      markStateUnknown(reason: reason);
-      return;
-    }
-    if (event.data case RecoveryCompleted(:final snapshot)) {
-      applyReconciledState(snapshot);
-      return;
+        return;
+      case RemoteSessionEvent.disconnected:
+        screenState.invalidate();
+        recoverConnection();
+        return;
+      case RemoteSessionEvent.reconciled:
+        applyReconciledVisibility();
+        return;
+      case RemoteSessionEvent.handled:
+        return;
+      case RemoteSessionEvent.unhandled:
+        break;
     }
     final update = window.acceptVideoEvent(event);
     if (update == null) return;
@@ -534,29 +473,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
     focusVisibleDevice();
   }
 
-  int markStateUnknown({String? reason, VideoSessionView? initialSession}) {
-    trace(
-      'reconcile.unknown reason=$reason session=$sessionId visibility=${presentation.visibilityEpoch}',
-    );
-    updateClipboardFocus(sessionId, false);
-    final epoch = presentation.beginReconciliation(
-      initialSession: initialSession,
-      reason: reason,
-    );
-    unawaited(releaseInputs());
-    presentation.replaceBinding();
-    setState(() {});
-    return epoch;
-  }
-
-  void applyReconciledState(RuntimeSnapshot snapshot) {
-    final changed = presentation.reconcile(
-      snapshot,
-      packageName: widget.packageName,
-      deviceId: widget.device.id,
-    );
-    if (!changed) return;
-    setState(() {});
+  void applyReconciledVisibility() {
     if (presentation.stateUnverified || presentation.appLaunchUnknown) return;
     if (!presentation.covered &&
         acceptsInput &&
@@ -564,19 +481,6 @@ class _ControlPageState extends ConsumerState<ControlPage>
       unawaited(resumeView());
     } else {
       unawaited(pauseView());
-    }
-  }
-
-  Future<void> reconcileState() async {
-    final epoch = markStateUnknown();
-    try {
-      // 桥接只在完整读取栅栏通过后发布 state.resynced，命令回执本身不能解除画面门禁。
-      if (!_sourcesCurrent) return;
-      await ref.read(reconcileStateProvider)();
-    } catch (failure) {
-      if (mounted && presentation.acceptsReconciliation(epoch)) {
-        setState(() => presentation.reportError(remoteFailure(failure)));
-      }
     }
   }
 
@@ -600,7 +504,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
   void didPopNext() {
     presentation.cover(false);
     notices.flush();
-    if (connectionRecovery.pending) {
+    if (sessionLifecycle.recoveryPending) {
       recoverConnection();
     } else if (acceptsInput) {
       unawaited(resumeView());
@@ -608,15 +512,9 @@ class _ControlPageState extends ConsumerState<ControlPage>
   }
 
   void recoverConnection() {
-    if (!connectionStartAllowed ||
-        presentation.connecting ||
-        !connectionRecovery.take()) {
-      return;
+    if (sessionLifecycle.takeConnectionRecovery()) {
+      unawaited(start(recoveringConnection: true));
     }
-    // 异步恢复启动前同步消耗恢复意图，不重放路由最初携带的工具动作。
-    presentation.suppressInitialAction();
-    window.abandonEndedSession();
-    unawaited(start(recoveringConnection: true));
   }
 
   Future<void> pauseView() async {
@@ -698,7 +596,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
       // 短暂 inactive 保留画面流但可能推迟视口调整，恢复时即使无需切换可见性也要继续调整。
       displaySizing.reconsider();
       if (!presentation.lifecycleVisibility(true)) return;
-      if (connectionRecovery.pending) {
+      if (sessionLifecycle.recoveryPending) {
         recoverConnection();
       } else if (!presentation.covered) {
         unawaited(resumeView());
@@ -775,6 +673,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
   void dispose() {
     _retired = true;
     _clipboardFocusRevision++;
+    sessionLifecycle.dispose();
     notices.dispose();
     scheduleMicrotask(_clipboardFocus.dispose);
     displaySizing.dispose();
@@ -824,9 +723,9 @@ class _ControlPageState extends ConsumerState<ControlPage>
           : presentation.qualityRetryable
           ? () => QualityRoute(deviceId: widget.device.id).push<void>(context)
           : presentation.appLaunchUnknown
-          ? checkAppLaunch
+          ? sessionLifecycle.checkAppLaunch
           : presentation.reconcileOnly
-          ? reconcileState
+          ? sessionLifecycle.reconcileState
           : start,
     );
     // 应用消息可跨路由显示；远控使用独立消息区域，防止本机页面的结果遮住手机画面。
