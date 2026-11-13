@@ -60,7 +60,7 @@ import UserNotifications
         }
         let bounds = window.bounds
         let safe = window.safeAreaInsets
-        result([
+        var environment: [String: Any] = [
           "width": bounds.width,
           "height": bounds.height,
           "windowId": windowIdProvider() ?? scene.session.persistentIdentifier,
@@ -70,7 +70,26 @@ import UserNotifications
             "right": safe.right,
             "bottom": safe.bottom,
           ],
-        ])
+        ]
+        if #available(iOS 27.1, *) {
+          let divisions = window.reservedRegions(kind: .division, options: [])
+          environment["displayFeatures"] = divisions.map { region in
+            let frame = region.frame
+            return [
+              "left": frame.minX,
+              "top": frame.minY,
+              "width": frame.width,
+              "height": frame.height,
+              "type": "fold",
+              "state": frame.width >= frame.height ? "tabletop" : "book",
+            ] as [String: Any]
+          }
+          environment["posture"] = divisions.first.map { region in
+            let frame = region.frame
+            return frame.width >= frame.height ? "tabletop" : "book"
+          } ?? "normal"
+        }
+        result(environment)
         return
       }
       guard call.method == "window.openIndependent" else {
