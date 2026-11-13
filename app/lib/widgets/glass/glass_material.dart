@@ -221,6 +221,7 @@ class Glass extends StatefulWidget {
     this.radius = DesignTokens.roundedLg,
     this.padding = EdgeInsets.zero,
     this.solid = false,
+    this.showShadow = true,
     this.variant = GlassVariant.regular,
     this.clipExpansion = const EdgeInsets.all(
       DesignTokens.componentGlassRefractionWidth,
@@ -231,6 +232,10 @@ class Glass extends StatefulWidget {
   final double radius;
   final EdgeInsetsGeometry padding;
   final bool solid;
+
+  /// Toolbars turn this off when their parent has a sampling edge, so the
+  /// edge never crops a button shadow.
+  final bool showShadow;
   final GlassVariant variant;
 
   @override
@@ -324,13 +329,15 @@ class Glass extends StatefulWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
-        boxShadow: [
-          BoxShadow(
-            color: dark ? ConnectTokens.shadowDark : ConnectTokens.shadow,
-            blurRadius: ConnectTokens.shadowBlur,
-            offset: const Offset(0, ConnectTokens.shadowOffset),
-          ),
-        ],
+        boxShadow: showShadow
+            ? [
+                BoxShadow(
+                  color: dark ? ConnectTokens.shadowDark : ConnectTokens.shadow,
+                  blurRadius: ConnectTokens.shadowBlur,
+                  offset: const Offset(0, ConnectTokens.shadowOffset),
+                ),
+              ]
+            : const [],
       ),
       child: surface,
     );
