@@ -5,8 +5,10 @@ import 'package:scrcpy_connect/core/platform/window_environment.dart';
 ///
 /// Android WindowManager, iPhone Duo scene geometry and HarmonyOS
 /// FoldSplitContainer can all project into this shape without making the
-/// widget layer depend on a vendor SDK. Flutter's MediaQuery path remains the
-/// primary source when the engine already exposes display features.
+/// widget layer depend on a vendor SDK. HarmonyOS WindowStatusType names and
+/// enum values are accepted at this boundary; Flutter's MediaQuery path
+/// remains the primary source when the engine already exposes display
+/// features.
 final class WindowEnvironmentCodec {
   const WindowEnvironmentCodec._();
 
@@ -23,7 +25,10 @@ final class WindowEnvironmentCodec {
         _posture(payload['posture'], allowNull: true) != null;
     final displayFeaturesProvided = payload['displayFeatures'] is List;
     final input = _input(payload['input']);
-    final mode = _mode(payload['mode']);
+    // HarmonyOS hosts commonly expose WindowStatusType as either the enum
+    // name or its numeric value. Keep the canonical payload small while
+    // accepting both forms at the platform boundary.
+    final mode = _mode(payload['mode'] ?? payload['windowStatusType']);
     final posture =
         _posture(payload['posture'], allowNull: true) ??
         _postureFromFeatures(features) ??
@@ -122,9 +127,13 @@ final class WindowEnvironmentCodec {
       };
 
   static WindowMode _mode(Object? value) => switch (value) {
-    'split' => WindowMode.split,
-    'floating' => WindowMode.floating,
-    'freeform' => WindowMode.freeform,
+    'split' || 'SPLIT' || 'SPLIT_SCREEN' => WindowMode.split,
+    'floating' || 'FLOATING' => WindowMode.floating,
+    'freeform' || 'FREEFORM' => WindowMode.freeform,
+    // HarmonyOS WindowStatusType values: FULL_SCREEN=1, MAXIMIZE=2,
+    // MINIMIZE=3, FLOATING=4, SPLIT_SCREEN=5.
+    4 => WindowMode.floating,
+    5 => WindowMode.split,
     _ => WindowMode.fullScreen,
   };
 

@@ -168,6 +168,22 @@ void main() {
     expect(environment.verticalPaneDivider, isNotNull);
   });
 
+  test('accepts HarmonyOS WindowStatusType names and enum values', () {
+    final splitByName = WindowEnvironmentCodec.decode({
+      'width': 700,
+      'height': 500,
+      'windowStatusType': 'SPLIT_SCREEN',
+    });
+    final floatingByValue = WindowEnvironmentCodec.decode({
+      'width': 700,
+      'height': 500,
+      'windowStatusType': 4,
+    });
+
+    expect(splitByName?.mode, WindowMode.split);
+    expect(floatingByValue?.mode, WindowMode.floating);
+  });
+
   test('records explicit empty host projections so a closed fold clears', () {
     final environment = WindowEnvironmentCodec.decode({
       'width': 700,
