@@ -15,10 +15,7 @@ void main() {
         home: GlassPreferences(
           reduceTransparency: true,
           child: Scaffold(
-            body: ExitHandle(
-              deviceLabel: '测试设备',
-              onExit: () {},
-            ),
+            body: ExitHandle(deviceLabel: '测试设备', onExit: () {}),
           ),
         ),
       ),
@@ -27,10 +24,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('remote-tool-handle')));
     await tester.pump();
 
-    expect(
-      find.byKey(const ValueKey('remote-tool-panel')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('remote-tool-panel')), findsOneWidget);
     expect(
       tester.widget<ContentSurface>(
         find.byKey(const ValueKey('remote-tool-panel')),
