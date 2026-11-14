@@ -8,6 +8,7 @@ import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 
 class PageFrame extends StatefulWidget {
   const PageFrame({
@@ -75,14 +76,18 @@ class _PageFrameState extends State<PageFrame> {
         : text.titleLarge;
   }
 
-  double _toolbarHeight(BuildContext context, BoxConstraints constraints) {
+  double _toolbarHeight(
+    BuildContext context,
+    BoxConstraints constraints, {
+    bool includeActions = true,
+  }) {
     final width =
         (constraints.maxWidth.clamp(
                   0,
                   DesignTokens.componentPageContentMaxWidth,
                 ) -
                 DesignTokens.componentIconButtonSize *
-                    ((widget.actions?.length ?? 0) +
+                    ((includeActions ? (widget.actions?.length ?? 0) : 0) +
                         (widget.trailingAction == null ? 0 : 1) +
                         2))
             .clamp(1.0, double.infinity);
@@ -117,12 +122,19 @@ class _PageFrameState extends State<PageFrame> {
                     '/transfers',
                     '/settings',
                   ].contains(router.routeInformationProvider.value.uri.path));
-      final toolbarHeight = _toolbarHeight(context, constraints);
       // A desktop/freeform window owns its workspace chrome for every route,
       // including detail pages. Keeping the root-only guard here makes a
       // narrow desktop detail window regress to a phone-style AppBar.
       final workspaceToolbar = windowEnvironmentOf(context)
           .usesWorkspaceToolbar;
+      final verticalBar = workspaceToolbar
+          ? null
+          : liquid.GlassVerticalBar.maybeOf(context);
+      final toolbarHeight = _toolbarHeight(
+        context,
+        constraints,
+        includeActions: verticalBar == null,
+      );
       final top = workspaceToolbar
           ? 0.0
           : MediaQuery.paddingOf(context).top + toolbarHeight;
@@ -140,29 +152,31 @@ class _PageFrameState extends State<PageFrame> {
         leadingWidth:
             DesignTokens.spacingMd + DesignTokens.componentIconButtonSize,
         titleSpacing: hasBack ? DesignTokens.spacingSm : DesignTokens.spacingMd,
-        leading:
-            widget.leading ??
-            (hasBack
-                ? Padding(
-                    padding: const EdgeInsets.only(
-                      left: DesignTokens.spacingMd,
-                    ),
-                    child: Center(
-                      child: Tooltip(
-                        message: backLabel,
-                        child: GlassToolbarIconButton(
-                          semanticLabel: backLabel,
-                          interactionScale: reduceMotion
-                              ? 1
-                              : DesignTokens.componentGlassInteractionScale,
-                          anchorStretch: !reduceMotion,
-                          onPressed: onBack,
-                          icon: const Icon(LucideIcons.chevronLeft),
-                        ),
-                      ),
-                    ),
-                  )
-                : null),
+        leading: verticalBar != null
+            ? null
+            : widget.leading ??
+                  (hasBack
+                      ? Padding(
+                          padding: const EdgeInsets.only(
+                            left: DesignTokens.spacingMd,
+                          ),
+                          child: Center(
+                            child: Tooltip(
+                              message: backLabel,
+                              child: GlassToolbarIconButton(
+                                semanticLabel: backLabel,
+                                interactionScale: reduceMotion
+                                    ? 1
+                                    : DesignTokens
+                                          .componentGlassInteractionScale,
+                                anchorStretch: !reduceMotion,
+                                onPressed: onBack,
+                                icon: const Icon(LucideIcons.chevronLeft),
+                              ),
+                            ),
+                          ),
+                        )
+                      : null),
         title:
             widget.titleContent ??
             Text(
@@ -172,9 +186,12 @@ class _PageFrameState extends State<PageFrame> {
               style: _titleStyle(context),
             ),
         actions:
-            (widget.actions == null || widget.actions!.isEmpty) &&
-                widget.trailingAction == null
-            ? null
+            verticalBar != null ||
+                ((widget.actions == null || widget.actions!.isEmpty) &&
+                    widget.trailingAction == null)
+            ? (verticalBar != null && widget.trailingAction != null
+                  ? [Center(child: widget.trailingAction!)]
+                  : null)
             : [
                 if (widget.actions != null && widget.actions!.isNotEmpty)
                   Padding(
@@ -192,7 +209,7 @@ class _PageFrameState extends State<PageFrame> {
                 const SizedBox(width: DesignTokens.spacingMd),
               ],
       );
-      return Scaffold(
+      final scaffold = Scaffold(
         backgroundColor: widget.backgroundColor,
         extendBodyBehindAppBar: true,
         extendBody: true,
@@ -344,6 +361,49 @@ class _PageFrameState extends State<PageFrame> {
                   ),
                 ),
               ),
+      );
+      if (verticalBar == null ||
+          (widget.leading == null &&
+              !hasBack &&
+              (widget.actions == null || widget.actions!.isEmpty))) {
+        return scaffold;
+      }
+      final verticalActions = <Widget>[
+        if (widget.leading != null)
+          widget.leading!
+        else if (hasBack)
+          GlassToolbarIconButton(
+            semanticLabel: backLabel,
+            interactionScale: reduceMotion
+                ? 1
+                : DesignTokens.componentGlassInteractionScale,
+            anchorStretch: !reduceMotion,
+            onPressed: onBack,
+            icon: const Icon(LucideIcons.chevronLeft),
+          ),
+        ...?widget.actions,
+      ];
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          scaffold,
+          Positioned(
+            top: verticalBar.top,
+            left: verticalBar.edge == liquid.GlassVerticalBarEdge.leading
+                ? 0
+                : null,
+            right: verticalBar.edge == liquid.GlassVerticalBarEdge.trailing
+                ? 0
+                : null,
+            width: verticalBar.width,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: DesignTokens.spacingSm,
+              ),
+              child: GlassVerticalToolbarGroup(children: verticalActions),
+            ),
+          ),
+        ],
       );
     },
   );

@@ -139,7 +139,12 @@ class ConnectApp extends HookConsumerWidget {
                     MediaQuery.highContrastOf(context) ||
                     liquid.GlassAccessibilityData.of(context)
                         .reduceTransparency,
-                child: child!,
+                // The package owns the iPhone Duo vertical bar reservation.
+                // Keeping this shell above the router lets the single app
+                // navigation bar follow UIKit's side strip on the outer
+                // display and inner landscape, while remaining horizontal
+                // on ordinary phones and inner portrait.
+                child: liquid.GlassNavigationShell(child: child!),
               ),
             ),
           ),
