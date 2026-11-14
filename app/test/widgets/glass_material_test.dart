@@ -29,4 +29,22 @@ void main() {
     expect(glass.showShadow, isFalse);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('navigation track uses the package shadow lifecycle', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ConnectTokens.theme(Brightness.light),
+        home: Builder(
+          builder: (context) {
+            final settings = GlassMaterial.navigationBarSettings(context);
+            expect(settings.effectiveShadow, isNotEmpty);
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
