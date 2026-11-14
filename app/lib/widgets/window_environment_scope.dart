@@ -213,11 +213,24 @@ Future<WindowEnvironment?> _readHostEnvironment() async {
 }
 
 Stream<WindowEnvironment?> _watchHostEnvironment() {
+  // Linux and Windows currently expose window identity through the desktop
+  // engine, while metrics/lifecycle callbacks provide the live geometry.
+  // Do not subscribe to an EventChannel those hosts do not register: an
+  // absent channel fails asynchronously when the stream is listened to and
+  // would otherwise surface as an uncaught MissingPluginException.
+  if (defaultTargetPlatform == TargetPlatform.linux ||
+      defaultTargetPlatform == TargetPlatform.windows) {
+    return const Stream<WindowEnvironment?>.empty();
+  }
   try {
-    return const PlatformChannels().windowEnvironmentEvents.map((payload) {
-      if (payload is! Map) return null;
-      return WindowEnvironmentCodec.decode(Map<String, dynamic>.from(payload));
-    });
+    return const PlatformChannels().windowEnvironmentEvents
+        .map((payload) {
+          if (payload is! Map) return null;
+          return WindowEnvironmentCodec.decode(
+            Map<String, dynamic>.from(payload),
+          );
+        })
+        .handleError((Object _, StackTrace _) {});
   } on Exception {
     return const Stream<WindowEnvironment?>.empty();
   }

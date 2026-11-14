@@ -4,6 +4,7 @@ import desktop_multi_window
 
 class MainFlutterWindow: NSWindow {
   private var visualPreferences: SystemVisualPreferences?
+  private var environmentEvents: WindowEnvironmentEvents?
   private var platformMethods: FlutterMethodChannel?
 
   override func awakeFromNib() {
@@ -17,6 +18,8 @@ class MainFlutterWindow: NSWindow {
       RegisterGeneratedPlugins(registry: controller)
     }
     visualPreferences = SystemVisualPreferences(messenger: flutterViewController.engine.binaryMessenger)
+    environmentEvents = WindowEnvironmentEvents(
+      window: self, messenger: flutterViewController.engine.binaryMessenger)
     let platform = FlutterMethodChannel(
       name: "dev.scrcpyconnect/platform", binaryMessenger: flutterViewController.engine.binaryMessenger)
     platform.setMethodCallHandler { [weak self] call, result in
@@ -51,6 +54,80 @@ class MainFlutterWindow: NSWindow {
   deinit {
     platformMethods?.setMethodCallHandler(nil)
     visualPreferences?.dispose()
+    environmentEvents?.dispose()
+  }
+}
+
+/// Publishes the same window geometry contract as the mobile hosts. Flutter
+/// still re-reads on metrics changes; this stream covers native window mode
+/// transitions that do not necessarily produce a Flutter frame immediately.
+private final class WindowEnvironmentEvents: NSObject, FlutterStreamHandler {
+  private weak var window: NSWindow?
+  private let events: FlutterEventChannel
+  private var sink: FlutterEventSink?
+  private var observers: [NSObjectProtocol] = []
+  private var generation: Int64 = 0
+
+  init(window: NSWindow, messenger: FlutterBinaryMessenger) {
+    self.window = window
+    events = FlutterEventChannel(
+      name: "dev.scrcpyconnect/window_environment/events", binaryMessenger: messenger)
+    super.init()
+    events.setStreamHandler(self)
+  }
+
+  func onListen(withArguments arguments: Any?, eventSink: @escaping FlutterEventSink)
+    -> FlutterError?
+  {
+    stopObserving()
+    sink = eventSink
+    let listeningGeneration = generation
+    sendSnapshot()
+    guard let window else { return nil }
+    let names: [Notification.Name] = [
+      NSWindow.didResizeNotification,
+      NSWindow.didMoveNotification,
+      NSWindow.didEnterFullScreenNotification,
+      NSWindow.didExitFullScreenNotification,
+      NSWindow.didChangeScreenNotification,
+    ]
+    observers = names.map { name in
+      NotificationCenter.default.addObserver(
+        forName: name, object: window, queue: .main
+      ) { [weak self] _ in
+        guard let self, self.generation == listeningGeneration else { return }
+        self.sendSnapshot()
+      }
+    }
+    return nil
+  }
+
+  func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    stopObserving()
+    return nil
+  }
+
+  private func sendSnapshot() {
+    guard let window else { return }
+    let bounds = window.contentView?.bounds ?? .zero
+    sink?([
+      "width": bounds.width,
+      "height": bounds.height,
+      "windowId": "macos:\(window.windowNumber)",
+      "mode": window.styleMask.contains(.fullScreen) ? "fullScreen" : "freeform",
+    ])
+  }
+
+  private func stopObserving() {
+    generation += 1
+    observers.forEach(NotificationCenter.default.removeObserver)
+    observers.removeAll()
+    sink = nil
+  }
+
+  func dispose() {
+    stopObserving()
+    events.setStreamHandler(nil)
   }
 }
 
