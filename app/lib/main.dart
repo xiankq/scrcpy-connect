@@ -21,6 +21,7 @@ import 'package:scrcpy_connect/core/platform/window_launch_route.dart';
 
 Future<void> main([List<String> args = const []]) async {
   WidgetsFlutterBinding.ensureInitialized();
+  runApp(const ProviderScope(child: _StartupShell()));
   final launch = await _windowLaunch();
   DiagnosticLog? diagnostics;
   try {
@@ -59,6 +60,20 @@ Future<void> main([List<String> args = const []]) async {
       ),
     );
   }
+}
+
+final class _StartupShell extends StatelessWidget {
+  const _StartupShell();
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    title: '邻接',
+    debugShowCheckedModeBanner: false,
+    theme: ConnectTokens.theme(Brightness.light),
+    darkTheme: ConnectTokens.theme(Brightness.dark),
+    themeMode: ThemeMode.system,
+    home: const StartupLoadingPage(),
+  );
 }
 
 final class _WindowLaunch {
