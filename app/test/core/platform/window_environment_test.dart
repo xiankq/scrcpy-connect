@@ -364,6 +364,23 @@ void main() {
     expect(floatingByValue?.mode, WindowMode.floating);
   });
 
+  test('keeps HarmonyOS maximized windows in the workspace mode', () {
+    final maximizedByName = WindowEnvironmentCodec.decode({
+      'width': 1200,
+      'height': 800,
+      'windowStatusType': 'MAXIMIZE',
+    });
+    final maximizedByValue = WindowEnvironmentCodec.decode({
+      'width': 1200,
+      'height': 800,
+      'windowStatusType': 2,
+    });
+
+    expect(maximizedByName?.mode, WindowMode.freeform);
+    expect(maximizedByName?.usesWorkspaceToolbar, isTrue);
+    expect(maximizedByValue?.mode, WindowMode.freeform);
+  });
+
   test('normalizes ArkTS enum casing at the host boundary', () {
     final environment = WindowEnvironmentCodec.decode({
       'width': 1200,
