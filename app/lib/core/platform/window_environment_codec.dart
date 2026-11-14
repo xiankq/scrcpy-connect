@@ -3,12 +3,13 @@ import 'package:scrcpy_connect/core/platform/window_environment.dart';
 
 /// Decodes the small, platform-neutral window payload used by native hosts.
 ///
-/// Android WindowManager, iPhone Duo scene geometry and HarmonyOS
-/// FoldSplitContainer can all project into this shape without making the
-/// widget layer depend on a vendor SDK. HarmonyOS WindowStatusType names and
-/// enum values are accepted at this boundary; Flutter's MediaQuery path
-/// remains the primary source when the engine already exposes display
-/// features.
+/// Android WindowManager and HarmonyOS FoldSplitContainer can project into
+/// this shape without making the widget layer depend on a vendor SDK. iPhone
+/// Duo geometry is supplied by the `foldable` package and merged at the widget
+/// boundary, so this codec remains responsible for window identity, mode and
+/// host metadata only. HarmonyOS WindowStatusType names and enum values are
+/// accepted at this boundary; Flutter's MediaQuery path remains the primary
+/// source when the engine already exposes display features.
 final class WindowEnvironmentCodec {
   const WindowEnvironmentCodec._();
 

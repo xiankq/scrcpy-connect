@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:foldable/foldable.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -130,21 +131,28 @@ class ConnectApp extends HookConsumerWidget {
         child: AppPresentationHost(
           navigator: navigator,
           router: router,
-          child: WindowEnvironmentScope(
-            child: liquid.GlassTheme(
-              data: GlassMaterial.theme(context),
-              child: liquid.GlassAccessibilityScope(
-                reduceTransparency:
-                    systemVisualPreferences.reduceTransparency ||
-                    MediaQuery.highContrastOf(context) ||
-                    liquid.GlassAccessibilityData.of(context)
-                        .reduceTransparency,
-                // The package owns the iPhone Duo vertical bar reservation.
-                // Keeping this shell above the router lets the single app
-                // navigation bar follow UIKit's side strip on the outer
-                // display and inner landscape, while remaining horizontal
-                // on ordinary phones and inner portrait.
-                child: liquid.GlassNavigationShell(child: child!),
+          child: FoldableProvider(
+            // Keep the fold in the provider for explicit layout decisions and
+            // publish it to Flutter surfaces while the hinge is partially open.
+            // The provider suppresses the bridge automatically if Flutter starts
+            // exposing native iOS display features itself.
+            bridgeMode: DisplayFeatureBridgeMode.full,
+            child: WindowEnvironmentScope(
+              child: liquid.GlassTheme(
+                data: GlassMaterial.theme(context),
+                child: liquid.GlassAccessibilityScope(
+                  reduceTransparency:
+                      systemVisualPreferences.reduceTransparency ||
+                      MediaQuery.highContrastOf(context) ||
+                      liquid.GlassAccessibilityData.of(context)
+                          .reduceTransparency,
+                  // The package owns the iPhone Duo vertical bar reservation.
+                  // Keeping this shell above the router lets the single app
+                  // navigation bar follow UIKit's side strip on the outer
+                  // display and inner landscape, while remaining horizontal
+                  // on ordinary phones and inner portrait.
+                  child: liquid.GlassNavigationShell(child: child!),
+                ),
               ),
             ),
           ),

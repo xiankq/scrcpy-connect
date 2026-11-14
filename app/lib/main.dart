@@ -19,9 +19,16 @@ import 'package:scrcpy_connect/core/notifications/local_notification_sink.dart';
 import 'package:scrcpy_connect/core/notifications/system_notification_sink_provider.dart';
 import 'package:scrcpy_connect/core/platform/window_launch_route.dart';
 
+// The bootstrap shell is intentionally outside the session ProviderScope;
+// replacing a mounted scope would reject the session overrides.
+// ignore_for_file: riverpod_lint/missing_provider_scope
+
 Future<void> main([List<String> args = const []]) async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const ProviderScope(child: _StartupShell()));
+  // Keep the loading shell outside the session scope. Riverpod scopes cannot
+  // add overrides after they have been mounted; replacing this root scope
+  // would make the release build fail during the first real frame.
+  runApp(const _StartupShell());
   final launch = await _windowLaunch();
   DiagnosticLog? diagnostics;
   try {

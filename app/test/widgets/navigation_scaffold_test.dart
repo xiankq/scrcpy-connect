@@ -150,8 +150,8 @@ void main() {
         child: MediaQuery(
           data: const MediaQueryData(
             size: Size(402, 874),
-            viewPadding: EdgeInsets.only(right: 84),
-            padding: EdgeInsets.only(right: 84),
+            viewPadding: EdgeInsets.only(right: 120),
+            padding: EdgeInsets.only(right: 120),
           ),
           child: MaterialApp.router(
             theme: ConnectTokens.theme(Brightness.light),
@@ -164,11 +164,19 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
 
-    final bar = tester.widget<liquid.GlassVerticalBar>(
-      find.byType(liquid.GlassVerticalBar),
+    final bars = tester
+        .widgetList<liquid.GlassVerticalBar>(
+          find.byType(liquid.GlassVerticalBar),
+        )
+        .toList();
+    expect(
+      bars.any((bar) => bar.data?.edge == liquid.GlassVerticalBarEdge.trailing),
+      isTrue,
     );
-    expect(bar.data?.edge, liquid.GlassVerticalBarEdge.trailing);
-    expect(find.byKey(const ValueKey('app-bottom-navigation')), findsOneWidget);
+    expect(bars.any((bar) => bar.data?.width == 84), isTrue);
+    final navigation = find.byKey(const ValueKey('app-bottom-navigation'));
+    expect(navigation, findsOneWidget);
+    expect(tester.getBottomRight(navigation).dx, closeTo(402, 1));
     expect(find.byType(GlassVerticalToolbarGroup), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

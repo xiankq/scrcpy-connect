@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
+import 'package:foldable/foldable.dart';
+import 'package:scrcpy_connect/core/platform/foldable_window_environment.dart';
 import 'package:scrcpy_connect/core/platform/window_environment.dart';
 import 'package:scrcpy_connect/widgets/window_environment_media.dart';
 import 'package:scrcpy_connect/widgets/window_environment_scope.dart';
@@ -21,9 +23,13 @@ final class WindowPaneHost extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    final environment =
+    final base =
         windowEnvironmentOverrideOf(context) ??
         windowEnvironmentFromMedia(media);
+    final environment = mergeFoldableWindowEnvironment(
+      base,
+      DuoMediaQuery.maybeOf(context),
+    );
     final divider = environment.horizontalPaneDivider;
     if (divider == null) return child;
 

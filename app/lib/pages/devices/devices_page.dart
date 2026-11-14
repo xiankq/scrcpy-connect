@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:foldable/foldable.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -73,6 +74,7 @@ class DevicesPage extends HookConsumerWidget {
     );
     return LayoutBuilder(
       builder: (context, constraints) {
+        final fold = DuoMediaQuery.maybeOf(context);
         final verticalBar = liquid.GlassVerticalBar.maybeOf(context);
         final barInset = verticalBar == null
             ? DesignTokens.spacingZero
@@ -182,7 +184,10 @@ class DevicesPage extends HookConsumerWidget {
                     ),
                   )
                 else if (WindowEnvironment.sizeClassFor(constraints.maxWidth) ==
-                    WindowSizeClass.expanded)
+                        WindowSizeClass.expanded ||
+                    fold?.isFoldable == true &&
+                        fold?.horizontalSizeClass == SizeClass.regular &&
+                        fold?.isFullyOpen == true)
                   SliverPadding(
                     padding: EdgeInsets.fromLTRB(
                       DesignTokens.spacingMd + leadingInset,
