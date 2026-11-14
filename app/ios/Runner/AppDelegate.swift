@@ -131,7 +131,7 @@ import UserNotifications
       let divisions = window
         .reservedRegions(kind: .division, options: [])
         .filter { $0.isActive }
-      environment["displayFeatures"] = divisions.map { region in
+      let divisionFeatures = divisions.map { region in
         let frame = region.frame
         return [
           "left": frame.minX,
@@ -142,6 +142,20 @@ import UserNotifications
           "state": frame.width >= frame.height ? "tabletop" : "book",
         ] as [String: Any]
       }
+      let occlusionFeatures = window
+        .reservedRegions(kind: .occlusion, options: [])
+        .filter { $0.isActive }
+        .map { region in
+          let frame = region.frame
+          return [
+            "left": frame.minX,
+            "top": frame.minY,
+            "width": frame.width,
+            "height": frame.height,
+            "type": "cutout",
+          ] as [String: Any]
+        }
+      environment["displayFeatures"] = divisionFeatures + occlusionFeatures
       environment["posture"] = divisions.first.map { region in
         let frame = region.frame
         return frame.width >= frame.height ? "tabletop" : "book"

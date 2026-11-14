@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
@@ -237,25 +238,36 @@ class Glass extends StatefulWidget {
   }) {
     final dark = brightness == Brightness.dark;
     final clear = variant == GlassVariant.clear;
-    return liquid.LiquidGlassSettings(
-      thickness: DesignTokens.componentGlassOpticalDepth,
-      refractiveIndex: ConnectTokens.glassRefractionIndex,
-      chromaticAberration: ConnectTokens.glassDispersion,
-      saturation: ConnectTokens.glassSaturation,
-      blur: clear
-          ? DesignTokens.componentGlassClearBlur
-          : ConnectTokens.glassBlur,
-      bodyMode: clear
-          ? liquid.GlassBodyMode.clear
-          : liquid.GlassBodyMode.adaptive,
+    final base = switch (defaultTargetPlatform) {
+      // The package preset tracks Apple's current regular material (including
+      // frost, rim shade and paraxial lens terms). Keep the app's clear
+      // media variant explicit, but do not replace the regular system optics
+      // with a hand-tuned approximation on Apple platforms.
+      TargetPlatform.iOS || TargetPlatform.macOS =>
+        dark
+            ? liquid.LiquidGlassSettings.ios27Dark
+            : liquid.LiquidGlassSettings.ios27Light,
+      _ => liquid.LiquidGlassSettings(
+        thickness: DesignTokens.componentGlassOpticalDepth,
+        refractiveIndex: ConnectTokens.glassRefractionIndex,
+        chromaticAberration: ConnectTokens.glassDispersion,
+        saturation: ConnectTokens.glassSaturation,
+        blur: ConnectTokens.glassBlur,
+        bodyMode: liquid.GlassBodyMode.adaptive,
+        glassColor: dark ? ConnectTokens.glassDark : ConnectTokens.glass,
+        lightAngle: DesignTokens.componentGlassAngle * math.pi / 180,
+        lightIntensity: DesignTokens.componentGlassSpecularIntensity,
+        glowIntensity: DesignTokens.componentGlassGlowIntensity,
+      ),
+    };
+    return base.copyWith(
+      blur: clear ? DesignTokens.componentGlassClearBlur : null,
+      bodyMode: clear ? liquid.GlassBodyMode.clear : null,
       glassColor: clear
           ? (dark
                 ? DesignTokens.colorGlassClearDark
                 : DesignTokens.colorGlassClear)
-          : (dark ? ConnectTokens.glassDark : ConnectTokens.glass),
-      lightAngle: DesignTokens.componentGlassAngle * math.pi / 180,
-      lightIntensity: DesignTokens.componentGlassSpecularIntensity,
-      glowIntensity: DesignTokens.componentGlassGlowIntensity,
+          : null,
       shadow: const [],
     );
   }
