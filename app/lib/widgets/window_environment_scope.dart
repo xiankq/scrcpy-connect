@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -112,9 +113,29 @@ final class _WindowEnvironmentScopeState extends State<WindowEnvironmentScope>
     final environment = _hostEnvironment == null
         ? mediaEnvironment
         : _merge(mediaEnvironment, _hostEnvironment!);
-    return _WindowEnvironmentInherited(
+    final inherited = _WindowEnvironmentInherited(
       environment: environment,
       child: widget.child,
+    );
+    if (_hostEnvironment?.insetsProvided != true) return inherited;
+    final hostInsets = _hostEnvironment!.insets;
+    final viewInsets = MediaQuery.viewInsetsOf(context);
+    final viewPadding = EdgeInsets.fromLTRB(
+      hostInsets.left,
+      hostInsets.top,
+      hostInsets.right,
+      hostInsets.bottom,
+    );
+    final padding = EdgeInsets.fromLTRB(
+      math.max(0, viewPadding.left - viewInsets.left),
+      math.max(0, viewPadding.top - viewInsets.top),
+      math.max(0, viewPadding.right - viewInsets.right),
+      math.max(0, viewPadding.bottom - viewInsets.bottom),
+    );
+    return MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(padding: padding, viewPadding: viewPadding),
+      child: inherited,
     );
   }
 

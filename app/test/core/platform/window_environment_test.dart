@@ -198,6 +198,7 @@ void main() {
     tester,
   ) async {
     WindowEnvironment? observed;
+    EdgeInsets? observedPadding;
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(
@@ -214,6 +215,7 @@ void main() {
           child: Builder(
             builder: (context) {
               observed = context.windowEnvironment;
+              observedPadding = MediaQuery.paddingOf(context);
               return const SizedBox.shrink();
             },
           ),
@@ -223,6 +225,7 @@ void main() {
     await tester.pump();
 
     expect(observed?.insets, const WindowInsets());
+    expect(observedPadding, EdgeInsets.zero);
   });
 
   test('accepts HarmonyOS WindowStatusType names and enum values', () {
