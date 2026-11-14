@@ -29,7 +29,10 @@ final class WindowEnvironmentCodec {
     final input = _input(payload['input']);
     // HarmonyOS hosts commonly expose WindowStatusType as either the enum
     // name or its numeric value. Keep the canonical payload small while
-    // accepting both forms at the platform boundary.
+    // accepting both forms at the platform boundary. A half-folded status
+    // alone is deliberately not converted to book/tabletop: the host must
+    // provide the physical feature geometry before the layout can choose a
+    // pane.
     final mode = _mode(payload['mode'] ?? payload['windowStatusType']);
     final posture =
         _posture(payload['posture'], allowNull: true) ??
@@ -124,28 +127,33 @@ final class WindowEnvironmentCodec {
     return null;
   }
 
-  static WindowDisplayFeatureType? _featureType(Object? value) =>
-      switch (value) {
-        'fold' => WindowDisplayFeatureType.fold,
-        'hinge' => WindowDisplayFeatureType.hinge,
-        'cutout' => WindowDisplayFeatureType.cutout,
-        _ => null,
-      };
+  static WindowDisplayFeatureType? _featureType(Object? value) {
+    final name = value is String ? value.toLowerCase() : null;
+    return switch (name) {
+      'fold' => WindowDisplayFeatureType.fold,
+      'hinge' => WindowDisplayFeatureType.hinge,
+      'cutout' || 'occlusion' => WindowDisplayFeatureType.cutout,
+      _ => null,
+    };
+  }
 
-  static WindowMode _mode(Object? value) => switch (value) {
-    'split' || 'SPLIT' || 'SPLIT_SCREEN' => WindowMode.split,
-    'floating' || 'FLOATING' => WindowMode.floating,
-    'freeform' || 'FREEFORM' => WindowMode.freeform,
-    // HarmonyOS WindowStatusType values: FULL_SCREEN=1, MAXIMIZE=2,
-    // MINIMIZE=3, FLOATING=4, SPLIT_SCREEN=5.
-    4 => WindowMode.floating,
-    5 => WindowMode.split,
-    _ => WindowMode.fullScreen,
-  };
+  static WindowMode _mode(Object? value) {
+    final normalized = value is String ? value.toLowerCase() : value;
+    return switch (normalized) {
+      'split' || 'split_screen' => WindowMode.split,
+      'floating' => WindowMode.floating,
+      'freeform' || 'windowed' => WindowMode.freeform,
+      // HarmonyOS WindowStatusType values: FULL_SCREEN=1, MAXIMIZE=2,
+      // MINIMIZE=3, FLOATING=4, SPLIT_SCREEN=5.
+      4 => WindowMode.floating,
+      5 => WindowMode.split,
+      _ => WindowMode.fullScreen,
+    };
+  }
 
   static WindowPosture? _posture(Object? value, {bool allowNull = false}) {
-    final posture = switch (value) {
-      'flat' => WindowPosture.flat,
+    final posture = switch (value is String ? value.toLowerCase() : value) {
+      'flat' || 'expanded' => WindowPosture.flat,
       'book' => WindowPosture.book,
       'tabletop' => WindowPosture.tabletop,
       'normal' => WindowPosture.normal,
