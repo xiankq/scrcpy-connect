@@ -266,6 +266,18 @@ void main() {
     expect(observedPadding, EdgeInsets.zero);
   });
 
+  testWidgets(
+    'an optional host event channel never escapes as a plugin error',
+    (tester) async {
+      await tester.pumpWidget(
+        const WindowEnvironmentScope(child: SizedBox.shrink()),
+      );
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   test('accepts HarmonyOS WindowStatusType names and enum values', () {
     final splitByName = WindowEnvironmentCodec.decode({
       'width': 700,
