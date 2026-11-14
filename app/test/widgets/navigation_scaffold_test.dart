@@ -56,6 +56,14 @@ void main() {
       const key = ValueKey('app-bottom-navigation');
       final first = tester.element(find.byKey(key));
       expect(find.byKey(key), findsOneWidget);
+      final isolation = tester.widget<liquid.GlassIsolationScope>(
+        find.ancestor(
+          of: find.byKey(key),
+          matching: find.byType(liquid.GlassIsolationScope),
+        ),
+      );
+      expect(isolation.isolated, isTrue);
+      expect(isolation.defaultQuality, liquid.GlassQuality.premium);
 
       reduceTransparency.value = true;
       await tester.pumpAndSettle(const Duration(milliseconds: 100));

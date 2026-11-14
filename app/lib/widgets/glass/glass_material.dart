@@ -69,6 +69,7 @@ abstract final class GlassMaterial {
     final settings = Glass.optics(
       brightness: Theme.of(context).brightness,
       variant: variant,
+      includeShadow: false,
     );
     return quality(context) == liquid.GlassQuality.minimal
         ? settings.copyWith(
@@ -103,19 +104,14 @@ abstract final class GlassMaterial {
   /// that can be clipped or disappear while the official indicator settles.
   static liquid.LiquidGlassSettings navigationTrackSettings(
     BuildContext context,
-  ) => settings(context).copyWith(
-    shadow: !opaque(context) && Theme.of(context).brightness == Brightness.light
-        ? const [
-            BoxShadow(
-              color: ConnectTokens.shadow,
-              blurRadius: ConnectTokens.shadowBlur,
-              offset: Offset(0, ConnectTokens.shadowOffset),
-            ),
-          ]
-        : const [],
+  ) => Glass.optics(
+    brightness: Theme.of(context).brightness,
+    includeShadow: !opaque(context),
   );
 
   /// The official bottom bar owns both the track and its moving indicator.
+  /// Its preset shadow is resolved by the package so the shadow follows the
+  /// same visibility and accessibility state as the platter.
   static liquid.LiquidGlassSettings navigationBarSettings(
     BuildContext context,
   ) => navigationTrackSettings(context);
@@ -235,6 +231,7 @@ class Glass extends StatefulWidget {
     required Brightness brightness,
     GlassVariant variant = GlassVariant.regular,
     double radius = DesignTokens.roundedLg,
+    bool includeShadow = false,
   }) {
     final dark = brightness == Brightness.dark;
     final clear = variant == GlassVariant.clear;
@@ -260,7 +257,7 @@ class Glass extends StatefulWidget {
         glowIntensity: DesignTokens.componentGlassGlowIntensity,
       ),
     };
-    return base.copyWith(
+    final resolved = base.copyWith(
       blur: clear ? DesignTokens.componentGlassClearBlur : null,
       bodyMode: clear ? liquid.GlassBodyMode.clear : null,
       glassColor: clear
@@ -268,8 +265,8 @@ class Glass extends StatefulWidget {
                 ? DesignTokens.colorGlassClearDark
                 : DesignTokens.colorGlassClear)
           : null,
-      shadow: const [],
     );
+    return includeShadow ? resolved : resolved.copyWith(shadow: const []);
   }
 
   Widget _build(BuildContext context, GlobalKey contentKey) {
