@@ -2,6 +2,26 @@ import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 
+class StartupLoadingPage extends StatelessWidget {
+  const StartupLoadingPage({super.key});
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: SafeArea(
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: DesignTokens.spacingLg),
+            Text('正在启动邻接', style: Theme.of(context).textTheme.titleLarge),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 class StartupErrorPage extends StatelessWidget {
   const StartupErrorPage({
     super.key,
