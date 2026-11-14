@@ -77,18 +77,44 @@ class MainFlutterWindow: NSWindow {
 private final class MacOSWindowServices {
   private let visualPreferences: SystemVisualPreferences
   private let environmentEvents: WindowEnvironmentEvents?
+  private let platformMethods: FlutterMethodChannel
+  private weak var window: NSWindow?
 
   init(controller: FlutterViewController) {
     let messenger = controller.engine.binaryMessenger
     visualPreferences = SystemVisualPreferences(messenger: messenger)
-    if let window = controller.view.window {
+    window = controller.view.window
+    if let window {
       environmentEvents = WindowEnvironmentEvents(window: window, messenger: messenger)
     } else {
       environmentEvents = nil
     }
+    platformMethods = FlutterMethodChannel(
+      name: "dev.scrcpyconnect/platform", binaryMessenger: messenger)
+    platformMethods.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(FlutterError(code: "unavailable", message: "Window is closed", details: nil))
+        return
+      }
+      guard call.method == "window.readEnvironment" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      let bounds = self.window?.contentView?.bounds ?? .zero
+      let windowId = self.window.map { "macos:\($0.windowNumber)" } ?? "macos:child"
+      result([
+        "width": bounds.width,
+        "height": bounds.height,
+        "windowId": windowId,
+        "mode": self.window?.styleMask.contains(.fullScreen) == true
+            ? "fullScreen"
+            : "freeform",
+      ])
+    }
   }
 
   deinit {
+    platformMethods.setMethodCallHandler(nil)
     visualPreferences.dispose()
     environmentEvents?.dispose()
   }
