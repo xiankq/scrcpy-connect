@@ -63,6 +63,7 @@ Flutter 官方主线没有 HarmonyOS 目标；OpenHarmony 社区 fork 需要独�
 - 暂不可见的控制页可停止本地呈现，不能据此推断远端捕获或编码停止。
 - 画质是请求上限，最终尺寸、帧率、编码与声音取决于实际协商；静态画面无新帧不等于断连。
 - 无光学支持时使用非光学回退；降低透明度或提高对比度使用实体面。Apple 自绘控件使用 `liquid_glass_widgets` 的 iOS 27 regular/clear 光学预设，保留系统可变材质的层级和统一交互；系统首选玻璃外观由 Apple 标准组件自动响应，Flutter 自绘层不读取未公开的偏好值，也不伪造 clear/tinted 状态。自绘层仍必须在系统首选外观、降低透明度、提高对比度和减少动态组合下做真机视觉验收；未完成对应真机验收时不能宣称完全复刻系统玻璃。已声明支持而初始化失败时进入可重试启动错误。
+- 当前验证机只有 iOS 模拟器、macOS 和 Web；仓库没有 Windows 构建主机。`liquid_glass_widgets` 1.17.3 的 Windows shader 编译仍会被 Flutter 提示多重 `return` 与纹理采样器的已知风险，Windows 发布包必须在 Windows/Impeller 主机上单独构建和运行验收；运行时继续使用不支持光学时的实体面回退。
 
 ## 数据与授权保护
 

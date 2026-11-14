@@ -19,7 +19,7 @@ abstract final class GlassMaterial {
 
   static bool get isInitialized => _initialized;
   static const backend = 'liquid_glass_widgets';
-  static const backendVersion = '1.17.2';
+  static const backendVersion = '1.17.3';
   static const samplingBounds = 'surface-rect-with-optical-headroom';
   static const composition =
       'component-owned-navigation-and-local-surface-groups';
