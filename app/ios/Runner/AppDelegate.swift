@@ -140,6 +140,7 @@ import UserNotifications
           "height": frame.height,
           "type": "fold",
           "state": frame.width >= frame.height ? "tabletop" : "book",
+          "separating": true,
         ] as [String: Any]
       }
       let occlusionFeatures = window
@@ -153,6 +154,7 @@ import UserNotifications
             "width": frame.width,
             "height": frame.height,
             "type": "cutout",
+            "separating": false,
           ] as [String: Any]
         }
       environment["displayFeatures"] = divisionFeatures + occlusionFeatures

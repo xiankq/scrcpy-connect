@@ -125,6 +125,26 @@ void main() {
     expect(environment.verticalPaneDivider, isNotNull);
   });
 
+  test('a non-separating crease stays continuous without splitting panes', () {
+    const environment = WindowEnvironment(
+      width: 840,
+      height: 700,
+      displayFeatures: [
+        WindowDisplayFeature(
+          left: 420,
+          top: 0,
+          width: 2,
+          height: 700,
+          type: WindowDisplayFeatureType.fold,
+          separating: false,
+        ),
+      ],
+    );
+
+    expect(environment.hasReservedDisplayFeature, isTrue);
+    expect(environment.verticalPaneDivider, isNull);
+  });
+
   test('a horizontal hinge exposes a safe tabletop pane', () {
     const environment = WindowEnvironment(
       width: 840,
@@ -194,6 +214,27 @@ void main() {
     expect(environment.verticalPaneDivider, isNotNull);
   });
 
+  test('decodes an explicit non-separating host feature', () {
+    final environment = WindowEnvironmentCodec.decode({
+      'width': 840,
+      'height': 700,
+      'displayFeatures': [
+        {
+          'left': 420,
+          'top': 0,
+          'width': 2,
+          'height': 700,
+          'type': 'fold',
+          'separating': false,
+        },
+      ],
+    });
+
+    expect(environment, isNotNull);
+    expect(environment!.displayFeatures.single.separating, isFalse);
+    expect(environment.verticalPaneDivider, isNull);
+  });
+
   test(
     'keeps iPhone Duo camera occlusion in the reserved feature contract',
     () {
@@ -225,6 +266,7 @@ void main() {
             width: 26,
             height: 42,
             type: WindowDisplayFeatureType.cutout,
+            separating: false,
           ),
         ),
       );
