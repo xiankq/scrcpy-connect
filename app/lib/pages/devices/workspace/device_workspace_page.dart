@@ -114,7 +114,7 @@ class DeviceWorkspacePage extends ConsumerWidget {
                   SettingsGroup(
                     children: [
                       ActionRow(
-                        icon: LucideIcons.pencil,
+                        icon: LucideIcons.squarePen,
                         title: '设备名称',
                         onTap: () async {
                           final management = ref.read(deviceManagementProvider);
