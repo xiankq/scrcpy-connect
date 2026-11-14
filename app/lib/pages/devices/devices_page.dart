@@ -1,6 +1,9 @@
+import 'dart:math' as math;
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_card.dart';
@@ -56,13 +59,38 @@ class DevicesPage extends HookConsumerWidget {
               ),
       ),
     );
-    final addButton = GlassActionIcon(
+    final addButton = IconButton(
       onPressed: () => AddDeviceRoute().push<void>(context),
       tooltip: '添加设备',
+      style: IconButton.styleFrom(
+        minimumSize: const Size.square(DesignTokens.componentIconButtonSize),
+        maximumSize: const Size.square(DesignTokens.componentIconButtonSize),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: const CircleBorder(),
+        side: BorderSide(color: Theme.of(context).colorScheme.outline),
+      ),
       icon: const Icon(LucideIcons.plus),
     );
     return LayoutBuilder(
       builder: (context, constraints) {
+        final verticalBar = liquid.GlassVerticalBar.maybeOf(context);
+        final barInset = verticalBar == null
+            ? DesignTokens.spacingZero
+            : verticalBar.width + DesignTokens.spacingSm;
+        final leadingInset =
+            verticalBar?.edge == liquid.GlassVerticalBarEdge.leading
+            ? barInset
+            : DesignTokens.spacingZero;
+        final trailingInset =
+            verticalBar?.edge == liquid.GlassVerticalBarEdge.trailing
+            ? barInset
+            : DesignTokens.spacingZero;
+        final contentPadding = EdgeInsets.fromLTRB(
+          DesignTokens.spacingMd + leadingInset,
+          DesignTokens.spacingZero,
+          DesignTokens.spacingMd + trailingInset,
+          DesignTokens.spacingZero,
+        );
         final compactHeader =
             constraints.maxHeight < DesignTokens.componentSheetShortHeight;
         return PageFrame(
@@ -77,7 +105,7 @@ class DevicesPage extends HookConsumerWidget {
                   ],
                 )
               : null,
-          actions: [addButton],
+          trailingAction: addButton,
           child: RefreshIndicator(
             onRefresh: ref.read(deviceListProvider.notifier).refresh,
             child: CustomScrollView(
@@ -85,12 +113,7 @@ class DevicesPage extends HookConsumerWidget {
               slivers: [
                 const PageChromeSliver(),
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(
-                    DesignTokens.spacingMd,
-                    DesignTokens.spacingZero,
-                    DesignTokens.spacingMd,
-                    DesignTokens.spacingZero,
-                  ),
+                  padding: contentPadding,
                   sliver: SliverToBoxAdapter(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,7 +143,15 @@ class DevicesPage extends HookConsumerWidget {
                   SliverFillRemaining(
                     hasScrollBody: false,
                     child: Padding(
-                      padding: const EdgeInsets.only(bottom: 100),
+                      padding: EdgeInsets.only(
+                        left: leadingInset,
+                        right: trailingInset,
+                        bottom: math.max(
+                          DesignTokens.spacingXl,
+                          MediaQuery.paddingOf(context).bottom +
+                              DesignTokens.spacingMd,
+                        ),
+                      ),
                       child: EmptyContent(
                         icon: query.text.isEmpty
                             ? LucideIcons.smartphone
@@ -153,8 +184,11 @@ class DevicesPage extends HookConsumerWidget {
                 else if (WindowEnvironment.sizeClassFor(constraints.maxWidth) ==
                     WindowSizeClass.expanded)
                   SliverPadding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: DesignTokens.spacingMd,
+                    padding: EdgeInsets.fromLTRB(
+                      DesignTokens.spacingMd + leadingInset,
+                      DesignTokens.spacingZero,
+                      DesignTokens.spacingMd + trailingInset,
+                      DesignTokens.spacingZero,
                     ),
                     sliver: SliverGrid.builder(
                       gridDelegate:
@@ -173,8 +207,11 @@ class DevicesPage extends HookConsumerWidget {
                   )
                 else
                   SliverPadding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: DesignTokens.spacingMd,
+                    padding: EdgeInsets.fromLTRB(
+                      DesignTokens.spacingMd + leadingInset,
+                      DesignTokens.spacingZero,
+                      DesignTokens.spacingMd + trailingInset,
+                      DesignTokens.spacingZero,
                     ),
                     sliver: SliverList.separated(
                       itemCount: devices.length,
