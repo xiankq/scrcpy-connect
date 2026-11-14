@@ -11,6 +11,7 @@ import 'package:scrcpy_connect/core/settings/models/preferences_state.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 
 void main() {
@@ -113,6 +114,7 @@ void main() {
     );
     expect(bar.data?.edge, liquid.GlassVerticalBarEdge.trailing);
     expect(find.byKey(const ValueKey('app-bottom-navigation')), findsOneWidget);
+    expect(find.byType(GlassVerticalToolbarGroup), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

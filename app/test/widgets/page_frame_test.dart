@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/core/platform/window_environment.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
@@ -145,6 +146,43 @@ void main() {
     expect(find.byType(GlassVerticalToolbarGroup), findsOneWidget);
     expect(find.byKey(actionKey), findsOneWidget);
     expect(tester.getTopLeft(find.byKey(actionKey)).dx, greaterThan(300));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Duo navigation shell exposes its side bar to page chrome', (
+    tester,
+  ) async {
+    final previousPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = previousPlatform);
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(
+          size: Size(402, 874),
+          viewPadding: EdgeInsets.only(right: 84),
+        ),
+        child: MaterialApp(
+          home: liquid.GlassNavigationShell(
+            child: PageFrame(
+              root: true,
+              title: '设备',
+              actions: [
+                IconButton(
+                  key: const ValueKey('duo-shell-action'),
+                  onPressed: null,
+                  icon: const Icon(Icons.add),
+                ),
+              ],
+              child: const SizedBox.expand(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(GlassVerticalToolbarGroup), findsOneWidget);
+    expect(find.byKey(const ValueKey('duo-shell-action')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
