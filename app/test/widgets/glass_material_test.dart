@@ -6,7 +6,9 @@ import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 
 void main() {
-  testWidgets('toolbar glass does not add a clipped drop shadow', (tester) async {
+  testWidgets('toolbar glass does not add a clipped drop shadow', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: ConnectTokens.theme(Brightness.light),
