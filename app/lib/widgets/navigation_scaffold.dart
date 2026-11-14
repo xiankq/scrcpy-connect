@@ -44,71 +44,75 @@ class NavigationScaffold extends HookConsumerWidget {
       Scaffold(
         extendBody: true,
         body: navigationShell,
-        bottomNavigationBar: MediaQuery.viewInsetsOf(context).bottom > 0
-            ? null
-            : SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    DesignTokens.spacingMd,
-                    DesignTokens.spacingZero,
-                    DesignTokens.spacingMd,
-                    DesignTokens.spacingMd,
-                  ),
-                  child: liquid.GlassTabBar.bottom(
-                    // Keep the package-owned platter alive when accessibility
-                    // preferences change; replacing the glass layer here can
-                    // drop its sampled surface during the next frame.
-                    key: const ValueKey('app-bottom-navigation'),
-                    tabs: [
-                      for (final destination in destinations)
-                        liquid.GlassTab(
-                          icon: Icon(destination.$1),
-                          label: destination.$2,
-                        ),
-                    ],
-                    indicatorExpansion: reducedMotion
-                        ? EdgeInsets.zero
-                        : const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                    indicatorPinchStrength: reducedMotion ? 0 : 0.4,
-                    magnification: reducedMotion ? 1 : 1.15,
-                    selectedIndex: tab,
-                    onTabSelected: selectTab,
-                    horizontalPadding: 0,
-                    verticalPadding: 0,
-                    barHeight: GlassMaterial.navigationHeight(context),
-                    barBorderRadius: DesignTokens.componentNavigationRounded,
-                    tabPadding: const EdgeInsets.symmetric(
-                      horizontal: DesignTokens.componentNavigationPadding,
-                    ),
-                    iconLabelSpacing: DesignTokens.spacingMicro,
-                    iconSize: DesignTokens.componentIconSize,
-                    labelFontSize: theme.textTheme.labelLarge!.fontSize!,
-                    textStyle: theme.textTheme.labelLarge,
-                    selectedIconColor: theme.colorScheme.primary,
-                    selectedLabelColor: theme.colorScheme.primary,
-                    unselectedIconColor: theme.colorScheme.onSurfaceVariant,
-                    unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
-                    indicatorColor: opaque
-                        ? theme.colorScheme.surfaceContainerHigh
-                        : theme.brightness == Brightness.dark
-                        ? DesignTokens.colorGlassSelectedDark
-                        : DesignTokens.colorGlassSelected,
-                    settings: GlassMaterial.navigationBarSettings(context),
-                    quality: GlassMaterial.quality(context),
-                    indicatorSettings:
-                        GlassMaterial.navigationIndicatorSettings(context),
-                    pressScale: reducedMotion
-                        ? 1
-                        : DesignTokens.componentGlassInteractionScale,
-                    interactionBehavior: reducedMotion
-                        ? liquid.GlassInteractionBehavior.glowOnly
-                        : liquid.GlassInteractionBehavior.full,
-                  ),
-                ),
+        // Keep the package-owned tab bar mounted while the keyboard changes
+        // viewInsets. Offstage removes its layout footprint without tearing
+        // down the package state that owns the moving glass indicator.
+        bottomNavigationBar: Visibility(
+          visible: MediaQuery.viewInsetsOf(context).bottom <= 0,
+          maintainState: true,
+          maintainAnimation: true,
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                DesignTokens.spacingMd,
+                DesignTokens.spacingZero,
+                DesignTokens.spacingMd,
+                DesignTokens.spacingMd,
               ),
+              child: liquid.GlassTabBar.bottom(
+                // Keep the package-owned platter alive when accessibility
+                // preferences change; replacing the glass layer here can
+                // drop its sampled surface during the next frame.
+                key: const ValueKey('app-bottom-navigation'),
+                tabs: [
+                  for (final destination in destinations)
+                    liquid.GlassTab(
+                      icon: Icon(destination.$1),
+                      label: destination.$2,
+                    ),
+                ],
+                indicatorExpansion: reducedMotion
+                    ? EdgeInsets.zero
+                    : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                indicatorPinchStrength: reducedMotion ? 0 : 0.4,
+                magnification: reducedMotion ? 1 : 1.15,
+                selectedIndex: tab,
+                onTabSelected: selectTab,
+                horizontalPadding: 0,
+                verticalPadding: 0,
+                barHeight: GlassMaterial.navigationHeight(context),
+                barBorderRadius: DesignTokens.componentNavigationRounded,
+                tabPadding: const EdgeInsets.symmetric(
+                  horizontal: DesignTokens.componentNavigationPadding,
+                ),
+                iconLabelSpacing: DesignTokens.spacingMicro,
+                iconSize: DesignTokens.componentIconSize,
+                labelFontSize: theme.textTheme.labelLarge!.fontSize!,
+                textStyle: theme.textTheme.labelLarge,
+                selectedIconColor: theme.colorScheme.primary,
+                selectedLabelColor: theme.colorScheme.primary,
+                unselectedIconColor: theme.colorScheme.onSurfaceVariant,
+                unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+                indicatorColor: opaque
+                    ? theme.colorScheme.surfaceContainerHigh
+                    : theme.brightness == Brightness.dark
+                    ? DesignTokens.colorGlassSelectedDark
+                    : DesignTokens.colorGlassSelected,
+                settings: GlassMaterial.navigationBarSettings(context),
+                quality: GlassMaterial.quality(context),
+                indicatorSettings: GlassMaterial.navigationIndicatorSettings(
+                  context,
+                ),
+                pressScale: reducedMotion
+                    ? 1
+                    : DesignTokens.componentGlassInteractionScale,
+                interactionBehavior: reducedMotion
+                    ? liquid.GlassInteractionBehavior.glowOnly
+                    : liquid.GlassInteractionBehavior.full,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

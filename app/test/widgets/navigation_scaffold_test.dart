@@ -66,6 +66,49 @@ void main() {
     },
   );
 
+  testWidgets('keeps the bottom glass bar state while the keyboard is shown', (
+    tester,
+  ) async {
+    final oldSize = tester.view.physicalSize;
+    final oldRatio = tester.view.devicePixelRatio;
+    final oldInsets = tester.view.viewInsets;
+    addTearDown(() {
+      tester.view
+        ..physicalSize = oldSize
+        ..devicePixelRatio = oldRatio
+        ..viewInsets = oldInsets;
+    });
+    tester.view
+      ..physicalSize = const Size(402, 844)
+      ..devicePixelRatio = 1;
+
+    final router = createAppRouter();
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          deviceListProvider.overrideWith(_Devices.new),
+          recoveryStateProvider.overrideWith(_Recovery.new),
+          preferencesProvider.overrideWith(_Preferences.new),
+        ],
+        child: MaterialApp.router(
+          theme: ConnectTokens.theme(Brightness.light),
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+
+    const key = ValueKey('app-bottom-navigation');
+    final first = tester.element(find.byKey(key));
+    tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+    await tester.pump();
+    final mounted = find.byKey(key, skipOffstage: false);
+    expect(mounted, findsOneWidget);
+    expect(tester.element(mounted), same(first));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('iPhone Duo vertical bar owns the compact navigation strip', (
     tester,
   ) async {

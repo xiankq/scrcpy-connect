@@ -185,4 +185,47 @@ void main() {
     expect(find.byKey(const ValueKey('duo-shell-action')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('Duo side bar also owns a trailing text action', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(size: Size(402, 874)),
+          child: liquid.GlassVerticalBar(
+            data: const liquid.GlassVerticalBarData(
+              edge: liquid.GlassVerticalBarEdge.trailing,
+              width: 84,
+              top: 24,
+            ),
+            child: WindowEnvironmentScope(
+              readHostEnvironment: () async => const WindowEnvironment(
+                width: 402,
+                height: 874,
+                windowId: 'ios:duo-trailing-action',
+              ),
+              watchHostEnvironment: () => const Stream.empty(),
+              child: PageFrame(
+                title: '发送到设备',
+                trailingAction: TextButton(
+                  key: const ValueKey('duo-trailing-action'),
+                  onPressed: null,
+                  child: const Text('取消'),
+                ),
+                child: const SizedBox.expand(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(GlassVerticalToolbarGroup), findsOneWidget);
+    expect(find.byKey(const ValueKey('duo-trailing-action')), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('duo-trailing-action'))).dx,
+      greaterThan(300),
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
