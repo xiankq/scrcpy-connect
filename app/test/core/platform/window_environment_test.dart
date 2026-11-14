@@ -194,6 +194,44 @@ void main() {
     expect(environment.verticalPaneDivider, isNotNull);
   });
 
+  test(
+    'keeps iPhone Duo camera occlusion in the reserved feature contract',
+    () {
+      final environment = WindowEnvironmentCodec.decode({
+        'width': 402,
+        'height': 874,
+        'windowId': 'ios:duo-occlusion',
+        'displayFeatures': [
+          {'left': 188, 'top': 0, 'width': 26, 'height': 42, 'type': 'cutout'},
+          {
+            'left': 199,
+            'top': 0,
+            'width': 4,
+            'height': 874,
+            'type': 'fold',
+            'state': 'book',
+          },
+        ],
+      });
+
+      expect(environment, isNotNull);
+      expect(environment!.displayFeaturesProvided, isTrue);
+      expect(
+        environment.displayFeatures,
+        contains(
+          const WindowDisplayFeature(
+            left: 188,
+            top: 0,
+            width: 26,
+            height: 42,
+            type: WindowDisplayFeatureType.cutout,
+          ),
+        ),
+      );
+      expect(environment.posture, WindowPosture.book);
+    },
+  );
+
   testWidgets('an explicit zero host inset clears stale view padding', (
     tester,
   ) async {

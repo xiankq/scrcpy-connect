@@ -3,6 +3,8 @@ import UIKit
 
 class SceneDelegate: FlutterSceneDelegate {
   private var flutterEngine: FlutterEngine?
+  private var restorationInitialRoute: String?
+  private var restorationWindowId: String?
 
   override func scene(
     _ scene: UIScene,
@@ -12,8 +14,11 @@ class SceneDelegate: FlutterSceneDelegate {
     guard let windowScene = scene as? UIWindowScene,
       let appDelegate = UIApplication.shared.delegate as? AppDelegate else { return }
     let activity = connectionOptions.userActivities.first
+      ?? session.stateRestorationActivity
     let initialRoute = activity?.userInfo?["initialRoute"] as? String
     let windowId = activity?.userInfo?["windowId"] as? String
+    restorationInitialRoute = initialRoute
+    restorationWindowId = windowId
     let engine = appDelegate.makeEngine(initialRoute: initialRoute)
     flutterEngine = engine
     window = UIWindow(windowScene: windowScene)
@@ -52,6 +57,19 @@ class SceneDelegate: FlutterSceneDelegate {
     }
     flutterEngine = nil
     super.sceneDidDisconnect(scene)
+  }
+
+  func stateRestorationActivity(for scene: UIScene) -> NSUserActivity? {
+    guard let initialRoute = restorationInitialRoute, !initialRoute.isEmpty else {
+      return nil
+    }
+    let activity = NSUserActivity(activityType: "dev.scrcpyconnect.remote-window")
+    activity.userInfo = [
+      "initialRoute": initialRoute,
+      "windowId": restorationWindowId
+        ?? (scene.session.persistentIdentifier),
+    ]
+    return activity
   }
 
   private func refreshEnvironment() {
