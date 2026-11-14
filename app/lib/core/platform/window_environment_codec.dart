@@ -19,6 +19,8 @@ final class WindowEnvironmentCodec {
       return null;
     }
     final insets = _insets(payload['insets']);
+    final insetsProvided =
+        payload.containsKey('insets') && payload['insets'] is Map;
     final features = _features(payload['displayFeatures']);
     final postureProvided =
         payload.containsKey('posture') &&
@@ -45,6 +47,7 @@ final class WindowEnvironmentCodec {
       mode: mode,
       posture: posture,
       input: input,
+      insetsProvided: insetsProvided,
       postureProvided: postureProvided,
       displayFeaturesProvided: displayFeaturesProvided,
     );

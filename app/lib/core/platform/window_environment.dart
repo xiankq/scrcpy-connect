@@ -80,6 +80,7 @@ final class WindowEnvironment {
     this.mode = WindowMode.fullScreen,
     this.posture = WindowPosture.normal,
     this.input = const WindowInputCapabilities(),
+    this.insetsProvided = false,
     this.postureProvided = false,
     this.displayFeaturesProvided = false,
   });
@@ -92,6 +93,13 @@ final class WindowEnvironment {
   final WindowMode mode;
   final WindowPosture posture;
   final WindowInputCapabilities input;
+
+  /// Whether a native host explicitly supplied [insets].
+  ///
+  /// An explicit zero inset clears stale Flutter view padding after a window
+  /// mode or posture change; a missing inset payload keeps MediaQuery as the
+  /// live fallback.
+  final bool insetsProvided;
 
   /// Whether a native host explicitly supplied [posture].
   ///
@@ -115,6 +123,7 @@ final class WindowEnvironment {
         mode != other.mode ||
         posture != other.posture ||
         input != other.input ||
+        insetsProvided != other.insetsProvided ||
         postureProvided != other.postureProvided ||
         displayFeaturesProvided != other.displayFeaturesProvided ||
         displayFeatures.length != other.displayFeatures.length) {
@@ -135,6 +144,7 @@ final class WindowEnvironment {
     mode,
     posture,
     input,
+    insetsProvided,
     postureProvided,
     displayFeaturesProvided,
     Object.hashAll(displayFeatures),

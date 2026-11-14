@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/core/platform/window_environment_codec.dart';
+import 'package:flutter/widgets.dart';
 import 'package:scrcpy_connect/core/platform/window_environment.dart';
+import 'package:scrcpy_connect/widgets/adaptive_window.dart';
 
 void main() {
   test('classifies the available window, not the physical device', () {
@@ -183,6 +184,7 @@ void main() {
 
     expect(environment, isNotNull);
     expect(environment!.windowId, 'stage-7');
+    expect(environment.insetsProvided, isTrue);
     expect(environment.mode, WindowMode.split);
     expect(environment.posture, WindowPosture.book);
     expect(environment.insets.top, 24);
@@ -190,6 +192,37 @@ void main() {
     expect(environment.displayFeaturesProvided, isTrue);
     expect(environment.postureProvided, isFalse);
     expect(environment.verticalPaneDivider, isNotNull);
+  });
+
+  testWidgets('an explicit zero host inset clears stale view padding', (
+    tester,
+  ) async {
+    WindowEnvironment? observed;
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(
+          size: Size(700, 500),
+          padding: EdgeInsets.only(top: 24),
+        ),
+        child: WindowEnvironmentScope(
+          readHostEnvironment: () async => const WindowEnvironment(
+            width: 700,
+            height: 500,
+            insetsProvided: true,
+            windowId: 'stage-7',
+          ),
+          child: Builder(
+            builder: (context) {
+              observed = context.windowEnvironment;
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(observed?.insets, const WindowInsets());
   });
 
   test('accepts HarmonyOS WindowStatusType names and enum values', () {
