@@ -713,7 +713,7 @@ Ardot 独立顶层画板：规范／组件在左，完整页面居中按产品�
 
 桌面、平板、折叠屏和移动端的“独立窗口”都是控制会话的系统窗口，不是复制一个页面状态。每个窗口携带唯一窗口身份、设备身份、应用任务、视频捕获和输入焦点；关闭只撤销自己的会话。系统不支持额外窗口时，退回同页分栏并保持相同的窗口身份模型。窗口最小尺寸保证标题、画面、退出与恢复动作可达，调整大小期间不创建新的连接或捕获。
 
-折叠屏状态至少覆盖：外屏、完全展开、书本半折、桌面半折、旋转后展开；每种状态核对铰链／折痕避让、方向切换、键盘、安全区、长文字、减少动态和降低透明度。iPhone Duo 使用外屏单列、内屏双栏和保留区域布局；不跨中间铰链放置重要内容，折叠时保持当前选择和输入。Android 使用窗口尺寸类别与 WindowManager 的折叠特征；鸿蒙使用窗口断点和折叠分栏容器；Flutter 层以 `MediaQuery`／`LayoutBuilder` 的实际窗口空间作为统一输入。
+折叠屏状态至少覆盖：外屏、完全展开、书本半折、桌面半折、旋转后展开；每种状态核对铰链／折痕避让、方向切换、键盘、安全区、长文字、减少动态和降低透明度。iPhone Duo 使用外屏单列、内屏双栏和保留区域布局；外屏及内屏横向姿态让工具栏、导航和标签栏跟随系统侧边垂直栏，内屏竖向姿态保留横向栏；不跨中间铰链放置重要内容，折叠时保持当前选择和输入。Flutter 通过 `GlassNavigationShell` 接入 `liquid_glass_widgets` 的系统保留区与垂直栏，底部导航仍由同一个 `GlassTabBar` 实例渲染。Android 使用窗口尺寸类别与 WindowManager 的折叠特征；鸿蒙使用窗口断点和折叠分栏容器；Flutter 层以 `MediaQuery`／`LayoutBuilder` 的实际窗口空间作为统一输入。
 
 实现对应 `WindowEnvironment` 与 `WindowEnvironmentCodec`。Android 宿主通过 AndroidX `WindowInfoTracker` 的 `FoldingFeature` 事件投影折叠／铰链保留区；iPhone Duo 在 iOS 27.1+ 由 UIKit `UIView.ReservedRegion` 的 division frame 投影到同一 payload，铰链交互事件只负责触发布局重新读取；HarmonyOS FoldSplitContainer 也使用相同的窗口 payload。窗口指标变化、平台姿态事件与前台恢复会重新读取宿主投影，当前 Flutter view 的尺寸和显示特征保持实时；全高折痕／铰链在导航工作区中保留真实空区，不让侧栏或主内容跨过保留区；横向全宽铰链进入桌面半折时，单一页面选用安全子屏并重写当前 MediaQuery；不完整或不支持的宿主数据回退到当前 Flutter 窗口，而不猜测物理屏幕。
 

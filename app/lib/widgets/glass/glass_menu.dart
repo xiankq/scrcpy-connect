@@ -284,3 +284,32 @@ class GlassToolbarGroup extends StatelessWidget {
     );
   }
 }
+
+/// iPhone Duo 侧边栏中的共享工具操作平面。
+///
+/// 子按钮保持普通按钮语义，共用一个玻璃层；这样侧边轴不会叠出多个
+/// 独立镜片，也不会把按钮交互光晕裁切到标题栏边界之外。
+class GlassVerticalToolbarGroup extends StatelessWidget {
+  const GlassVerticalToolbarGroup({
+    super.key,
+    required this.children,
+    this.variant = GlassVariant.regular,
+  });
+
+  final List<Widget> children;
+  final GlassVariant variant;
+
+  @override
+  Widget build(BuildContext context) => GlassSurfaceGroup(
+    variant: variant,
+    child: GlassPressFeedback(
+      child: Glass(
+        radius: DesignTokens.roundedFull,
+        variant: variant,
+        showShadow: false,
+        padding: const EdgeInsets.symmetric(vertical: DesignTokens.spacingXs),
+        child: Column(mainAxisSize: MainAxisSize.min, children: children),
+      ),
+    ),
+  );
+}

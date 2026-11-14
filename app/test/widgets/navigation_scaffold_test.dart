@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_state.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_state.dart';
@@ -62,6 +64,57 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('iPhone Duo vertical bar owns the compact navigation strip', (
+    tester,
+  ) async {
+    final previousPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = previousPlatform);
+    final oldSize = tester.view.physicalSize;
+    final oldRatio = tester.view.devicePixelRatio;
+    addTearDown(() {
+      tester.view
+        ..physicalSize = oldSize
+        ..devicePixelRatio = oldRatio;
+    });
+    tester.view
+      ..physicalSize = const Size(402, 874)
+      ..devicePixelRatio = 1;
+
+    final router = createAppRouter();
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          deviceListProvider.overrideWith(_Devices.new),
+          recoveryStateProvider.overrideWith(_Recovery.new),
+          preferencesProvider.overrideWith(_Preferences.new),
+        ],
+        child: MediaQuery(
+          data: const MediaQueryData(
+            size: Size(402, 874),
+            viewPadding: EdgeInsets.only(right: 84),
+            padding: EdgeInsets.only(right: 84),
+          ),
+          child: MaterialApp.router(
+            theme: ConnectTokens.theme(Brightness.light),
+            routerConfig: router,
+            builder: (context, child) =>
+                liquid.GlassNavigationShell(child: child!),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+
+    final bar = tester.widget<liquid.GlassVerticalBar>(
+      find.byType(liquid.GlassVerticalBar),
+    );
+    expect(bar.data?.edge, liquid.GlassVerticalBarEdge.trailing);
+    expect(find.byKey(const ValueKey('app-bottom-navigation')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _Recovery extends RecoveryStateNotifier {
