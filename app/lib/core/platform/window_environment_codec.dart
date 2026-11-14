@@ -145,8 +145,13 @@ final class WindowEnvironmentCodec {
       'freeform' || 'windowed' => WindowMode.freeform,
       // HarmonyOS WindowStatusType values: FULL_SCREEN=1, MAXIMIZE=2,
       // MINIMIZE=3, FLOATING=4, SPLIT_SCREEN=5.
+      // MAXIMIZE is a windowed desktop state rather than the phone-style
+      // full-screen mode; preserve the workspace toolbar when ArkUI reports
+      // the enum name or value.
+      'maximize' => WindowMode.freeform,
       4 => WindowMode.floating,
       5 => WindowMode.split,
+      2 => WindowMode.freeform,
       _ => WindowMode.fullScreen,
     };
   }
