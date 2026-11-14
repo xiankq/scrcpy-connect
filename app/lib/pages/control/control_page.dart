@@ -175,10 +175,9 @@ class _ControlPageState extends ConsumerState<ControlPage>
         closePage<void>(context);
         return;
       }
-      RemoteAppRoute(
+      RemoteSessionRoute(
         deviceId: widget.device.id,
-        packageName: package,
-        $extra: const RemoteLaunchIntent(),
+        sessionId: sourceSessionId,
       ).pushReplacement(context);
     } catch (failure) {
       if (mounted && !presentation.exiting) {
