@@ -1,8 +1,10 @@
 import Cocoa
 import FlutterMacOS
 import desktop_multi_window
+import ObjectiveC
 
 class MainFlutterWindow: NSWindow {
+  private static var childServicesKey: UInt8 = 0
   private var visualPreferences: SystemVisualPreferences?
   private var environmentEvents: WindowEnvironmentEvents?
   private var platformMethods: FlutterMethodChannel?
@@ -16,6 +18,7 @@ class MainFlutterWindow: NSWindow {
     RegisterGeneratedPlugins(registry: flutterViewController)
     FlutterMultiWindowPlugin.setOnWindowCreatedCallback { controller in
       RegisterGeneratedPlugins(registry: controller)
+      MainFlutterWindow.installChildServices(on: controller)
     }
     visualPreferences = SystemVisualPreferences(messenger: flutterViewController.engine.binaryMessenger)
     environmentEvents = WindowEnvironmentEvents(
@@ -54,6 +57,39 @@ class MainFlutterWindow: NSWindow {
   deinit {
     platformMethods?.setMethodCallHandler(nil)
     visualPreferences?.dispose()
+    environmentEvents?.dispose()
+  }
+
+  private static func installChildServices(on controller: FlutterViewController) {
+    let services = MacOSWindowServices(controller: controller)
+    objc_setAssociatedObject(
+      controller,
+      &childServicesKey,
+      services,
+      .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    )
+  }
+}
+
+/// Child engines do not pass through [MainFlutterWindow.awakeFromNib]. Keep
+/// the same host contracts attached to the child controller so accessibility
+/// preferences and live window geometry remain identical across windows.
+private final class MacOSWindowServices {
+  private let visualPreferences: SystemVisualPreferences
+  private let environmentEvents: WindowEnvironmentEvents?
+
+  init(controller: FlutterViewController) {
+    let messenger = controller.engine.binaryMessenger
+    visualPreferences = SystemVisualPreferences(messenger: messenger)
+    if let window = controller.view.window {
+      environmentEvents = WindowEnvironmentEvents(window: window, messenger: messenger)
+    } else {
+      environmentEvents = nil
+    }
+  }
+
+  deinit {
+    visualPreferences.dispose()
     environmentEvents?.dispose()
   }
 }
