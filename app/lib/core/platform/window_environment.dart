@@ -168,12 +168,21 @@ final class WindowEnvironment {
   bool get isMedium => sizeClass == WindowSizeClass.medium;
   bool get isExpanded => sizeClass == WindowSizeClass.expanded;
 
-  /// Expanded and freeform workspaces use their content toolbar rather than a
+  /// Expanded and desktop workspaces use their content toolbar rather than a
   /// phone-style status/header strip. A desktop window can be narrower than
-  /// the expanded breakpoint, so its window mode must take precedence over a
-  /// width-only classification.
+  /// the expanded breakpoint or report `fullScreen`, so its identity must
+  /// take precedence over a width- or mode-only classification.
+  bool get isDesktopWindow =>
+      windowId.startsWith('desktop:') ||
+      windowId.startsWith('macos:') ||
+      windowId.startsWith('windows:') ||
+      windowId.startsWith('linux:');
+
   bool get usesWorkspaceToolbar =>
-      isExpanded || mode == WindowMode.freeform || mode == WindowMode.floating;
+      isExpanded ||
+      isDesktopWindow ||
+      mode == WindowMode.freeform ||
+      mode == WindowMode.floating;
 
   /// A feature that physically divides or blocks content must be treated as a
   /// reserved region by pane layout.
