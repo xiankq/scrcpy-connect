@@ -189,9 +189,7 @@ class _PageFrameState extends State<PageFrame> {
             verticalBar != null ||
                 ((widget.actions == null || widget.actions!.isEmpty) &&
                     widget.trailingAction == null)
-            ? (verticalBar != null && widget.trailingAction != null
-                  ? [Center(child: widget.trailingAction!)]
-                  : null)
+            ? null
             : [
                 if (widget.actions != null && widget.actions!.isNotEmpty)
                   Padding(
@@ -362,10 +360,12 @@ class _PageFrameState extends State<PageFrame> {
                 ),
               ),
       );
-      if (verticalBar == null ||
-          (widget.leading == null &&
-              !hasBack &&
-              (widget.actions == null || widget.actions!.isEmpty))) {
+      final hasVerticalActions =
+          widget.leading != null ||
+          hasBack ||
+          (widget.actions != null && widget.actions!.isNotEmpty) ||
+          widget.trailingAction != null;
+      if (verticalBar == null || !hasVerticalActions) {
         return scaffold;
       }
       final verticalActions = <Widget>[
@@ -382,6 +382,7 @@ class _PageFrameState extends State<PageFrame> {
             icon: const Icon(LucideIcons.chevronLeft),
           ),
         ...?widget.actions,
+        if (widget.trailingAction != null) widget.trailingAction!,
       ];
       return Stack(
         fit: StackFit.expand,
