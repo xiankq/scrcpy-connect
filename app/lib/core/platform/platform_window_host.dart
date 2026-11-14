@@ -8,15 +8,25 @@ import 'package:scrcpy_connect/core/platform/independent_window_receipt.dart';
 import 'package:scrcpy_connect/core/platform/platform_channels.dart';
 import 'package:scrcpy_connect/core/platform/window_launch_route.dart';
 
+typedef DesktopWindowOpener = Future<IndependentWindowReceipt?> Function({
+  required String deviceId,
+  required String packageName,
+  required String sessionId,
+});
+
 /// Host boundary for native Activity/scene/window creation.
 ///
 /// Flutter's view and multi-engine APIs do not create a native window by
 /// themselves. Unsupported hosts return an explicit same-view fallback, so a
 /// logical control session never pretends that a second native window exists.
 final class PlatformWindowHost {
-  const PlatformWindowHost({this.request});
+  const PlatformWindowHost({
+    this.request,
+    this.desktopWindowOpen = _openDesktopWindow,
+  });
 
   final Future<Json?> Function(String command, Json params)? request;
+  final DesktopWindowOpener desktopWindowOpen;
 
   Future<IndependentWindowReceipt> open({
     required String deviceId,
@@ -30,7 +40,7 @@ final class PlatformWindowHost {
     );
     if (request == null &&
         (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
-      final desktop = await _openDesktopWindow(
+      final desktop = await desktopWindowOpen(
         deviceId: deviceId,
         packageName: packageName,
         sessionId: sessionId,
@@ -62,7 +72,7 @@ final class PlatformWindowHost {
     }
   }
 
-  Future<IndependentWindowReceipt?> _openDesktopWindow({
+  static Future<IndependentWindowReceipt?> _openDesktopWindow({
     required String deviceId,
     required String packageName,
     required String sessionId,

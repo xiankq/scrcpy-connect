@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scrcpy_connect/core/platform/independent_window_receipt.dart';
 import 'package:scrcpy_connect/core/platform/platform_window_host.dart';
 import 'package:scrcpy_connect/core/platform/window_launch_route.dart';
 
@@ -61,6 +64,40 @@ void main() {
       );
       expect(receipt.opened, isFalse);
       expect(receipt.reason, contains('未提供'));
+    },
+  );
+
+  test(
+    'desktop engines receive an isolated route and window identity',
+    () async {
+      if (!Platform.isLinux && !Platform.isMacOS && !Platform.isWindows) return;
+
+      String? receivedRoute;
+      final host = PlatformWindowHost(
+        desktopWindowOpen:
+            ({
+              required String deviceId,
+              required String packageName,
+              required String sessionId,
+            }) async {
+              receivedRoute = independentWindowLaunchRoute(
+                deviceId: deviceId,
+                packageName: packageName,
+                sessionId: sessionId,
+              );
+              return IndependentWindowReceipt.opened('desktop-child-7');
+            },
+      );
+
+      final receipt = await host.open(
+        deviceId: 'device-a',
+        packageName: 'com.example.app',
+        sessionId: 'session-a',
+      );
+
+      expect(receipt.opened, isTrue);
+      expect(receipt.windowId, 'desktop-child-7');
+      expect(receivedRoute, contains('/__independent_remote'));
     },
   );
 }
