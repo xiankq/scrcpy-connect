@@ -364,6 +364,40 @@ void main() {
     expect(floatingByValue?.mode, WindowMode.floating);
   });
 
+  test('normalizes ArkTS enum casing at the host boundary', () {
+    final environment = WindowEnvironmentCodec.decode({
+      'width': 1200,
+      'height': 800,
+      'windowStatusType': 'WINDOWED',
+      'posture': 'EXPANDED',
+      'displayFeatures': [
+        {
+          'left': 598,
+          'top': 0,
+          'width': 4,
+          'height': 800,
+          'type': 'HINGE',
+          'state': 'BOOK',
+          'separating': true,
+        },
+        {'left': 0, 'top': 0, 'width': 24, 'height': 42, 'type': 'OCCLUSION'},
+      ],
+    });
+
+    expect(environment?.mode, WindowMode.freeform);
+    expect(environment?.posture, WindowPosture.flat);
+    expect(environment?.displayFeatures, hasLength(2));
+    expect(
+      environment?.displayFeatures.first.type,
+      WindowDisplayFeatureType.hinge,
+    );
+    expect(
+      environment?.displayFeatures.last.type,
+      WindowDisplayFeatureType.cutout,
+    );
+    expect(environment?.verticalPaneDivider, isNotNull);
+  });
+
   test('records explicit empty host projections so a closed fold clears', () {
     final environment = WindowEnvironmentCodec.decode({
       'width': 700,
