@@ -26,6 +26,7 @@ void main() {
             height: 700,
             type: WindowDisplayFeatureType.fold,
             state: WindowPosture.book,
+            separating: true,
           ),
         ],
         input: WindowInputCapabilities(pointer: true),
@@ -42,6 +43,7 @@ void main() {
             height: 700,
             type: WindowDisplayFeatureType.fold,
             state: WindowPosture.book,
+            separating: true,
           ),
         ],
         input: WindowInputCapabilities(pointer: true),
@@ -117,6 +119,7 @@ void main() {
           width: 2,
           height: 700,
           type: WindowDisplayFeatureType.fold,
+          separating: true,
         ),
       ],
     );
@@ -156,6 +159,7 @@ void main() {
           width: 840,
           height: 2,
           type: WindowDisplayFeatureType.hinge,
+          separating: true,
         ),
       ],
     );
@@ -198,6 +202,7 @@ void main() {
           'height': 800,
           'type': 'hinge',
           'state': 'book',
+          'separating': true,
         },
       ],
     });
@@ -227,6 +232,20 @@ void main() {
           'type': 'fold',
           'separating': false,
         },
+      ],
+    });
+
+    expect(environment, isNotNull);
+    expect(environment!.displayFeatures.single.separating, isFalse);
+    expect(environment.verticalPaneDivider, isNull);
+  });
+
+  test('does not split when a host omits separating metadata', () {
+    final environment = WindowEnvironmentCodec.decode({
+      'width': 840,
+      'height': 700,
+      'displayFeatures': [
+        {'left': 420, 'top': 0, 'width': 2, 'height': 700, 'type': 'fold'},
       ],
     });
 

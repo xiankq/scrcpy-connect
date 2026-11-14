@@ -52,6 +52,7 @@ void main() {
             height: 500,
             type: WindowDisplayFeatureType.fold,
             state: WindowPosture.book,
+            separating: true,
           ),
         ],
       ),
@@ -90,6 +91,7 @@ void main() {
 
     expect(observed?.posture, WindowPosture.book);
     expect(observed?.displayFeatures.single.state, WindowPosture.book);
+    expect(observed?.verticalPaneDivider, isNull);
   });
 
   testWidgets('keeps tabletop content inside the top pane', (tester) async {
@@ -122,6 +124,7 @@ void main() {
                 height: 2,
                 type: WindowDisplayFeatureType.hinge,
                 state: WindowPosture.tabletop,
+                separating: true,
               ),
             ],
           ),
@@ -164,6 +167,7 @@ void main() {
                 width: 2,
                 height: 500,
                 type: WindowDisplayFeatureType.hinge,
+                separating: true,
               ),
             ],
           ),
