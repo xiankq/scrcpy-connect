@@ -184,10 +184,18 @@ import UserNotifications
       "windowId": windowId,
     ]
     UIApplication.shared.requestSceneSessionActivation(
-      nil, userActivity: activity, options: nil) { _ in }
-    // UIKit only calls the error handler on failure and has no success callback;
-    // this response confirms that the scene request was accepted by the host.
-    result(["supported": true, "windowId": windowId])
+      nil, userActivity: activity, options: nil) { error in
+        DispatchQueue.main.async {
+          if error != nil {
+            result([
+              "supported": false,
+              "reason": "系统拒绝创建独立窗口，已回退到当前窗口",
+            ])
+          } else {
+            result(["supported": true, "windowId": windowId])
+          }
+        }
+      }
   }
 
   private static func activeWindow() -> UIWindow? {
