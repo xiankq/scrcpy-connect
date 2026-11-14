@@ -12,6 +12,7 @@
         android:label="邻接"
         android:allowBackup="false"
         android:usesCleartextTraffic="false"
+        android:resizeableActivity="true"
         android:name=".ConnectApplication"
         android:icon="@mipmap/ic_launcher">
         <service android:name=".ConnectionService" android:exported="false" android:foregroundServiceType="connectedDevice" />
