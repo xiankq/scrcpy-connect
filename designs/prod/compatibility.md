@@ -4,7 +4,7 @@
 
 ## 窗口与形态适配目标
 
-所有页面按当前应用窗口的可用宽高、方向、系统安全区、显示特征和输入方式布局，不按设备名称或物理屏幕猜测。compact 窗口使用单列与底部导航；medium 窗口使用侧栏或 rail；expanded 窗口使用侧栏、列表／详情双栏和工作区工具栏；freeform 桌面窗口即使宽度低于 expanded 断点也保留工作区工具栏。桌面不绘制手机式默认顶部状态条，窗口标题栏和窗口菜单由宿主负责，应用内容从工作区工具栏开始。设计基线与窗口示意维护于 Ardot《规范 / 07 折叠、平板与多窗口适配》。
+所有页面按当前应用窗口的可用宽高、方向、系统安全区、显示特征和输入方式布局，不按设备名称或物理屏幕猜测。compact 窗口使用单列与底部导航；medium 窗口使用沿可用窗口高度铺开的侧栏或 rail；expanded 窗口使用侧栏、列表／详情双栏和工作区工具栏；freeform 桌面窗口即使宽度低于 expanded 断点也保留工作区工具栏。桌面不绘制手机式默认顶部状态条，窗口标题栏和窗口菜单由宿主负责，应用内容从工作区工具栏开始。设计基线与窗口示意维护于 Ardot《规范 / 07 折叠、平板与多窗口适配》。
 
 折叠与双屏必须避开铰链、折痕、挖孔和相机等系统保留区。外屏保持单列，完全展开使用双栏，书本／桌面半折按实时折叠特征避让；开合、旋转、分屏、自由缩放和键盘出现时保留当前设备、应用任务、焦点、选择、未提交输入和滚动位置。iPhone Duo 使用外屏单列、内屏双栏和 reserved regions；外屏及内屏横向姿态的工具栏、导航和标签栏进入系统侧边垂直栏，内屏竖向姿态使用横向栏；Flutter 通过 `GlassNavigationShell` 与 `GlassVerticalBar` 接收 UIKit 的垂直栏边缘和保留区，底部导航继续由单一 `GlassTabBar` 持有。Android 依据实际 app window 的 WindowManager 指标与 `FoldingFeature.isSeparating` 选择布局，不依据物理设备型号；HarmonyOS 使用 `windowSizeChange` 驱动断点，API 12+ 的 `FoldSplitContainer` 处理展开、悬停和折叠态，`windowStatusChange` 只更新窗口模式，`foldStatusChange` 只服务悬停等物理形态行为；Flutter 统一层只消费宿主提供的 `WindowEnvironment`。研究依据：[Android 自适应窗口尺寸](https://developer.android.com/develop/adaptive-apps/guides/support-different-display-sizes)、[Android FoldingFeature](https://developer.android.com/reference/androidx/window/layout/FoldingFeature)、[Apple iPhone Duo 设计](https://developer.apple.com/design/human-interface-guidelines/designing-for-iphone-duo)、[Apple iPhone Duo 准备指南](https://developer.apple.com/iphone-duo/prepare/)。
 
