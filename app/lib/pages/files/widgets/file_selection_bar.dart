@@ -67,7 +67,7 @@ class FileSelectionBar extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     MenuItemButton(
-                      leadingIcon: const Icon(LucideIcons.pencil),
+                      leadingIcon: const Icon(LucideIcons.squarePen),
                       onPressed: onRename,
                       child: const Text('重命名'),
                     ),
