@@ -111,6 +111,7 @@ class PageChromeProtection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final extent = height;
+    if (extent <= 0) return const SizedBox.shrink();
     final protected = backgroundColor.withValues(
       alpha: DesignTokens.componentScrollEdgeOpacity,
     );
