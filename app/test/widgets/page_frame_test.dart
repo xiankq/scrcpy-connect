@@ -72,6 +72,33 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('desktop full screen windows keep workspace chrome', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(size: Size(720, 900)),
+          child: WindowEnvironmentScope(
+            readHostEnvironment: () async => const WindowEnvironment(
+              width: 720,
+              height: 900,
+              mode: WindowMode.fullScreen,
+              windowId: 'macos:42',
+            ),
+            watchHostEnvironment: () => const Stream.empty(),
+            child: PageFrame(title: '全屏桌面', child: const SizedBox.expand()),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(AppBar), findsNothing);
+    expect(find.text('全屏桌面'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('compact navigation keeps the title plane opaque', (
     tester,
   ) async {
