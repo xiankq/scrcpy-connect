@@ -61,7 +61,7 @@ class NavigationScaffold extends HookConsumerWidget {
               ),
               child: liquid.GlassIsolationScope(
                 isolated: true,
-                defaultQuality: liquid.GlassQuality.premium,
+                defaultQuality: GlassMaterial.quality(context),
                 child: liquid.GlassTabBar.bottom(
                   // Keep the package-owned platter alive when accessibility
                   // preferences change; replacing the glass layer here can

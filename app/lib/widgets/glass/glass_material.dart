@@ -58,9 +58,20 @@ abstract final class GlassMaterial {
     );
   }
 
-  static liquid.GlassQuality quality(BuildContext context) => opaque(context)
-      ? liquid.GlassQuality.minimal
-      : liquid.GlassQuality.premium;
+  static liquid.GlassQuality quality(BuildContext context) {
+    if (opaque(context)) return liquid.GlassQuality.minimal;
+    // Premium is the package's Impeller path and matches Apple's iOS 27
+    // preset. Other platforms use the documented standard approximation so
+    // desktop/Android do not pretend to have the same native material or
+    // spend a premium shader budget on every local action group.
+    final apple = switch (defaultTargetPlatform) {
+      TargetPlatform.iOS || TargetPlatform.macOS => true,
+      _ => false,
+    };
+    return apple && ImageFilter.isShaderFilterSupported
+        ? liquid.GlassQuality.premium
+        : liquid.GlassQuality.standard;
+  }
 
   static liquid.LiquidGlassSettings settings(
     BuildContext context, {
@@ -166,7 +177,7 @@ class GlassSurfaceGroup extends StatefulWidget {
             brightness: Theme.of(context).brightness,
             variant: variant,
           ),
-          quality: liquid.GlassQuality.premium,
+          quality: GlassMaterial.quality(context),
           // 混合值是几何距离，来自同一光学边缘 token。
           blendAmount: DesignTokens.componentGlassRefractionWidth,
           clipBehavior: Clip.none,
@@ -309,13 +320,13 @@ class Glass extends StatefulWidget {
       surface = group?.variant == variant
           ? liquid.AdaptiveGlass.grouped(
               shape: shape,
-              quality: liquid.GlassQuality.premium,
+              quality: GlassMaterial.quality(context),
               child: content,
             )
           : liquid.AdaptiveGlass(
               shape: shape,
               settings: style,
-              quality: liquid.GlassQuality.premium,
+              quality: GlassMaterial.quality(context),
               allowElevation: false,
               clipExpansion: clipExpansion,
               child: content,
