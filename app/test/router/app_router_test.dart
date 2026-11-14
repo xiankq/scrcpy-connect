@@ -101,6 +101,20 @@ void main() {
     }
   });
 
+  test('独立控制窗口深链保留原会话身份', () {
+    final router = createAppRouter();
+    addTearDown(router.dispose);
+    const route = RemoteSessionRoute(
+      deviceId: 'device/one',
+      sessionId: 'session/one',
+    );
+    final match = router.configuration.findMatch(Uri.parse(route.location));
+    expect(match.isError, isFalse);
+    expect(match.fullPath, '/devices/:deviceId/sessions/:sessionId');
+    expect(match.pathParameters['deviceId'], 'device/one');
+    expect(match.pathParameters['sessionId'], 'session/one');
+  });
+
   testWidgets('控制深链及恢复不创建新画面，返回后保留原路由', (tester) async {
     final resources = _Resources();
     const initial = RouteErrorRoute(reason: 'missing-session');

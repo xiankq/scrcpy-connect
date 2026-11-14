@@ -72,9 +72,9 @@ Future<_WindowLaunch> _windowLaunch() async {
   final mobileWindow = decodeIndependentWindowLaunchRoute(requestedRoute);
   if (mobileWindow != null) {
     return _WindowLaunch(
-      RemoteAppRoute(
+      RemoteSessionRoute(
         deviceId: mobileWindow['deviceId']!,
-        packageName: mobileWindow['packageName']!,
+        sessionId: mobileWindow['sessionId']!,
       ).location,
     );
   }
@@ -89,8 +89,14 @@ Future<_WindowLaunch> _windowLaunch() async {
     final type = decoded['type'];
     final deviceId = decoded['deviceId'];
     final packageName = decoded['packageName'];
+    final sessionId = decoded['sessionId'];
     if (type != 'remote' || deviceId is! String || packageName is! String) {
       return const _WindowLaunch('/devices');
+    }
+    if (sessionId is String && sessionId.isNotEmpty) {
+      return _WindowLaunch(
+        RemoteSessionRoute(deviceId: deviceId, sessionId: sessionId).location,
+      );
     }
     return _WindowLaunch(
       RemoteAppRoute(deviceId: deviceId, packageName: packageName).location,
