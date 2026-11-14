@@ -161,6 +161,51 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Duo vertical navigation wins over the tablet sidebar', (
+    tester,
+  ) async {
+    final oldSize = tester.view.physicalSize;
+    final oldRatio = tester.view.devicePixelRatio;
+    addTearDown(() {
+      tester.view
+        ..physicalSize = oldSize
+        ..devicePixelRatio = oldRatio;
+    });
+    tester.view
+      ..physicalSize = const Size(1200, 900)
+      ..devicePixelRatio = 1;
+
+    final router = createAppRouter();
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          deviceListProvider.overrideWith(_Devices.new),
+          recoveryStateProvider.overrideWith(_Recovery.new),
+          preferencesProvider.overrideWith(_Preferences.new),
+        ],
+        child: MaterialApp.router(
+          theme: ConnectTokens.theme(Brightness.light),
+          routerConfig: router,
+          builder: (context, child) => liquid.GlassVerticalBar(
+            data: const liquid.GlassVerticalBarData(
+              edge: liquid.GlassVerticalBarEdge.trailing,
+              width: 84,
+              top: 24,
+            ),
+            child: child!,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+
+    expect(find.byKey(const ValueKey('app-sidebar')), findsNothing);
+    expect(find.byKey(const ValueKey('app-bottom-navigation')), findsOneWidget);
+    expect(find.byType(liquid.GlassTabBar), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('tablet sidebar occupies the full available work area', (
     tester,
   ) async {
