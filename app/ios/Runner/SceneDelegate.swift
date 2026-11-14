@@ -59,7 +59,7 @@ class SceneDelegate: FlutterSceneDelegate {
     super.sceneDidDisconnect(scene)
   }
 
-  func stateRestorationActivity(for scene: UIScene) -> NSUserActivity? {
+  override func stateRestorationActivity(for scene: UIScene) -> NSUserActivity? {
     guard let initialRoute = restorationInitialRoute, !initialRoute.isEmpty else {
       return nil
     }
