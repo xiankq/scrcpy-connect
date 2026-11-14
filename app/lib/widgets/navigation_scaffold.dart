@@ -184,6 +184,7 @@ class AppNavigationShell extends StatelessWidget {
                                   child: SizedBox(
                                     key: const ValueKey('app-sidebar'),
                                     width: sidebarWidth,
+                                    height: double.infinity,
                                     child: Padding(
                                       padding: EdgeInsets.all(
                                         short

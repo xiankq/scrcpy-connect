@@ -115,6 +115,45 @@ void main() {
     expect(find.byKey(const ValueKey('app-bottom-navigation')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('tablet sidebar occupies the full available work area', (
+    tester,
+  ) async {
+    final oldSize = tester.view.physicalSize;
+    final oldRatio = tester.view.devicePixelRatio;
+    addTearDown(() {
+      tester.view
+        ..physicalSize = oldSize
+        ..devicePixelRatio = oldRatio;
+    });
+    tester.view
+      ..physicalSize = const Size(1200, 900)
+      ..devicePixelRatio = 1;
+
+    final router = createAppRouter();
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          deviceListProvider.overrideWith(_Devices.new),
+          recoveryStateProvider.overrideWith(_Recovery.new),
+          preferencesProvider.overrideWith(_Preferences.new),
+        ],
+        child: MaterialApp.router(
+          theme: ConnectTokens.theme(Brightness.light),
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+
+    final sidebar = tester.renderObject<RenderBox>(
+      find.byKey(const ValueKey('app-sidebar')),
+    );
+    expect(sidebar.size.height, closeTo(tester.view.physicalSize.height, 1));
+    expect(sidebar.localToGlobal(Offset.zero).dy, closeTo(0, 1));
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _Recovery extends RecoveryStateNotifier {
