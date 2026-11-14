@@ -12,6 +12,7 @@ import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 
 void main() {
@@ -63,7 +64,10 @@ void main() {
         ),
       );
       expect(isolation.isolated, isTrue);
-      expect(isolation.defaultQuality, liquid.GlassQuality.premium);
+      expect(
+        isolation.defaultQuality,
+        GlassMaterial.quality(tester.element(find.byKey(key))),
+      );
 
       reduceTransparency.value = true;
       await tester.pumpAndSettle(const Duration(milliseconds: 100));

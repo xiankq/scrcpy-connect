@@ -28,14 +28,20 @@ class ExitHandle extends StatefulWidget {
   final Widget? soundControl;
   final VoidCallback? onSleep, onScreenshot, onConvert, onKeyboard, onRotate;
   final bool independent;
-  static const initialOffset = Offset(12, 80);
+  static const initialTopFraction = 0.44;
 
-  /// 初始叠加区域也在恢复内容中预留位置。
+  /// 初始叠加区域也在恢复内容中预留位置。远控稿将快捷按钮放在右侧，
+  /// 顶部随当前窗口高度取中部位置，避免把手机稿的固定左上角坐标带到
+  /// 平板、折叠屏或自由缩放窗口。
   static Rect initialBoundsFor(Size viewport, MediaQueryData media) {
     final bounds = _dragBoundsFor(viewport, media);
+    final top = (viewport.height * initialTopFraction).clamp(
+      bounds.top,
+      bounds.bottom,
+    );
     return Rect.fromLTWH(
-      initialOffset.dx.clamp(bounds.left, bounds.right).toDouble(),
-      initialOffset.dy.clamp(bounds.top, bounds.bottom).toDouble(),
+      bounds.right,
+      top.toDouble(),
       DesignTokens.componentRemoteExitSize,
       DesignTokens.componentRemoteExitHitHeight,
     );
@@ -68,7 +74,7 @@ class _ExitHandleState extends State<ExitHandle>
           offset = Offset(animation.value, offset.dy);
         });
       });
-  Offset offset = ExitHandle.initialOffset;
+  Offset offset = Offset.zero;
   bool collapsed = false;
   bool expanded = false;
   bool dragging = false;
@@ -78,6 +84,7 @@ class _ExitHandleState extends State<ExitHandle>
   Size viewport = Size.zero;
   Rect dragBounds = Rect.zero;
   double collapsedRight = 0;
+  bool layoutInitialized = false;
 
   void activateControl() {
     animation.stop();
@@ -156,9 +163,20 @@ class _ExitHandleState extends State<ExitHandle>
       final gestures = media.systemGestureInsets;
       final rightInset = math.max(padding.right, gestures.right);
       dragBounds = _dragBoundsFor(viewport, media);
+      if (!layoutInitialized) {
+        final initial = ExitHandle.initialBoundsFor(viewport, media);
+        offset = initial.topLeft;
+        right = true;
+        layoutInitialized = true;
+      } else {
+        offset = Offset(
+          offset.dx.clamp(dragBounds.left, dragBounds.right).toDouble(),
+          offset.dy.clamp(dragBounds.top, dragBounds.bottom).toDouble(),
+        );
+      }
       collapsedRight = math.max(
         dragBounds.left,
-        viewport.width - rightInset - 44,
+        viewport.width - rightInset - DesignTokens.componentRemoteExitHitWidth,
       );
       final dx = offset.dx.clamp(dragBounds.left, dragBounds.right).toDouble();
       final dy = offset.dy.clamp(dragBounds.top, dragBounds.bottom).toDouble();

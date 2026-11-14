@@ -134,6 +134,7 @@ class RemoteRecoveryPanel extends StatelessWidget {
               44,
             )
           : ExitHandle.initialBoundsFor(constraints.biggest, media);
+      final exitOnRight = exit.center.dx > constraints.maxWidth / 2;
       final belowExit = exit.bottom + DesignTokens.spacingSm;
       final bottom = math.max(DesignTokens.spacingXl, media.padding.bottom);
       final roomBelow = constraints.maxHeight - belowExit - bottom;
@@ -142,11 +143,15 @@ class RemoteRecoveryPanel extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(
           below
               ? math.max(DesignTokens.spacingXl, media.padding.left)
+              : exitOnRight
+              ? math.max(DesignTokens.spacingXl, media.padding.left)
               : exit.right + DesignTokens.spacingSm,
           below
               ? belowExit
               : math.max(DesignTokens.spacingXl, media.padding.top),
-          math.max(DesignTokens.spacingXl, media.padding.right),
+          below || !exitOnRight
+              ? math.max(DesignTokens.spacingXl, media.padding.right)
+              : exit.width + DesignTokens.spacingSm,
           bottom,
         ),
         child: Center(
