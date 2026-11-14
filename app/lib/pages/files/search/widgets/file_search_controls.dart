@@ -109,11 +109,8 @@ class FileSearchTypeField extends StatelessWidget {
         menuPadding: const EdgeInsets.all(DesignTokens.spacingXs),
         menuBorderRadius: DesignTokens.roundedLg,
         itemBorderRadius: DesignTokens.roundedMd,
-        settings: Glass.optics(
-          brightness: theme.brightness,
-          variant: GlassVariant.regular,
-        ),
-        quality: GlassQuality.premium,
+        settings: GlassMaterial.settings(context),
+        quality: GlassMaterial.quality(context),
         stretch: reduceMotion
             ? 0
             : DesignTokens.componentGlassInteractionStretch,

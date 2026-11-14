@@ -29,7 +29,7 @@ class FileViewMenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final reduceMotion = GlassMaterial.reduceMotion(context);
     final menuWidth = math.min(
       288.0,
       math.max(208.0, MediaQuery.sizeOf(context).width - 32),
@@ -45,11 +45,8 @@ class FileViewMenuButton extends StatelessWidget {
         menuWidth: menuWidth,
         menuBorderRadius: DesignTokens.roundedLg,
         itemBorderRadius: DesignTokens.roundedMd,
-        settings: Glass.optics(
-          brightness: theme.brightness,
-          variant: GlassVariant.regular,
-        ),
-        quality: GlassQuality.premium,
+        settings: GlassMaterial.settings(context),
+        quality: GlassMaterial.quality(context),
         stretch: reduceMotion
             ? 0
             : DesignTokens.componentGlassInteractionStretch,
