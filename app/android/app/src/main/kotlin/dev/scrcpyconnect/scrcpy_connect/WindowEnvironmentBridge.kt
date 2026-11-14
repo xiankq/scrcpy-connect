@@ -33,6 +33,7 @@ internal class WindowEnvironmentBridge(
     )
     private val executor = ContextCompat.getMainExecutor(activity)
     private var sink: EventChannel.EventSink? = null
+    private var closed = false
     private var latestFeatures: List<DisplayFeature> = emptyList()
     private var latest = snapshot(emptyList())
     private val listener = Consumer<WindowLayoutInfo> { info ->
@@ -66,6 +67,8 @@ internal class WindowEnvironmentBridge(
     fun isFor(owner: Activity): Boolean = activity === owner
 
     fun close() {
+        if (closed) return
+        closed = true
         tracker.removeWindowLayoutInfoListener(listener)
         sink = null
         channel.setStreamHandler(null)
