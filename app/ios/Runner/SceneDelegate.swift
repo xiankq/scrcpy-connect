@@ -43,7 +43,12 @@ class SceneDelegate: FlutterSceneDelegate {
     refreshEnvironment()
   }
 
-  func sceneDidUpdate(_ scene: UIScene) {
+  func scene(
+    _ scene: UIScene,
+    didUpdate previousCoordinateSpace: UICoordinateSpace,
+    interfaceOrientation previousInterfaceOrientation: UIInterfaceOrientation,
+    traitCollection previousTraitCollection: UITraitCollection
+  ) {
     refreshEnvironment()
   }
 
