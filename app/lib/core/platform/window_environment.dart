@@ -44,6 +44,7 @@ final class WindowDisplayFeature {
     required this.height,
     required this.type,
     this.state,
+    this.separating = true,
   });
 
   final double left;
@@ -53,6 +54,14 @@ final class WindowDisplayFeature {
   final WindowDisplayFeatureType type;
   final WindowPosture? state;
 
+  /// Whether this feature divides the app window into separate panes.
+  ///
+  /// Android's FoldingFeature distinguishes a separating hinge from a crease
+  /// that remains one continuous surface. Flutter's DisplayFeature has no
+  /// equivalent field, so media projections keep the historical default and
+  /// native hosts can explicitly clear it.
+  final bool separating;
+
   @override
   bool operator ==(Object other) =>
       other is WindowDisplayFeature &&
@@ -61,10 +70,12 @@ final class WindowDisplayFeature {
       width == other.width &&
       height == other.height &&
       type == other.type &&
-      state == other.state;
+      state == other.state &&
+      separating == other.separating;
 
   @override
-  int get hashCode => Object.hash(left, top, width, height, type, state);
+  int get hashCode =>
+      Object.hash(left, top, width, height, type, state, separating);
 
   bool contains(double x, double y) =>
       x >= left && x <= left + width && y >= top && y <= top + height;
@@ -185,7 +196,7 @@ final class WindowEnvironment {
       final isFoldOrHinge =
           feature.type == WindowDisplayFeatureType.fold ||
           feature.type == WindowDisplayFeatureType.hinge;
-      if (spansHeight && isFoldOrHinge) return feature;
+      if (spansHeight && isFoldOrHinge && feature.separating) return feature;
     }
     return null;
   }
@@ -200,7 +211,7 @@ final class WindowEnvironment {
       final isFoldOrHinge =
           feature.type == WindowDisplayFeatureType.fold ||
           feature.type == WindowDisplayFeatureType.hinge;
-      if (spansWidth && isFoldOrHinge) return feature;
+      if (spansWidth && isFoldOrHinge && feature.separating) return feature;
     }
     return null;
   }

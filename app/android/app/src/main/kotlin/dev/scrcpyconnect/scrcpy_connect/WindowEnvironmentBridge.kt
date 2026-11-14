@@ -154,6 +154,7 @@ internal class WindowEnvironmentBridge(
             "height" to bounds.height() / density,
             "type" to type,
             "state" to state,
+            "separating" to feature.isSeparating,
         )
     }
 
