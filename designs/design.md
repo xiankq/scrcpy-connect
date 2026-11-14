@@ -715,7 +715,7 @@ Ardot 独立顶层画板：规范／组件在左，完整页面居中按产品�
 
 折叠屏状态至少覆盖：外屏、完全展开、书本半折、桌面半折、旋转后展开；每种状态核对铰链／折痕避让、方向切换、键盘、安全区、长文字、减少动态和降低透明度。iPhone Duo 使用外屏单列、内屏双栏和保留区域布局；外屏及内屏横向姿态让工具栏、导航和标签栏跟随系统侧边垂直栏，内屏竖向姿态保留横向栏；不跨中间铰链放置重要内容，折叠时保持当前选择和输入。Flutter 通过 `WindowEnvironment` 接入 UIKit 的 division/occlusion 保留区与 `GlassVerticalBar`，底部导航仍由同一个 `GlassTabBar` 实例渲染。Android 使用窗口尺寸类别与 WindowManager 的折叠特征，只有 `FoldingFeature.isSeparating` 为真时才切分双栏，非分隔折痕保持连续内容并避开关键控件；鸿蒙使用窗口断点和折叠分栏容器；Flutter 层以 `MediaQuery`／`LayoutBuilder` 的实际窗口空间作为统一输入。
 
-实现对应 `WindowEnvironment` 与 `WindowEnvironmentCodec`。Android 宿主通过 AndroidX `WindowInfoTracker` 的 `FoldingFeature` 事件投影折叠／铰链保留区及 `isSeparating`；iPhone Duo 在 iOS 27.1+ 由 UIKit `UIView.ReservedRegion` 的 division 与 active occlusion frame 投影到同一 payload，铰链交互事件只负责触发布局重新读取；HarmonyOS FoldSplitContainer 也使用相同的窗口 payload。窗口指标变化、平台姿态事件与前台恢复会重新读取宿主投影，当前 Flutter view 的尺寸和显示特征保持实时；全高折痕／铰链在导航工作区中保留真实空区，不让侧栏或主内容跨过保留区，只有明确分隔的特征才切分窗格；横向全宽铰链进入桌面半折时，单一页面选用安全子屏并重写当前 MediaQuery；不完整或不支持的宿主数据回退到当前 Flutter 窗口，而不猜测物理屏幕。
+实现对应 `WindowEnvironment` 与 `WindowEnvironmentCodec`。Android 宿主通过 AndroidX `WindowInfoTracker` 的 `FoldingFeature` 事件投影折叠／铰链保留区及 `isSeparating`；iPhone Duo 在 iOS 27.1+ 由 UIKit `UIView.ReservedRegion` 的 division 与 active occlusion frame 投影到同一 payload，铰链交互事件只负责触发布局重新读取；HarmonyOS FoldSplitContainer 也使用相同的窗口 payload。窗口指标变化、平台姿态事件与前台恢复会重新读取宿主投影，当前 Flutter view 的尺寸和显示特征保持实时；全高折痕／铰链在导航工作区中保留真实空区，不让侧栏或主内容跨过保留区，只有宿主明确提供 `isSeparating: true` 的特征才切分窗格；只有 Flutter `MediaQuery.displayFeatures` 或缺少分隔标记时，折痕仍作为连续保留区处理，不猜测物理分屏；横向全宽铰链进入桌面半折时，单一页面选用安全子屏并重写当前 MediaQuery；不完整或不支持的宿主数据回退到当前 Flutter 窗口，而不猜测物理屏幕。
 
 桌面工作区不提供默认顶部状态条；操作系统标题栏与窗口菜单由宿主负责，应用内容从工作区工具栏开始。移动端和折叠外屏可保留系统安全区与页面导航，平板及桌面不复制手机顶部状态条。
 

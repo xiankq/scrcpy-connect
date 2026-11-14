@@ -31,6 +31,10 @@ WindowEnvironment windowEnvironmentFromMedia(MediaQueryData media) {
           _ => WindowDisplayFeatureType.fold,
         },
         state: featurePosture,
+        // Flutter's DisplayFeature does not expose Android's separating flag.
+        // Keep the crease reserved but continuous until a native host projects
+        // an explicit separating=true fact.
+        separating: false,
       ),
     );
   }

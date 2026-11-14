@@ -44,7 +44,7 @@ final class WindowDisplayFeature {
     required this.height,
     required this.type,
     this.state,
-    this.separating = true,
+    this.separating = false,
   });
 
   final double left;
@@ -58,8 +58,9 @@ final class WindowDisplayFeature {
   ///
   /// Android's FoldingFeature distinguishes a separating hinge from a crease
   /// that remains one continuous surface. Flutter's DisplayFeature has no
-  /// equivalent field, so media projections keep the historical default and
-  /// native hosts can explicitly clear it.
+  /// equivalent field. MediaQuery-only projections therefore keep the feature
+  /// as a reserved region without splitting panes; native hosts must explicitly
+  /// project `true` when their window manager reports a separating feature.
   final bool separating;
 
   @override

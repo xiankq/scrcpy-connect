@@ -111,7 +111,7 @@ final class WindowEnvironmentCodec {
       state: _posture(value['state'], allowNull: true),
       separating: value['separating'] is bool
           ? value['separating'] as bool
-          : type != WindowDisplayFeatureType.cutout,
+          : false,
     );
   }
 
