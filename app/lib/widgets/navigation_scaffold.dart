@@ -158,9 +158,14 @@ class AppNavigationShell extends StatelessWidget {
           final short =
               constraints.maxWidth > constraints.maxHeight &&
               constraints.maxHeight < DesignTokens.componentSheetShortHeight;
-          // A narrow phone in landscape still needs the bottom bar. Medium and
-          // expanded windows get a persistent navigation plane.
-          final sidebar = sizeClass != WindowSizeClass.compact;
+          // A narrow phone in landscape still needs the bottom bar. Medium
+          // and expanded windows get a persistent navigation plane unless
+          // UIKit has already reserved an iPhone Duo vertical bar: in that
+          // case the single package-owned GlassTabBar moves its tabs into the
+          // system strip and an app rail would duplicate navigation.
+          final verticalBar = liquid.GlassVerticalBar.maybeOf(context);
+          final sidebar =
+              verticalBar == null && sizeClass != WindowSizeClass.compact;
           final compactSidebar = sizeClass == WindowSizeClass.medium;
           return _NavigationLayout(
             sidebar: sidebar,
