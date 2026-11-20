@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
+import android.content.pm.PackageManager
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbManager
@@ -246,6 +247,10 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun authorizeUsb(call: MethodCall, result: MethodChannel.Result) {
+        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_USB_HOST)) {
+            result.error("usb_unsupported", "当前 Android 主控不支持 USB Host，请使用无线调试配对。", null)
+            return
+        }
         val lease = UsbLeases.connections.checkAdmission(call.argument<String>("ownerLeaseId"))
         UsbLeases.connections.checkCapacity(lease)
         if (pendingUsb != null) { result.error("permission_pending", "已有一个 USB 授权请求正在等待。", null); return }

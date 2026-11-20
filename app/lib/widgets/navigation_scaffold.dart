@@ -8,6 +8,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_press_feedback.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 import 'package:scrcpy_connect/widgets/overlays.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
 
@@ -18,7 +19,7 @@ class NavigationScaffold extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tab = navigationShell.currentIndex;
     final theme = Theme.of(context);
-    final opaque = GlassMaterial.opaque(context);
+    final opaque = opaqueGlass(context);
     final reducedMotion = GlassMaterial.reduceMotion(context);
     final history = useRef(<int>[0]);
     if (history.value.last != tab) history.value.add(tab);
@@ -83,7 +84,10 @@ class NavigationScaffold extends HookConsumerWidget {
                 ],
                 indicatorExpansion: reducedMotion
                     ? EdgeInsets.zero
-                    : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    : const EdgeInsets.symmetric(
+                        horizontal: DesignTokens.spacingSm,
+                        vertical: DesignTokens.spacingXs,
+                      ),
                 indicatorPinchStrength: reducedMotion ? 0 : 0.4,
                 magnification: reducedMotion ? 1 : 1.15,
                 selectedIndex: tab,
@@ -108,7 +112,7 @@ class NavigationScaffold extends HookConsumerWidget {
                     : theme.brightness == Brightness.dark
                     ? DesignTokens.colorGlassSelectedDark
                     : DesignTokens.colorGlassSelected,
-                settings: GlassMaterial.navigationBarSettings(context),
+                settings: GlassMaterial.navigationTrackSettings(context),
                 quality: GlassMaterial.quality(context),
                 indicatorSettings: GlassMaterial.navigationIndicatorSettings(
                   context,
@@ -176,16 +180,13 @@ class AppNavigationShell extends StatelessWidget {
   final Widget child;
   final Uri uri;
 
+  static _NavigationLayout? _layout(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_NavigationLayout>();
+
   static bool hasSidebar(BuildContext context) =>
-      context
-          .dependOnInheritedWidgetOfExactType<_NavigationLayout>()
-          ?.sidebar ??
-      false;
+      _layout(context)?.sidebar ?? false;
   static bool isVisible(BuildContext context) =>
-      context
-          .dependOnInheritedWidgetOfExactType<_NavigationLayout>()
-          ?.visible ??
-      true;
+      _layout(context)?.visible ?? true;
 
   @override
   Widget build(BuildContext context) {

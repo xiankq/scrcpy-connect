@@ -144,7 +144,7 @@ class _RemoteNavigationGlyphPainter extends CustomPainter {
         canvas.drawRRect(
           RRect.fromRectAndRadius(
             const Rect.fromLTWH(2.75, 2.75, 16.5, 16.5),
-            const Radius.circular(2),
+            Radius.circular(DesignTokens.spacingMicro),
           ),
           paint,
         );

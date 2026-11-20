@@ -235,7 +235,10 @@ class _AmbientLoadingPainter extends CustomPainter {
                 math.sin(angle) * 38 * widthScale,
               ),
           orb.$1 / 2 * scale,
-          Paint()..color = orb.$4.withValues(alpha: 0.32),
+          Paint()
+            ..color = orb.$4.withValues(
+              alpha: DesignTokens.componentLoadingOrbOpacity,
+            ),
         );
       }
     }

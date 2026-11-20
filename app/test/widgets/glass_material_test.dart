@@ -38,7 +38,7 @@ void main() {
         theme: ConnectTokens.theme(Brightness.light),
         home: Builder(
           builder: (context) {
-            final settings = GlassMaterial.navigationBarSettings(context);
+            final settings = GlassMaterial.navigationTrackSettings(context);
             expect(settings.effectiveShadow, isNotEmpty);
             return const SizedBox.shrink();
           },

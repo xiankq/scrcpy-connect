@@ -18,11 +18,6 @@ abstract final class GlassMaterial {
   static bool _initialized = false;
 
   static bool get isInitialized => _initialized;
-  static const backend = 'liquid_glass_widgets';
-  static const backendVersion = '1.17.3';
-  static const samplingBounds = 'surface-rect-with-optical-headroom';
-  static const composition =
-      'component-owned-navigation-and-local-surface-groups';
 
   static Future<void> initialize() {
     return _initialization ??=
@@ -42,8 +37,6 @@ abstract final class GlassMaterial {
   }
 
   // 只配置官方组件；这些方法不构建 widget，不替换库的手势、焦点或组件生命周期。
-  static bool opaque(BuildContext context) => opaqueGlass(context);
-
   static bool reduceMotion(BuildContext context) =>
       liquid.GlassAccessibilityData.of(context).reduceMotion;
 
@@ -59,7 +52,7 @@ abstract final class GlassMaterial {
   }
 
   static liquid.GlassQuality quality(BuildContext context) {
-    if (opaque(context)) return liquid.GlassQuality.minimal;
+    if (opaqueGlass(context)) return liquid.GlassQuality.minimal;
     // Premium is the package's Impeller path and matches Apple's iOS 27
     // preset. Other platforms use the documented standard approximation so
     // desktop/Android do not pretend to have the same native material or
@@ -76,16 +69,18 @@ abstract final class GlassMaterial {
   static liquid.LiquidGlassSettings settings(
     BuildContext context, {
     GlassVariant variant = GlassVariant.regular,
+    bool includeShadow = false,
   }) {
+    final theme = Theme.of(context);
     final settings = Glass.optics(
-      brightness: Theme.of(context).brightness,
+      brightness: theme.brightness,
       variant: variant,
-      includeShadow: false,
+      includeShadow: includeShadow,
     );
     return quality(context) == liquid.GlassQuality.minimal
         ? settings.copyWith(
             blur: 0,
-            glassColor: Theme.of(context).colorScheme.surface,
+            glassColor: theme.colorScheme.surface,
             bodyMode: liquid.GlassBodyMode.clear,
           )
         : settings;
@@ -106,7 +101,7 @@ abstract final class GlassMaterial {
   /// 标签栏指示器的局部 clear 材质，与 regular 玻璃轨道分开。
   static liquid.LiquidGlassSettings navigationIndicatorSettings(
     BuildContext context,
-  ) => opaque(context)
+  ) => opaqueGlass(context)
       ? settings(context).copyWith(glassColor: DesignTokens.colorTransparent)
       : liquid.AnimatedGlassIndicator.baseIndicatorSettings;
 
@@ -115,17 +110,7 @@ abstract final class GlassMaterial {
   /// that can be clipped or disappear while the official indicator settles.
   static liquid.LiquidGlassSettings navigationTrackSettings(
     BuildContext context,
-  ) => Glass.optics(
-    brightness: Theme.of(context).brightness,
-    includeShadow: !opaque(context),
-  );
-
-  /// The official bottom bar owns both the track and its moving indicator.
-  /// Its preset shadow is resolved by the package so the shadow follows the
-  /// same visibility and accessibility state as the platter.
-  static liquid.LiquidGlassSettings navigationBarSettings(
-    BuildContext context,
-  ) => navigationTrackSettings(context);
+  ) => settings(context, includeShadow: !opaqueGlass(context));
 
   /// 向后端注册 Material 明暗模式和系统辅助偏好。
   /// 背景采样组只属于局部控件组，不能放在根 Navigator。
@@ -241,7 +226,6 @@ class Glass extends StatefulWidget {
   static liquid.LiquidGlassSettings optics({
     required Brightness brightness,
     GlassVariant variant = GlassVariant.regular,
-    double radius = DesignTokens.roundedLg,
     bool includeShadow = false,
   }) {
     final dark = brightness == Brightness.dark;
@@ -281,21 +265,17 @@ class Glass extends StatefulWidget {
   }
 
   Widget _build(BuildContext context, GlobalKey contentKey) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
     final opaque = opaqueGlass(context, solid: solid);
-    final style = optics(
-      brightness: Theme.of(context).brightness,
-      variant: variant,
-    );
+    final style = optics(brightness: theme.brightness, variant: variant);
     final content = KeyedSubtree(
       key: contentKey,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: opaque ? Theme.of(context).colorScheme.surface : null,
+          color: opaque ? theme.colorScheme.surface : null,
           borderRadius: BorderRadius.circular(radius),
-          border: opaque
-              ? Border.all(color: Theme.of(context).colorScheme.outline)
-              : null,
+          border: opaque ? Border.all(color: theme.colorScheme.outline) : null,
         ),
         child: Material(
           type: MaterialType.transparency,

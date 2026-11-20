@@ -314,14 +314,19 @@ class _ExitHandleState extends State<ExitHandle>
                         child: collapsed && !dragging
                             ? Center(
                                 child: Container(
-                                  width: 3,
-                                  height: DesignTokens.spacingMd,
+                                  width: DesignTokens
+                                      .componentRemoteExitHandleWidth,
+                                  height: DesignTokens
+                                      .componentRemoteExitHandleHeight,
                                   decoration: BoxDecoration(
                                     color: Theme.of(context)
                                         .textTheme
                                         .bodySmall
                                         ?.color,
-                                    borderRadius: BorderRadius.circular(3),
+                                    borderRadius: BorderRadius.circular(
+                                      DesignTokens
+                                          .componentRemoteExitHandleRounded,
+                                    ),
                                   ),
                                 ),
                               )

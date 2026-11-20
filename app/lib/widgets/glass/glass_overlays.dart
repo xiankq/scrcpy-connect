@@ -11,17 +11,7 @@ class GlassActionIcon extends StatelessWidget {
     this.color,
     this.padding,
     this.constraints,
-    this.visualDensity,
     this.style,
-    this.alignment = Alignment.center,
-    this.disabledColor,
-    this.focusNode,
-    this.autofocus = false,
-    this.enableFeedback,
-    this.isSelected,
-    this.selectedIcon,
-    this.onLongPress,
-    this.mouseCursor,
   });
   final Widget icon;
   final VoidCallback? onPressed;
@@ -30,17 +20,7 @@ class GlassActionIcon extends StatelessWidget {
   final Color? color;
   final EdgeInsetsGeometry? padding;
   final BoxConstraints? constraints;
-  final VisualDensity? visualDensity;
   final ButtonStyle? style;
-  final AlignmentGeometry alignment;
-  final Color? disabledColor;
-  final FocusNode? focusNode;
-  final bool autofocus;
-  final bool? enableFeedback;
-  final bool? isSelected;
-  final Widget? selectedIcon;
-  final VoidCallback? onLongPress;
-  final MouseCursor? mouseCursor;
 
   @override
   Widget build(BuildContext context) {
@@ -51,17 +31,7 @@ class GlassActionIcon extends StatelessWidget {
       color: color,
       padding: padding,
       constraints: constraints,
-      visualDensity: visualDensity,
       style: style,
-      alignment: alignment,
-      disabledColor: disabledColor,
-      focusNode: focusNode,
-      autofocus: autofocus,
-      enableFeedback: enableFeedback,
-      isSelected: isSelected,
-      selectedIcon: selectedIcon,
-      onLongPress: onLongPress,
-      mouseCursor: mouseCursor,
     );
     return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
   }

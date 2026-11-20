@@ -114,6 +114,13 @@ class GlassMenuButton extends StatelessWidget {
         ),
       );
     }
+    final triggerStyle = IconButton.styleFrom(
+      minimumSize: const Size.square(DesignTokens.componentIconButtonSize),
+      maximumSize: const Size.square(DesignTokens.componentIconButtonSize),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      foregroundColor: theme.colorScheme.onSurface,
+      iconSize: DesignTokens.componentIconSize,
+    );
     if (reducedMotion || !ImageFilter.isShaderFilterSupported) {
       // 后端的“瞬时”形变仍使用空间弹簧。
       // 减少动态效果或不支持形变时保留框架菜单生命周期，材料仍交给自适应玻璃后端。
@@ -175,17 +182,7 @@ class GlassMenuButton extends StatelessWidget {
           ),
         ],
         builder: (context, controller, child) => GlassActionIcon(
-          style: IconButton.styleFrom(
-            minimumSize: const Size.square(
-              DesignTokens.componentIconButtonSize,
-            ),
-            maximumSize: const Size.square(
-              DesignTokens.componentIconButtonSize,
-            ),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            foregroundColor: theme.colorScheme.onSurface,
-            iconSize: DesignTokens.componentIconSize,
-          ),
+          style: triggerStyle,
           icon: icon,
           tooltip: tooltip,
           onPressed: () =>
@@ -206,17 +203,7 @@ class GlassMenuButton extends StatelessWidget {
             ? 0
             : DesignTokens.componentGlassInteractionStretch,
         triggerBuilder: (context, toggle) => GlassActionIcon(
-          style: IconButton.styleFrom(
-            minimumSize: const Size.square(
-              DesignTokens.componentIconButtonSize,
-            ),
-            maximumSize: const Size.square(
-              DesignTokens.componentIconButtonSize,
-            ),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            foregroundColor: theme.colorScheme.onSurface,
-            iconSize: DesignTokens.componentIconSize,
-          ),
+          style: triggerStyle,
           icon: icon,
           tooltip: tooltip,
           onPressed: toggle,
