@@ -1,6 +1,7 @@
 package dev.scrcpyconnect.scrcpy_connect
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
 import io.flutter.embedding.engine.FlutterEngine
@@ -35,6 +36,19 @@ internal object ProcessFlutterHost {
                 .setMethodCallHandler { call, result ->
                     try {
                         when (call.method) {
+                            "usb.hostSupport" -> {
+                                val host = activity?.get()
+                                if (host == null) {
+                                    result.error("activity_unavailable", "请返回应用后检查 USB 能力。", null)
+                                } else {
+                                    result.success(
+                                        mapOf(
+                                            "supported" to host.packageManager
+                                                .hasSystemFeature(PackageManager.FEATURE_USB_HOST),
+                                        ),
+                                    )
+                                }
+                            }
                             "usb.environment" -> result.success(UsbLeases.connections.environment())
                             "usb.beginRecovery" -> result.success(MainActivity.beginUsbRecovery(
                                 call.argument<String>("expectedOwnerLeaseId"), call.argument<String>("ownerLeaseId")))

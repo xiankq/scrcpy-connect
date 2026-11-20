@@ -192,7 +192,10 @@ class RemoteStage extends StatelessWidget {
               key: const ValueKey('remote-first-frame-close'),
               tooltip: '关闭等待',
               onPressed: onClose,
-              constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+              constraints: const BoxConstraints.tightFor(
+                width: DesignTokens.componentIconButtonSize,
+                height: DesignTokens.componentIconButtonSize,
+              ),
               icon: const Icon(LucideIcons.x),
             ),
           )

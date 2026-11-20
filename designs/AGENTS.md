@@ -1,6 +1,6 @@
 # 视觉设计
 
-产品行为以 [prod/README.md](prod/README.md) 为准，视觉数值及材料用途唯一维护于 [design.md](design.md)。修改数值后运行 [token 生成检查](../scripts/design_tokens/README.md)，Flutter token 与 Ardot 变量保持一致。
+产品行为以 [prod/README.md](prod/README.md) 为准，视觉数值及材料用途唯一维护于 [design.md](design.md)。修改数值后运行 [token 生成检查](../scripts/design_tokens/README.md)，Flutter token 与 Ardot 变量保持一致；Ardot 的 opacity 变量使用百分比值（32 对应 Flutter 的 0.32）。
 
 ## 工作稿与组件
 

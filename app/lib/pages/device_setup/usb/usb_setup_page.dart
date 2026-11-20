@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -5,6 +8,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/devices/device_setup.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/platform/platform_channels.dart';
 import 'package:scrcpy_connect/pages/device_setup/usb/usb_setup_notifier.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
@@ -36,9 +40,18 @@ class UsbSetupPage extends HookConsumerWidget {
     final provider = usbSetupProvider(deviceId: deviceId, scope: scope);
     final state = ref.watch(provider);
     final actions = ref.read(provider.notifier);
-    final usbSupported = kIsWeb
-        ? false
-        : defaultTargetPlatform != TargetPlatform.iOS;
+    final usbSupport = useFuture(
+      useMemoized(() async {
+        if (kIsWeb || defaultTargetPlatform == TargetPlatform.iOS) return false;
+        if (!Platform.isAndroid) return true;
+        final response = await const PlatformChannels().requestOptional(
+          'usb.hostSupport',
+          const {},
+        );
+        return response?['supported'] == true;
+      }),
+    );
+    final usbSupported = usbSupport.hasError ? false : usbSupport.data;
     Future<void> check({String? serial, String? usbDeviceId}) async {
       if (state.hasPendingAttempt) return;
       final allowed = await prepareConnection?.call() ?? true;
@@ -53,6 +66,15 @@ class UsbSetupPage extends HookConsumerWidget {
       await actions.check(serial: serial, usbDeviceId: usbDeviceId);
     }
 
+    if (usbSupported == null) {
+      const loading = Text('正在检查本机 USB 能力…');
+      return embedded
+          ? SliverToBoxAdapter(child: loading)
+          : PageFrame(
+              title: '添加设备',
+              child: ConnectionContent(child: loading),
+            );
+    }
     if (!usbSupported) {
       final limited = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -86,7 +108,23 @@ class UsbSetupPage extends HookConsumerWidget {
       const SizedBox(height: DesignTokens.spacingSectionTitle),
       FilledButton(
         onPressed: state.hasPendingAttempt ? null : () => check(),
-        child: Text(state.phase == .checking ? '正在检查…' : '检查连接'),
+        child: state.phase == .checking
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CupertinoActivityIndicator(
+                    radius: DesignTokens.spacingXs,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: DesignTokens.spacingXs),
+                  const Text('正在检查…'),
+                ],
+              )
+            : Text(switch (state.phase) {
+                .cancelling => '正在取消…',
+                .cleanupRequired => '等待清理完成',
+                _ => '检查连接',
+              }),
       ),
       if (state.hasPendingAttempt)
         TextButton(
@@ -101,20 +139,32 @@ class UsbSetupPage extends HookConsumerWidget {
       if (state.result != null)
         ContentPanel(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(switch (state.result!) {
-                UsbSelectionRequired(:final message) =>
-                  message ?? '选择 USB 设备，并在手机上允许调试。',
-                UsbConnected() => 'USB 连接已建立',
-              }),
-              if (state.result case UsbConnected(:final receipt))
+              StateNote(
+                switch (state.result!) {
+                  UsbSelectionRequired(:final message) =>
+                    message ?? '选择 USB 设备，并在手机上允许调试。',
+                  UsbConnected() => 'USB 连接已建立',
+                },
+                icon: switch (state.result!) {
+                  UsbConnected() => LucideIcons.check,
+                  UsbSelectionRequired() => LucideIcons.info,
+                },
+                color: switch (state.result!) {
+                  UsbConnected() => DesignTokens.colorAccentMint,
+                  UsbSelectionRequired() => null,
+                },
+              ),
+              if (state.result case UsbConnected(:final receipt)) ...[
+                const SizedBox(height: DesignTokens.spacingSm),
                 FilledButton(
                   onPressed: () =>
                       WorkspaceRoute(deviceId: receipt.deviceId)
                           .pushReplacement(context),
                   child: const Text('打开设备工作台'),
                 ),
+              ],
             ],
           ),
         ),

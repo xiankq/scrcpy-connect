@@ -2,6 +2,7 @@ package dev.scrcpyconnect.scrcpy_connect
 
 import android.app.Activity
 import android.graphics.Rect
+import android.view.View
 import androidx.core.content.ContextCompat
 import androidx.core.util.Consumer
 import androidx.core.view.ViewCompat
@@ -36,14 +37,17 @@ internal class WindowEnvironmentBridge(
     private var closed = false
     private var latestFeatures: List<DisplayFeature> = emptyList()
     private var latest = snapshot(emptyList())
+    private val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        publishSnapshot()
+    }
     private val listener = Consumer<WindowLayoutInfo> { info ->
         latestFeatures = info.displayFeatures
-        latest = snapshot(info.displayFeatures)
-        sink?.success(latest)
+        publishSnapshot()
     }
 
     init {
         channel.setStreamHandler(this)
+        activity.window.decorView.addOnLayoutChangeListener(layoutListener)
         tracker.addWindowLayoutInfoListener(activity, executor, listener)
     }
 
@@ -60,8 +64,7 @@ internal class WindowEnvironmentBridge(
 
     /** Re-emits mode, bounds and cutouts after an Activity callback. */
     fun refresh() {
-        latest = snapshot(latestFeatures)
-        sink?.success(latest)
+        publishSnapshot()
     }
 
     fun isFor(owner: Activity): Boolean = activity === owner
@@ -69,9 +72,19 @@ internal class WindowEnvironmentBridge(
     fun close() {
         if (closed) return
         closed = true
+        activity.window.decorView.removeOnLayoutChangeListener(layoutListener)
         tracker.removeWindowLayoutInfoListener(listener)
         sink = null
         channel.setStreamHandler(null)
+    }
+
+    private fun publishSnapshot() {
+        // WindowManager only reports folding features. Ordinary rotations and
+        // inset changes arrive through the decor view's completed layout.
+        val next = snapshot(latestFeatures)
+        if (next == latest) return
+        latest = next
+        sink?.success(next)
     }
 
     private fun snapshot(features: List<DisplayFeature>): Map<String, Any> {

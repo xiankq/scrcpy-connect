@@ -52,8 +52,8 @@ class GalleryMediaTile extends StatelessWidget {
                 ),
               if (file.mime.startsWith('video'))
                 const Positioned(
-                  left: 8,
-                  bottom: 8,
+                  left: DesignTokens.spacingXs,
+                  bottom: DesignTokens.spacingXs,
                   child: Icon(
                     LucideIcons.play,
                     color: Colors.white,

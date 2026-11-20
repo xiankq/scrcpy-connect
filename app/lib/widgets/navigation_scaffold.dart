@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:foldable/foldable.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
@@ -7,6 +8,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_press_feedback.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 import 'package:scrcpy_connect/widgets/overlays.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
 
@@ -17,7 +19,7 @@ class NavigationScaffold extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tab = navigationShell.currentIndex;
     final theme = Theme.of(context);
-    final opaque = GlassMaterial.opaque(context);
+    final opaque = opaqueGlass(context);
     final reducedMotion = GlassMaterial.reduceMotion(context);
     final history = useRef(<int>[0]);
     if (history.value.last != tab) history.value.add(tab);
@@ -40,6 +42,93 @@ class NavigationScaffold extends HookConsumerWidget {
       return withBack(navigationShell);
     }
     const destinations = appDestinations;
+    final verticalBar = liquid.GlassVerticalBar.maybeOf(context);
+    final navigationBar = _duoEdgeAttachedBar(
+      verticalBar,
+      child: Visibility(
+        visible: MediaQuery.viewInsetsOf(context).bottom <= 0,
+        maintainState: true,
+        maintainAnimation: true,
+        child: SafeArea(
+          // GlassTabBar's vertical layout owns the physical strip. Applying
+          // the system's lateral inset a second time would push the capsule
+          // back toward the content instead of attaching it to the edge.
+          top: false,
+          left: verticalBar == null,
+          right: verticalBar == null,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              verticalBar == null
+                  ? DesignTokens.spacingMd
+                  : DesignTokens.spacingZero,
+              DesignTokens.spacingZero,
+              verticalBar == null
+                  ? DesignTokens.spacingMd
+                  : DesignTokens.spacingZero,
+              DesignTokens.spacingMd,
+            ),
+            child: liquid.GlassIsolationScope(
+              isolated: true,
+              defaultQuality: GlassMaterial.quality(context),
+              child: liquid.GlassTabBar.bottom(
+                // Keep the package-owned platter alive when accessibility
+                // preferences change; replacing the glass layer here can
+                // drop its sampled surface during the next frame.
+                key: const ValueKey('app-bottom-navigation'),
+                tabs: [
+                  for (final destination in destinations)
+                    liquid.GlassTab(
+                      icon: Icon(destination.$1),
+                      label: destination.$2,
+                    ),
+                ],
+                indicatorExpansion: reducedMotion
+                    ? EdgeInsets.zero
+                    : const EdgeInsets.symmetric(
+                        horizontal: DesignTokens.spacingSm,
+                        vertical: DesignTokens.spacingXs,
+                      ),
+                indicatorPinchStrength: reducedMotion ? 0 : 0.4,
+                magnification: reducedMotion ? 1 : 1.15,
+                selectedIndex: tab,
+                onTabSelected: selectTab,
+                horizontalPadding: 0,
+                verticalPadding: 0,
+                barHeight: GlassMaterial.navigationHeight(context),
+                barBorderRadius: DesignTokens.componentNavigationRounded,
+                tabPadding: const EdgeInsets.symmetric(
+                  horizontal: DesignTokens.componentNavigationPadding,
+                ),
+                iconLabelSpacing: DesignTokens.spacingMicro,
+                iconSize: DesignTokens.componentIconSize,
+                labelFontSize: theme.textTheme.labelLarge!.fontSize!,
+                textStyle: theme.textTheme.labelLarge,
+                selectedIconColor: theme.colorScheme.primary,
+                selectedLabelColor: theme.colorScheme.primary,
+                unselectedIconColor: theme.colorScheme.onSurfaceVariant,
+                unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+                indicatorColor: opaque
+                    ? theme.colorScheme.surfaceContainerHigh
+                    : theme.brightness == Brightness.dark
+                    ? DesignTokens.colorGlassSelectedDark
+                    : DesignTokens.colorGlassSelected,
+                settings: GlassMaterial.navigationTrackSettings(context),
+                quality: GlassMaterial.quality(context),
+                indicatorSettings: GlassMaterial.navigationIndicatorSettings(
+                  context,
+                ),
+                pressScale: reducedMotion
+                    ? 1
+                    : DesignTokens.componentGlassInteractionScale,
+                interactionBehavior: reducedMotion
+                    ? liquid.GlassInteractionBehavior.glowOnly
+                    : liquid.GlassInteractionBehavior.full,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
     return withBack(
       Scaffold(
         extendBody: true,
@@ -47,77 +136,34 @@ class NavigationScaffold extends HookConsumerWidget {
         // Keep the package-owned tab bar mounted while the keyboard changes
         // viewInsets. Offstage removes its layout footprint without tearing
         // down the package state that owns the moving glass indicator.
-        bottomNavigationBar: Visibility(
-          visible: MediaQuery.viewInsetsOf(context).bottom <= 0,
-          maintainState: true,
-          maintainAnimation: true,
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                DesignTokens.spacingMd,
-                DesignTokens.spacingZero,
-                DesignTokens.spacingMd,
-                DesignTokens.spacingMd,
-              ),
-              child: liquid.GlassIsolationScope(
-                isolated: true,
-                defaultQuality: GlassMaterial.quality(context),
-                child: liquid.GlassTabBar.bottom(
-                  // Keep the package-owned platter alive when accessibility
-                  // preferences change; replacing the glass layer here can
-                  // drop its sampled surface during the next frame.
-                  key: const ValueKey('app-bottom-navigation'),
-                  tabs: [
-                    for (final destination in destinations)
-                      liquid.GlassTab(
-                        icon: Icon(destination.$1),
-                        label: destination.$2,
-                      ),
-                  ],
-                  indicatorExpansion: reducedMotion
-                      ? EdgeInsets.zero
-                      : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  indicatorPinchStrength: reducedMotion ? 0 : 0.4,
-                  magnification: reducedMotion ? 1 : 1.15,
-                  selectedIndex: tab,
-                  onTabSelected: selectTab,
-                  horizontalPadding: 0,
-                  verticalPadding: 0,
-                  barHeight: GlassMaterial.navigationHeight(context),
-                  barBorderRadius: DesignTokens.componentNavigationRounded,
-                  tabPadding: const EdgeInsets.symmetric(
-                    horizontal: DesignTokens.componentNavigationPadding,
-                  ),
-                  iconLabelSpacing: DesignTokens.spacingMicro,
-                  iconSize: DesignTokens.componentIconSize,
-                  labelFontSize: theme.textTheme.labelLarge!.fontSize!,
-                  textStyle: theme.textTheme.labelLarge,
-                  selectedIconColor: theme.colorScheme.primary,
-                  selectedLabelColor: theme.colorScheme.primary,
-                  unselectedIconColor: theme.colorScheme.onSurfaceVariant,
-                  unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
-                  indicatorColor: opaque
-                      ? theme.colorScheme.surfaceContainerHigh
-                      : theme.brightness == Brightness.dark
-                      ? DesignTokens.colorGlassSelectedDark
-                      : DesignTokens.colorGlassSelected,
-                  settings: GlassMaterial.navigationBarSettings(context),
-                  quality: GlassMaterial.quality(context),
-                  indicatorSettings: GlassMaterial.navigationIndicatorSettings(
-                    context,
-                  ),
-                  pressScale: reducedMotion
-                      ? 1
-                      : DesignTokens.componentGlassInteractionScale,
-                  interactionBehavior: reducedMotion
-                      ? liquid.GlassInteractionBehavior.glowOnly
-                      : liquid.GlassInteractionBehavior.full,
-                ),
-              ),
-            ),
-          ),
-        ),
+        bottomNavigationBar: navigationBar,
       ),
+    );
+  }
+
+  /// UIKit's inner Duo inset includes the status cluster, so the package's
+  /// vertical layout centres the tab capsule too far inside that reserved
+  /// region. The app nav belongs to the physical edge; keep the original
+  /// inset for page content and give only this bar the measured 84pt strip.
+  Widget _duoEdgeAttachedBar(
+    liquid.GlassVerticalBarData? bar, {
+    required Widget child,
+  }) {
+    if (bar == null || bar.width <= liquid.GlassVerticalBarMetrics.stripWidth) {
+      return child;
+    }
+    return liquid.GlassVerticalBar(
+      data: liquid.GlassVerticalBarData(
+        edge: bar.edge,
+        width: liquid.GlassVerticalBarMetrics.stripWidth,
+        top: bar.top,
+        bottom: bar.bottom,
+        collapsesTabBar: bar.collapsesTabBar,
+        rowTop: bar.rowTop,
+        titleInset: bar.titleInset,
+        systemInset: bar.systemInset,
+      ),
+      child: child,
     );
   }
 }
@@ -134,16 +180,13 @@ class AppNavigationShell extends StatelessWidget {
   final Widget child;
   final Uri uri;
 
+  static _NavigationLayout? _layout(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_NavigationLayout>();
+
   static bool hasSidebar(BuildContext context) =>
-      context
-          .dependOnInheritedWidgetOfExactType<_NavigationLayout>()
-          ?.sidebar ??
-      false;
+      _layout(context)?.sidebar ?? false;
   static bool isVisible(BuildContext context) =>
-      context
-          .dependOnInheritedWidgetOfExactType<_NavigationLayout>()
-          ?.visible ??
-      true;
+      _layout(context)?.visible ?? true;
 
   @override
   Widget build(BuildContext context) {
@@ -154,8 +197,8 @@ class AppNavigationShell extends StatelessWidget {
         ? 1
         : 0;
     return WindowPaneHost(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
+      child: FoldAwareBuilder(
+        builder: (context, constraints, fold) {
           final sizeClass = WindowEnvironment.sizeClassFor(
             constraints.maxWidth,
           );
@@ -168,14 +211,35 @@ class AppNavigationShell extends StatelessWidget {
           // case the single package-owned GlassTabBar moves its tabs into the
           // system strip and an app rail would duplicate navigation.
           final verticalBar = liquid.GlassVerticalBar.maybeOf(context);
+          // The inner Duo display keeps the horizontal tab bar in its upright
+          // pose. Its regular size class must not accidentally become a
+          // tablet rail just because the window is taller than it is wide.
+          final duoInnerPortrait =
+              fold.isFoldable &&
+              fold.isRegularWidth &&
+              constraints.maxHeight > constraints.maxWidth;
+          final divider = windowEnvironmentOf(context).verticalPaneDivider;
           final sidebar =
-              verticalBar == null && sizeClass != WindowSizeClass.compact;
+              verticalBar == null &&
+              !duoInnerPortrait &&
+              (sizeClass != WindowSizeClass.compact || divider != null);
           final compactSidebar = sizeClass == WindowSizeClass.medium;
+          final singlePaneChild = !sidebar && divider != null
+              ? Align(
+                  alignment: Alignment.centerRight,
+                  child: SizedBox(
+                    width: (constraints.maxWidth - divider.left - divider.width)
+                        .clamp(0.0, constraints.maxWidth)
+                        .toDouble(),
+                    child: child,
+                  ),
+                )
+              : child;
           return _NavigationLayout(
             sidebar: sidebar,
             visible: visible,
             child: !sidebar
-                ? child
+                ? singlePaneChild
                 : Scaffold(
                     body: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,

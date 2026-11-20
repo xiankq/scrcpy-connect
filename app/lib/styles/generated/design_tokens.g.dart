@@ -290,6 +290,7 @@ abstract final class DesignTokens {
   static const componentLoadingFlowMintBackgroundColor = Color(0x6181e8ce);
   static const componentLoadingFlowVioletBackgroundColor = Color(0x6bb8a4f5);
   static const componentLoadingFlowWarmBackgroundColor = Color(0x7affbeb8);
+  static const componentLoadingOrbOpacity = 0.32;
   static const componentMediaProtectionBackgroundColor = Color(0x99000000);
   static const componentMediaProtectionHeight = 64.0;
   static const componentModalScrimBackgroundColor = Color(0x4d17171b);
@@ -316,6 +317,9 @@ abstract final class DesignTokens {
   static const componentPhoneWidth = 402.0;
   static const componentRemoteClockHeight = 108.0;
   static const componentRemoteExitBackgroundColor = Color(0x80ffffff);
+  static const componentRemoteExitHandleHeight = 24.0;
+  static const componentRemoteExitHandleRounded = 999.0;
+  static const componentRemoteExitHandleWidth = 2.0;
   static const componentRemoteExitHitHeight = 52.0;
   static const componentRemoteExitHitWidth = 44.0;
   static const componentRemoteExitPadding = 12.0;

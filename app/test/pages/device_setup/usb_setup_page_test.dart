@@ -28,7 +28,7 @@ void main() {
     await tester.pumpWidget(_page(container));
     await tester.pumpAndSettle();
     await tester.tap(find.text('检查连接'));
-    await tester.pumpAndSettle();
+    await tester.pump();
     expect(setup.attempts, hasLength(1));
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -62,7 +62,7 @@ void main() {
     await tester.pumpWidget(_page(container));
     await tester.pumpAndSettle();
     await tester.tap(find.text('检查连接'));
-    await tester.pumpAndSettle();
+    await tester.pump();
     final replacement = _Setup();
     final replacementManagement = _Management();
     container.updateOverrides([
@@ -80,7 +80,7 @@ void main() {
     expect(find.text('retired'), findsNothing);
     expect(devices._refreshes, 0);
     await tester.tap(find.text('检查连接'));
-    await tester.pumpAndSettle();
+    await tester.pump();
     replacement.attempts.single.result.complete(
       const UsbSetupResult.selectionRequired([], message: 'current'),
     );

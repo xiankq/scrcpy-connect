@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/pages/control/widgets/remote_navigation_bar.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 
 void main() {
   testWidgets('uses the design spacing at the 402 point reference width', (
@@ -14,7 +15,10 @@ void main() {
         ..devicePixelRatio = oldRatio;
     });
     tester.view
-      ..physicalSize = const Size(402, 100)
+      ..physicalSize = Size(
+        DesignTokens.componentPhoneWidth,
+        DesignTokens.componentRemoteNavigationHeight,
+      )
       ..devicePixelRatio = 1;
     await tester.pumpWidget(const MaterialApp(home: _Subject()));
 
@@ -25,7 +29,17 @@ void main() {
     ];
 
     expect(find.byType(IconButton), findsNWidgets(3));
-    expect(positions, orderedEquals([89.5, 201, 312.5]));
+    expect(
+      positions,
+      orderedEquals([
+        DesignTokens.componentRemoteNavigationPadding +
+            DesignTokens.componentIconButtonSize / 2,
+        DesignTokens.componentPhoneWidth / 2,
+        DesignTokens.componentPhoneWidth -
+            DesignTokens.componentRemoteNavigationPadding -
+            DesignTokens.componentIconButtonSize / 2,
+      ]),
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -40,11 +54,24 @@ void main() {
         ..devicePixelRatio = oldRatio;
     });
     tester.view
-      ..physicalSize = const Size(240, 100)
+      ..physicalSize = Size(240, DesignTokens.componentRemoteNavigationHeight)
       ..devicePixelRatio = 1;
     await tester.pumpWidget(const MaterialApp(home: _Subject()));
 
     expect(find.byType(IconButton), findsNWidgets(3));
+    final edgePadding = (240 - DesignTokens.componentIconButtonSize * 3) / 4;
+    expect(
+      [
+        tester.getCenter(find.byType(IconButton).at(0)).dx,
+        tester.getCenter(find.byType(IconButton).at(1)).dx,
+        tester.getCenter(find.byType(IconButton).at(2)).dx,
+      ],
+      orderedEquals([
+        edgePadding + DesignTokens.componentIconButtonSize / 2,
+        120,
+        240 - edgePadding - DesignTokens.componentIconButtonSize / 2,
+      ]),
+    );
     expect(tester.takeException(), isNull);
   });
 }

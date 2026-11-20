@@ -62,15 +62,6 @@ import UserNotifications
     if let engine = engine {
       environmentEventHandlers[ObjectIdentifier(engine)] = environmentEvents
     }
-    if #available(iOS 27.1, *) {
-      DispatchQueue.main.async { [weak environmentEvents] in
-        guard let view = windowProvider()?.rootViewController?.view else { return }
-        let interaction = UIHingeInteraction { _, _ in
-          environmentEvents?.emit()
-        }
-        view.addInteraction(interaction)
-      }
-    }
     let platform = FlutterMethodChannel(
       name: "dev.scrcpyconnect/platform", binaryMessenger: messenger)
     platform.setMethodCallHandler { [weak self] call, result in
@@ -127,42 +118,6 @@ import UserNotifications
         "bottom": safe.bottom,
       ],
     ]
-    if #available(iOS 27.1, *) {
-      let divisions = window
-        .reservedRegions(kind: .division, options: [])
-        .filter { $0.isActive }
-      let divisionFeatures = divisions.map { region in
-        let frame = region.frame
-        return [
-          "left": frame.minX,
-          "top": frame.minY,
-          "width": frame.width,
-          "height": frame.height,
-          "type": "fold",
-          "state": frame.width >= frame.height ? "tabletop" : "book",
-          "separating": true,
-        ] as [String: Any]
-      }
-      let occlusionFeatures = window
-        .reservedRegions(kind: .occlusion, options: [])
-        .filter { $0.isActive }
-        .map { region in
-          let frame = region.frame
-          return [
-            "left": frame.minX,
-            "top": frame.minY,
-            "width": frame.width,
-            "height": frame.height,
-            "type": "cutout",
-            "separating": false,
-          ] as [String: Any]
-        }
-      environment["displayFeatures"] = divisionFeatures + occlusionFeatures
-      environment["posture"] = divisions.first.map { region in
-        let frame = region.frame
-        return frame.width >= frame.height ? "tabletop" : "book"
-      } ?? "normal"
-    }
     return environment
   }
 
