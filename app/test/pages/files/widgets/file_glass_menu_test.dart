@@ -41,7 +41,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final menus = tester.widgetList<GlassMenu>(find.byType(GlassMenu));
-    expect(menus, hasLength(2));
+    expect(menus, hasLength(1));
     for (final menu in menus) {
       expect(menu.quality, GlassQuality.minimal);
       expect(menu.settings?.blur, 0);
@@ -50,6 +50,11 @@ void main() {
         ConnectTokens.theme(Brightness.light).colorScheme.surface,
       );
     }
+    await tester.tap(find.byKey(const ValueKey('file-search-type-field')));
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.text('文件类型'), findsOneWidget);
+    expect(find.text('图片'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

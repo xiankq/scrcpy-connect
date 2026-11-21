@@ -22,6 +22,7 @@ import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/documents/document_export_form.dart';
 import 'package:scrcpy_connect/widgets/documents/file_delivery_path.dart';
 import 'package:scrcpy_connect/widgets/documents/original_file_header.dart';
+import 'package:scrcpy_connect/widgets/documents/open_prepared_file.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/widgets/file_transfer_labels.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
@@ -31,7 +32,13 @@ import 'package:scrcpy_connect/widgets/state_note.dart';
 
 /// 准备原件时任务身份保持不变，缓存下载完成后才作为明确系统交付的来源。
 class ReceiveContentPage extends HookConsumerWidget {
-  const ReceiveContentPage({super.key, required this.task, this.share = false});
+  const ReceiveContentPage({
+    super.key,
+    required this.task,
+    this.share = false,
+    this.openAfterTransfer = false,
+  });
+  final bool openAfterTransfer;
   final FileTransferSnapshot task;
   final bool share;
 
@@ -53,7 +60,10 @@ class ReceiveContentPage extends HookConsumerWidget {
     final shareResult = useState<String?>(null);
     final shareReviewed = useState(false);
     final taskId = task.id;
-    final autoShareAttempted = useMemoized(() => <String>{}, [source, taskId]);
+    final autoDeliveryAttempted = useMemoized(() => <String>{}, [
+      source,
+      taskId,
+    ]);
     useEffect(() {
       busy.value = false;
       shareResult.value = null;
@@ -61,7 +71,11 @@ class ReceiveContentPage extends HookConsumerWidget {
       return null;
     }, [owner]);
     return PageFrame(
-      title: share && supportsSystemFileShare ? '分享原文件' : '保存原文件',
+      title: openAfterTransfer
+          ? '取回文件'
+          : share && supportsSystemFileShare
+          ? '分享原文件'
+          : '保存原文件',
       child: AsyncContent<FileTransferSnapshot>(
         loading: query.isLoading,
         data: query.value,
@@ -104,33 +118,57 @@ class ReceiveContentPage extends HookConsumerWidget {
                 }
               }
 
+              Future<void> openFile() async {
+                if (busy.value || !ready) return;
+                busy.value = true;
+                try {
+                  await performAction(
+                    context,
+                    () => openPreparedFile(context, ref, localPath),
+                  );
+                } finally {
+                  if (ownsView()) busy.value = false;
+                }
+              }
+
               final route = ModalRoute.of(context);
               final owned =
                   data.id == taskId &&
                   data.deviceId == task.deviceId &&
                   data.direction == .pull &&
                   data.destinationScope == .privateCache;
-              useEffect(() {
-                if (!owned ||
-                    !ready ||
-                    (!share || !supportsSystemFileShare) ||
-                    current.kind == .directory ||
-                    route?.isCurrent == false ||
-                    autoShareAttempted.contains(taskId)) {
-                  return null;
-                }
-                var active = true;
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (!active ||
-                      !context.mounted ||
+              useEffect(
+                () {
+                  if (!owned ||
+                      !ready ||
+                      (!openAfterTransfer &&
+                          (!share || !supportsSystemFileShare)) ||
+                      current.kind == .directory ||
                       route?.isCurrent == false ||
-                      !autoShareAttempted.add(taskId)) {
-                    return;
+                      autoDeliveryAttempted.contains(taskId)) {
+                    return null;
                   }
-                  unawaited(deliverShare());
-                });
-                return () => active = false;
-              }, [owned, ready, share, taskId, route?.isCurrent]);
+                  var active = true;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!active ||
+                        !context.mounted ||
+                        route?.isCurrent == false ||
+                        !autoDeliveryAttempted.add(taskId)) {
+                      return;
+                    }
+                    unawaited(openAfterTransfer ? openFile() : deliverShare());
+                  });
+                  return () => active = false;
+                },
+                [
+                  owned,
+                  ready,
+                  share,
+                  openAfterTransfer,
+                  taskId,
+                  route?.isCurrent,
+                ],
+              );
               if (data.id != taskId ||
                   data.deviceId != task.deviceId ||
                   data.direction != .pull ||
@@ -142,6 +180,7 @@ class ReceiveContentPage extends HookConsumerWidget {
                 );
               }
               if (ready &&
+                  !openAfterTransfer &&
                   supportsSystemDocumentSave &&
                   (!share || !supportsSystemFileShare)) {
                 return DocumentExportForm(
@@ -288,9 +327,19 @@ class ReceiveContentPage extends HookConsumerWidget {
                       !ready &&
                       isMediaCacheAdmissionFailure((current.errorCode ?? '')))
                     const MediaCacheBlocker(),
-                  if (ready && !share && !supportsSystemDocumentSave)
+                  if (ready && openAfterTransfer && current.kind != .directory)
+                    FilledButton.icon(
+                      onPressed: busy.value ? null : openFile,
+                      icon: const Icon(LucideIcons.externalLink),
+                      label: const Text('使用本机应用打开'),
+                    ),
+                  if (ready &&
+                      !openAfterTransfer &&
+                      !share &&
+                      !supportsSystemDocumentSave)
                     const StateNote('原文件已取回本机暂存；此主控当前通过系统分享交给其他应用保存。'),
                   if (ready &&
+                      !openAfterTransfer &&
                       supportsSystemFileShare &&
                       (share || !supportsSystemDocumentSave) &&
                       current.kind != .directory) ...[
@@ -318,6 +367,7 @@ class ReceiveContentPage extends HookConsumerWidget {
                     ),
                   ],
                   if (ready &&
+                      !openAfterTransfer &&
                       supportsSystemFileShare &&
                       (share || !supportsSystemDocumentSave) &&
                       current.kind == .directory)

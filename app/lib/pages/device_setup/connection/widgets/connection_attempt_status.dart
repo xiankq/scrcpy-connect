@@ -1,9 +1,8 @@
-import 'package:material_ui/material_ui.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/devices/models/device_setup_receipt.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 
 class ConnectionAttemptStatus extends StatelessWidget {
   const ConnectionAttemptStatus({
@@ -17,154 +16,151 @@ class ConnectionAttemptStatus extends StatelessWidget {
     required this.onEdit,
     required this.onRetry,
     required this.onRecheck,
-    required this.onConnectionPort,
     this.failure,
   });
 
   final bool busy, checking, cancelling, paired;
   final String deviceName;
   final SetupIssue? failure;
-  final VoidCallback onCancel, onEdit, onRetry, onRecheck, onConnectionPort;
+  final VoidCallback onCancel, onEdit, onRetry, onRecheck;
 
   @override
   Widget build(BuildContext context) {
     final code = failure?.code ?? '';
-    final mismatched =
+    final identityMismatch =
         code == 'device_identity_mismatch' || code == 'identity_mismatch';
-    final unknown =
+    final needsCheck =
         code.contains('unknown') ||
         code.contains('unconfirmed') ||
         code == 'configuration_unverified';
-    final authorization =
-        code == 'authorization_required' || code == 'auth_failed';
-    final title = mismatched
-        ? '设备身份不符'
-        : unknown
-        ? '连接结果待确认'
-        : paired
-        ? '已配对，尚未连接'
-        : authorization
-        ? '请在手机上允许调试连接'
-        : '连接未完成';
-    final message = mismatched
-        ? '响应设备与已保存设备不一致，请核对目标并修改连接信息。'
-        : unknown
-        ? '尚未确认本次连接结果。重新核对只检查当前状态，不会重发连接请求。'
-        : paired && failure == null
-        ? '配对授权已保留，请补充手机无线调试主页面的连接端口。'
-        : failure?.message ?? '尚未确认连接可用，请检查地址、端口和手机授权。';
-    final text = Theme.of(context).textTheme;
-    final colors = Theme.of(context).colorScheme;
+    final pending = busy || checking || cancelling;
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final accent = pending
+        ? dark
+              ? DesignTokens.componentConnectionSignalDarkBackgroundColor
+              : DesignTokens.componentConnectionSignalBackgroundColor
+        : theme.colorScheme.error;
+    final title = cancelling
+        ? '正在取消连接'
+        : pending
+        ? '正在连接'
+        : '连接失败';
+    final subtitle = pending
+        ? deviceName.isNotEmpty
+              ? deviceName
+              : '正在与设备建立连接'
+        : identityMismatch
+        ? '设备身份与保存的记录不一致。请核对连接信息。'
+        : failure?.message ?? '暂时未能连上手机。请检查网络和调试授权。';
+
     return Scaffold(
-      body: Semantics(
-        label: busy ? '正在连接设备 $deviceName' : '$title，$deviceName',
-        liveRegion: true,
-        child: Stack(
+      body: SafeArea(
+        child: Column(
           children: [
-            if (busy)
-              Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CircularProgressIndicator(),
-                    const SizedBox(height: DesignTokens.spacingMd),
-                    Text('正在连接设备…', style: text.bodyMedium),
-                  ],
-                ),
-              ),
-            if (!busy)
-              Positioned.fill(
-                child: SafeArea(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) => SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(
-                        DesignTokens.spacingLg,
-                        DesignTokens.componentIconButtonSize +
-                            DesignTokens.spacingLg,
-                        DesignTokens.spacingLg,
-                        DesignTokens.spacingLg,
-                      ),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight:
-                              (constraints.maxHeight -
-                                      DesignTokens.componentIconButtonSize -
-                                      DesignTokens.spacingLg * 2)
-                                  .clamp(0, double.infinity),
-                        ),
-                        child: Center(
+            Expanded(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(DesignTokens.spacingLg),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 440),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ExcludeSemantics(
                           child: ConstrainedBox(
-                            constraints: const BoxConstraints(
-                              maxWidth:
-                                  DesignTokens.componentPageContentMaxWidth,
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                            constraints: const BoxConstraints(maxWidth: 296),
+                            child: Row(
                               children: [
-                                Text(
-                                  title,
-                                  style: text.titleLarge?.copyWith(
-                                    color: colors.onSurface,
+                                _ConnectionEndpoint(icon: LucideIcons.monitor),
+                                Expanded(
+                                  child: Divider(
+                                    color: accent.withValues(alpha: .45),
                                   ),
                                 ),
-                                const SizedBox(height: DesignTokens.spacingSm),
-                                Text(
-                                  message,
-                                  style: text.bodyLarge?.copyWith(
-                                    color: colors.onSurfaceVariant,
+                                DecoratedBox(
+                                  decoration: ShapeDecoration(
+                                    color: theme.colorScheme.surface,
+                                    shape: const CircleBorder(),
                                   ),
-                                ),
-                                const SizedBox(height: DesignTokens.spacingLg),
-                                if (!mismatched)
-                                  TextButton(
-                                    onPressed: checking
-                                        ? null
-                                        : unknown
-                                        ? onRecheck
-                                        : paired
-                                        ? onConnectionPort
-                                        : onRetry,
-                                    child: Text(
-                                      checking
-                                          ? '正在核对…'
-                                          : unknown
-                                          ? '重新核对'
-                                          : paired
-                                          ? '补充连接端口'
-                                          : authorization
-                                          ? '重新检查'
-                                          : '重试',
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(
+                                      DesignTokens.spacingSm,
                                     ),
+                                    child: pending
+                                        ? ContentLoadingIndicator(
+                                            size: DesignTokens
+                                                .componentIconActionSize,
+                                            color: accent,
+                                          )
+                                        : Icon(
+                                            LucideIcons.unlink,
+                                            color: accent,
+                                            size: DesignTokens
+                                                .componentIconActionSize,
+                                          ),
                                   ),
-                                TextButton(
-                                  onPressed: checking ? null : onEdit,
-                                  child: Text(
-                                    mismatched ||
-                                            (!unknown &&
-                                                !paired &&
-                                                !authorization)
-                                        ? '返回修改'
-                                        : '返回',
+                                ),
+                                Expanded(
+                                  child: Divider(
+                                    color: accent.withValues(alpha: .45),
                                   ),
+                                ),
+                                _ConnectionEndpoint(
+                                  icon: LucideIcons.smartphone,
                                 ),
                               ],
                             ),
                           ),
                         ),
-                      ),
+                        const SizedBox(height: DesignTokens.spacingXl),
+                        Semantics(
+                          liveRegion: true,
+                          child: Text(
+                            title,
+                            style: theme.textTheme.headlineMedium,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        const SizedBox(height: DesignTokens.spacingXs),
+                        Text(
+                          subtitle,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
-            Positioned(
-              top: MediaQuery.paddingOf(context).top + DesignTokens.spacingMd,
-              left: DesignTokens.spacingMd,
-              child: GlassSurfaceGroup(
-                child: GlassActionIcon(
-                  tooltip: cancelling ? '正在取消…' : '关闭',
-                  icon: const Icon(LucideIcons.x),
-                  onPressed: cancelling ? null : onCancel,
+            ),
+            Padding(
+              padding: const EdgeInsets.all(DesignTokens.spacingMd),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: pending
+                      ? OutlinedButton(
+                          onPressed: cancelling ? null : onCancel,
+                          child: const Text('取消连接'),
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (!identityMismatch && !paired)
+                              FilledButton(
+                                onPressed: needsCheck ? onRecheck : onRetry,
+                                child: Text(needsCheck ? '重新检查' : '重试'),
+                              ),
+                            TextButton(
+                              onPressed: onEdit,
+                              child: const Text('返回修改'),
+                            ),
+                          ],
+                        ),
                 ),
               ),
             ),
@@ -173,4 +169,21 @@ class ConnectionAttemptStatus extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ConnectionEndpoint extends StatelessWidget {
+  const _ConnectionEndpoint({required this.icon});
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
+      color: Theme.of(context).colorScheme.surface,
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(DesignTokens.spacingMd),
+      child: Icon(icon, size: DesignTokens.componentIconLargeSize),
+    ),
+  );
 }

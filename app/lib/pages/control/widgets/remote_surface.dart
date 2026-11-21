@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -9,7 +8,9 @@ import 'package:scrcpy_connect/pages/control/remote_input_owner.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/ambient_loading_field.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/overlays.dart';
 
 class RemoteSurface extends StatelessWidget {
@@ -70,6 +71,7 @@ class RemoteStage extends StatelessWidget {
     required this.sensitive,
     required this.inputFocus,
     required this.needsWake,
+    required this.screenOff,
     required this.onWake,
     required this.onClose,
     required this.controls,
@@ -79,7 +81,7 @@ class RemoteStage extends StatelessWidget {
   final RemoteInputOwner inputs;
   final ValueChanged<Size> onViewport;
   final String deviceLabel;
-  final bool independent, ime, sensitive, needsWake;
+  final bool independent, ime, sensitive, needsWake, screenOff;
   final FocusNode inputFocus;
   final VoidCallback? onWake, onClose;
   final Widget recovery, controls;
@@ -94,11 +96,7 @@ class RemoteStage extends StatelessWidget {
         presentation.stateUnverified ||
         presentation.appLaunchUnknown;
     final stage = abnormal
-        ? presentation.connecting
-              ? '正在核对屏幕启动结果'
-              : presentation.stateUnverified || presentation.appLaunchUnknown
-              ? '屏幕启动结果待核对'
-              : '屏幕启动未完成'
+        ? '无法打开'
         : independent
         ? '正在打开独立窗口'
         : '正在打开手机屏幕';
@@ -106,21 +104,28 @@ class RemoteStage extends StatelessWidget {
       children: [
         Positioned.fill(
           child: RemoteSurface(
-            textureId: presentation.session?.textureId,
+            textureId: screenOff ? null : presentation.session?.textureId,
             sourceSize: Size(presentation.imageWidth, presentation.imageHeight),
             inputs: inputs,
             onViewport: onViewport,
           ),
         ),
-        if (loading)
+        if (loading && !screenOff)
           Positioned.fill(
             key: const ValueKey('remote-first-frame-wait'),
             child: AmbientLoadingField(
               semanticsLabel: '$deviceLabel，$stage',
               animating:
                   !abnormal && presentation.connecting && !presentation.exiting,
-              showParticles: !abnormal && !presentation.exiting,
-              overlay: abnormal ? recovery : null,
+              showParticles: false,
+              overlay: abnormal
+                  ? recovery
+                  : Center(
+                      child: ContentLoadingIndicator(
+                        size: DesignTokens.componentIconLargeSize,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
             ),
           ),
         if (presentation.qualityRebuilding)
@@ -138,9 +143,40 @@ class RemoteStage extends StatelessWidget {
           ),
         if (!loading &&
             !presentation.connecting &&
-            (presentation.error != null || presentation.paused) &&
+            (presentation.error != null ||
+                presentation.stateUnverified ||
+                presentation.appLaunchUnknown ||
+                presentation.sessionEnded) &&
+            !needsWake &&
             presentation.errorCode != 'device_asleep')
-          recovery,
+          recovery
+        else if (!loading && presentation.paused && !screenOff)
+          const Align(
+            alignment: Alignment.topCenter,
+            child: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(top: DesignTokens.spacingXs),
+                child: ContentSurface(
+                  radius: DesignTokens.roundedFull,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: DesignTokens.spacingSm,
+                    vertical: DesignTokens.spacingXxs,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        LucideIcons.pause,
+                        size: DesignTokens.componentIconSmallSize,
+                      ),
+                      SizedBox(width: DesignTokens.spacingXxs),
+                      Text('已暂停'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         if (ime)
           Positioned(
             left: 0,
@@ -167,20 +203,15 @@ class RemoteStage extends StatelessWidget {
             ),
           ),
         if (needsWake)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: math.max(MediaQuery.paddingOf(context).bottom, 24) + 48,
-            child: Center(
-              child: GlassActionIcon(
-                tooltip: '点亮屏幕',
+          Center(
+            child: Tooltip(
+              message: '点亮屏幕',
+              excludeFromSemantics: true,
+              child: GlassToolbarIconButton(
+                variant: GlassVariant.clear,
+                semanticLabel: '点亮屏幕',
                 onPressed: onWake,
-                icon: Icon(
-                  LucideIcons.sun,
-                  color: loading
-                      ? Theme.of(context).colorScheme.onSurface
-                      : Colors.white,
-                ),
+                icon: const Icon(LucideIcons.sun, color: Colors.white),
               ),
             ),
           ),
@@ -188,15 +219,15 @@ class RemoteStage extends StatelessWidget {
           Positioned(
             left: MediaQuery.paddingOf(context).left + 20,
             top: MediaQuery.paddingOf(context).top + 12,
-            child: GlassActionIcon(
-              key: const ValueKey('remote-first-frame-close'),
-              tooltip: '关闭等待',
-              onPressed: onClose,
-              constraints: const BoxConstraints.tightFor(
-                width: DesignTokens.componentIconButtonSize,
-                height: DesignTokens.componentIconButtonSize,
+            child: Tooltip(
+              message: '关闭等待',
+              excludeFromSemantics: true,
+              child: GlassToolbarIconButton(
+                key: const ValueKey('remote-first-frame-close'),
+                semanticLabel: '关闭等待',
+                onPressed: onClose,
+                icon: const Icon(LucideIcons.x),
               ),
-              icon: const Icon(LucideIcons.x),
             ),
           )
         else

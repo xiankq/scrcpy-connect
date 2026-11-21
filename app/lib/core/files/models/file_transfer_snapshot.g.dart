@@ -53,6 +53,7 @@ _FileTransferSnapshot _$FileTransferSnapshotFromJson(
   exportReason: json['exportReason'] as String?,
   saveMode: json['saveMode'] as String?,
   cleanupPending: json['cleanupPending'] as bool? ?? false,
+  historyHidden: json['historyHidden'] as bool? ?? false,
   partialDestinationPossible:
       json['partialDestinationPossible'] as bool? ?? false,
   treeVerified: json['treeVerified'] as bool? ?? false,
@@ -109,6 +110,7 @@ Map<String, dynamic> _$FileTransferSnapshotToJson(
   'exportReason': instance.exportReason,
   'saveMode': instance.saveMode,
   'cleanupPending': instance.cleanupPending,
+  'historyHidden': instance.historyHidden,
   'partialDestinationPossible': instance.partialDestinationPossible,
   'treeVerified': instance.treeVerified,
   'treeComplete': instance.treeComplete,

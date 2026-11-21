@@ -329,12 +329,19 @@ class FilesPage extends HookConsumerWidget {
             }
           },
           child: PageFrame(
-            title: selecting.value ? '已选择 ${selected.value.length} 项' : '文件管理',
+            title: selecting.value
+                ? '已选择 ${selected.value.length} 项'
+                : atStorageRoot
+                ? '文件'
+                : p.posix.basename(path.value),
             leading: selecting.value
-                ? GlassActionIcon(
-                    tooltip: '退出选择',
-                    onPressed: exitSelection,
-                    icon: const Icon(LucideIcons.x),
+                ? Tooltip(
+                    message: '退出选择',
+                    child: GlassToolbarIconButton(
+                      semanticLabel: '退出选择',
+                      onPressed: exitSelection,
+                      icon: const Icon(LucideIcons.x),
+                    ),
                   )
                 : null,
             backgroundColor: Theme.of(context).colorScheme.surface,
@@ -357,7 +364,7 @@ class FilesPage extends HookConsumerWidget {
                       },
                       icon: Icon(
                         allSelected
-                            ? LucideIcons.listX
+                            ? LucideIcons.squareMinus
                             : LucideIcons.listChecks,
                       ),
                     ),
@@ -372,75 +379,6 @@ class FilesPage extends HookConsumerWidget {
                               path: path.value,
                             ).push<void>(context),
                       icon: const Icon(LucideIcons.search),
-                    ),
-                    FileViewMenuButton(
-                      viewMode: viewMode,
-                      sortKey: sortKey,
-                      ascending: ascending,
-                      onViewModeChanged: (next) => unawaited(
-                        updateBrowserPreferences(
-                          PreferenceChanges(fileViewMode: next),
-                        ),
-                      ),
-                      onSortKeyChanged: (next) => unawaited(
-                        updateBrowserPreferences(
-                          PreferenceChanges(fileSortKey: next),
-                        ),
-                      ),
-                      onAscendingChanged: (next) => unawaited(
-                        updateBrowserPreferences(
-                          PreferenceChanges(fileSortAscending: next),
-                        ),
-                      ),
-                    ),
-                    GlassMenuButton(
-                      tooltip: '更多文件操作',
-                      icon: const Icon(LucideIcons.ellipsisVertical),
-                      actions: [
-                        GlassMenuAction(
-                          label: '选择',
-                          icon: const Icon(LucideIcons.squareCheck),
-                          onPressed: () => selecting.value = true,
-                        ),
-                        GlassMenuAction(
-                          label: '新建文件夹',
-                          icon: const Icon(LucideIcons.folderPlus),
-                          onPressed: busy || !verified
-                              ? null
-                              : () async {
-                                  final name = await askText(
-                                    context,
-                                    title: '新建文件夹',
-                                    label: '文件夹名称',
-                                    action: '创建',
-                                  );
-                                  if (name == null || !context.mounted) return;
-                                  if (name.isEmpty ||
-                                      name.contains('/') ||
-                                      name == '.' ||
-                                      name == '..') {
-                                    feedback(context, '文件夹名称不能包含路径分隔符');
-                                    return;
-                                  }
-                                  await mutate(
-                                    () => actions.createDirectory(name),
-                                  );
-                                },
-                        ),
-                        GlassMenuAction(
-                          label: '发送本机文件',
-                          icon: const Icon(LucideIcons.upload),
-                          onPressed: busy || !verified ? null : upload,
-                        ),
-                        if (Platform.isAndroid || Platform.isLinux)
-                          GlassMenuAction(
-                            label: '发送本机文件夹',
-                            icon: const Icon(LucideIcons.folderUp),
-                            onPressed: busy || !verified
-                                ? null
-                                : uploadDirectory,
-                          ),
-                      ],
                     ),
                   ],
             bottomRadius: DesignTokens.roundedFull,
@@ -484,8 +422,8 @@ class FilesPage extends HookConsumerWidget {
                             if (await confirm(
                                   context,
                                   '删除 ${chosen.length} 项？',
-                                  '将从 ${deviceName(device)} 的 ${path.value} 删除所选内容。此操作无法在本应用撤销，若结果未知请重新检查目录。',
-                                  action: '删除',
+                                  '将从 ${deviceName(device)} 的 ${path.value} 删除所选内容。',
+                                  action: '同意',
                                   danger: true,
                                 ) &&
                                 context.mounted) {
@@ -529,7 +467,112 @@ class FilesPage extends HookConsumerWidget {
                       ),
                     ),
                   )
-                : null,
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: '发送本机文件',
+                              onPressed: busy || !verified ? null : upload,
+                              icon: const Icon(LucideIcons.upload),
+                            ),
+                            const Text('发送'),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            FileViewMenuButton(
+                              viewMode: viewMode,
+                              sortKey: sortKey,
+                              ascending: ascending,
+                              onViewModeChanged: (next) => unawaited(
+                                updateBrowserPreferences(
+                                  PreferenceChanges(fileViewMode: next),
+                                ),
+                              ),
+                              onSortKeyChanged: (next) => unawaited(
+                                updateBrowserPreferences(
+                                  PreferenceChanges(fileSortKey: next),
+                                ),
+                              ),
+                              onAscendingChanged: (next) => unawaited(
+                                updateBrowserPreferences(
+                                  PreferenceChanges(fileSortAscending: next),
+                                ),
+                              ),
+                            ),
+                            const Text('视图与排序', textAlign: TextAlign.center),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            GlassMenuButton(
+                              tooltip: '更多文件操作',
+                              icon: const Icon(LucideIcons.ellipsisVertical),
+                              actions: [
+                                GlassMenuAction(
+                                  label: '选择',
+                                  icon: const Icon(LucideIcons.squareCheck),
+                                  onPressed: () => selecting.value = true,
+                                ),
+                                GlassMenuAction(
+                                  label: '新建文件夹',
+                                  icon: const Icon(LucideIcons.folderPlus),
+                                  onPressed: busy || !verified
+                                      ? null
+                                      : () async {
+                                          final name = await askText(
+                                            context,
+                                            title: '新建文件夹',
+                                            label: '文件夹名称',
+                                            action: '创建',
+                                          );
+                                          if (name == null ||
+                                              !context.mounted) {
+                                            return;
+                                          }
+                                          if (name.isEmpty ||
+                                              name.contains('/') ||
+                                              name == '.' ||
+                                              name == '..') {
+                                            feedback(context, '文件夹名称不能包含路径分隔符');
+                                            return;
+                                          }
+                                          await mutate(
+                                            () => actions.createDirectory(name),
+                                          );
+                                        },
+                                ),
+                                GlassMenuAction(
+                                  label: '发送本机文件',
+                                  icon: const Icon(LucideIcons.upload),
+                                  onPressed: busy || !verified ? null : upload,
+                                ),
+                                if (Platform.isAndroid || Platform.isLinux)
+                                  GlassMenuAction(
+                                    label: '发送本机文件夹',
+                                    icon: const Icon(LucideIcons.folderUp),
+                                    onPressed: busy || !verified
+                                        ? null
+                                        : uploadDirectory,
+                                  ),
+                              ],
+                            ),
+                            const Text('更多'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
             child: data == null
                 ? PageChromeBody(
                     child: query.loading
@@ -565,12 +608,13 @@ class FilesPage extends HookConsumerWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                DeviceSourceRow(
-                                  device: currentDevice ?? device,
-                                  padding: const EdgeInsets.only(
-                                    bottom: DesignTokens.spacingSm,
+                                if (!connected)
+                                  DeviceSourceRow(
+                                    device: currentDevice ?? device,
+                                    padding: const EdgeInsets.only(
+                                      bottom: DesignTokens.spacingSm,
+                                    ),
                                   ),
-                                ),
                                 if (!verified)
                                   StateNote(
                                     !connected
@@ -583,54 +627,62 @@ class FilesPage extends HookConsumerWidget {
                                   const StateNote(
                                     '部分所选项未出现在本次已核验范围，已保留选择并暂停批量操作。可重新全选当前已加载范围，或退出选择后刷新核验。',
                                   ),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: FileBreadcrumbs(
-                                        path: path.value,
-                                        onSelected: selecting.value
-                                            ? null
-                                            : openDirectory,
+                                if (!atStorageRoot)
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: FileBreadcrumbs(
+                                          path: path.value,
+                                          onSelected: selecting.value
+                                              ? null
+                                              : openDirectory,
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(
-                                      width: DesignTokens.spacingXs,
-                                    ),
-                                    GlassActionIcon(
-                                      tooltip: '刷新目录',
-                                      onPressed: busy || selecting.value
-                                          ? null
-                                          : () {
-                                              selected.value = {};
-                                              refresh();
-                                            },
-                                      icon: const Icon(LucideIcons.refreshCw),
-                                      iconSize:
-                                          DesignTokens.componentIconSmallSize +
-                                          DesignTokens.spacingMicro,
-                                      padding: EdgeInsets.zero,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                      constraints:
-                                          const BoxConstraints.tightFor(
-                                            width: DesignTokens
-                                                .componentSmallButtonSize,
-                                            height: DesignTokens
-                                                .componentSmallButtonSize,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                                if (atStorageRoot) ...[
-                                  const SizedBox(
-                                    height: DesignTokens.spacingMd,
+                                      const SizedBox(
+                                        width: DesignTokens.spacingXs,
+                                      ),
+                                      GlassActionIcon(
+                                        tooltip: '刷新目录',
+                                        onPressed: busy || selecting.value
+                                            ? null
+                                            : () {
+                                                selected.value = {};
+                                                refresh();
+                                              },
+                                        icon: const Icon(LucideIcons.refreshCw),
+                                        iconSize:
+                                            DesignTokens
+                                                .componentIconSmallSize +
+                                            DesignTokens.spacingMicro,
+                                        padding: EdgeInsets.zero,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                        constraints:
+                                            const BoxConstraints.tightFor(
+                                              width: DesignTokens
+                                                  .componentSmallButtonSize,
+                                              height: DesignTokens
+                                                  .componentSmallButtonSize,
+                                            ),
+                                      ),
+                                    ],
                                   ),
+                                if (atStorageRoot) ...[
                                   FileTypeFilterGrid(
                                     selected: typeFilter.value,
                                     onSelected: selecting.value
                                         ? null
                                         : (next) => typeFilter.value = next,
+                                  ),
+                                  const SizedBox(
+                                    height: DesignTokens.spacingMd,
+                                  ),
+                                  Text(
+                                    '手机存储',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium,
                                   ),
                                 ],
                                 if (data.hasMore || data.truncated)

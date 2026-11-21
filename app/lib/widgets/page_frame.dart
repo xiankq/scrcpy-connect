@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:material_ui/material_ui.dart';
@@ -16,11 +18,13 @@ class PageFrame extends StatefulWidget {
     required this.title,
     required this.child,
     this.root = false,
+    this.pane = false,
     this.titleContent,
     this.actions,
     this.trailingAction,
     this.bottom,
     this.bottomRadius = DesignTokens.roundedLg,
+    this.bottomGlass = true,
     this.onBack,
     this.leading,
     this.backgroundColor,
@@ -28,11 +32,13 @@ class PageFrame extends StatefulWidget {
   final String title;
   final Widget child;
   final bool root;
+  final bool pane;
   final Widget? titleContent;
   final List<Widget>? actions;
   final Widget? trailingAction;
   final Widget? bottom;
   final double bottomRadius;
+  final bool bottomGlass;
   final VoidCallback? onBack;
   final Widget? leading;
   final Color? backgroundColor;
@@ -114,30 +120,43 @@ class _PageFrameState extends State<PageFrame> {
       final router = GoRouter.maybeOf(context);
       final hasBack =
           widget.leading != null ||
-          !widget.root &&
-              router != null &&
-              (router.canPop() ||
-                  ![
-                    '/devices',
-                    '/transfers',
-                    '/settings',
-                  ].contains(router.routeInformationProvider.value.uri.path));
+          (widget.onBack != null ||
+              !widget.root &&
+                  !widget.pane &&
+                  router != null &&
+                  (router.canPop() ||
+                      !['/devices', '/transfers', '/settings'].contains(
+                        router.routeInformationProvider.value.uri.path,
+                      )));
       // A desktop/freeform window owns its workspace chrome for every route,
       // including detail pages. Keeping the root-only guard here makes a
       // narrow desktop detail window regress to a phone-style AppBar.
-      final workspaceToolbar = windowEnvironmentOf(context)
-          .usesWorkspaceToolbar;
-      final verticalBar = workspaceToolbar
-          ? null
-          : liquid.GlassVerticalBar.maybeOf(context);
+      final platformBar = liquid.GlassVerticalBar.maybeOf(context);
+      final workspaceToolbar =
+          widget.pane ||
+          (platformBar == null &&
+              windowEnvironmentOf(context).usesWorkspaceToolbar);
+      final verticalBar = workspaceToolbar ? null : platformBar;
       final toolbarHeight = _toolbarHeight(
         context,
         constraints,
         includeActions: verticalBar == null,
       );
-      final top = workspaceToolbar
+      final safe = MediaQuery.paddingOf(context);
+      final extraTop = verticalBar == null
           ? 0.0
-          : MediaQuery.paddingOf(context).top + toolbarHeight;
+          : math.max(0.0, verticalBar.rowTop - safe.top);
+      final extraSide = verticalBar == null
+          ? 0.0
+          : math.max(
+              0.0,
+              verticalBar.width -
+                  (verticalBar.edge == liquid.GlassVerticalBarEdge.leading
+                      ? safe.left
+                      : safe.right) +
+                  DesignTokens.spacingSm,
+            );
+      final top = workspaceToolbar ? 0.0 : safe.top + toolbarHeight + extraTop;
       final backLabel = MaterialLocalizations.of(context).backButtonTooltip;
       final onBack = widget.onBack ?? () => closePage<void>(context);
       final reduceMotion = GlassMaterial.reduceMotion(context);
@@ -149,9 +168,14 @@ class _PageFrameState extends State<PageFrame> {
         scrolledUnderElevation: 0,
         forceMaterialTransparency: true,
         automaticallyImplyLeading: false,
+        centerTitle: false,
         leadingWidth:
             DesignTokens.spacingMd + DesignTokens.componentIconButtonSize,
-        titleSpacing: hasBack ? DesignTokens.spacingSm : DesignTokens.spacingMd,
+        titleSpacing: hasBack
+            ? DesignTokens.spacingSm
+            : widget.root
+            ? DesignTokens.spacingLg
+            : DesignTokens.spacingMd,
         leading: verticalBar != null
             ? null
             : widget.leading ??
@@ -163,6 +187,7 @@ class _PageFrameState extends State<PageFrame> {
                           child: Center(
                             child: Tooltip(
                               message: backLabel,
+                              excludeFromSemantics: true,
                               child: GlassToolbarIconButton(
                                 semanticLabel: backLabel,
                                 interactionScale: reduceMotion
@@ -214,7 +239,7 @@ class _PageFrameState extends State<PageFrame> {
         appBar: workspaceToolbar
             ? null
             : PreferredSize(
-                preferredSize: appBar.preferredSize,
+                preferredSize: Size.fromHeight(toolbarHeight + extraTop),
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
                   excludeFromSemantics: true,
@@ -239,7 +264,22 @@ class _PageFrameState extends State<PageFrame> {
                       // independently interactive buttons own glass surfaces;
                       // a glass parent would clip their optical overshoot and
                       // turn the whole navigation strip into a frosted panel.
-                      child: appBar,
+                      child: Padding(
+                        padding: EdgeInsets.only(
+                          top: extraTop,
+                          left:
+                              verticalBar?.edge ==
+                                  liquid.GlassVerticalBarEdge.leading
+                              ? extraSide
+                              : 0,
+                          right:
+                              verticalBar?.edge ==
+                                  liquid.GlassVerticalBarEdge.trailing
+                              ? extraSide
+                              : 0,
+                        ),
+                        child: appBar,
+                      ),
                     ),
                   ),
                 ),
@@ -258,6 +298,14 @@ class _PageFrameState extends State<PageFrame> {
             child: SafeArea(
               top: false,
               bottom: false,
+              minimum: EdgeInsets.only(
+                left: verticalBar?.edge == liquid.GlassVerticalBarEdge.leading
+                    ? safe.left + extraSide
+                    : 0,
+                right: verticalBar?.edge == liquid.GlassVerticalBarEdge.trailing
+                    ? safe.right + extraSide
+                    : 0,
+              ),
               child: Align(
                 alignment: Alignment.topCenter,
                 child: Column(
@@ -346,13 +394,20 @@ class _PageFrameState extends State<PageFrame> {
                           DesignTokens.spacingMd,
                           DesignTokens.spacingMd,
                         ),
-                        child: Glass(
-                          radius: widget.bottomRadius,
-                          padding: const EdgeInsets.all(DesignTokens.spacingSm),
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: widget.bottom!,
-                          ),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: widget.bottomGlass
+                              ? Glass(
+                                  radius: widget.bottomRadius,
+                                  padding: const EdgeInsets.all(
+                                    DesignTokens.spacingSm,
+                                  ),
+                                  child: SizedBox(
+                                    width: double.infinity,
+                                    child: widget.bottom!,
+                                  ),
+                                )
+                              : widget.bottom!,
                         ),
                       ),
                     ),
@@ -462,6 +517,7 @@ class _WorkspaceToolbar extends StatelessWidget {
             else if (hasBack)
               Tooltip(
                 message: backLabel,
+                excludeFromSemantics: true,
                 child: GlassToolbarIconButton(
                   semanticLabel: backLabel,
                   interactionScale: reduceMotion

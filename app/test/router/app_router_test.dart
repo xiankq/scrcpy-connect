@@ -9,6 +9,12 @@ import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_state.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
 import 'package:scrcpy_connect/core/platform/platform_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/platform/background_control.dart';
+import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
+import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
+import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/settings/settings_management.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences_state.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/pages/control/control_page.dart';
@@ -28,6 +34,10 @@ void main() {
           deviceListProvider.overrideWith(_Devices.new),
           recoveryStateProvider.overrideWith(_Recovery.new),
           preferencesProvider.overrideWith(_Preferences.new),
+          runtimeEventsProvider.overrideWithValue(const Stream.empty()),
+          appSnapshotProvider.overrideWithValue(AppState(loading: false)),
+          settingsManagementProvider.overrideWithValue(_Settings()),
+          backgroundControlProvider.overrideWithValue(_Background()),
           appInfoReaderProvider.overrideWithValue(
             () async => throw StateError('unused'),
           ),
@@ -44,8 +54,8 @@ void main() {
     await tester.restoreFrom(data);
     await _settle(tester);
     expect(tester.takeException(), isNull);
-    expect(find.text('添加你的第一台设备'), findsOneWidget);
-    tester.widget<TextField>(find.byType(TextField)).controller!.text = 'AVD';
+    expect(find.text('AVD'), findsOneWidget);
+    tester.widget<TextField>(find.byType(TextField)).controller!.text = '测试';
     await tester.pump();
     router.go(const SettingsRoute().location);
     await _settle(tester);
@@ -53,13 +63,16 @@ void main() {
     await _settle(tester);
     expect(
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
-      'AVD',
+      '测试',
     );
     router.go(const SettingsRoute().location);
     await _settle(tester);
     await tester.restartAndRestore();
     await _settle(tester);
     expect(find.text('外观'), findsOneWidget);
+    expect(find.text('使用偏好'), findsOneWidget);
+    expect(find.text('本机数据'), findsOneWidget);
+    expect(find.text('后台运行资格'), findsOneWidget);
     unawaited(router.push<void>(const RouteErrorRoute().location));
     await _settle(tester);
     await tester.restartAndRestore();
@@ -194,10 +207,27 @@ class _Recovery extends RecoveryStateNotifier {
 
 class _Devices extends DeviceListNotifier {
   @override
-  DeviceListState build() => DeviceListState(loading: false);
+  DeviceListState build() => DeviceListState(
+    loading: false,
+    devices: const [DeviceSnapshot(id: 'avd', name: 'AVD')],
+  );
 }
 
 class _Preferences extends PreferencesNotifier {
   @override
   PreferencesState build() => PreferencesState();
+}
+
+class _Settings implements SettingsManagement {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _Background implements BackgroundControl {
+  @override
+  Future<BackgroundStatus> readBackgroundStatus() async =>
+      const BackgroundStatus();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

@@ -6,7 +6,6 @@
 npm ci --ignore-scripts --prefix scripts/design_tokens
 node scripts/design_tokens/generate.mjs
 node scripts/design_tokens/generate.mjs --check
-npm test --prefix scripts/design_tokens
 npm run lint --prefix scripts/design_tokens
 ```
 

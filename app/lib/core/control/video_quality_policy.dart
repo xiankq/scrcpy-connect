@@ -53,7 +53,7 @@ class VideoQualityPolicy {
           ? inherited.videoEncoder?.name
           : patch.encoder!.name,
     );
-    if (quality.maxSize < 320 ||
+    if ((quality.maxSize != 0 && quality.maxSize < 320) ||
         quality.maxSize > 4096 ||
         quality.maxFps < 1 ||
         quality.maxFps > 120 ||

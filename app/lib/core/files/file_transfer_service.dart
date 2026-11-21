@@ -439,6 +439,7 @@ class FileTransferService implements FileTransfers {
       errorCode: record.errorCode,
       saveMode: record.saveMode,
       cleanupPending: record.cleanupPending,
+      historyHidden: record.historyHidden,
       partialDestinationPossible: record.partialDestinationPossible,
       treeVerified: record.treeVerified,
       treeComplete: record.treeComplete,
@@ -1600,6 +1601,7 @@ class FileTransferService implements FileTransfers {
       task.record = task.record.copyWith(
         policy: selectedPolicy,
         generation: task.record.generation + 1,
+        historyHidden: false,
         status: FileTransferStatus.queued,
         error: null,
         errorCode: null,
@@ -1696,6 +1698,62 @@ class FileTransferService implements FileTransfers {
     }
   }
 
+  @override
+  Future<void> clearTransferHistory(List<FileTransferTarget> targets) async {
+    _check();
+    final ids = <String>{};
+    final batches = <String>{};
+    for (final target in targets) {
+      switch (target) {
+        case FileTransferBatchTarget(:final id):
+          batches.add(id);
+        case FileTransferTaskTarget(:final id):
+          ids.add(id);
+      }
+    }
+    final candidates = _tasks.values.where(
+      (task) =>
+          batches.contains(task.record.batchId) || ids.contains(task.record.id),
+    );
+    final unsettled = {
+      for (final task in _tasks.values)
+        if (!_terminal(task.record.status) ||
+            task.record.errorCode == 'result_unknown' ||
+            task.record.cleanupPending ||
+            _transferCleanups.containsKey(task.record.id))
+          task.record.batchId,
+    };
+    final settled = candidates
+        .where(
+          (task) =>
+              !task.record.historyHidden &&
+              !unsettled.contains(task.record.batchId),
+        )
+        .toList();
+    if (settled.isEmpty) return;
+    final edits = _beginBatchEdits(
+      settled.map((task) => task.record.batchId).toSet(),
+      _BatchEditKind.hideHistory,
+    );
+    try {
+      final committed = _writes.then(
+        (_) => _journal.hideHistory(
+          settled.map((task) => task.record.id).toList(),
+        ),
+      );
+      _writes = committed;
+      await committed;
+      for (final task in settled) {
+        task.record = task.record.copyWith(historyHidden: true);
+        if (!_events.isClosed) _events.add(FileTransferChanged(task.record.id));
+      }
+    } finally {
+      for (final entry in edits.entries) {
+        await _endBatchEdit(entry.key, entry.value);
+      }
+    }
+  }
+
   /// 保护受管取回内容及未发布片段；租约由实际消费者显式释放。
   Future<String> acquireCacheLease(String transferId) async {
     _check();
@@ -1751,7 +1809,7 @@ final class _TransferBatch {
       stopping == 0;
 }
 
-enum _BatchEditKind { restart, remove }
+enum _BatchEditKind { restart, remove, hideHistory }
 
 /// reserve 的迟到租约在交给批次前由本对象持有，清理失败后不能撤销登记。
 final class _BatchEdit {

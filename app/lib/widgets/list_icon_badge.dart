@@ -7,24 +7,32 @@ class ListIconBadge extends StatelessWidget {
     super.key,
     required this.icon,
     required this.backgroundColor,
+    this.compact = false,
   });
 
   final IconData icon;
   final Color backgroundColor;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) => SizedBox.square(
-    dimension: DesignTokens.componentListIconSize,
+    dimension: compact
+        ? DesignTokens.componentListIconCompactSize
+        : DesignTokens.componentListIconSize,
     child: DecoratedBox(
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(
-          DesignTokens.componentListIconRounded,
+          compact
+              ? DesignTokens.componentListIconCompactRounded
+              : DesignTokens.componentListIconRounded,
         ),
       ),
       child: Icon(
         icon,
-        size: DesignTokens.componentListIconGlyphSize,
+        size: compact
+            ? DesignTokens.componentListIconGlyphCompactSize
+            : DesignTokens.componentListIconGlyphSize,
         color: DesignTokens.componentListIconTextColor,
       ),
     ),

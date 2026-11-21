@@ -42,6 +42,7 @@ class FileTransferJournal {
           }
           tasks[row['id']! as String] = row;
         }
+        _markHistoryHidden(tasks, value['historyHidden']);
         if (value['remove'] != null) tasks.remove(value['remove']);
         for (final id in value['removed'] as List? ?? const []) {
           tasks.remove(id);
@@ -166,6 +167,15 @@ class FileTransferJournal {
 
   Future<void> upsert(FileTransferRecord task) =>
       _enqueue({'task': task.toJson()});
+  Future<void> hideHistory(List<String> ids) =>
+      _enqueue({'historyHidden': ids});
+
+  void _markHistoryHidden(Map<String, Map<String, Object?>> rows, Object? ids) {
+    for (final id in ids as List? ?? const []) {
+      rows[id]?['historyHidden'] = true;
+    }
+  }
+
   Future<void> removeMany(List<String> ids) => _enqueue({'removed': ids});
   Future<void> _enqueue(Map<String, Object?> change) {
     final write = _pending.then((_) => _append(change));
@@ -198,6 +208,7 @@ class FileTransferJournal {
       if (task is Map<String, Object?>) {
         _rows[task['id']! as String] = Map.of(task);
       }
+      _markHistoryHidden(_rows, change['historyHidden']);
       if (change['remove'] is String) _rows.remove(change['remove']);
       for (final id in change['removed'] as List? ?? const []) {
         _rows.remove(id);

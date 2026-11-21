@@ -7,7 +7,6 @@ import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 class DeviceFunctionChecks extends ConsumerWidget {
@@ -38,17 +37,47 @@ class DeviceFunctionChecks extends ConsumerWidget {
             if (capabilities.isEmpty) const StateNote('尚未检查这台设备的功能，请连接后重新检查。'),
             for (final cap in capabilities)
               ListTile(
-                leading: ListIconBadge(
-                  icon: cap.status == DeviceFeatureStatus.available
-                      ? LucideIcons.circleCheck
-                      : LucideIcons.circleAlert,
-                  backgroundColor: cap.status == DeviceFeatureStatus.available
-                      ? DesignTokens.colorListIconMint
-                      : DesignTokens.colorListIconAmber,
-                ),
+                leading: Icon(switch (cap.feature) {
+                  .shell => LucideIcons.shieldCheck,
+                  .files => LucideIcons.folder,
+                  .wirelessPairing => LucideIcons.wifi,
+                  .screen => LucideIcons.smartphone,
+                  .clipboard => LucideIcons.clipboard,
+                  .apps => LucideIcons.grid2x2,
+                  .audio => LucideIcons.volume2,
+                  .notifications => LucideIcons.bell,
+                  .calls => LucideIcons.phone,
+                  .background => LucideIcons.appWindow,
+                }, size: DesignTokens.componentIconSmallSize),
                 title: Text(
-                  '${_featureName(cap.feature)} · ${_statusText(cap.status)}',
+                  _featureName(cap.feature),
                   style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _statusText(cap.status),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(width: DesignTokens.spacingXs),
+                    Icon(
+                      switch (cap.status) {
+                        .available => LucideIcons.check,
+                        .unavailable => LucideIcons.x,
+                        .limited || .needsSetup => LucideIcons.circleAlert,
+                        _ => LucideIcons.circle,
+                      },
+                      size: DesignTokens.componentIconSmallSize,
+                      color: switch (cap.status) {
+                        .available => DesignTokens.colorSuccess,
+                        .unavailable => Theme.of(context).colorScheme.error,
+                        .limited || .needsSetup =>
+                          DesignTokens.componentConnectionIconUsbTextColor,
+                        _ => Theme.of(context).colorScheme.onSurfaceVariant,
+                      },
+                    ),
+                  ],
                 ),
                 subtitle: cap.reason.isEmpty
                     ? null

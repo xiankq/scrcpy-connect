@@ -21,6 +21,7 @@ List<RouteBase> get $appRoutes => [
   $usbGuideRoute,
   $qrPairRoute,
   $workspaceRoute,
+  $deviceManagementRoute,
   $deviceDetailsRoute,
   $deviceDataRoute,
   $capabilitiesRoute,
@@ -47,6 +48,7 @@ List<RouteBase> get $appRoutes => [
   $documentImportRoute,
   $incomingShareRoute,
   $shareDirectoryRoute,
+  $appUpdatesRoute,
   $appearanceRoute,
   $backgroundRoute,
   $activitiesRoute,
@@ -563,6 +565,39 @@ mixin $WorkspaceRoute on GoRouteData {
   @override
   String get location =>
       GoRouteData.$location('/devices/${Uri.encodeComponent(_self.deviceId)}');
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+}
+
+RouteBase get $deviceManagementRoute => GoRouteData.$route(
+  path: '/devices/:deviceId/manage',
+  name: 'device-management',
+  hasOverriddenOnExit: false,
+  parentNavigatorKey: DeviceManagementRoute.$parentNavigatorKey,
+  factory: $DeviceManagementRoute._fromState,
+);
+
+mixin $DeviceManagementRoute on GoRouteData {
+  static DeviceManagementRoute _fromState(GoRouterState state) =>
+      DeviceManagementRoute(deviceId: state.pathParameters['deviceId']!);
+
+  DeviceManagementRoute get _self => this as DeviceManagementRoute;
+
+  @override
+  String get location => GoRouteData.$location(
+    '/devices/${Uri.encodeComponent(_self.deviceId)}/manage',
+  );
 
   @override
   void go(BuildContext context) => context.go(location);
@@ -1402,6 +1437,7 @@ mixin $ReceiveContentRoute on GoRouteData {
               _$boolConverter,
             ) ??
             false,
+        $extra: state.extra as bool?,
       );
 
   ReceiveContentRoute get _self => this as ReceiveContentRoute;
@@ -1413,17 +1449,19 @@ mixin $ReceiveContentRoute on GoRouteData {
   );
 
   @override
-  void go(BuildContext context) => context.go(location);
+  void go(BuildContext context) => context.go(location, extra: _self.$extra);
 
   @override
-  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+  Future<T?> push<T>(BuildContext context) =>
+      context.push<T>(location, extra: _self.$extra);
 
   @override
   void pushReplacement(BuildContext context) =>
-      context.pushReplacement(location);
+      context.pushReplacement(location, extra: _self.$extra);
 
   @override
-  void replace(BuildContext context) => context.replace(location);
+  void replace(BuildContext context) =>
+      context.replace(location, extra: _self.$extra);
 }
 
 RouteBase get $documentImportRoute => GoRouteData.$route(
@@ -1521,6 +1559,35 @@ mixin $ShareDirectoryRoute on GoRouteData {
     '/devices/${Uri.encodeComponent(_self.deviceId)}/share-directory',
     queryParams: {if (_self.path != '/sdcard') 'path': _self.path},
   );
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+}
+
+RouteBase get $appUpdatesRoute => GoRouteData.$route(
+  path: '/settings/updates',
+  name: 'app-updates',
+  hasOverriddenOnExit: false,
+  parentNavigatorKey: AppUpdatesRoute.$parentNavigatorKey,
+  factory: $AppUpdatesRoute._fromState,
+);
+
+mixin $AppUpdatesRoute on GoRouteData {
+  static AppUpdatesRoute _fromState(GoRouterState state) =>
+      const AppUpdatesRoute();
+
+  @override
+  String get location => GoRouteData.$location('/settings/updates');
 
   @override
   void go(BuildContext context) => context.go(location);

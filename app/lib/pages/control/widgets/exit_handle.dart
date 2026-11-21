@@ -1,12 +1,12 @@
 import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/physics.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_press_feedback.dart';
-import 'package:scrcpy_connect/widgets/overlays.dart';
 
 class ExitHandle extends StatefulWidget {
   const ExitHandle({
@@ -68,72 +68,57 @@ Rect _dragBoundsFor(Size viewport, MediaQueryData media) {
 
 class _ExitHandleState extends State<ExitHandle>
     with SingleTickerProviderStateMixin {
+  static const _handleSize = DesignTokens.componentRemoteExitSize;
+  static const _peekWidth = DesignTokens.componentRemoteExitPeekWidth;
+  static const _hitWidth = DesignTokens.componentRemoteExitHitWidth;
+  static const _hitHeight = DesignTokens.componentRemoteExitHitHeight;
+
   late final AnimationController animation =
       AnimationController.unbounded(vsync: this)..addListener(() {
-        setState(() {
-          offset = Offset(animation.value, offset.dy);
-        });
+        setState(() => offset = Offset(animation.value, offset.dy));
       });
+  Rect dragBounds = Rect.zero;
   Offset offset = Offset.zero;
-  bool collapsed = false;
+  bool initialized = false;
   bool expanded = false;
   bool dragging = false;
-  bool right = false;
-  bool dragStartedCollapsed = false;
-  double dragStartX = 0;
-  Size viewport = Size.zero;
-  Rect dragBounds = Rect.zero;
-  double collapsedRight = 0;
-  bool layoutInitialized = false;
+  bool right = true;
+  bool get docked => !dragging && !animation.isAnimating;
 
-  void activateControl() {
-    animation.stop();
-    if (!collapsed) {
-      setState(() => expanded = !expanded);
-      return;
-    }
+  void settle([double velocity = 0]) {
+    final midpoint = (dragBounds.left + dragBounds.right) / 2;
+    final target = offset.dx >= midpoint ? dragBounds.right : dragBounds.left;
     setState(() {
-      collapsed = false;
-      expanded = true;
+      right = target == dragBounds.right;
       dragging = false;
-      offset = Offset(
-        (right ? dragBounds.right - 12 : dragBounds.left + 12).clamp(
-          dragBounds.left,
-          dragBounds.right,
-        ),
-        offset.dy.clamp(dragBounds.top, dragBounds.bottom),
-      );
     });
-  }
-
-  void settle(DragEndDetails detail) {
-    dragging = false;
-    final movedInward = right ? offset.dx < dragStartX : offset.dx > dragStartX;
-    if (dragStartedCollapsed && movedInward) {
-      setState(() => expanded = true);
-      return;
-    }
-    right = offset.dx > (dragBounds.left + dragBounds.right) / 2;
-    collapsed = true;
-    expanded = false;
-    final target = right ? collapsedRight : dragBounds.left;
-    if (MediaQuery.disableAnimationsOf(context)) {
-      setState(() {
-        offset = Offset(target, offset.dy);
-      });
+    if (MediaQuery.disableAnimationsOf(context) ||
+        GlassMaterial.reduceMotion(context) ||
+        (offset.dx - target).abs() < 0.5) {
+      offset = Offset(target, offset.dy);
       return;
     }
     animation.value = offset.dx;
-    animation.animateWith(
-      SpringSimulation(
-        const SpringDescription(mass: 1, stiffness: 260, damping: 30),
-        offset.dx,
-        target,
-        detail.velocity.pixelsPerSecond.dx,
-      ),
-    );
-    setState(() {});
+    animation
+        .animateWith(
+          SpringSimulation(
+            const SpringDescription(mass: 1, stiffness: 260, damping: 30),
+            offset.dx,
+            target,
+            velocity,
+          ),
+        )
+        .whenComplete(() => setState(() {}));
   }
+
+  void closePanel() => setState(() => expanded = false);
+
+  VoidCallback? closeThen(VoidCallback? callback) => callback == null
+      ? null
+      : () {
+          closePanel();
+          callback();
+        };
 
   @override
   void dispose() {
@@ -141,210 +126,287 @@ class _ExitHandleState extends State<ExitHandle>
     super.dispose();
   }
 
-  Widget _action(String label, IconData icon, VoidCallback? callback) =>
-      ListTile(
-        leading: Icon(icon),
-        title: Text(label, style: Theme.of(context).textTheme.bodyLarge),
-        onTap: callback == null
-            ? null
-            : () {
-                setState(() => expanded = false);
-                callback();
-              },
-        enabled: callback != null,
-      );
-
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      viewport = constraints.biggest;
+      final viewport = constraints.biggest;
       final media = MediaQuery.of(context);
-      final padding = media.padding;
-      final gestures = media.systemGestureInsets;
-      final rightInset = math.max(padding.right, gestures.right);
       dragBounds = _dragBoundsFor(viewport, media);
-      if (!layoutInitialized) {
-        final initial = ExitHandle.initialBoundsFor(viewport, media);
-        offset = initial.topLeft;
-        right = true;
-        layoutInitialized = true;
-      } else {
-        offset = Offset(
-          offset.dx.clamp(dragBounds.left, dragBounds.right).toDouble(),
-          offset.dy.clamp(dragBounds.top, dragBounds.bottom).toDouble(),
-        );
+      if (!initialized) {
+        offset = ExitHandle.initialBoundsFor(viewport, media).topLeft;
+        initialized = true;
       }
-      collapsedRight = math.max(
-        dragBounds.left,
-        viewport.width - rightInset - DesignTokens.componentRemoteExitHitWidth,
-      );
-      final dx = offset.dx.clamp(dragBounds.left, dragBounds.right).toDouble();
+      final rightEdge =
+          viewport.width -
+          math.max(media.padding.right, media.systemGestureInsets.right);
+      final bottomEdge = dragBounds.bottom + _hitHeight;
       final dy = offset.dy.clamp(dragBounds.top, dragBounds.bottom).toDouble();
-      final roomRight = viewport.width - rightInset - dx - 52;
-      final roomLeft = dx - dragBounds.left;
-      final growRight = roomRight >= roomLeft;
+      final snapX = right ? dragBounds.right : dragBounds.left;
+      final dx = docked
+          ? snapX
+          : offset.dx.clamp(dragBounds.left, dragBounds.right).toDouble();
+      final handleLeft = docked && right
+          ? math.max(dragBounds.left, rightEdge - _hitWidth)
+          : dx;
       final panelWidth = math.min(
-        244.0,
-        math.max(48.0, (growRight ? roomRight : roomLeft) - 8),
+        DesignTokens.componentRemoteToolPanelWidth,
+        math.max(0.0, rightEdge - dragBounds.left - 2 * DesignTokens.spacingMd),
       );
-      final panelLeft = (growRight ? dx + 60 : dx - panelWidth - 8)
+      final panelHeight = DesignTokens.componentRemoteToolPanelHeight;
+      final panelLeft = viewport.width < 440
+          ? dragBounds.left + (rightEdge - dragBounds.left - panelWidth) / 2
+          : right
+          ? rightEdge - panelWidth - DesignTokens.spacingLg
+          : dragBounds.left + DesignTokens.spacingLg;
+      final panelTop = (dy - 72)
           .clamp(
-            dragBounds.left,
-            math.max(dragBounds.left, viewport.width - rightInset - panelWidth),
+            dragBounds.top,
+            math.max(dragBounds.top, bottomEdge - panelHeight),
           )
           .toDouble();
-      final panelTop = math.max(
-        dragBounds.top,
-        math.min(dy, dragBounds.bottom - 120),
-      );
+
       return Stack(
         children: [
-          if (expanded && !dragging)
+          if (expanded) ...[
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: closePanel,
+                excludeFromSemantics: true,
+              ),
+            ),
             Positioned(
-              key: const ValueKey('remote-tool-panel-position'),
               left: panelLeft,
               top: panelTop,
               width: panelWidth,
               child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: math.max(48, dragBounds.bottom - panelTop + 52),
-                ),
-                child: ContentSurface(
+                constraints: BoxConstraints(maxHeight: bottomEdge - panelTop),
+                child: Glass(
                   key: const ValueKey('remote-tool-panel'),
                   radius: DesignTokens.roundedLg,
                   child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Padding(
-                          padding: const EdgeInsets.all(DesignTokens.spacingMd),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                widget.deviceLabel,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '画面工具',
                                 style: Theme.of(context).textTheme.titleLarge,
                               ),
-                              Text(
-                                widget.connectionLabel,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
-                          ),
+                            ),
+                            IconButton(
+                              tooltip: '收起画面工具',
+                              onPressed: closePanel,
+                              icon: const Icon(LucideIcons.slidersHorizontal),
+                            ),
+                          ],
                         ),
-                        ?widget.soundControl,
-                        _action('熄屏', LucideIcons.moon, widget.onSleep),
-                        _action('截图', LucideIcons.camera, widget.onScreenshot),
-                        if (!widget.independent)
-                          _action(
-                            '转为独立窗口',
-                            LucideIcons.appWindow,
-                            widget.onConvert,
+                        Text(
+                          widget.independent ? '独立窗口' : '整机画面',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                        ),
+                        const SizedBox(height: DesignTokens.spacingMd),
+                        LayoutBuilder(
+                          builder: (context, limits) {
+                            final tileWidth =
+                                limits.maxWidth /
+                                (limits.maxWidth < 192 ? 2 : 3);
+                            return Wrap(
+                              runSpacing: DesignTokens.spacingXs,
+                              children: [
+                                for (final action in [
+                                  widget.soundControl ??
+                                      const RemoteToolAction(
+                                        icon: LucideIcons.volume2,
+                                        label: '设备声音',
+                                      ),
+                                  RemoteToolAction(
+                                    icon: LucideIcons.sun,
+                                    label: '熄屏',
+                                    onPressed: closeThen(widget.onSleep),
+                                  ),
+                                  RemoteToolAction(
+                                    icon: LucideIcons.camera,
+                                    label: '截图',
+                                    onPressed: closeThen(widget.onScreenshot),
+                                  ),
+                                  if (!widget.independent)
+                                    RemoteToolAction(
+                                      icon: LucideIcons.layers,
+                                      label: '独立窗口',
+                                      onPressed: closeThen(widget.onConvert),
+                                    ),
+                                  RemoteToolAction(
+                                    icon: LucideIcons.keyboard,
+                                    label: '键盘',
+                                    onPressed: closeThen(widget.onKeyboard),
+                                  ),
+                                  RemoteToolAction(
+                                    icon: LucideIcons.rotateCw,
+                                    label: '旋转',
+                                    onPressed: closeThen(widget.onRotate),
+                                  ),
+                                ])
+                                  SizedBox(width: tileWidth, child: action),
+                              ],
+                            );
+                          },
+                        ),
+                        const SizedBox(height: DesignTokens.spacingLg),
+                        FilledButton(
+                          style: FilledButton.styleFrom(
+                            fixedSize: const Size.fromHeight(50),
+                            backgroundColor: Theme.of(context)
+                                .colorScheme
+                                .surface,
+                            foregroundColor: Theme.of(context)
+                                .colorScheme
+                                .onSurface,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                DesignTokens.roundedMd,
+                              ),
+                            ),
                           ),
-                        _action('键盘', LucideIcons.keyboard, widget.onKeyboard),
-                        _action('旋转', LucideIcons.rotateCw, widget.onRotate),
-                        _action('关闭画面', LucideIcons.x, widget.onExit),
+                          onPressed: closeThen(widget.onExit),
+                          child: const Text('关闭画面'),
+                        ),
                       ],
                     ),
                   ),
                 ),
               ),
             ),
-          Positioned(
-            key: const ValueKey('remote-tool-handle-position'),
-            left: collapsed && right && !dragging ? collapsedRight : dx,
-            top: dy,
-            width: collapsed && !dragging
-                ? DesignTokens.componentRemoteExitHitWidth
-                : DesignTokens.componentRemoteExitSize,
-            height: DesignTokens.componentRemoteExitHitHeight,
-            child: Semantics(
-              container: true,
-              label: collapsed
-                  ? '展开画面工具，${widget.deviceLabel}，${widget.connectionLabel}'
-                  : expanded
-                  ? '收起画面工具，${widget.deviceLabel}，${widget.connectionLabel}'
-                  : '展开画面工具，${widget.deviceLabel}，${widget.connectionLabel}',
-              button: true,
-              child: GlassPressFeedback(
-                child: GestureDetector(
-                  key: const ValueKey('remote-tool-handle'),
-                  behavior: HitTestBehavior.opaque,
-                  onTapDown: (_) => animation.stop(),
-                  onPanStart: (_) {
-                    animation.stop();
-                    setState(() {
-                      dragStartedCollapsed = collapsed;
-                      dragStartX = dx;
-                      dragging = true;
-                      expanded = false;
-                      collapsed = false;
-                      offset = Offset(dx, dy);
-                    });
-                  },
-                  onPanUpdate: (details) => setState(() {
-                    offset = Offset(
-                      (offset.dx + details.delta.dx).clamp(
-                        dragBounds.left,
-                        dragBounds.right,
-                      ),
-                      (offset.dy + details.delta.dy).clamp(
-                        dragBounds.top,
-                        dragBounds.bottom,
-                      ),
-                    );
-                  }),
-                  onPanEnd: settle,
-                  onPanCancel: () {
-                    if (dragging) settle(DragEndDetails());
-                  },
-                  onTap: activateControl,
-                  child: Align(
-                    alignment: collapsed && !dragging
-                        ? (right ? Alignment.centerRight : Alignment.centerLeft)
-                        : Alignment.center,
-                    child: Glass(
-                      variant: GlassVariant.regular,
-                      radius: DesignTokens.roundedFull,
-                      child: SizedBox(
-                        width: collapsed && !dragging
-                            ? DesignTokens.componentRemoteExitPeekWidth
-                            : DesignTokens.componentRemoteExitSize,
-                        height: DesignTokens.componentRemoteExitHitHeight,
-                        child: collapsed && !dragging
-                            ? Center(
-                                child: Container(
-                                  width: DesignTokens
-                                      .componentRemoteExitHandleWidth,
-                                  height: DesignTokens
-                                      .componentRemoteExitHandleHeight,
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.color,
-                                    borderRadius: BorderRadius.circular(
-                                      DesignTokens
-                                          .componentRemoteExitHandleRounded,
+          ] else
+            Positioned(
+              key: const ValueKey('remote-tool-handle-position'),
+              left: handleLeft,
+              top: dy,
+              width: docked ? _hitWidth : _handleSize,
+              height: _hitHeight,
+              child: Semantics(
+                label: '展开画面工具，${widget.deviceLabel}，${widget.connectionLabel}',
+                button: true,
+                child: GlassPressFeedback(
+                  child: GestureDetector(
+                    key: const ValueKey('remote-tool-handle'),
+                    behavior: HitTestBehavior.opaque,
+                    dragStartBehavior: DragStartBehavior.down,
+                    onPanStart: (_) {
+                      animation.stop();
+                      setState(() {
+                        dragging = true;
+                        offset = Offset(dx, dy);
+                      });
+                    },
+                    onPanUpdate: (details) => setState(() {
+                      offset = Offset(
+                        (offset.dx + details.delta.dx).clamp(
+                          dragBounds.left,
+                          dragBounds.right,
+                        ),
+                        (offset.dy + details.delta.dy).clamp(
+                          dragBounds.top,
+                          dragBounds.bottom,
+                        ),
+                      );
+                    }),
+                    onPanEnd: (details) =>
+                        settle(details.velocity.pixelsPerSecond.dx),
+                    onPanCancel: () {
+                      if (dragging) settle();
+                    },
+                    onTap: () {
+                      animation.stop();
+                      setState(() => expanded = true);
+                    },
+                    child: Align(
+                      alignment: right
+                          ? Alignment.centerRight
+                          : Alignment.centerLeft,
+                      child: Glass(
+                        radius: DesignTokens.roundedFull,
+                        child: SizedBox(
+                          width: docked ? _peekWidth : _handleSize,
+                          height: _hitHeight,
+                          child: docked
+                              ? Center(
+                                  child: Container(
+                                    width: DesignTokens
+                                        .componentRemoteExitHandleWidth,
+                                    height: DesignTokens
+                                        .componentRemoteExitHandleHeight,
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                      borderRadius: BorderRadius.circular(
+                                        DesignTokens
+                                            .componentRemoteExitHandleRounded,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              )
-                            : Icon(
-                                expanded
-                                    ? LucideIcons.chevronUp
-                                    : LucideIcons.ellipsis,
-                                size: DesignTokens.componentIconFeatureSize,
-                              ),
+                                )
+                              : const Icon(LucideIcons.slidersHorizontal),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
         ],
       );
     },
   );
+}
+
+class RemoteToolAction extends StatelessWidget {
+  const RemoteToolAction({
+    super.key,
+    required this.icon,
+    required this.label,
+    this.description,
+    this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final String? description;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final action = TextButton(
+      style: TextButton.styleFrom(
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
+        minimumSize: const Size(0, 66),
+        padding: const EdgeInsets.symmetric(
+          horizontal: DesignTokens.spacingMicro,
+          vertical: DesignTokens.spacingXs,
+        ),
+      ),
+      onPressed: onPressed,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: DesignTokens.componentIconFeatureSize),
+          const SizedBox(height: DesignTokens.spacingMicro),
+          Text(label, textAlign: TextAlign.center),
+        ],
+      ),
+    );
+    return description == null
+        ? action
+        : Tooltip(message: description!, child: action);
+  }
 }

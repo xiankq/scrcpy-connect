@@ -36,8 +36,17 @@ class GlassToolbarIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return liquid.GlassIconButton(
-      icon: icon,
+      icon: IconTheme(
+        data: IconThemeData(
+          color: onPressed == null
+              ? theme.disabledColor
+              : theme.colorScheme.onSurface,
+          size: iconSize,
+        ),
+        child: icon,
+      ),
       onPressed: onPressed,
       semanticLabel: semanticLabel,
       size: size,

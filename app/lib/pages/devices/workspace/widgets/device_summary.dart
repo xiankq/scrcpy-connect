@@ -1,111 +1,125 @@
-import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/devices/device_identity.dart';
 import 'package:scrcpy_connect/widgets/devices/device_status.dart';
 
-/// 设备信息与工作台首卡共用内容，离线仍可阅读；设备名称由页头拥有。
 class DeviceSummary extends HookWidget {
   const DeviceSummary({
     super.key,
     required this.device,
     this.connecting = false,
+    this.pane = false,
   });
   final DeviceSnapshot device;
   final bool connecting;
+  final bool pane;
 
   @override
   Widget build(BuildContext context) {
-    // 元数据过期后立即消失，即使下一次有界查询失败也不能保留为实时值。
     useStream(
       useMemoized(
         () => Stream<int>.periodic(const Duration(seconds: 30), (tick) => tick),
       ),
       initialData: 0,
     );
-    final nowSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final updatedAt = int.tryParse((device.batteryUpdatedAt?.toString() ?? ''));
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final updatedAt = device.batteryUpdatedAt;
     final liveBattery =
-        device.status == DeviceConnectionStatus.connected &&
+        device.status == .connected &&
         updatedAt != null &&
-        nowSeconds >= updatedAt &&
-        nowSeconds - updatedAt <= 90;
+        now >= updatedAt &&
+        now - updatedAt <= 90;
     final text = Theme.of(context).textTheme;
     final displayedDevice = connecting
-        ? device.copyWith(status: DeviceConnectionStatus.connecting)
+        ? device.copyWith(status: .connecting)
         : device;
-    final address = (device.address ?? '').trim();
-    final port = int.tryParse((device.port?.toString() ?? ''));
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+    final version = device.androidVersion;
+    final model = device.model;
+    final name = deviceName(device);
+    final transport = device.transport;
+    final battery = device.battery;
+    final batteryIcon = device.charging == true
+        ? LucideIcons.batteryCharging
+        : battery != null && battery <= 20
+        ? LucideIcons.batteryLow
+        : battery != null && battery < 70
+        ? LucideIcons.batteryMedium
+        : LucideIcons.batteryFull;
+    Widget metric(IconData icon, String value, {String? accessibilityLabel}) =>
         Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            DeviceIdentity(device: displayedDevice),
-            const SizedBox(width: DesignTokens.spacingSm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: DesignTokens.spacingXs,
-                    runSpacing: DesignTokens.spacingXxs,
-                    children: [
-                      DeviceStatus(device: displayedDevice),
-                      Text(deviceTransportLabel(device), style: text.bodySmall),
-                    ],
-                  ),
-                  if (device.status == DeviceConnectionStatus.offline) ...[
-                    const SizedBox(height: DesignTokens.spacingXs),
-                    Text(
-                      deviceConnectionLabel(device).replaceFirst('离线 · ', ''),
-                      style: text.bodySmall,
-                    ),
-                  ],
-                  const SizedBox(height: DesignTokens.spacingXs),
-                  if (device.transport != DeviceTransport.usb)
-                    Text(
-                      address.isEmpty
-                          ? '地址未获取'
-                          : (port != null && port > 0
-                                ? '${address.contains(':') && !address.startsWith('[') ? '[$address]' : address}:$port'
-                                : address),
-                      style: text.bodySmall,
-                    ),
-                  if (liveBattery && device.battery != null) ...[
-                    const SizedBox(height: DesignTokens.spacingXs),
-                    Row(
-                      children: [
-                        Icon(
-                          device.charging == true
-                              ? LucideIcons.batteryCharging
-                              : LucideIcons.battery,
-                          size: DesignTokens.componentIconSmallSize,
-                          color: DesignTokens.colorListIconMint,
-                        ),
-                        const SizedBox(width: DesignTokens.spacingXxs),
-                        Flexible(
-                          child: Text(
-                            '${device.battery}%${device.charging == true ? ' · 正在充电' : ''}',
-                            style: text.bodySmall,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
+            Icon(icon, size: DesignTokens.componentIconSmallSize),
+            const SizedBox(width: DesignTokens.spacingXxs),
+            Text(
+              value,
+              style: text.bodySmall,
+              semanticsLabel: accessibilityLabel,
             ),
           ],
-        ),
-        if (device.status != DeviceConnectionStatus.connected)
-          Padding(
-            padding: const EdgeInsets.only(top: DesignTokens.spacingSm),
-            child: Text('信息来自本机记录', style: text.bodySmall),
+        );
+
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: text.displaySmall,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (version != null || model != null && model != name)
+                Text(
+                  version != null ? 'Android $version' : model!,
+                  style: text.bodyMedium,
+                ),
+              const SizedBox(height: DesignTokens.spacingXs),
+              Wrap(
+                spacing: DesignTokens.spacingMd,
+                runSpacing: DesignTokens.spacingXs,
+                children: [
+                  if (liveBattery && battery != null)
+                    metric(
+                      batteryIcon,
+                      '$battery%',
+                      accessibilityLabel: device.charging == true
+                          ? '正在充电，电量 $battery%'
+                          : '电量 $battery%',
+                    ),
+                  if (!liveBattery || battery == null)
+                    metric(
+                      LucideIcons.battery,
+                      '—',
+                      accessibilityLabel: '未获取电量',
+                    ),
+                  if (transport != null)
+                    metric(
+                      transport == .usb ? LucideIcons.usb : LucideIcons.wifi,
+                      transport == .usb
+                          ? 'USB 调试'
+                          : deviceTransportLabel(device),
+                    ),
+                ],
+              ),
+            ],
           ),
+        ),
+        const SizedBox(width: DesignTokens.spacingSm),
+        Semantics(
+          label: deviceStatusText(displayedDevice),
+          child: DeviceIdentity(
+            device: displayedDevice,
+            showcase: true,
+            pane: pane,
+          ),
+        ),
       ],
     );
   }

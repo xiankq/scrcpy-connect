@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/identity/adb_identity_validation.dart';
 import 'package:scrcpy_connect/core/identity/adb_private_key_file_failure.dart';
@@ -12,11 +13,12 @@ import 'package:scrcpy_connect/core/identity/identity_management_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
-import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:scrcpy_connect/widgets/overlays.dart';
+
+import '../widgets/settings_row.dart';
 
 class AdbIdentityPage extends HookConsumerWidget {
   const AdbIdentityPage({super.key});
@@ -64,85 +66,102 @@ class AdbIdentityPage extends HookConsumerWidget {
       }
     }
 
+    Future<void> importIdentity() async {
+      final pem = await Navigator.of(context).push<String>(
+        MaterialPageRoute(builder: (_) => const _PrivateKeyInput()),
+      );
+      if (pem == null || !context.mounted || !ownsScope()) return;
+      if (!await confirmConnectionChange(
+            context,
+            '将中断现有连接',
+            warning,
+            action: '导入并更换',
+          ) ||
+          !context.mounted ||
+          !ownsScope()) {
+        return;
+      }
+      await change(() => source.importGlobal(pem));
+    }
+
+    Future<void> resetIdentity() async {
+      if (!await confirmConnectionChange(
+            context,
+            '重置身份？',
+            warning,
+            action: '重置身份',
+            danger: true,
+          ) ||
+          !context.mounted ||
+          !ownsScope()) {
+        return;
+      }
+      await change(source.resetGlobal);
+    }
+
+    final fingerprint = data?.fingerprint;
     return PageFrame(
       title: '授权密钥',
-      child: ConnectionContent(
-        child: GroupedListView(
-          padding: const EdgeInsets.all(DesignTokens.spacingMd),
-          children: [
-            ContentPanel(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('全局私钥', style: Theme.of(context).textTheme.bodyMedium),
-                  const SizedBox(height: DesignTokens.spacingXs),
-                  SelectableText(
-                    data?.fingerprint ??
-                        (result.connectionState == ConnectionState.done
-                            ? '指纹未获取'
-                            : '正在读取…'),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
+      child: GroupedListView(
+        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+        children: [
+          SettingsGroup(
+            children: [
+              SettingsRow(
+                compact: true,
+                icon: LucideIcons.fingerprint,
+                color: DesignTokens.colorListIconSlate,
+                title: '本机指纹',
+                value: fingerprint == null
+                    ? (result.connectionState == ConnectionState.done
+                          ? '未读取'
+                          : '正在读取…')
+                    : fingerprint.length > 12
+                    ? '${fingerprint.substring(0, 5)}:…:${fingerprint.substring(fingerprint.length - 2)}'
+                    : fingerprint,
+                onTap: fingerprint == null
+                    ? null
+                    : () => showAppDialog<void>(
+                        context: context,
+                        title: const Text('本机指纹'),
+                        content: SelectableText(fingerprint),
+                        actions: [
+                          Builder(
+                            builder: (context) => TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('完成'),
+                            ),
+                          ),
+                        ],
+                      ),
               ),
-            ),
-            const SizedBox(height: DesignTokens.spacingMd),
-            Text(warning, style: Theme.of(context).textTheme.bodySmall),
-            if (result.hasError) ...[
-              StateNote('${result.error}'),
-              TextButton(
-                onPressed: busy.value ? null : () => revision.value++,
-                child: const Text('重新读取'),
+              SettingsRow(
+                compact: true,
+                icon: LucideIcons.keyRound,
+                color: DesignTokens.colorListIconBlue,
+                title: '导入身份',
+                onTap: busy.value ? null : importIdentity,
+              ),
+              SettingsRow(
+                compact: true,
+                icon: LucideIcons.rotateCcw,
+                color: DesignTokens.colorListIconCoral,
+                title: '重置身份',
+                destructive: true,
+                onTap: busy.value ? null : resetIdentity,
               ),
             ],
-            if (failure.value != null) StateNote(failure.value!),
-            if (notice.value != null) StateNote(notice.value!),
-            const SizedBox(height: DesignTokens.spacingMd),
-            FilledButton(
-              onPressed: busy.value
-                  ? null
-                  : () async {
-                      final pem = await showAppDialog<String>(
-                        context: context,
-                        builder: (_) => const _PrivateKeyInput(),
-                      );
-                      if (pem == null || (!context.mounted || !ownsScope())) {
-                        return;
-                      }
-                      if (!await confirmConnectionChange(
-                            context,
-                            '导入 ADB 私钥？',
-                            warning,
-                            action: '导入并更换',
-                          ) ||
-                          (!context.mounted || !ownsScope())) {
-                        return;
-                      }
-                      await change(() => source.importGlobal(pem));
-                    },
-              child: Text(busy.value ? '正在更新…' : '导入私钥'),
+          ),
+          if (result.hasError) StateNote('${result.error}'),
+          if (failure.value case final error?) StateNote(error),
+          if (notice.value case final message?) StateNote(message),
+          Center(
+            child: TextButton(
+              onPressed: busy.value ? null : () => revision.value++,
+              child: Text(busy.value ? '正在更新…' : '更新指纹'),
             ),
-            const SizedBox(height: DesignTokens.spacingXs),
-            OutlinedButton(
-              onPressed: busy.value
-                  ? null
-                  : () async {
-                      if (!await confirmConnectionChange(
-                            context,
-                            '重置全局 ADB 私钥？',
-                            '将生成新的全局私钥。使用全局私钥的设备连接将断开，需在手机上重新授权；设备专用私钥不受影响。',
-                            action: '重置密钥',
-                            danger: true,
-                          ) ||
-                          (!context.mounted || !ownsScope())) {
-                        return;
-                      }
-                      await change(source.resetGlobal);
-                    },
-              child: const Text('重置密钥'),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -187,66 +206,56 @@ class _PrivateKeyInput extends HookWidget {
       }
     }
 
-    return ConnectionContent(
-      child: AppAlertDialog(
-        title: const Text('导入私钥'),
-        content: Form(
-          key: key,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'PEM 格式 · RSA 2048',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: DesignTokens.spacingSm),
-              TextFormField(
+    return PageFrame(
+      title: '导入身份',
+      onBack: () => Navigator.pop(context),
+      bottomGlass: false,
+      bottom: FilledButton(
+        onPressed: loading.value
+            ? null
+            : () {
+                if (key.currentState!.validate()) {
+                  Navigator.pop(context, normalizeAdbPrivateKeyPem(pem.text));
+                }
+              },
+        child: const Text('核对替换影响'),
+      ),
+      child: ConnectionContent(
+        child: GroupedListView(
+          padding: const EdgeInsets.all(DesignTokens.spacingMd),
+          children: [
+            Form(
+              key: key,
+              child: TextFormField(
                 controller: pem,
                 enabled: !loading.value,
                 onChanged: (_) => fileError.value = null,
-                minLines: 4,
-                maxLines: 8,
+                minLines: 5,
+                maxLines: 10,
                 autocorrect: false,
                 enableSuggestions: false,
                 enableIMEPersonalizedLearning: false,
                 smartDashesType: SmartDashesType.disabled,
                 smartQuotesType: SmartQuotesType.disabled,
                 decoration: InputDecoration(
-                  labelText: 'PEM 私钥',
+                  labelText: '私钥文本',
+                  hintText: '粘贴 RSA 私钥',
+                  alignLabelWithHint: true,
                   errorText: fileError.value,
                 ),
                 validator: validateAdbPrivateKeyPem,
               ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: loading.value ? null : pickFile,
-                  child: Text(loading.value ? '正在读取…' : '从文件选择'),
-                ),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: loading.value ? null : pickFile,
+                icon: const Icon(LucideIcons.folderOpen),
+                label: Text(loading.value ? '正在读取…' : '选取文件'),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: loading.value
-                ? null
-                : () {
-                    if (key.currentState!.validate()) {
-                      Navigator.pop(
-                        context,
-                        normalizeAdbPrivateKeyPem(pem.text),
-                      );
-                    }
-                  },
-            child: const Text('继续'),
-          ),
-        ],
       ),
     );
   }

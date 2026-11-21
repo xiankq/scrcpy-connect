@@ -44,7 +44,7 @@ class QualityOptionRow extends StatelessWidget {
               DesignTokens.componentIconSmallSize -
               DesignTokens.spacingSm * 2;
       const chevron = Icon(
-        LucideIcons.chevronRight,
+        LucideIcons.chevronDown,
         size: DesignTokens.componentIconSmallSize,
       );
       return ListTile(

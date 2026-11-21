@@ -15,7 +15,6 @@ import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 
@@ -85,27 +84,66 @@ class GalleryPage extends HookConsumerWidget {
       await actions.start();
     }
 
-    return PageFrame(
-      title: '手机相册',
+    useEffect(() {
+      if (scan.canLoadMore && !scan.paging && scan.error == null) {
+        scheduleMicrotask(() {
+          if (context.mounted) actions.loadMore();
+        });
+      }
+      return null;
+    }, [actions, scan.result?.nextOffset, scan.paging, scan.error]);
 
-      actions: [
-        GlassActionIcon(
-          tooltip: '重新检查相册',
-          onPressed: selected.value.isNotEmpty || scan.scanning ? null : reload,
-          icon: const Icon(LucideIcons.refreshCw),
-        ),
-        GlassActionIcon(
-          tooltip: selected.value.isEmpty ? '选择照片' : '取消选择',
-          onPressed: media.isEmpty
-              ? null
-              : () => selected.value = selected.value.isEmpty
-                    ? {'__select__'}
-                    : {},
-          icon: Icon(
-            selected.value.isEmpty ? LucideIcons.squareCheck : LucideIcons.x,
+    final selecting = selected.value.isNotEmpty;
+    final chosen = media.where((file) => selected.value.contains(file.path));
+    return PageFrame(
+      title: selecting ? '已选择 ${chosen.length} 项' : '手机相册',
+      onBack: selecting ? () => selected.value = {} : null,
+      bottomRadius: DesignTokens.roundedFull,
+      bottom: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          if (!selecting)
+            Expanded(
+              child: _GalleryAction(
+                label: '刷新',
+                icon: LucideIcons.refreshCw,
+                onPressed: scan.scanning ? null : reload,
+              ),
+            ),
+          if (selecting)
+            Expanded(
+              child: _GalleryAction(
+                label: '取回原件',
+                icon: LucideIcons.download,
+                onPressed: chosen.isEmpty
+                    ? null
+                    : () => retrieveSelection(
+                        context,
+                        ref,
+                        device,
+                        chosen
+                            .map(
+                              (file) => (
+                                path: file.path,
+                                name: file.name,
+                                canOpen: file.canOpen,
+                              ),
+                            )
+                            .toList(),
+                      ),
+              ),
+            ),
+          Expanded(
+            child: _GalleryAction(
+              label: selecting ? '取消选择' : '选择',
+              icon: selecting ? LucideIcons.x : LucideIcons.squareCheck,
+              onPressed: media.isEmpty
+                  ? null
+                  : () => selected.value = selecting ? {} : {'__select__'},
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
       child: RefreshIndicator(
         onRefresh: reload,
         child: CustomScrollView(
@@ -139,47 +177,6 @@ class GalleryPage extends HookConsumerWidget {
                               if (scroll.hasClients) scroll.jumpTo(0);
                             },
                     ),
-                    if (selected.value.isNotEmpty)
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '已选择 ${selected.value.where((e) => e != '__select__').length} 项',
-                            ),
-                          ),
-                          TextButton.icon(
-                            onPressed:
-                                selected.value.any(
-                                  (path) => path != '__select__',
-                                )
-                                ? () => retrieveSelection(
-                                    context,
-                                    ref,
-                                    device,
-                                    media
-                                        .where(
-                                          (file) => selected.value.contains(
-                                            file.path,
-                                          ),
-                                        )
-                                        .map(
-                                          (file) => (
-                                            path: file.path,
-                                            name: file.name,
-                                            canOpen: file.canOpen,
-                                          ),
-                                        )
-                                        .toList(),
-                                  )
-                                : null,
-                            icon: const Icon(
-                              LucideIcons.download,
-                              size: DesignTokens.componentIconActionSize,
-                            ),
-                            label: const Text('保存原文件'),
-                          ),
-                        ],
-                      ),
                   ],
                 ),
               ),
@@ -237,15 +234,9 @@ class GalleryPage extends HookConsumerWidget {
                 },
               ),
             ),
-            if (scan.canLoadMore)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(DesignTokens.spacingMd),
-                  child: OutlinedButton(
-                    onPressed: scan.paging ? null : actions.loadMore,
-                    child: Text(scan.paging ? '正在加载' : '加载更多'),
-                  ),
-                ),
+            if (scan.paging)
+              const SliverToBoxAdapter(
+                child: Center(child: ContentLoadingIndicator()),
               ),
             const SliverToBoxAdapter(
               child: SizedBox(height: DesignTokens.spacingLg),
@@ -256,4 +247,28 @@ class GalleryPage extends HookConsumerWidget {
       ),
     );
   }
+}
+
+class _GalleryAction extends StatelessWidget {
+  const _GalleryAction({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => TextButton(
+    onPressed: onPressed,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: DesignTokens.componentIconSize),
+        const SizedBox(height: DesignTokens.spacingXxs),
+        Text(label, textAlign: TextAlign.center),
+      ],
+    ),
+  );
 }

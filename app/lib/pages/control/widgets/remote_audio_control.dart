@@ -8,6 +8,8 @@ import 'package:scrcpy_connect/core/media/media_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/media/audio_sources_provider.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
 
+import 'exit_handle.dart';
+
 /// 所有画面读取同一设备音源；静音只改变本机输出，不停止远端采集。
 class RemoteAudioControl extends HookConsumerWidget {
   const RemoteAudioControl({super.key, required this.deviceId});
@@ -81,12 +83,11 @@ class RemoteAudioControl extends HookConsumerWidget {
         : source?.status == DeviceAudioStatus.playing
         ? '正在播放设备声音'
         : source?.reason ?? '设备声音尚未播放';
-    return ListTile(
-      leading: Icon(muted ? LucideIcons.volumeX : LucideIcons.volume2),
-      title: Text(label, style: Theme.of(context).textTheme.bodyLarge),
-      subtitle: Text(status),
-      enabled: online && !unsupported && !busy.value && !query.isLoading,
-      onTap: !online || unsupported || busy.value || query.isLoading
+    return RemoteToolAction(
+      icon: muted || source == null ? LucideIcons.volumeX : LucideIcons.volume2,
+      label: '设备声音',
+      description: '$label。$status',
+      onPressed: !online || unsupported || busy.value || query.isLoading
           ? null
           : () async {
               busy.value = true;

@@ -76,6 +76,7 @@ abstract class FileTransferSnapshot with _$FileTransferSnapshot {
     String? exportReason,
     String? saveMode,
     @Default(false) bool cleanupPending,
+    @Default(false) bool historyHidden,
     @Default(false) bool partialDestinationPossible,
     @Default(false) bool treeVerified,
     @Default(false) bool treeComplete,

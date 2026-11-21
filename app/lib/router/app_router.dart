@@ -19,7 +19,7 @@ import 'package:scrcpy_connect/pages/devices/connection_settings/device_connecti
 import 'package:scrcpy_connect/pages/devices/details/device_details_page.dart';
 import 'package:scrcpy_connect/pages/devices/devices_page.dart';
 import 'package:scrcpy_connect/pages/devices/diagnostics/connection_diagnostics_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/device_workspace_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/device_management_page.dart';
 import 'package:scrcpy_connect/pages/files/details/file_details_page.dart';
 import 'package:scrcpy_connect/pages/files/directory_picker/file_directory_picker_page.dart';
 import 'package:scrcpy_connect/pages/files/files_page.dart';
@@ -37,6 +37,7 @@ import 'package:scrcpy_connect/pages/settings/data_preferences/data_preferences_
 import 'package:scrcpy_connect/pages/settings/media_cache/media_cache_page.dart';
 import 'package:scrcpy_connect/pages/settings/runtime_logs/runtime_logs_page.dart';
 import 'package:scrcpy_connect/pages/settings/settings_page.dart';
+import 'package:scrcpy_connect/pages/settings/app_updates_page.dart';
 import 'package:scrcpy_connect/pages/transfers/details/transfer_details_page.dart';
 import 'package:scrcpy_connect/pages/transfers/export/document_export_page.dart';
 import 'package:scrcpy_connect/pages/transfers/receive/receive_content_page.dart';
@@ -425,9 +426,27 @@ class WorkspaceRoute extends _AppPageRoute with $WorkspaceRoute {
   @override
   Widget build(BuildContext context, GoRouterState state) {
     Widget page(BuildContext _, GoRouterState state, DeviceSnapshot device) =>
-        DeviceWorkspacePage(device: device);
+        DevicesPage(initialDevice: device);
     return _deviceRecord(context, state, deviceId, 'workspace', page);
   }
+}
+
+@TypedGoRoute<DeviceManagementRoute>(
+  path: '/devices/:deviceId/manage',
+  name: 'device-management',
+)
+class DeviceManagementRoute extends _AppPageRoute with $DeviceManagementRoute {
+  const DeviceManagementRoute({required this.deviceId});
+  final String deviceId;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
+  @override
+  Widget build(BuildContext context, GoRouterState state) => _deviceRecord(
+    context,
+    state,
+    deviceId,
+    'device-management',
+    (_, _, device) => DeviceManagementPage(device: device),
+  );
 }
 
 @TypedGoRoute<DeviceDetailsRoute>(
@@ -542,7 +561,9 @@ class FileDetailsRoute extends _AppPageRoute with $FileDetailsRoute {
       return RouteResourceView(
         identity: 'file:${device.id}:$path',
         load: () => resources.file(device.id, path),
-        builder: (_, file) => FileDetailsPage(device: device, file: file),
+        builder: (_, file) => file.mime.startsWith('image/')
+            ? MediaPreviewPage(device: device, file: file)
+            : FileDetailsPage(device: device, file: file),
       );
     }
 
@@ -887,17 +908,26 @@ class DocumentExportRoute extends _AppPageRoute with $DocumentExportRoute {
   name: 'receive-content',
 )
 class ReceiveContentRoute extends _AppPageRoute with $ReceiveContentRoute {
-  const ReceiveContentRoute({required this.taskId, this.share = false});
+  const ReceiveContentRoute({
+    required this.taskId,
+    this.share = false,
+    this.$extra,
+  });
   final String taskId;
   final bool share;
+  final bool? $extra;
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final resources = _resources(context);
     return RouteResourceView(
-      identity: 'receive:$taskId:$share',
+      identity: 'receive:$taskId:$share:${$extra == true}',
       load: () => resources.transfer(taskId),
-      builder: (_, task) => ReceiveContentPage(task: task, share: share),
+      builder: (_, task) => ReceiveContentPage(
+        task: task,
+        share: share,
+        openAfterTransfer: $extra == true,
+      ),
     );
   }
 }
@@ -968,6 +998,15 @@ class ShareDirectoryRoute extends _AppPageRoute with $ShareDirectoryRoute {
         FileDirectoryPickerPage(device: device, initialPath: path);
     return _deviceRecord(context, state, deviceId, 'share-directory', page);
   }
+}
+
+@TypedGoRoute<AppUpdatesRoute>(path: '/settings/updates', name: 'app-updates')
+class AppUpdatesRoute extends _AppPageRoute with $AppUpdatesRoute {
+  const AppUpdatesRoute();
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
+  @override
+  Widget build(BuildContext context, GoRouterState state) =>
+      const AppUpdatesPage();
 }
 
 @TypedGoRoute<AppearanceRoute>(path: '/settings/appearance', name: 'appearance')

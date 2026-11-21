@@ -60,6 +60,7 @@ _FileTransferRecord _$FileTransferRecordFromJson(Map<String, dynamic> json) =>
       partialDestinationPossible:
           json['partialDestinationPossible'] as bool? ?? false,
       cleanupPending: json['cleanupPending'] as bool? ?? false,
+      historyHidden: json['historyHidden'] as bool? ?? false,
       cleanupScopeId: json['cleanupScopeId'] as String?,
       cleanupScopeKey: json['cleanupScopeKey'] as String?,
     );
@@ -95,6 +96,7 @@ Map<String, dynamic> _$FileTransferRecordToJson(_FileTransferRecord instance) =>
       'treeComplete': instance.treeComplete,
       'partialDestinationPossible': instance.partialDestinationPossible,
       'cleanupPending': instance.cleanupPending,
+      'historyHidden': instance.historyHidden,
       'cleanupScopeId': ?instance.cleanupScopeId,
       'cleanupScopeKey': ?instance.cleanupScopeKey,
     };

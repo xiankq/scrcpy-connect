@@ -20,7 +20,14 @@ import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 class TransferDetailsPage extends HookConsumerWidget {
-  const TransferDetailsPage({super.key, required this.task});
+  const TransferDetailsPage({
+    super.key,
+    required this.task,
+    this.pane = false,
+    this.onBack,
+  });
+  final bool pane;
+  final VoidCallback? onBack;
   final FileTransferSnapshot task;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -32,6 +39,8 @@ class TransferDetailsPage extends HookConsumerWidget {
         .refresh(provider.future)
         .then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return PageFrame(
+      pane: pane,
+      onBack: onBack,
       title: '传输详情',
       child: AsyncContent<FileTransferSnapshot>(
         loading: query.isLoading,

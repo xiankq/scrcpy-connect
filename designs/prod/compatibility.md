@@ -4,13 +4,13 @@
 
 ## 窗口与形态适配目标
 
-所有页面按当前应用窗口的可用宽高、方向、系统安全区、显示特征和输入方式布局，不按设备名称或物理屏幕猜测。compact 窗口使用单列与底部导航；medium 窗口使用沿可用窗口高度铺开的侧栏或 rail；expanded 窗口使用侧栏、列表／详情双栏和工作区工具栏；freeform 桌面窗口即使宽度低于 expanded 断点也保留工作区工具栏。桌面不绘制手机式默认顶部状态条，窗口标题栏和窗口菜单由宿主负责，应用内容从工作区工具栏开始。设计基线与窗口示意维护于 Ardot《规范 / 07 折叠、平板与多窗口适配》。
+所有页面依据当前窗口的可用宽高、方向、系统安全区、显示特征和输入方式布局。导航在 600 和 840 点调整，列表／详情在 1080 点且各安全窗格足够时并排，低于 480 点高度优先保留正文滚动与关键动作。自由缩放的桌面窗口保留工作区工具栏。详见[宽高阈值](../design.md#通用宽高阈值)和[iPhone Duo 专项](../design.md#iphone-duo-专项)。
 
-折叠与双屏必须避开铰链、折痕、挖孔和相机等系统保留区。外屏保持单列，完全展开使用双栏，书本／桌面半折按实时折叠特征避让；只有宿主明确提供 `FoldingFeature.isSeparating == true` 时才把 Android 特征当作窗格分隔，非分隔或缺少分隔标记的折痕保持连续内容并避开关键控件。开合、旋转、分屏、自由缩放和键盘出现时保留当前设备、应用任务、焦点、选择、未提交输入和滚动位置。iPhone Duo 使用外屏单列、内屏双栏和 reserved regions；外屏及内屏横向姿态的工具栏、导航和标签栏进入系统侧边垂直栏，内屏竖向姿态使用横向栏；Flutter 通过 `GlassNavigationShell` 与 `GlassVerticalBar` 接收 UIKit 的垂直栏边缘和保留区，底部导航继续由单一 `GlassTabBar` 持有。Android 依据实际 app window 的 WindowManager 指标与 `FoldingFeature.isSeparating` 选择布局，不依据物理设备型号；HarmonyOS 使用 `windowSizeChange` 驱动断点，API 12+ 的 `FoldSplitContainer` 处理展开、悬停和折叠态，`windowStatusChange` 只更新窗口模式，`foldStatusChange` 只服务悬停等物理形态行为；Flutter 统一层只消费宿主提供的 `WindowEnvironment`。研究依据：[Android 自适应窗口尺寸](https://developer.android.com/develop/adaptive-apps/guides/support-different-display-sizes)、[Android FoldingFeature](https://developer.android.com/reference/androidx/window/layout/FoldingFeature)、[Apple iPhone Duo 设计](https://developer.apple.com/design/human-interface-guidelines/designing-for-iphone-duo)、[Apple iPhone Duo 准备指南](https://developer.apple.com/iphone-duo/prepare/)。
+折叠与双屏按宿主报告的铰链、折痕、挖孔和相机保留区布置内容。Android 用 WindowManager 的实际窗口指标判断布局，仅当 `FoldingFeature.isSeparating == true` 时以该特征分窗格。HarmonyOS 使用 `windowSizeChange` 驱动布局，API 12+ 的 `FoldSplitContainer` 提供折叠姿态。Flutter 统一接收宿主的 `WindowEnvironment`。开合、旋转、分屏与缩放时保留设备、任务、焦点、选择、未提交输入和滚动位置。[Android 自适应窗口尺寸](https://developer.android.com/develop/adaptive-apps/guides/support-different-display-sizes) · [Android FoldingFeature](https://developer.android.com/reference/androidx/window/layout/FoldingFeature)
 
 连接屏幕的独立窗口属于控制会话的窗口实例。每个实例拥有唯一窗口身份、设备身份、应用任务、视频捕获和输入焦点；关闭只撤销自己的会话，迟到回执不能更新已关闭窗口。平板、桌面、移动端和鸿蒙分别由宿主的 Android Activity/WindowManager、iPadOS/macOS scene/window、HarmonyOS WindowStage 或对应插件创建和销毁；HarmonyOS 辅助窗口由宿主显式管理，主窗与辅助窗不可共享页面所有权。桌面子 engine 若没有 `window.readEnvironment` 宿主回调，使用 `desktop_multi_window` 当前 `WindowController.windowId` 保持身份隔离。Flutter 官方 view／multi-engine 能力不等于统一的原生窗口 API。宿主不支持额外窗口时回退为同页分栏，但继续使用同一窗口身份和状态边界。
 
-iPhone Duo 横向垂直导航胶囊贴合物理屏幕边缘并保留 24 点外边距；完整系统 lateral inset 只用于页面内容避让，不能再次作为导航胶囊的水平 SafeArea。
+iPhone Duo 采用 iOS 27.1 SDK 的外屏与内屏布局作为设计目标。Flutter 根据系统报告的栏位、分屏外缘及相机与折叠保留区放置自绘控件。当前桌面半折使用安全单窗格。Duo 在上下窗格分别呈现远控和工具属于待验收设计。[Apple 准备指南](https://developer.apple.com/iphone-duo/prepare/) · [竖向栏技术讲解](https://developer.apple.com/videos/play/tech-talks/111462/)
 
 Flutter 侧已交付 `WindowEnvironment`、`WindowEnvironmentCodec` 与显示特征保留区布局：Android 宿主通过 AndroidX `WindowInfoTracker` 的 `FoldingFeature` 事件投影折叠／铰链及 `isSeparating`，并把 Activity 的分屏／画中画事实投影为 `split`／`floating`；WindowManager 回调、配置变化和 Activity 生命周期会重新发送同一窗口的最新模式、边界、安全区 inset、挖孔与折叠特征。iPhone Duo 使用 `foldable` 包读取 UIKit 的 hinge 状态、尺寸类别、division 与 occlusion 保留区，`WindowEnvironment` 将原子快照转换为统一的 posture 与 reserved regions；外屏、完全展开和半折切换不再由设备名称或自定义 UIKit 投影推断。独立 scene 的初始路由和窗口身份通过 `stateRestorationActivity` 保存，系统重建 scene 时恢复同一控制会话。HarmonyOS 宿主可将 FoldSplitContainer 投影为同一 payload；窗口指标变化、平台姿态事件或应用恢复前台时重新读取宿主投影，当前 Flutter view 的尺寸与显示特征保持实时；桌面工作区和折叠导航会为全高折痕／铰链留下真实空区，只有宿主明确标记分隔的特征才切分窗格，MediaQuery-only 折痕不猜测分屏。横向全宽铰链进入桌面半折时，`WindowPaneHost` 选择安全子屏并重写该子屏的 MediaQuery，内容不跨铰链。Linux、macOS、Windows 使用 `desktop_multi_window` 创建独立 Flutter engine，并在每个子窗口注册插件；Android 使用 `FlutterEngineGroup` + 独立 `Activity` 任务，iOS/iPadOS 使用 `UIApplicationSupportsMultipleScenes` + `FlutterEngineGroup` + `SceneDelegate` 创建真实窗口。
 
@@ -50,13 +50,16 @@ Flutter 官方主线没有 HarmonyOS 目标；OpenHarmony 社区 fork 需要独�
 
 ## 当前交付边界
 
+- 已能读取实际安装包的版本与构建信息。[应用版本与更新](app-updates.md)的检测、发布记录、下载和安装交付按实际分发渠道接入和验收。
 - 通话当前仅请求打开手机系统通话界面；尚无逐呼叫接听、拒接、挂断及双向语音。系统接受请求不证明界面可见。这是交付现状，不是技术不可行结论；完整接力为待验证目标，未验证组合仅显示原界面路径。
 - 自动剪贴板复用 scrcpy；仅当前可见且获焦的控制画面参与，切设备／恢复先建立两端基线，保留本机内容。写入须收到回执并读回一致；读不到文字、权限受限或结果未知时暂停，不报告同步成功。各主控平台与被控组合仍须设备验证。
 - 相册检查时渐进展示已发现内容；进程内按设备保留最近集合和位置，再访后台检查，新终态由用户主动更新。进程重启不恢复历史集合；权限及中途失败保留已知结果，不伪装完整图库。
 - 截图来自已接收的视频帧，可能降采样；暂停时取最后画面。缩略反馈提供系统保存及分享，系统保存复用同次交付记录，系统接收分享不证明接收应用已保存。
 - Android 目录发送使用系统目录授权；Linux 使用原生目录选择和公开文件能力递归发送；iOS 尚未提供目录发送。系统保存当前由 Android 目录授权及 Linux 精确文件能力提供；macOS／Windows 的精确本机文件能力尚未交付，文件仅提供系统分享，目录操作不暗示已可用。iOS 文件交付使用系统分享，不将应用私有暂存说成已保存。
-- 通知清除作用远端，批量操作先确认来源与范围；持续通知和未知结果保留核验。当前活动区分正在进行与待核对，未知启动仅核对同次记录，关闭记录保留手机应用任务。
-- 应用打开方式按本机设备记录与包名记忆，优先复用尚存会话；能力变化需重新选择。电话入口和真实来电进入同一完整电话页，未验证接力组合明确声音仍在手机。独立设备详情展示设备参数，诊断集中连接与功能检查，检查项直接平铺，画面偏好集中于“画面与控制”。
+- 单文件取回后调用主控设备的系统打开方式选择器属于[系统交付设计目标](content-and-transfer.md#原件取回与系统交付)。系统选择器与已交付的保存、分享分别核验。
+- 通知清除作用于当前被控设备，批量操作限于点按时已核验、可清除的条目，常驻通知保留，未知结果重新核验。当前活动区分正在进行与待核对，未知启动仅核对同次记录，关闭记录保留手机应用任务。
+- 当前工作台已有运行中应用读取与打开方式选择能力。两张应用卡、常用应用排序与同页连接反馈见[工作台设计目标](device-connection.md#设备工作台)。
+- 应用打开方式按本机设备记录与包名记忆，优先复用尚存会话；能力变化需重新选择。当前电话页从工作台进入，已交付动作是请求打开手机界面；直接接续与按能力分流以[电话设计目标](calls.md)为准。独立设备详情展示设备参数，诊断集中连接与功能检查，画面偏好集中于“画面与控制”。
 - 记录导入先预览，按同一内容的持久回执抑制重复追加；默认保留本机设置，只有明确选择才导入全局偏好。设备偏好、应用打开方式和授权身份不由元数据导入覆盖，写入结果未知先核验同次导入。
 - 当前应用启动按包名选择任务，不能保证精确恢复某个多实例任务页面；熄屏请求也不保证立即要求强认证解锁。
 - 通知与来电系统提醒意图分别保存且默认关闭，仅明确开启时索权；当前设备通知页可见时抑制重复系统提醒。实际送达及点击仍取决于宿主权限与平台支持。
@@ -74,5 +77,7 @@ Flutter 官方主线没有 HarmonyOS 目标；OpenHarmony 社区 fork 需要独�
 密钥、配对码、通知正文和剪贴板不得进入诊断或分享报告。复制、系统分享与远端写入须有明确用户动作。资源不足拒绝新活动或明确暂停所属活动，保留已有数据和其他设备的重要活动。
 
 兼容声明注明实际宿主、被控版本与验证环境；编译、夹具、静态稿和设备运行各自只证明对应层级。
+
+取回原件和系统交付依赖宿主将已核验的暂存描述符原子发布到目标路径。当前实现提供 Linux 和 Android 的发布能力。Apple 宿主可读取设备目录，取回原件在发布环节返回 `atomic_save_unavailable`，因此不会进入系统打开方式。
 
 视觉以 [iOS 27 规范](../design.md)为目标；静态设计齐全不表示系统玻璃外观联动、动态字体、读屏、GPU 材料或新增产品动作已完成。媒体暂存的外部读取保护尚不能安全主动解除，满额时不可通过清理受保护文件恢复预算，见[媒体暂存](content-and-transfer.md#媒体暂存与空间准入)。

@@ -25,15 +25,51 @@ class FileDetailsPage extends ConsumerWidget {
         ? name.split('.').last.toUpperCase()
         : '';
     final (type, icon) = switch (mime) {
-      _ when mime.startsWith('image/') => ('图片', LucideIcons.image),
+      _ when mime == 'application/pdf' => ('PDF 文件', LucideIcons.fileText),
+      _ when const {'ZIP', 'RAR', '7Z', 'GZ'}.contains(extension) => (
+        '压缩包',
+        LucideIcons.archive,
+      ),
       _ when mime.startsWith('video/') => ('视频', LucideIcons.video),
       _ when mime.startsWith('audio/') => ('音频', LucideIcons.audioLines),
       _ => (extension.isEmpty ? '文件' : '$extension 文件', LucideIcons.fileText),
     };
     final theme = Theme.of(context);
-    final accent = ConnectTokens.accent(context, ConnectTokens.amber);
+    final accent = ConnectTokens.accent(context, switch (icon) {
+      LucideIcons.archive => ConnectTokens.amber,
+      LucideIcons.audioLines => DesignTokens.colorListIconSlate,
+      LucideIcons.video => DesignTokens.colorListIconPurple,
+      _ => DesignTokens.colorListIconDocument,
+    });
     return PageFrame(
       title: '文件详情',
+      bottom: Wrap(
+        alignment: WrapAlignment.spaceEvenly,
+        spacing: DesignTokens.spacingSm,
+        children: [
+          TextButton.icon(
+            onPressed: fileCanOpen(file)
+                ? () => retrieveFile(
+                    context,
+                    ref,
+                    device,
+                    file,
+                    openAfterTransfer: true,
+                  )
+                : null,
+            icon: const Icon(LucideIcons.download),
+            label: const Text('取回文件'),
+          ),
+          if (supportsSystemFileShare)
+            TextButton.icon(
+              onPressed: fileCanOpen(file)
+                  ? () => retrieveFile(context, ref, device, file, share: true)
+                  : null,
+              icon: const Icon(LucideIcons.share2),
+              label: const Text('分享'),
+            ),
+        ],
+      ),
       child: GroupedListView(
         padding: const EdgeInsets.all(DesignTokens.spacingMd),
         children: [
@@ -113,29 +149,6 @@ class FileDetailsPage extends ConsumerWidget {
             StateNote(
               fileUnavailableReason(file),
               icon: LucideIcons.circleAlert,
-            ),
-          const SizedBox(height: DesignTokens.spacingXs),
-          FilledButton.icon(
-            onPressed: fileCanOpen(file)
-                ? () => retrieveFile(context, ref, device, file)
-                : null,
-            icon: const Icon(
-              LucideIcons.download,
-              size: DesignTokens.componentIconActionSize,
-            ),
-            label: const Text('取回原文件'),
-          ),
-          const SizedBox(height: DesignTokens.spacingSm),
-          if (supportsSystemFileShare)
-            OutlinedButton.icon(
-              onPressed: fileCanOpen(file)
-                  ? () => retrieveFile(context, ref, device, file, share: true)
-                  : null,
-              icon: const Icon(
-                LucideIcons.share2,
-                size: DesignTokens.componentIconActionSize,
-              ),
-              label: const Text('交给系统分享'),
             ),
           const StateNote('取回后可在本机编辑副本；修改后需要主动重新发送，不会自动回写手机。'),
         ],

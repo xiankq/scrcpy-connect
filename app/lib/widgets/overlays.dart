@@ -86,6 +86,7 @@ Future<T?> showAppDialog<T>({
   List<Widget> actions = const [],
   bool barrierDismissible = true,
   RouteSettings? routeSettings,
+  Offset? anchorPoint,
 }) {
   assert(builder != null || content != null);
   return showDialog<T>(
@@ -93,6 +94,7 @@ Future<T?> showAppDialog<T>({
     barrierColor: _scrim(context),
     barrierDismissible: barrierDismissible,
     routeSettings: routeSettings,
+    anchorPoint: anchorPoint,
     builder:
         builder ??
         (context) =>
@@ -110,6 +112,7 @@ Future<T?> showAppModalSheet<T>({
   bool isDismissible = true,
   bool enableDrag = true,
   RouteSettings? routeSettings,
+  Offset? anchorPoint,
 }) => showModalBottomSheet<T>(
   context: context,
   barrierColor: _scrim(context),
@@ -119,6 +122,7 @@ Future<T?> showAppModalSheet<T>({
   isDismissible: isDismissible,
   enableDrag: enableDrag,
   routeSettings: routeSettings,
+  anchorPoint: anchorPoint,
   showDragHandle: enableDrag,
   backgroundColor: Theme.of(context).colorScheme.surface,
   elevation: 0,

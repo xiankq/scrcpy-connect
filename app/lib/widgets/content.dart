@@ -1,23 +1,51 @@
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 
-class ContentLoadingIndicator extends StatelessWidget {
-  const ContentLoadingIndicator({super.key});
+class ContentLoadingIndicator extends HookWidget {
+  const ContentLoadingIndicator({
+    super.key,
+    this.size = DesignTokens.componentIconSize,
+    this.color,
+  });
+
+  final double size;
+  final Color? color;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    label: '正在加载',
-    child: Center(
-      widthFactor: 1,
-      heightFactor: 1,
-      child: CupertinoActivityIndicator(
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-        animating: !MediaQuery.disableAnimationsOf(context),
+  Widget build(BuildContext context) {
+    final animate =
+        !MediaQuery.disableAnimationsOf(context) &&
+        !MediaQuery.reduceMotionOf(context);
+    final rotation = useAnimationController(
+      duration: const Duration(milliseconds: 900),
+    );
+    useEffect(() {
+      if (animate) {
+        rotation.repeat();
+      } else {
+        rotation.reset();
+      }
+      return null;
+    }, [rotation, animate]);
+    return Semantics(
+      label: '正在加载',
+      child: Center(
+        widthFactor: 1,
+        heightFactor: 1,
+        child: RotationTransition(
+          turns: rotation,
+          child: Icon(
+            LucideIcons.loaderCircle,
+            color: color ?? Theme.of(context).colorScheme.onSurfaceVariant,
+            size: size,
+          ),
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class ContentPanel extends StatelessWidget {

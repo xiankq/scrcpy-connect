@@ -193,7 +193,7 @@ bool _qualityValue(String key, Object? value) => switch (key) {
             value.isNotEmpty &&
             value.length <= 256 &&
             RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(value)),
-  'maxSize' => value is int && value >= 320 && value <= 4096,
+  'maxSize' => value is int && (value == 0 || value >= 320 && value <= 4096),
   'maxFps' => value is int && value >= 1 && value <= 120,
   'videoBitRate' => value is int && value >= 500000 && value <= 50000000,
   _ => false,
@@ -217,9 +217,21 @@ bool _deviceSetting(Object? value) =>
           'custom',
         ].contains(entry.value),
         'remoteCustomRatio' => _ratio(entry.value),
+        'favoriteApps' => _favoriteApps(entry.value),
         _ => false,
       },
     );
+bool _favoriteApps(Object? value) =>
+    value is List &&
+    value.every(
+      (item) =>
+          item is Map &&
+          item['packageName'] is String &&
+          (item['packageName'] as String).isNotEmpty &&
+          item['name'] is String &&
+          (item['userId'] == null || item['userId'] is int),
+    );
+
 bool _ratio(Object? value) {
   if (value is! String) return false;
   final parts = value.split(':');

@@ -39,7 +39,7 @@ class VideoQualityPreferences with _$VideoQualityPreferences {
 
   static const defaults = VideoQualityPreferences(
     qualityPreset: (name: 'balanced'),
-    maxSize: 1280,
+    maxSize: 720,
     maxFps: 60,
     videoBitRate: 4000000,
     videoCodec: VideoCodec.h264,
@@ -63,6 +63,8 @@ class VideoQualityPreferences with _$VideoQualityPreferences {
   );
 }
 
+typedef FavoriteDeviceApp = ({String packageName, String name, int? userId});
+
 @freezed
 class DevicePreferences with _$DevicePreferences {
   const DevicePreferences({
@@ -73,6 +75,7 @@ class DevicePreferences with _$DevicePreferences {
     this.stayAwake,
     this.remoteAspectRatio,
     this.remoteCustomRatio,
+    this.favoriteApps,
   });
 
   final bool? clipboardSync;
@@ -82,6 +85,7 @@ class DevicePreferences with _$DevicePreferences {
   final bool? stayAwake;
   final ScreenAspectRatio? remoteAspectRatio;
   final String? remoteCustomRatio;
+  final List<FavoriteDeviceApp>? favoriteApps;
 
   DevicePreferences merge(DevicePreferences patch) => copyWith(
     clipboardSync: patch.clipboardSync ?? clipboardSync,
@@ -91,6 +95,7 @@ class DevicePreferences with _$DevicePreferences {
     stayAwake: patch.stayAwake ?? stayAwake,
     remoteAspectRatio: patch.remoteAspectRatio ?? remoteAspectRatio,
     remoteCustomRatio: patch.remoteCustomRatio ?? remoteCustomRatio,
+    favoriteApps: patch.favoriteApps ?? favoriteApps,
   );
 }
 

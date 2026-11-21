@@ -287,7 +287,10 @@ class _ControlPageState extends ConsumerState<ControlPage>
     );
     screenState = RemoteScreenState(
       window: window,
-      foreground: () => acceptsInput,
+      foreground: () => switch (WidgetsBinding.instance.lifecycleState) {
+        null || .resumed || .inactive => true,
+        _ => false,
+      },
       onChanged: () {
         if (mounted) setState(() {});
       },
@@ -817,6 +820,10 @@ class _ControlPageState extends ConsumerState<ControlPage>
                   (screenState.screenOn == null &&
                       screenState.screenLocked == null &&
                       presentation.errorCode == 'device_asleep'),
+              screenOff:
+                  screenState.screenOn == false ||
+                  screenState.screenOn == null &&
+                      presentation.errorCode == 'device_asleep',
               onWake: waking ? null : wakeScreen,
               onClose: presentation.exiting ? null : leave,
               controls: ExitHandle(

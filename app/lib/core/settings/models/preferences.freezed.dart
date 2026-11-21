@@ -222,20 +222,20 @@ $DevicePreferencesCopyWith<DevicePreferences> get copyWith => _$DevicePreference
 @override
 bool operator ==(Object other) {
   final _this = this as DevicePreferences;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is DevicePreferences&&(identical(other.clipboardSync, _this.clipboardSync) || other.clipboardSync == _this.clipboardSync)&&(identical(other.showNavigationBar, _this.showNavigationBar) || other.showNavigationBar == _this.showNavigationBar)&&(identical(other.wakeOnConnect, _this.wakeOnConnect) || other.wakeOnConnect == _this.wakeOnConnect)&&(identical(other.lockOnClose, _this.lockOnClose) || other.lockOnClose == _this.lockOnClose)&&(identical(other.stayAwake, _this.stayAwake) || other.stayAwake == _this.stayAwake)&&(identical(other.remoteAspectRatio, _this.remoteAspectRatio) || other.remoteAspectRatio == _this.remoteAspectRatio)&&(identical(other.remoteCustomRatio, _this.remoteCustomRatio) || other.remoteCustomRatio == _this.remoteCustomRatio));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is DevicePreferences&&(identical(other.clipboardSync, _this.clipboardSync) || other.clipboardSync == _this.clipboardSync)&&(identical(other.showNavigationBar, _this.showNavigationBar) || other.showNavigationBar == _this.showNavigationBar)&&(identical(other.wakeOnConnect, _this.wakeOnConnect) || other.wakeOnConnect == _this.wakeOnConnect)&&(identical(other.lockOnClose, _this.lockOnClose) || other.lockOnClose == _this.lockOnClose)&&(identical(other.stayAwake, _this.stayAwake) || other.stayAwake == _this.stayAwake)&&(identical(other.remoteAspectRatio, _this.remoteAspectRatio) || other.remoteAspectRatio == _this.remoteAspectRatio)&&(identical(other.remoteCustomRatio, _this.remoteCustomRatio) || other.remoteCustomRatio == _this.remoteCustomRatio)&&const DeepCollectionEquality().equals(other.favoriteApps, _this.favoriteApps));
 }
 
 
 @override
 int get hashCode {
   final _this = this as DevicePreferences;
-  return Object.hash(runtimeType,_this.clipboardSync,_this.showNavigationBar,_this.wakeOnConnect,_this.lockOnClose,_this.stayAwake,_this.remoteAspectRatio,_this.remoteCustomRatio);
+  return Object.hash(runtimeType,_this.clipboardSync,_this.showNavigationBar,_this.wakeOnConnect,_this.lockOnClose,_this.stayAwake,_this.remoteAspectRatio,_this.remoteCustomRatio,const DeepCollectionEquality().hash(_this.favoriteApps));
 }
 
 @override
 String toString() {
   final _this = this as DevicePreferences;
-  return 'DevicePreferences(clipboardSync: ${_this.clipboardSync}, showNavigationBar: ${_this.showNavigationBar}, wakeOnConnect: ${_this.wakeOnConnect}, lockOnClose: ${_this.lockOnClose}, stayAwake: ${_this.stayAwake}, remoteAspectRatio: ${_this.remoteAspectRatio}, remoteCustomRatio: ${_this.remoteCustomRatio})';
+  return 'DevicePreferences(clipboardSync: ${_this.clipboardSync}, showNavigationBar: ${_this.showNavigationBar}, wakeOnConnect: ${_this.wakeOnConnect}, lockOnClose: ${_this.lockOnClose}, stayAwake: ${_this.stayAwake}, remoteAspectRatio: ${_this.remoteAspectRatio}, remoteCustomRatio: ${_this.remoteCustomRatio}, favoriteApps: ${_this.favoriteApps})';
 }
 
 
@@ -246,7 +246,7 @@ abstract mixin class $DevicePreferencesCopyWith<$Res>  {
   factory $DevicePreferencesCopyWith(DevicePreferences value, $Res Function(DevicePreferences) _then) = _$DevicePreferencesCopyWithImpl;
 @useResult
 $Res call({
- bool? clipboardSync, bool? showNavigationBar, bool? wakeOnConnect, bool? lockOnClose, bool? stayAwake, ScreenAspectRatio? remoteAspectRatio, String? remoteCustomRatio
+ bool? clipboardSync, bool? showNavigationBar, bool? wakeOnConnect, bool? lockOnClose, bool? stayAwake, ScreenAspectRatio? remoteAspectRatio, String? remoteCustomRatio, List<FavoriteDeviceApp>? favoriteApps
 });
 
 
@@ -263,7 +263,7 @@ class _$DevicePreferencesCopyWithImpl<$Res>
 
 /// Create a copy of DevicePreferences
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? clipboardSync = freezed,Object? showNavigationBar = freezed,Object? wakeOnConnect = freezed,Object? lockOnClose = freezed,Object? stayAwake = freezed,Object? remoteAspectRatio = freezed,Object? remoteCustomRatio = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? clipboardSync = freezed,Object? showNavigationBar = freezed,Object? wakeOnConnect = freezed,Object? lockOnClose = freezed,Object? stayAwake = freezed,Object? remoteAspectRatio = freezed,Object? remoteCustomRatio = freezed,Object? favoriteApps = freezed,}) {
   return _then(DevicePreferences(
 clipboardSync: freezed == clipboardSync ? _self.clipboardSync : clipboardSync // ignore: cast_nullable_to_non_nullable
 as bool?,showNavigationBar: freezed == showNavigationBar ? _self.showNavigationBar : showNavigationBar // ignore: cast_nullable_to_non_nullable
@@ -272,7 +272,8 @@ as bool?,lockOnClose: freezed == lockOnClose ? _self.lockOnClose : lockOnClose /
 as bool?,stayAwake: freezed == stayAwake ? _self.stayAwake : stayAwake // ignore: cast_nullable_to_non_nullable
 as bool?,remoteAspectRatio: freezed == remoteAspectRatio ? _self.remoteAspectRatio : remoteAspectRatio // ignore: cast_nullable_to_non_nullable
 as ScreenAspectRatio?,remoteCustomRatio: freezed == remoteCustomRatio ? _self.remoteCustomRatio : remoteCustomRatio // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,favoriteApps: freezed == favoriteApps ? _self.favoriteApps : favoriteApps // ignore: cast_nullable_to_non_nullable
+as List<FavoriteDeviceApp>?,
   ));
 }
 

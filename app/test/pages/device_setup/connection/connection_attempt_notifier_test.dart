@@ -279,7 +279,7 @@ void main() {
     expect(container.read(provider).canSubmit, isFalse);
   });
 
-  testWidgets('配对后补充端口沿用记录与 TLS，连接失败原位显示真实原因', (tester) async {
+  testWidgets('连接失败返回配对码表单，主动切到 IP 才修改连接信息', (tester) async {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -297,6 +297,11 @@ void main() {
     final fields = tester.widget<ConnectionAddressFields>(
       find.byType(ConnectionAddressFields),
     );
+    final inputs = find.byType(TextFormField);
+    expect(
+      tester.getTopLeft(inputs.at(0)).dy,
+      tester.getTopLeft(inputs.at(1)).dy,
+    );
     fields.pairingCode.text = '123456';
     await tester.ensureVisible(find.text('配对并连接'));
     await tester.tap(find.text('配对并连接'));
@@ -305,14 +310,20 @@ void main() {
     expect(fields.pairingCode.text, isEmpty);
     setup.calls.single.result.complete(_paired());
     await tester.pumpAndSettle();
-    expect(find.text('已配对，尚未连接'), findsOneWidget);
-    await tester.tap(find.text('补充连接端口'));
+    expect(find.text('连接失败'), findsOneWidget);
+    expect(find.text('补充连接端口'), findsNothing);
+    await tester.tap(find.text('返回修改'));
+    await tester.pumpAndSettle();
+    expect(find.text('配对并连接'), findsOneWidget);
+    expect(fields.address.text, 'phone.local');
+    expect(fields.port.text, '45678');
+    expect(fields.pairingCode.text, isEmpty);
+    await tester.tap(find.text('IP 连接'));
     await tester.pumpAndSettle();
     final completed = tester.widget<ConnectionAddressFields>(
       find.byType(ConnectionAddressFields),
     );
     expect(completed.pairing, isFalse);
-    expect(completed.completingPairing, isTrue);
     expect(completed.legacyTcp, isFalse);
     expect(completed.address.text, 'phone.local');
     expect(completed.port.text, isEmpty);

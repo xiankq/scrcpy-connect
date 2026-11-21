@@ -167,6 +167,14 @@ final class FileOperations
       );
 
   @override
+  Future<void> clearTransferHistory(List<FileTransferTarget> targets) =>
+      _fileOperation(
+        'files.transfer.history.clear',
+        null,
+        () => _transfers.clearTransferHistory(targets),
+      );
+
+  @override
   Future<List<IncomingShare>> readIncomingShares() => _fileOperation(
     'sharing.pending',
     null,

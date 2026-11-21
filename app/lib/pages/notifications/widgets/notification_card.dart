@@ -11,7 +11,6 @@ import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
-import 'package:scrcpy_connect/widgets/state_note.dart';
 
 class NotificationCard extends HookConsumerWidget {
   const NotificationCard({
@@ -73,11 +72,7 @@ class NotificationCard extends HookConsumerWidget {
 
     final appName = notification.appName.trim();
     final packageName = notification.packageName;
-    final posted = switch (notification.postedAt) {
-      final int timestamp when timestamp > 0 && timestamp <= 8640000000000000 =>
-        DateTime.fromMillisecondsSinceEpoch(timestamp),
-      _ => null,
-    };
+    final posted = notification.postedTime;
     final localizations = MaterialLocalizations.of(context);
     final now = DateTime.now();
     final time = posted == null
@@ -86,11 +81,6 @@ class NotificationCard extends HookConsumerWidget {
             TimeOfDay.fromDateTime(posted),
             alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
           );
-    final sameDay =
-        posted != null &&
-        posted.year == now.year &&
-        posted.month == now.month &&
-        posted.day == now.day;
     final elapsed = posted == null ? null : now.difference(posted);
     final timeLabel = posted == null
         ? null
@@ -98,145 +88,93 @@ class NotificationCard extends HookConsumerWidget {
         ? '现在'
         : elapsed != null && !elapsed.isNegative && elapsed.inHours < 1
         ? '${elapsed.inMinutes}分钟前'
-        : sameDay
-        ? time
-        : '${localizations.formatShortMonthDay(posted)} · $time';
+        : time;
+    final theme = Theme.of(context);
     return ContentPanel(
       key: ValueKey('notification-${notification.id}'),
       padding: EdgeInsets.zero,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: opening.value || notification.canOpen == false ? null : open,
-          borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minHeight: DesignTokens.componentNotificationCardHeight,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(DesignTokens.spacingMd),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      minHeight: DesignTokens.componentButtonSecondaryHeight,
-                    ),
-                    child: Row(
-                      children: [
-                        if (packageName.isNotEmpty)
-                          SizedBox.square(
-                            dimension: DesignTokens.componentSmallButtonSize,
-                            child: FittedBox(
-                              child: PhoneAppIcon(
-                                deviceId: device.id,
-                                packageName: packageName,
-                                userId: notification.userId,
-                              ),
-                            ),
-                          )
-                        else
-                          const Icon(
-                            LucideIcons.imageOff,
-                            semanticLabel: '图标暂不可用',
-                          ),
-                        const SizedBox(width: DesignTokens.spacingSm),
-                        Expanded(
-                          child: Wrap(
-                            alignment: WrapAlignment.spaceBetween,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: DesignTokens.spacingSm,
-                            runSpacing: DesignTokens.spacingXxs,
-                            children: [
-                              Text(
-                                appName.isEmpty || appName == packageName
-                                    ? '手机通知'
-                                    : appName,
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                              if (timeLabel != null)
-                                Text(
-                                  timeLabel,
-                                  semanticsLabel:
-                                      '收到于 ${localizations.formatFullDate(posted!)} $time',
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (notification.title.isNotEmpty) ...[
-                    const SizedBox(height: DesignTokens.spacingSm),
-                    Text(
-                      notification.title,
-                      style: Theme.of(context).textTheme.bodyLarge
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                  if (notification.body.isNotEmpty) ...[
-                    const SizedBox(height: DesignTokens.spacingTight),
-                    Text(
-                      notification.body,
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ],
-                  if (notification.title.isEmpty &&
-                      notification.body.isEmpty) ...[
-                    const SizedBox(height: DesignTokens.spacingTight),
-                    Text(
-                      '此通知未提供预览内容',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                  if (notification.canOpen == false)
-                    const StateNote('此通知的原始动作已不可用，请在手机原应用中处理。'),
-                  if (notification.canDismiss is bool) ...[
-                    const SizedBox(height: DesignTokens.spacingSm),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        minHeight: DesignTokens.componentButtonSecondaryHeight,
-                      ),
-                      child: Align(
-                        alignment: AlignmentDirectional.centerEnd,
-                        child: Wrap(
-                          alignment: WrapAlignment.end,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          spacing: DesignTokens.spacingSm,
-                          runSpacing: DesignTokens.spacingXxs,
-                          children: [
-                            if (notification.canDismiss == true)
-                              Tooltip(
-                                message: '清除通知',
-                                child: TextButton.icon(
-                                  style: TextButton.styleFrom(
-                                    minimumSize: const Size(
-                                      DesignTokens.componentIconButtonSize,
-                                      DesignTokens.componentIconButtonSize,
-                                    ),
-                                  ),
-                                  onPressed: clearing ? null : onClear,
-                                  icon: const Icon(
-                                    LucideIcons.checkCheck,
-                                    size: DesignTokens.componentIconSmallSize,
-                                  ),
-                                  label: const Text('清除通知'),
-                                ),
-                              )
-                            else if (notification.canDismiss == false)
-                              Text(
-                                '手机系统将此项标为不可清除，请在原应用中处理。',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
+      child: InkWell(
+        onTap: opening.value || notification.canOpen == false ? null : open,
+        borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            DesignTokens.spacingMd,
+            DesignTokens.spacingSm,
+            DesignTokens.spacingSm,
+            DesignTokens.spacingSm,
+          ),
+          child: Row(
+            children: [
+              Semantics(
+                label: appName.isEmpty ? '手机通知' : appName,
+                child: packageName.isNotEmpty
+                    ? PhoneAppIcon(
+                        size: DesignTokens.componentNotificationAppIconSize,
+                        deviceId: device.id,
+                        packageName: packageName,
+                        userId: notification.userId,
+                      )
+                    : const Icon(LucideIcons.bell),
               ),
-            ),
+              const SizedBox(width: DesignTokens.spacingSm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      notification.title.isEmpty ? '手机通知' : notification.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (notification.body.isNotEmpty)
+                      Text(
+                        notification.body,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: DesignTokens.spacingXs),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth:
+                      104 *
+                      MediaQuery.textScalerOf(context).scale(1).clamp(1, 1.2),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (timeLabel != null)
+                      Text(
+                        timeLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        semanticsLabel:
+                            '收到于 ${localizations.formatFullDate(posted!)} $time',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    if (notification.canDismiss == true)
+                      IconButton(
+                        tooltip: '清除通知',
+                        onPressed: clearing ? null : onClear,
+                        icon: const Icon(
+                          LucideIcons.x,
+                          size: DesignTokens.componentIconSmallSize,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),

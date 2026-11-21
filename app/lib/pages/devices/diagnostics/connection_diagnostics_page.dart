@@ -10,7 +10,6 @@ import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
@@ -105,13 +104,14 @@ class ConnectionDiagnosticsPage extends HookConsumerWidget {
                 children: [
                   for (final check in checks)
                     ListTile(
-                      leading: ListIconBadge(
-                        icon: check.ok == true
+                      leading: Icon(
+                        check.ok == true
                             ? LucideIcons.circleCheck
                             : LucideIcons.circleAlert,
-                        backgroundColor: check.ok == true
-                            ? DesignTokens.colorListIconMint
-                            : DesignTokens.colorListIconAmber,
+                        size: DesignTokens.componentListIconGlyphSize,
+                        color: check.ok == true
+                            ? DesignTokens.colorSuccess
+                            : DesignTokens.componentConnectionIconUsbTextColor,
                       ),
                       title: Text(
                         check.name,

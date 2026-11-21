@@ -1,123 +1,345 @@
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:scrcpy_connect/core/platform/background_status_provider.dart';
 import 'package:scrcpy_connect/core/platform/platform_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
+import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
+import 'package:scrcpy_connect/widgets/form_controls.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
-import 'package:scrcpy_connect/widgets/overlays.dart';
+import 'package:scrcpy_connect/widgets/system_notifications.dart';
+
+import 'widgets/settings_row.dart';
 
 class SettingsPage extends HookConsumerWidget {
   const SettingsPage({super.key, this.embedded = false});
   final bool embedded;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final readInfo = ref.watch(appInfoReaderProvider);
-    final appSettingsError = ref.watch(
-      preferencesProvider.select((state) => state.error),
+    final preferences = ref.watch(preferencesProvider);
+    final settings = preferences.values;
+    final owner = ref.watch(settingsManagementProvider);
+    final controller = ref.watch(backgroundControlProvider);
+    final background = ref.watch(backgroundStatusProvider);
+    final alerts = useSystemNotifications(context, ref);
+    useStream(alerts.changes);
+    final infoReader = ref.watch(appInfoReaderProvider);
+    final info = useFuture(useMemoized(infoReader, [infoReader]));
+    final busy = useValueNotifier(false, [owner, controller, alerts]);
+    useValueListenable(busy);
+
+    bool current() =>
+        context.mounted &&
+        identical(owner, ref.read(settingsManagementProvider)) &&
+        identical(controller, ref.read(backgroundControlProvider));
+
+    Future<void> update(Future<void> Function() operation) async {
+      if (busy.value) return;
+      busy.value = true;
+      try {
+        await operation();
+      } catch (error) {
+        if (context.mounted && current()) feedback(context, '$error');
+      } finally {
+        if (current()) busy.value = false;
+      }
+    }
+
+    Future<void> save(PreferenceChanges changes) =>
+        ref.read(preferencesProvider.notifier).update(changes);
+
+    Future<void> setAlert(
+      bool enabled, {
+      required bool isCall,
+    }) => update(() async {
+      if (enabled) {
+        var status = await alerts.refreshStatus();
+        if (!context.mounted || !current()) return;
+        final requested = status.permissionGranted != true && status.canRequest;
+        if (requested) {
+          status = await alerts.requestPermission();
+          if (!context.mounted || !current()) return;
+        }
+        final channelEnabled = isCall
+            ? status.callChannelEnabled
+            : status.notificationChannelEnabled;
+        if (status.permissionGranted != true || channelEnabled == false) {
+          if (!requested && status.canOpenSettings) {
+            if (!await alerts.openSettings() && context.mounted && current()) {
+              feedback(context, '请在系统设置中允许提醒。');
+            }
+          } else {
+            feedback(
+              context,
+              status.reason.isEmpty ? '系统暂未允许提醒。' : status.reason,
+            );
+          }
+          return;
+        }
+      }
+      await save(
+        isCall
+            ? PreferenceChanges(callAlerts: enabled)
+            : PreferenceChanges(notificationAlerts: enabled),
+      );
+    });
+
+    Future<void> setBackground(bool enabled) => update(() async {
+      final result = await controller.requestBackground(
+        enabled: enabled,
+        askNotificationPermission: enabled,
+      );
+      if (!context.mounted || !current()) return;
+      ref.invalidate(backgroundStatusProvider);
+      if (enabled && (result.requested == false || result.stopped)) {
+        feedback(context, result.reason);
+        return;
+      }
+      await save(PreferenceChanges(backgroundKeepAlive: enabled));
+    });
+
+    useEffect(() {
+      final listener = AppLifecycleListener(
+        onResume: () {
+          ref.invalidate(backgroundStatusProvider);
+          alerts.refreshStatus();
+        },
+      );
+      return listener.dispose;
+    }, [alerts]);
+
+    final enabled = !busy.value && preferences.error == null;
+    final status = background.value;
+    final alertStatus = alerts.status;
+    final appearance = _AppearanceSelector(
+      selected: settings.appearance,
+      onSelected: enabled
+          ? (next) => update(() => save(PreferenceChanges(appearance: next)))
+          : null,
     );
-    final body = GroupedListView(
-      padding: EdgeInsets.fromLTRB(
-        DesignTokens.spacingMd,
+    void openBackground() => const BackgroundRoute().push<void>(context);
+    Widget heading(String label) => Padding(
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        DesignTokens.spacingXs,
         DesignTokens.spacingSm,
-        DesignTokens.spacingMd,
-        DesignTokens.spacingLg,
+        0,
+        DesignTokens.spacingXs,
       ),
-      children: [
-        if (appSettingsError != null) StateNote('偏好尚未读取：$appSettingsError'),
-        SettingsGroup(
-          children: [
-            ActionRow(
-              icon: LucideIcons.sunMoon,
-              title: '外观',
-              onTap: () => AppearanceRoute().push<void>(context),
-            ),
-            ActionRow(
-              icon: LucideIcons.radio,
-              title: '后台与提醒',
-              onTap: () => BackgroundRoute().push<void>(context),
-            ),
-            ActionRow(
-              icon: LucideIcons.hardDrive,
-              title: '媒体暂存',
-              onTap: () => const MediaCacheRoute().push<void>(context),
-            ),
-            ActionRow(
-              icon: LucideIcons.database,
-              title: '本地数据',
-              onTap: () => DataPreferencesRoute().push<void>(context),
-            ),
-            ActionRow(
-              icon: LucideIcons.keyRound,
-              title: '授权密钥',
-              onTap: () => const AdbIdentityRoute().push<void>(context),
-            ),
-            ActionRow(
-              icon: LucideIcons.fileText,
-              title: '本机运行日志',
-              onTap: () => const RuntimeLogsRoute().push<void>(context),
-            ),
-            ActionRow(
-              icon: LucideIcons.info,
-              title: '关于邻接',
-              onTap: () async {
-                try {
-                  final info = await readInfo();
-                  if (context.mounted &&
-                      identical(ref.read(appInfoReaderProvider), readInfo)) {
-                    showAppDialog<void>(
-                      context: context,
-                      builder: (dialogContext) => AppAlertDialog(
-                        title: const Text('邻接 Interconnect'),
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(info.version),
-                            const SizedBox(height: DesignTokens.spacingMd),
-                            const Text('基于设备授权的跨设备互联'),
-                          ],
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => showLicensePage(
-                              context: dialogContext,
-                              applicationName: '邻接 Interconnect',
-                              applicationVersion: info.version,
-                            ),
-                            child: Text(
-                              MaterialLocalizations.of(dialogContext)
-                                  .viewLicensesButtonLabel,
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(dialogContext),
-                            child: Text(
-                              MaterialLocalizations.of(dialogContext)
-                                  .closeButtonLabel,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted &&
-                      identical(ref.read(appInfoReaderProvider), readInfo)) {
-                    feedback(context, '$e');
-                  }
-                }
-              },
-            ),
-          ],
-        ),
-      ],
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.titleSmall,
+        semanticsLabel: label,
+      ),
     );
-    return PageFrame(root: embedded, title: '设置', child: body);
+    return PageFrame(
+      root: embedded,
+      title: '设置',
+      child: GroupedListView(
+        padding: const EdgeInsets.fromLTRB(
+          DesignTokens.spacingMd,
+          0,
+          DesignTokens.spacingMd,
+          DesignTokens.spacingLg,
+        ),
+        children: [
+          if (preferences.error case final error?) StateNote('偏好尚未读取：$error'),
+          heading('使用偏好'),
+          SettingsGroup(
+            children: [
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final room =
+                      constraints.maxWidth /
+                      MediaQuery.textScalerOf(context).scale(1);
+                  return room >= 300
+                      ? SettingsRow(
+                          compact: true,
+                          icon: LucideIcons.sun,
+                          color: DesignTokens.colorListIconAmber,
+                          title: '外观',
+                          trailing: appearance,
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const SettingsRow(
+                              compact: true,
+                              icon: LucideIcons.sun,
+                              color: DesignTokens.colorListIconAmber,
+                              title: '外观',
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                DesignTokens.spacingMd,
+                                0,
+                                DesignTokens.spacingMd,
+                                DesignTokens.spacingXs,
+                              ),
+                              child: appearance,
+                            ),
+                          ],
+                        );
+                },
+              ),
+              SettingsRow(
+                compact: true,
+                icon: LucideIcons.appWindow,
+                color: DesignTokens.colorListIconMint,
+                title: '后台保持',
+                trailing: status?.supported == false
+                    ? Text('不支持', style: Theme.of(context).textTheme.bodySmall)
+                    : ConnectSwitch(
+                        value: settings.backgroundKeepAlive,
+                        onChanged:
+                            enabled &&
+                                status?.supported == true &&
+                                (status!.canRequest ||
+                                    settings.backgroundKeepAlive)
+                            ? setBackground
+                            : null,
+                      ),
+              ),
+              SettingsRow(
+                compact: true,
+                icon: LucideIcons.bell,
+                color: DesignTokens.colorListIconCoral,
+                title: '通知提醒',
+                trailing: ConnectSwitch(
+                  value: settings.notificationAlerts,
+                  onChanged:
+                      enabled &&
+                          (alertStatus.supported || settings.notificationAlerts)
+                      ? (value) => setAlert(value, isCall: false)
+                      : null,
+                ),
+              ),
+              SettingsRow(
+                compact: true,
+                icon: LucideIcons.phone,
+                color: DesignTokens.colorListIconCoral,
+                title: '来电提醒',
+                trailing: ConnectSwitch(
+                  value: settings.callAlerts,
+                  onChanged:
+                      enabled && (alertStatus.supported || settings.callAlerts)
+                      ? (value) => setAlert(value, isCall: true)
+                      : null,
+                ),
+              ),
+              SettingsRow(
+                compact: true,
+                icon: LucideIcons.shieldCheck,
+                color: DesignTokens.colorListIconMint,
+                title: '后台运行资格',
+                onTap: openBackground,
+              ),
+            ],
+          ),
+          heading('本机数据'),
+          SettingsGroup(
+            children: [
+              SettingsRow(
+                compact: true,
+                icon: LucideIcons.hardDrive,
+                color: DesignTokens.colorListIconSlate,
+                title: '媒体暂存',
+                onTap: () => const MediaCacheRoute().push<void>(context),
+              ),
+              SettingsRow(
+                compact: true,
+                icon: LucideIcons.archiveRestore,
+                color: DesignTokens.colorListIconPurple,
+                title: '设备记录与恢复',
+                onTap: () => const DataPreferencesRoute().push<void>(context),
+              ),
+              SettingsRow(
+                compact: true,
+                icon: LucideIcons.keyRound,
+                color: DesignTokens.colorListIconMint,
+                title: '授权密钥',
+                onTap: () => const AdbIdentityRoute().push<void>(context),
+              ),
+              SettingsRow(
+                compact: true,
+                icon: LucideIcons.fileText,
+                color: DesignTokens.colorListIconUtility,
+                title: '运行日志',
+                onTap: () => const RuntimeLogsRoute().push<void>(context),
+              ),
+              SettingsRow(
+                compact: true,
+                icon: LucideIcons.circleHelp,
+                color: DesignTokens.colorListIconUtility,
+                title: '关于与更新',
+                value: info.data?.version,
+                onTap: () => const AppUpdatesRoute().push<void>(context),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AppearanceSelector extends StatelessWidget {
+  const _AppearanceSelector({required this.selected, required this.onSelected});
+
+  final Appearance selected;
+  final ValueChanged<Appearance>? onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(DesignTokens.roundedSm),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final (mode, label) in const [
+            (Appearance.system, '系统'),
+            (Appearance.light, '浅色'),
+            (Appearance.dark, '深色'),
+          ])
+            Semantics(
+              selected: selected == mode,
+              child: TextButton(
+                onPressed: onSelected == null ? null : () => onSelected!(mode),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(
+                    DesignTokens.componentIconButtonSize,
+                    DesignTokens.componentChipHeight,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: DesignTokens.spacingXs,
+                  ),
+                  backgroundColor: selected == mode ? colors.primary : null,
+                  foregroundColor: selected == mode
+                      ? colors.onPrimary
+                      : colors.onSurfaceVariant,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.all(
+                      Radius.circular(DesignTokens.roundedSm),
+                    ),
+                  ),
+                  textStyle: Theme.of(context).textTheme.bodySmall,
+                ),
+                child: Text(label),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

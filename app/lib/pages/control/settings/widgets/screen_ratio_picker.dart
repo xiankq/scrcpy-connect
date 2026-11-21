@@ -1,14 +1,11 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/control/remote_display_settings.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
-import 'package:scrcpy_connect/widgets/action_row.dart';
+import 'package:scrcpy_connect/widgets/choice_picker.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
-import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
-import 'package:scrcpy_connect/widgets/overlays.dart';
 
 Future<void> chooseScreenRatio(
   BuildContext context,
@@ -29,34 +26,13 @@ Future<void> chooseScreenRatio(
     ScreenAspectRatio.landscape: '16:9',
     ScreenAspectRatio.custom: '自定义',
   };
-  final choice = await showAppDialog<ScreenAspectRatio>(
+  final choice = await showChoicePicker<ScreenAspectRatio>(
     context: context,
-    builder: (context) => AppAlertDialog(
-      title: const Text('屏幕比例'),
-      content: SizedBox(
-        width: double.maxFinite,
-        height: MediaQuery.sizeOf(context).height * .5,
-        child: ListView(
-          children: [
-            for (final item in options.entries)
-              ListTile(
-                leading: ListIconBadge(
-                  icon: LucideIcons.ratio,
-                  backgroundColor: functionalIconColor(LucideIcons.ratio),
-                ),
-                title: Text(item.value),
-                trailing:
-                    (preferences.remoteAspectRatio ??
-                            ScreenAspectRatio.original) ==
-                        item.key
-                    ? const Icon(LucideIcons.check)
-                    : null,
-                onTap: () => Navigator.of(context).pop(item.key),
-              ),
-          ],
-        ),
-      ),
-    ),
+    title: '屏幕比例',
+    options: options.keys,
+    label: (option) => options[option]!,
+    isSelected: (option) =>
+        option == (preferences.remoteAspectRatio ?? ScreenAspectRatio.original),
   );
   if (choice == null || (!context.mounted || !ownsScope())) return;
   String? custom;

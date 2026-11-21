@@ -52,3 +52,11 @@ abstract class DeviceNotificationsSnapshot with _$DeviceNotificationsSnapshot {
 }
 
 typedef DeviceNotificationOpening = ({bool located, String? message});
+
+extension DeviceNotificationTime on DeviceNotification {
+  DateTime? get postedTime => switch (postedAt) {
+    final int timestamp when timestamp > 0 && timestamp <= 8640000000000000 =>
+      DateTime.fromMillisecondsSinceEpoch(timestamp),
+    _ => null,
+  };
+}

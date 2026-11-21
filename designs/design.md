@@ -1,25 +1,27 @@
 ---
 version: alpha
 name: 邻接 Interconnect
-description: 设备舞台：设备身份与真实内容建立主视觉，黑白内容层之上悬浮液态玻璃导航与操作。
+description: 近场工作台以设备、画面、通话和文件组织操作，中性界面承载内容，颜色和液态玻璃用于识别功能与操作。
 colors:
-  primary: '#1B1B1F'
-  primary-dark: '#F2F2F4'
-  primary-action: '#1B1B1F'
-  primary-action-dark: '#F2F2F4'
+  primary: '#000000'
+  primary-dark: '#FFFFFF'
+  primary-action: '{colors.primary}'
+  primary-action-dark: '{colors.primary-dark}'
   on-primary: '#FFFFFF'
-  on-primary-dark: '#18181A'
-  canvas: '#F2F2F7'
+  on-primary-dark: '#000000'
+  canvas: '#F6F7F8'
   canvas-dark: '#000000'
   canvas-label: '#808080'
   surface: '#FFFFFF'
-  surface-dark: '#1C1C1E'
-  text: '#000000'
-  text-dark: '#FFFFFF'
-  secondary: '#636366'
-  secondary-dark: '#AEAEB2'
-  muted: '#D1D1D6'
-  muted-dark: '#38383A'
+  surface-dark: '#242424'
+  device-panel: '#E9EFF1'
+  device-panel-dark: '#232A2D'
+  text: '#111111'
+  text-dark: '#FAFAFA'
+  secondary: '#656565'
+  secondary-dark: '#AEAEAE'
+  muted: '#DEDEDE'
+  muted-dark: '#404040'
   tint: '#E5E5EA'
   tint-dark: '#2C2C2E'
   glass: '#FFFFFF80'
@@ -34,18 +36,34 @@ colors:
   glass-shine-dark: '#FFFFFF1F'
   shadow: '#00000014'
   shadow-dark: '#00000066'
-  success: '{colors.list-icon-mint}'
-  success-dark: '{colors.list-icon-mint}'
-  warning: '{colors.list-icon-amber}'
-  warning-dark: '{colors.list-icon-amber}'
-  danger: '{colors.list-icon-coral}'
-  danger-dark: '{colors.list-icon-coral}'
+  success: '#00A34A'
+  success-dark: '#32E875'
+  warning: '#FFB020'
+  warning-dark: '#FFC247'
+  danger: '#FF3B30'
+  danger-dark: '#FF534A'
+  danger-text: '#DA2028'
+  danger-text-dark: '#FF6B63'
+  on-warning: '{colors.text}'
   scrim: '#17171B4D'
   scrim-dark: '#00000080'
   white: '#FFFFFF'
   transparent: '#00000000'
   media-ink: '#111114'
+  device-screen: '#171F27'
+  device-screen-rim: '#36414B'
+  device-shortcut-disabled: '#72767C'
   media-shade: '#00000099'
+  remote-wait-warm: '#68504D'
+  remote-wait-mid: '#242B37'
+  remote-wait-shadow: '#171E29'
+  remote-wait-blue: '#365472'
+  remote-wait-secondary: '#CFD8E5'
+  connection-nearby: '#0099A7'
+  connection-pairing: '#009447'
+  connection-qr: '#8057F1'
+  connection-usb: '#CC6700'
+  connection-ip: '#347EF5'
   accent-blue: '{colors.list-icon-blue}'
   accent-blue-dark: '{colors.list-icon-blue}'
   accent-blue-soft: '#E6F2FF'
@@ -63,35 +81,53 @@ colors:
   accent-mint-soft: '#EBF9EE'
   accent-mint-soft-dark: '#1E2E24'
   on-accent: '#FFFFFF'
-  list-icon-blue: '#0A84FF'
-  list-icon-amber: '#FFB340'
-  list-icon-mint: '#32D67B'
-  list-icon-coral: '#FF6B5E'
-  list-icon-slate: '#5AC8FA'
-  list-icon-purple: '#BF5AF2'
+  list-icon-blue: '#347EF5F5'
+  list-icon-amber: '#F7B418F5'
+  list-icon-mint: '#20C451F5'
+  list-icon-coral: '#F3483FF5'
+  list-icon-slate: '#00ADC1F5'
+  list-icon-purple: '#9266E5F5'
+  list-icon-document: '#596FF1F5'
+  list-icon-transfer: '#F57529F5'
+  list-icon-utility: '#8799ACF5'
   loading-warm: '#FFBEB87A'
   loading-blue: '#7EBBFF70'
   loading-mint: '#81E8CE61'
   loading-violet: '#B8A4F56B'
   glass-selected: '#0000000A'
   glass-selected-dark: '#FFFFFF1F'
-  glass-action: '#1B1B1F'
-  glass-action-dark: '#F2F2F4'
+  glass-action: '{colors.primary-action}'
+  glass-action-dark: '{colors.primary-action-dark}'
   glass-action-shine: '#FFFFFF14'
   glass-action-shine-dark: '#FFFFFF1F'
   black: '#000000'
-  on-danger: '#18181A'
-  on-danger-dark: '#18181A'
+  on-danger: '{colors.text}'
+  on-danger-dark: '{colors.text}'
   danger-container: '#FFEBEA'
   danger-container-dark: '#332021'
   on-danger-container: '#000000'
   on-danger-container-dark: '#FFFFFF'
-  surface-low: '#F2F2F7'
-  surface-low-dark: '#1C1C1E'
+  surface-low: '{colors.canvas}'
+  surface-low-dark: '{colors.surface-dark}'
   surface-high: '#E5E5EA'
   surface-high-dark: '#2C2C2E'
   outline: '#8B8B92'
   outline-dark: '#76767E'
+  connection-path: '#E8EEF5'
+  connection-path-dark: '#181C24'
+  connection-signal: '#347EF5'
+  connection-signal-dark: '#64A2FF'
+  file-tile: '#F2F1F6'
+  file-folder: '#FFB443'
+  file-current-directory: '#FFF1D8'
+  file-current-directory-dark: '#352818'
+  file-current-directory-text: '#845017'
+  call-stage: '#141D32'
+  call-dock: '#202D47'
+  call-key: '#344764'
+  call-muted: '#B8C6E2'
+  call-avatar: '#C6D3F8'
+  call-ring: '#445D8E'
 typography:
   display:
     fontFamily: MiSans
@@ -159,6 +195,24 @@ typography:
     fontWeight: 600
     lineHeight: '1.1'
     letterSpacing: -1px
+  caller-name:
+    fontFamily: MiSans
+    fontSize: 42px
+    fontWeight: 700
+    lineHeight: '1.2'
+    letterSpacing: 0px
+  connection-title:
+    fontFamily: MiSans
+    fontSize: 36px
+    fontWeight: 700
+    lineHeight: '1.2'
+    letterSpacing: 0px
+  call-elapsed:
+    fontFamily: MiSans
+    fontSize: 27px
+    fontWeight: 500
+    lineHeight: '1.25'
+    letterSpacing: 0px
 rounded:
   sm: 10px
   md: 14px
@@ -199,11 +253,18 @@ components:
     width: 1440px
     height: 960px
   sidebar:
-    width: 244px
+    width: 208px
     backgroundColor: '{colors.surface}'
     textColor: '{colors.text}'
   sidebar-compact:
-    width: 180px
+    width: 72px
+  workspace-pane:
+    width: 360px
+  workspace-duo-pane:
+    width: 280px
+  workspace-split:
+    width: 1080px
+    height: 480px
   status-bar:
     height: 54px
   page-header:
@@ -216,14 +277,14 @@ components:
   page-content:
     maxWidth: 720px
   button-primary:
-    height: 44px
-    rounded: '{rounded.full}'
+    height: 50px
+    rounded: 16px
     backgroundColor: '{colors.primary-action}'
     textColor: '{colors.on-primary}'
     typography: '{typography.label}'
   button-secondary:
-    height: 44px
-    rounded: '{rounded.full}'
+    height: 50px
+    rounded: 16px
     backgroundColor: '{colors.surface-high}'
     textColor: '{colors.text}'
     typography: '{typography.label}'
@@ -272,9 +333,15 @@ components:
     height: 208px
     rounded: '{rounded.lg}'
   device-hero:
-    height: 268px
-    rounded: '{rounded.lg}'
+    height: 258px
+    rounded: '{rounded.xl}'
+    backgroundColor: '{colors.device-panel}'
+    textColor: '{colors.text}'
+  device-hero-dark:
+    backgroundColor: '{colors.device-panel-dark}'
+    textColor: '{colors.text-dark}'
   navigation:
+    width: 284px
     height: 64px
     rounded: '{rounded.full}'
     backgroundColor: '{colors.glass}'
@@ -339,12 +406,32 @@ components:
     gap: '{spacing.sm}'
     verticalPadding: '{spacing.xs}'
     padding: '{spacing.md}'
+  settings-row:
+    height: 50px
+  usb-status-card:
+    height: 136px
+  empty-device-intro:
+    padding: 54px
+    height: 44px
+    width: 440px
   row-large:
     height: 64px
   notification-card:
     height: 190px
+  notification-list-item:
+    height: 92px
+    rounded: '{rounded.lg}'
+    padding: '{spacing.md}'
+    gap: 10px
+    backgroundColor: '{colors.surface}'
+  notification-app-icon:
+    size: 36px
+  notification-dismiss:
+    size: 26px
+    rounded: '{rounded.full}'
+    textColor: '{colors.secondary}'
   switch-track:
-    width: 44px
+    width: 46px
     height: 28px
     rounded: '{rounded.full}'
     backgroundColor: '{colors.primary-action}'
@@ -367,6 +454,36 @@ components:
     size: 112px
     height: 112px
     rounded: '{rounded.sm}'
+  file-browser-tile:
+    rounded: '{rounded.md}'
+    backgroundColor: '{colors.file-tile}'
+  file-browser-tile-dark:
+    backgroundColor: '{colors.surface-dark}'
+  file-folder-badge:
+    size: 30px
+    rounded: 9px
+    backgroundColor: '{colors.file-folder}'
+  file-folder-glyph:
+    textColor: '{colors.file-folder}'
+  file-current-directory:
+    height: 32px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.file-current-directory}'
+    textColor: '{colors.file-current-directory-text}'
+  file-current-directory-dark:
+    backgroundColor: '{colors.file-current-directory-dark}'
+    textColor: '{colors.file-folder}'
+  file-action-bar:
+    height: 64px
+    padding: '{spacing.xs}'
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.glass}'
+    textColor: '{colors.text}'
+  file-action-bar-dark:
+    backgroundColor: '{colors.glass-dark}'
+  media-preview-bar:
+    width: 344px
+    textColor: '{colors.text-dark}'
   remote-screen:
     height: 492px
     rounded: '{rounded.lg}'
@@ -381,7 +498,40 @@ components:
   sheet-long:
     height: 580px
   call-avatar:
-    size: 104px
+    size: 112px
+    backgroundColor: '{colors.call-avatar}'
+    textColor: '{colors.call-stage}'
+  call-stage:
+    backgroundColor: '{colors.call-stage}'
+    textColor: '{colors.text-dark}'
+  call-stage-secondary:
+    textColor: '{colors.call-muted}'
+  call-orbit:
+    backgroundColor: '{colors.call-ring}'
+  call-dock:
+    rounded: 34px
+    backgroundColor: '{colors.call-dock}'
+    textColor: '{colors.text-dark}'
+  call-utility-key:
+    size: 64px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.call-key}'
+    textColor: '{colors.text-dark}'
+  call-accept-key:
+    size: 72px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.success-dark}'
+    textColor: '{colors.call-stage}'
+  call-end-key:
+    size: 72px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.danger-dark}'
+    textColor: '{colors.call-stage}'
+  call-banner:
+    height: 96px
+    rounded: 24px
+    backgroundColor: '{colors.call-stage}'
+    textColor: '{colors.text-dark}'
   control-cell:
     height: 64px
   type-cell:
@@ -392,7 +542,7 @@ components:
   content-panel:
     backgroundColor: '{colors.surface}'
     textColor: '{colors.text}'
-    rounded: '{rounded.lg}'
+    rounded: 22px
   content-panel-dark:
     backgroundColor: '{colors.surface-dark}'
     textColor: '{colors.text-dark}'
@@ -414,6 +564,10 @@ components:
   button-danger-dark:
     backgroundColor: '{colors.danger-dark}'
     textColor: '{colors.on-danger-dark}'
+  text-danger:
+    textColor: '{colors.danger-text}'
+  text-danger-dark:
+    textColor: '{colors.danger-text-dark}'
   secondary-label:
     textColor: '{colors.secondary}'
   secondary-label-dark:
@@ -435,9 +589,11 @@ components:
   status-symbol-connected-dark:
     textColor: '{colors.success-dark}'
   status-symbol-warning:
-    textColor: '{colors.warning}'
+    backgroundColor: '{colors.warning}'
+    textColor: '{colors.on-warning}'
   status-symbol-warning-dark:
-    textColor: '{colors.warning-dark}'
+    backgroundColor: '{colors.warning-dark}'
+    textColor: '{colors.on-warning}'
   canvas-heading:
     height: 96px
     textColor: '{colors.canvas-label}'
@@ -529,23 +685,50 @@ components:
   remote-exit-hit:
     width: 44px
     height: 52px
+  remote-tool-panel:
+    width: 272px
+    height: 329px
   device-identity:
-    width: 52px
-    height: 72px
-    rounded: '{rounded.md}'
+    width: 58px
+    height: 58px
+    rounded: 17px
+    backgroundColor: '{colors.device-panel}'
+  device-identity-status:
+    size: 17px
   device-identity-showcase:
     width: 84px
     height: 144px
+    backgroundColor: '{colors.device-screen}'
+  device-identity-rim:
+    backgroundColor: '{colors.device-screen-rim}'
+  device-shortcut-disabled:
+    backgroundColor: '{colors.device-shortcut-disabled}'
+    textColor: '{colors.white}'
+  device-identity-pane:
+    width: 64px
+    height: 92px
+  workspace-sidebar:
+    backgroundColor: '{colors.device-panel}'
   device-identity-compact:
     height: 44px
   device-list-item-compact:
-    height: 64px
+    height: 96px
   device-list-item:
     height: 108px
     rounded: '{rounded.lg}'
     padding: '{spacing.md}'
     backgroundColor: '{colors.surface}'
     textColor: '{colors.text}'
+  connection-icon-nearby:
+    textColor: '{colors.connection-nearby}'
+  connection-icon-pairing:
+    textColor: '{colors.connection-pairing}'
+  connection-icon-qr:
+    textColor: '{colors.connection-qr}'
+  connection-icon-usb:
+    textColor: '{colors.connection-usb}'
+  connection-icon-ip:
+    textColor: '{colors.connection-ip}'
   connection-field:
     height: 52px
     rounded: '{rounded.md}'
@@ -554,6 +737,35 @@ components:
     textColor: '{colors.text}'
   connection-field-outline-dark:
     backgroundColor: '{colors.outline-dark}'
+  connection-nearby-entry:
+    height: 54px
+    rounded: 18px
+    padding: '{spacing.md}'
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.text}'
+  connection-tabs:
+    height: 74px
+    rounded: 18px
+    padding: '{spacing.xxs}'
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.secondary}'
+  connection-tab-selected:
+    rounded: '{rounded.md}'
+    backgroundColor: '{colors.tint}'
+    textColor: '{colors.text}'
+  connection-path:
+    height: 44px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.connection-path}'
+  connection-path-dark:
+    backgroundColor: '{colors.connection-path-dark}'
+  connection-signal:
+    width: 23px
+    height: 4px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.connection-signal}'
+  connection-signal-dark:
+    backgroundColor: '{colors.connection-signal-dark}'
   selection-field:
     height: 56px
     padding: '{spacing.md}'
@@ -571,11 +783,17 @@ components:
     rounded: '{rounded.md}'
     opacity: 0.1
   list-icon:
-    size: 28px
-    rounded: 6px
+    size: 30px
+    rounded: 9px
     textColor: '{colors.on-accent}'
   list-icon-glyph:
-    size: 20px
+    size: 18px
+  list-icon-compact:
+    size: 26px
+    rounded: 8px
+    textColor: '{colors.on-accent}'
+  list-icon-glyph-compact:
+    size: 16px
   list-icon-blue:
     backgroundColor: '{colors.list-icon-blue}'
   list-icon-amber:
@@ -588,6 +806,20 @@ components:
     backgroundColor: '{colors.list-icon-slate}'
   list-icon-purple:
     backgroundColor: '{colors.list-icon-purple}'
+  list-icon-document:
+    backgroundColor: '{colors.list-icon-document}'
+  list-icon-transfer:
+    backgroundColor: '{colors.list-icon-transfer}'
+  list-icon-utility:
+    backgroundColor: '{colors.list-icon-utility}'
+  transfer-progress:
+    height: 4px
+    rounded: '{spacing.micro}'
+    backgroundColor: '{colors.muted}'
+    textColor: '{colors.text}'
+  transfer-progress-dark:
+    backgroundColor: '{colors.muted-dark}'
+    textColor: '{colors.text-dark}'
   loading-flow-warm:
     backgroundColor: '{colors.loading-warm}'
   loading-flow-blue:
@@ -598,6 +830,19 @@ components:
     backgroundColor: '{colors.loading-violet}'
   loading-orb:
     opacity: 0.32
+  remote-wait:
+    backgroundColor: '{colors.media-ink}'
+    textColor: '{colors.text-dark}'
+  remote-wait-warm:
+    backgroundColor: '{colors.remote-wait-warm}'
+  remote-wait-mid:
+    backgroundColor: '{colors.remote-wait-mid}'
+  remote-wait-shadow:
+    backgroundColor: '{colors.remote-wait-shadow}'
+  remote-wait-blue:
+    backgroundColor: '{colors.remote-wait-blue}'
+  remote-wait-secondary:
+    textColor: '{colors.remote-wait-secondary}'
   empty-content:
     width: 380px
     padding: '{spacing.md}'
@@ -613,11 +858,11 @@ components:
     textColor: '{colors.black}'
 ---
 
-# 邻接 · iOS 27 设计规范
+# 邻接 · 近场工作台设计规范
 
 ## Overview
 
-以设备身份、真实画面与用户内容为视觉中心，瓷白／炭黑内容层上悬浮具有可感知连续折射的玻璃控制。产品行为见[产品规格](prod/README.md)。数值以 frontmatter token 为准，Flutter 常量由[工具](../scripts/design_tokens/README.md)生成；`px` 对应逻辑像素。
+页面从当前操作对象展开。工作台由设备名称、连接状态和屏幕入口组成，电话由来电身份和声音位置组成，传输由文件、方向和真实阶段组成。照片、视频和远控让真实内容占据画面。操作层沿用统一的中性实体面和液态玻璃。产品行为见[产品规格](prod/README.md)，当前视觉稿见 [Ardot《邻接 · 近场工作台》](https://ardot.tencent.com/file/749360133997361?node_id=2%3A14)。数值以 frontmatter 为准，由[工具](../scripts/design_tokens/README.md)生成 Flutter token，`px` 对应逻辑像素。
 
 frontmatter 的 maxWidth、gap、verticalPadding、opacity、scale、stretch 及玻璃光学属性属于项目扩展。生成与正式 lint 共用项目 schema，检查扩展类型、单位及取值范围，并保留官方的未知属性、断引用、对比度和未引用颜色检查。校验入口见[工具说明](../scripts/design_tokens/README.md)。颜色引用应对应实际组件或绘制层，透明层与图标的可读性按真实叠加关系核验。
 
@@ -634,26 +879,41 @@ frontmatter 的 maxWidth、gap、verticalPadding、opacity、scale、stretch 及
 | Flexibility／灵活 | 系统字体偏好、玻璃外观、减少动态、降低透明度、提高对比度分别适配 |
 | Simplicity／简洁 | 只去掉重复解释，保留设备来源、真实阶段、影响与恢复入口 |
 | Craft／工艺 | 明暗可读、触控可靠、连续可打断反馈；不以昂贵折射牺牲响应 |
-| Delight／愉悦 | 屏幕连接与画面启动通过柔和渐变和三球动效建立连续感；装饰运动不代表实际进度 |
+| Delight／愉悦 | 画面收到即显示，按压、拖动和返回有连续反馈，滚动与状态变化保留用户正在看的位置 |
+
+专用页只保留一个主视觉焦点。能从设备名称、来电者、文件名或真实内容辨认任务时，去掉重复用途标题、大数字面板、示意设备图和装饰渐变。连接、进度、来源与声音位置靠短文案和实际数据表达。一项事实出现一次，优先放在它影响的操作旁。相邻事实直接排列，只有能整组操作或阅读的内容才共用一个圆角容器。
 
 ## Colors
 
-项目配色以瓷白 `#F2F2F7`／白色内容面、炭黑 `#1B1B1F`／深色 `#1C1C1E` 为基础。主要动作浅色黑底白字、深色浅底深字；不把黑白等同于所有操作权重相同。
+浅色用 `canvas` 浅灰与白色内容面，深色用纯黑与中性深灰内容面。正文用 `text`，元数据用 `secondary`。主动作浅色黑底白字、深色白底黑字。次要动作使用中性实体面，单行文字动作跟随同级正文。
 
-点缀色采用高明度、鲜明饱和的色块，浅深色模式都保留色彩活力；功能图标底不使用棕黄、墨绿或灰紫。彩色背景统一搭配白色图形；功能名称与状态文字使用独立前景，保留明亮点缀色。
+| 功能 | 图标底 token |
+| --- | --- |
+| 设备、远控 | `list-icon-blue` |
+| 连接、授权、电话 | `list-icon-mint` |
+| 文件与目录 | `list-icon-document` |
+| 照片、视频与媒体 | `list-icon-slate` |
+| 传输与交付 | `list-icon-transfer` |
+| 通知 | `list-icon-coral` |
+| 显示与外观 | `list-icon-amber` |
+| 归档与备份 | `list-icon-purple` |
+| 通用设置、诊断入口与辅助入口 | `list-icon-utility` |
 
-| 点缀角色 | 色值 | 用途 |
-| --- | --- | --- |
-| 连接亮蓝 | `#0A84FF` | 连接、发现与通知功能图标 |
-| 画面亮紫 | `#BF5AF2` | 画面与媒体功能图标 |
-| 活动薄荷绿 | `#32D67B` | 活动、能力及通话功能图标 |
-| 资料橙黄 | `#FFB340` | 文件、剪贴板与诊断功能图标 |
-| 珊瑚红 | `#FF6B5E` | 设备管理与高影响功能入口图标 |
-| 资料青蓝 | `#5AC8FA` | 普通设置与设备数据功能图标 |
+明暗主题共用约 96% 不透明度的功能色底与白色 Lucide 图形，名称写在色块外。同一文件在列表和宫格沿用类别色，进入传输中心后用任务类型表达取回或发送。大面积内容和进度条采用中性色，设备与应用原图、真实媒体保留原色。
 
-`list-icon` 实色底统一配 `on-accent` 白色 Lucide 图形，浅深色模式一致。彩色图标与色块外的清楚文字标签成组呈现，功能不单靠图形传达；独立无标签控件须另行核验至少 3:1 的图形对比。色块内的说明文字采用深色前景，不复用图标前景 token。success／warning／danger 及 accent-mint／amber／coral／blue 直接引用上述亮色，明暗主题使用相同基色，不再维护另一套偏暗状态色或点缀色。普通正文及状态说明使用 text／secondary；亮色用于状态符号、色块及明确的风险动作，不把亮橙黄、薄荷绿用于浅色背景上的小字。危险实色按钮搭配 on-danger 深色文字，并以文字说明风险。熄屏、关闭画面及断开按真实影响选择样式。品牌色主要进入内容、状态及有意义的动作，不给整条导航染品牌底。空态用 `feature-icon` 淡底。真实应用图标、设备轮廓和缩略图保留自身角色。
+“画面与控制”中，清晰度用媒体色 `list-icon-slate`，窗口比例和导航键用远控色 `list-icon-blue`，点亮和熄屏用显示色 `list-icon-amber`，保持唤醒用辅助色 `list-icon-utility`。
 
-`list-icon` 定义尺寸与白色图形，`list-icon-blue` 等定义独立底色层；其中 textColor 是导出器沿用的图形前景字段，不用于文字。`glass-selection` 是叠加在现有内容面上的选中层，`glass-selection-label` 是独立标签；黑色标签需在浅色底合成后检查，不能把透明黑选中层当作不透明黑底。白色图形及实体、透明图层均保留真实色值，不为通过普通文字的4.5:1检查而改暗亮色底。
+| 状态 | 浅色 | 深色 | 用法 |
+| --- | --- | --- | --- |
+| 成功 | `success` | `success-dark` | 绿色勾或连接指示，图标单独出现时带读屏名称 |
+| 警告 | `warning` | `warning-dark` | 琥珀色实体标记配深色图形，旁边用正文色指出需授权、受限或需设置 |
+| 危险 | `danger` | `danger-dark` | 红色危险状态图形和实色危险按钮，按钮文字用 `on-danger`；文字动作使用 `danger-text` 对应主题值 |
+
+选用鲜明的状态色来传达结果，图形、短状态和原因保留各自信息。断开和停止按实际影响确定权重。
+
+连接诊断与 G5 状态组件使用 18 点无底线形图标。左侧功能图标用中性前景，右侧状态图标直接着色，状态文字沿用正文色。可用用绿色对勾，不可用用红色叉，需授权、受限和需设置用琥珀色图标（浅色 `#D47700`，深色 `warning-dark`），检查中用蓝色进度图标（浅色 `#2674ED`，深色 `#82B8FF`）。待检查、已停止和待核验用中性图标。文字和图标共用一行中心线，状态槽在各行右侧对齐。
+
+`list-icon` 定义尺寸与白色图形，`list-icon-blue` 等定义独立底色层。这里的 textColor 指图形前景。底栏以 `glass-selection` 为选中镜片着色，浅色叠加 4% 黑，深色叠加 12% 白。选中图标和标签使用当前主题正文前景，未选中项使用次要前景。在合成后的玻璃背景上核对实际对比度。
 
 主控导航、图标与分隔绑定主题语义色，远端画面不重着色。状态同时有文字或图形依据。降低透明度／提高对比度使用实体面。
 
@@ -665,81 +925,132 @@ frontmatter 的 maxWidth、gap、verticalPadding、opacity、scale、stretch 及
 
 普通文字对比至少 4.5:1，大字与有意义图形至少 3:1；玻璃必须在实际采样背景上核验，透明度数值不能证明对比合格。支持至少 200% 文字放大：行、按钮、菜单、页头随内容增高，横排可堆叠，网格减少列数；关键动作与来源不截断。普通触控目标采用至少 44×44 点，视觉图形可以更小。
 
-页头只保留标题，普通列表不加用途说明；真实状态、通知正文、错误、校验、进度及来源目标保留。文件大小／当前值就近放同行，长值允许换行、增高或提供全文，不能全局缩字修复溢出。
+页头显示当前任务标题与必要操作，随后直接进入列表、表单、功能控件或状态正文。容量、来源和状态就近放入对应的数据行、表单、对象或操作区。删除重复标题、重复路径和入口说明。字段标签、可操作的路径和列表日期分组随所属内容排版。跨设备传输、删除确认和可切换设备的控制工具在任务数据或操作旁标明来源与目标，来源归属也可由读屏查询。文件大小与当前值就近放同行，长值可换行、增高或查看全文。
 
 ## Layout
 
-- 远控画面下方的三键导航栏中，返回为指向左侧的实心三角形，主屏幕为空心圆，最近任务为圆角空心方形。三个按钮使用 44×44 点命中区；栏内左右各留 67.5 点，命中区之间等距。402 点宽时中心距左缘分别为 89.5、201、312.5 点，浅深主题共用位置，导航栏独立占高 56 点。
-- 设备卡以轮廓、名称和真实状态为中心，状态图标放在轮廓内；工作台顶栏显示当前设备名称，摘要使用 caption 承载连接、电量与端点，型号及参数留在独立详情页。工作台使用无标题列表组承载设备信息和任务入口，主动作与快捷入口沿用 `app-icon` 尺度。
+- 远控画面下方的三键导航栏中，返回为朝左的闭合实心三角形，三个角均做圆角。主屏幕为空心圆，最近任务为圆角空心方形。整机、独立应用、熄屏与暂停复用返回符号。三个按钮使用 44×44 点命中区，栏内左右各留 67.5 点，命中区之间等距。402 点宽时中心距左缘分别为 89.5、201、312.5 点，浅深主题共用位置，导航栏独立占高 56 点。
+- 画面工具在拖动时使用圆形 `remote-exit`。吸附后切换为 12×52 点的 `remote-exit-peek` 竖长条，外侧贴齐当前窗口的安全侧边，中央只绘制 2×24 点的 `remote-exit-handle` 握条。44×52 点的 `remote-exit-hit` 命中区从边缘向内延伸，不改变画面布局。左、右吸附复用同一几何。拖动仅移动工具，松手重新吸附。点按长条展开画面内侧的常规液态玻璃面板。面板中图标在上、标签在下，关闭画面按钮独占底行。
+- 设备首屏使用单一设备列表，`device-list-item` 定义整行高度。左侧使用 `device-identity`，手机与平板保留各自轮廓，状态标记贴设备轮廓右下。名称和连接短说明上下排列，尾部给出对应动作。已连接用绿色实点，离线用中性空环，需处理与失败使用警告和危险色。状态同时有文字或读屏描述；换行时整行自然增高。折叠布局沿用同样的列表与状态位置。
+- 首次没有设备记录时，标题沿用设备列表，正文只保留左对齐的设备标识、说明与同列主操作。添加入口在正文出现一次。保存第一条设备记录后显示搜索和标题栏的添加键。
+- 工作台四种连接状态共用 `device-hero` 和页面布局。左侧依次是设备名、型号或系统版本、电量图标和百分比、调试方式图标和名称。电池轮廓与百分比位置固定，正常时显示电芯，充电时在同一位置显示绿色闪电，暂无实时值时显示空轮廓与“—”。读屏提供电量与充电状态。
+- 右侧手机轮廓使用深色屏面，中心只显示连接状态图标。已连接用成功色对勾，未连接用中性空环，连接中用通用旋转线弧，连接失败用危险色叉。减少动态时保留静态线弧，各状态通过读屏播报。
+- 概览下方左侧共用一个主操作槽，分别显示“打开手机屏幕”“连接”“取消连接”或“重试”，右侧“设备详情”只显示居中文字。需要连接的快捷入口暂不可用时保持几何，点按在工作台底部提示“无法打开”及原因。右上设置键复用与返回键相同的 regular 液态玻璃材质和 44 点圆形命中区，直达设备管理。深色和折叠沿用同一布局，窄屏、大字时信息与动作可换行或纵向排列。
 - 顶层标题由 display 随滚动收至 heading，栏高不跳；短横屏直接紧凑。分组用 caption/secondary 与留白，普通行用 body，不逐行加粗或画底线。
-- 动态列表开放滚动、逐项构建；固定设置用 `content-panel` 实体卡，`row` 负责内距、最小高度与命中。组头在卡外，末行不追加装饰底线。通知各自成卡，来源、时间、正文自然排布。
-- 文件页用 surface，缩略区用 surface-low；搜索及通知用 canvas。类型入口两列，无重复标题；文件夹／文件默认自适应四列，同类排序连续排列，条目不套外卡。网格名与元数据居中，列表复用 row；长内容增高，缩略失败仅在缩略区提供紧凑重试。搜索结果保持列表，视图与排序菜单从页头展开并按组组织。
+- 动态列表逐项构建；固定设置和同组任务共用 `content-panel`，`row` 提供内距及最小高度。左侧图标、中间名称、右侧短值或操作共用纵向中心，组内用留白分隔。普通行的图标底为 30 点、图形 18 点。组头在容器外，适用时只用标题和分组留白。
 - 文件选择态保持同一内容几何：列表尾部共用 24 点固定槽，16 点箭头与 20 点选择圆框均在槽内居中，选中对勾 14 点；仅替换槽内绘制，不改变行高、内距、左右图形、名称与元数据的可用宽度、基线、换行或截断。宫格使用同样的 20 点圆框，叠放于缩略区正中，不挤压原图、文件名或元数据。标记用中性实体面／outline，选中用 primary-action 实色与 on-primary 对勾；缩略图上始终有清楚轮廓。可见标记与命中范围分离：命中至少 44 点，条目整体可切换选择；不得为扩大命中新增占位或挤压内容。相同屏宽、字体与滚动位置下，进入／退出选择态仅改变状态绘制与浮动操作，不对条目做缩放、横移或高度动画；底栏仅增加滚动末尾的避让空间。
-- 选择页头沿用 page-header：左侧 ×、中间计数、右侧图标动作；全选两态使用 22 点前景色图标和 44 点圆形命中区，固定在尾槽内，不挪动标题。底部使用一个 regular 液态玻璃胶囊承载成组操作，图标与短标签等宽排列；底栏遵循 navigation 的高度和安全留白，大字时自然增高，正文末尾同步避让。
-- 传输紧凑列表每批一次，body 文件名、caption 方向／设备／状态，活动项提供细进度；同设备活动在组头标设备。
-- 添加与连接配置共用外壳：图文 Tab 等宽排列，图标、标签起始基线和指示线对齐；选中由前景、字重与短线共同表达。窄屏与大字时标签区增高或允许横向滚动，选中项保持可见。字段使用 body，辅助信息使用 caption/secondary，不重复大标题。
-- 工作台快捷区使用文件、相册、通知、电话四个等宽入口；电话使用明亮薄荷图标底和白色听筒，窄屏或大字时改为两列两行并自然增高。电话页保持标准导航、来源设备、真实阶段和底部动作，完整行为见[电话接力](prod/calls.md)。
-- 连接诊断使用平铺检查项，设备详情和设置使用独立页；当前活动区分进行中与待核对。行为和恢复规则由[产品规格](prod/README.md)及其责任文档维护。
-- 添加、配对及普通连接使用中性页面和标准进度反馈；屏幕连接与首帧等待使用下方唯一“全屏加载”渐变与三球组件，异常在原页使用无背景文字反馈。
+- 选择页头沿用 `page-header`。左侧关闭选择，中间显示选择数量，右侧用清单勾选图标全选，用清单叉号图标取消全选。两态均为 22 点前景图形和 44 点圆形命中区，保持相同尾槽和标题位置。当前目录放在批量操作栏上方，与操作对象相邻。
+- 传输页顶部提供“传输中”和“已结束”两个文字 Tab，选中使用中性底色和加粗标签。每个任务使用独立圆角背景，条目间留 12 点间隔。左侧 48 点方形区域使用实际图片缩略图或文件格式图标，中间是文件名／批次名，下一行用方向图标及“本机 → 设备名”或“设备名 → 本机”标出来源和目标。
+- 传输中在任务卡内用 `transfer-progress` 显示可核实的进度，并贴近显示已传输字节、总量与百分比。待处理时同位置显示原因。结束卡右侧显示结果和结束时间，成功和失败沿用状态色，其他结果用对应短标签。仅“已结束”页头显示“清空记录”，确认文本说明文件保留，清空后在同一 Tab 显示空态。桌面双栏沿用同一任务卡与分栏，详情仍显示方向、阶段、路径、逐项结果与可用动作。
+- 工作台快捷区使用文件、相册、通知、电话四个等宽图标入口。快捷区下方的“常用应用”和“正在运行”使用独立实体卡，卡内展示应用原图标，图标下方留白。两张卡对齐列中心，每格命中至少 44 点，按可用宽度调整列数。各图标提供读屏名称，键盘焦点和指针悬停可显示名称。真实来电出现在概览与快捷区之间。
+- 常用应用为空时，卡内显示加号与“添加常用应用”；正在运行查询完成且为空时，卡内显示“当前没有正在运行的应用”，标题行提供“全部应用”。两个空态沿用已有内容时的卡片宽度与位置，加载、离线和读取失败用各自的提示。常用应用管理页整行显示应用，拖动从右侧把手发起并保留插入位置，读屏可操作排序。勾选项共享固定尾槽。运行应用的打开菜单从所点图标附近出现，窄屏或大字时使用可滚动实体面。
+- 设备详情从参数列表开始，左侧项目、右侧当前值。系统、电池、显示、网络与存储在同一列连续滚动，显示失败和快照时效。连接诊断平铺检查项。行为和恢复见[产品规格](prod/README.md)。
+- 从文件列表、宫格、搜索或相册点按图片，直接打开共用图片预览，以实际图片作为内容。点按视频、音频、文档、表格、压缩包及其他文件，打开共用文件详情。页首使用彩色格式图标、完整文件名与类型，属性区显示大小、修改时间、来源设备和文件位置，以实际已读取的值为准。格式图标保持固定槽位，名称与长路径可换行。
 
-### 全屏加载的主题与动效
+### 文件与相册
 
-普通页面及局部操作的未知时长等待使用紧凑、中性语义色的 Cupertino activity indicator，放在所属内容区域；横向条只用于已知完成比例的传输进度及容量占用。具体等待、取消和恢复行为见[交互规则](prod/interaction-rules.md)与[内容与传输](prod/content-and-transfer.md)。
+- 文件页以 `surface` 为底。共享存储首页按两列排列类型入口，目录默认自适应四列。类型入口和宫格缩略区用旧稿浅灰 `file-browser-tile`。列表文件夹用暖黄色 `file-folder-badge` 和白色图形，宫格在浅灰缩略底上使用同色文件夹轮廓。当前目录使用暖黄浅底的 `file-current-directory`。深色使用对应色值，文件夹保留暖黄色。列表沿用 `row`，宫格名称和元数据居中。
+- 文件类型沿用旧稿色系。PDF 用珊瑚红，图片和视频用紫色，表格用绿色，音频用青色，其他常见文档与压缩包用暖黄。文件详情和相册可用 `file-tile` 作为浅色页底。
+- 相册沿用旧稿的浅灰底和紧凑三列缩略图，宽度不足时适配列数。素材占满缩略范围，视频保留类型标识，缩略失败在原位置说明并允许重试。
+- 文件和相册的浏览、选择及普通文件操作共用 `file-action-bar` 的 regular 液态玻璃胶囊。图标在上，短标签在下，点击区至少 44 点。文件浏览底栏为发送、视图与排序、更多，搜索留在页头或当前目录。相册浏览为刷新、选择，选中后为取回原件。菜单从对应底栏动作向上展开。
+- 文件首页的存储容量与目录网格标题同排。目录名已在标题栏显示时，目录搜索和上级路径入口同行，路径入口显示可去的上级。相册的数量和检查范围入口在操作栏上方，媒体列表从日期分组直接开始。
+- 文件详情和图片预览的“取回文件”与“分享”放在底栏。图片可在当前画面切换原尺寸或适合屏幕，顶部和底部控件使用 clear，并按画面亮度加局部对比保护。单文件取回完成后，从当前页衔接主控设备的系统打开方式选择器，候选应用与面板样式由平台提供。底栏对齐同一安全边距，给正文末项留足可滚动空间。降低透明度时使用等尺寸实体底，窄屏大字下动作可以增高或换行。
+- 文件搜索的两种范围与类型选择在同一行。类型字段显示当前选项，默认“全部类型”，点按打开独立的选择弹层。大字时控件内文字可换行增高，沿同一行对齐。通栏“搜索”固定于安全区与键盘上方，结果区独立滚动。
+- 删除从当前列表打开实体确认弹窗，标题写明所选项数，正文简述来源，底部左“取消”、右“同意”。危险动作沿用主题状态色。
 
-屏幕连接及首帧等待状态使用唯一“组件 / 屏幕连接加载 · 渐变与三球”背景组件；“页面 / 03 添加设备 / 连接中 · 浅色”设备连接页使用中性背景和标准进度指示。屏幕等待跟随系统主题，颜色不绑定业务阶段。浅深两套只切换 canvas 底色（浅色 #F2F2F7、深色 #000000）。暖粉、雾蓝、薄荷与浅紫的流动渐变共用上述 RGBA 色值；三球使用 list-icon-mint、list-icon-coral、list-icon-purple 三种明亮基色，统一使用 `loading-orb.opacity` 的 0.32 透明度，Ardot 变量按百分比 32 绑定。渐变与三球的颜色、透明度、位置、尺寸、轨迹、速度及缩放在两种主题完全一致，通过半透明叠加自然形成深浅差异，不设深色专用动效覆盖。关闭和必要提示沿用标准语义色保持可读。
+### 首次授权与连接
 
-以可用视口为坐标，球群中心在横向 50%、纵向 45.3%；402 宽稿的轨道半径为 52×38 点，绿／珊瑚／紫球基准直径分别 32／28／22 点，初始相位 −35°／85°／205°。三球以 4.2 秒一周连续绕行，各自按 2.8／3.4／3.9 秒周期在 0.7–1.6 倍之间平滑放大缩小，错开相位；按屏宽收敛轨道，不随文字放大。背景三层渐变分别以 16／20／18 秒连续漂移，位移不超过各层尺寸 8%，缩放 1–1.12，并预留出血避免露边和亮度脉冲。静态源稿定义外观和轨迹参数，状态切换与生命周期见[交互规则](prod/interaction-rules.md)。
+- 添加设备在同一页切换配对码、扫码、USB 和 IP 连接。“附近设备”复用 `connection-nearby-entry`，独立放在 `connection-tabs` 上方。四个 Tab 等宽，`icon` 在上、`caption` 在下。选中使用 `connection-tab-selected` 的中性底色与加粗标签，读屏读出选中状态。深色使用 `surface-dark`、`tint-dark`、`text-dark` 和 `secondary-dark`。
+- 添加设备入口和 Tab 用彩色线形图标。浅色工作稿使用青色雷达（`#0099A7`）表示附近扫描，绿色锁孔（`#009447`）表示配对授权，紫色扫描框（`#8057F1`）表示扫码，亮琥珀色线缆（`#CC6700`）表示 USB，亮蓝色 Wi‑Fi（`#347EF5`）表示 IP 连接。颜色仅用于图形，选中和未选中沿用同一色彩。图标和标签沿垂直中轴对齐，选中态由整个 Tab 的中性底色和标签字重表达。
+- 各方式从 Tab 下同一基线开始。输入使用 `connection-field`，即时校验贴近对应字段。方式说明使用 `body-compact`，紧接表单、USB 状态或二维码之后，随后是当前方式的帮助入口。二维码始终保留白底与完整静区。四张帮助页共用文字步骤和固定返回动作。
+- USB Tab 用一张实体状态卡呈现线缆、手机、当前阶段和下一步。图示在线缆和手机之间留固定状态槽。引导接线与未检出时用中性空环，检查时用中性进度指示，实际检出设备后才点亮连线与成功色对勾。系统弹窗授权提示随检查状态出现。错误和主控受限分别用危险色与警告色符号。减少动态时保留静态进度指示，状态标题和说明可换行并由读屏播报。可选设备列在卡片下方。
+- `button-primary` 撑满内容列，左右沿用 `spacing.lg`，独立于滚动正文并避让键盘和安全区。正文最后一项可完整滚至按钮上方。标签无法在四列完整显示时改为两列，图文和读屏顺序一致；大字放大字号与行高，字段和按钮随内容增高。
+- 连接过程用无顶栏的全屏布局。主视觉是本机与手机之间的 `connection-path`，中间用通用旋转线弧表示等待。下方以 `connection-title` 显示标题，当前阶段使用正文。等待时只有底部固定的“取消连接”。失败时在原位显示断开的路径和实际原因，底部切换为适用的恢复动作。减少动态时使用静态线弧与阶段文字。确认成功立即进入设备工作台，动效随页面离开结束。见[连接过程](prod/device-connection.md#连接过程)。
+
+### 等待与动效
+
+全局不定进度共用单条连续、圆头的旋转线弧，覆盖连接、USB 检查、诊断和首帧等待。线弧在固定槽内匀速旋转，按背景和状态语义选前景色。启用减少动态时停在静态线弧，通过读屏播报持续状态。已知比例使用细进度条。
+
+手机屏幕与独立应用的首帧等待沿用全屏流光背景。由 `remote-wait-warm` 过渡至 `remote-wait-blue`，中间用 `remote-wait-mid`、`remote-wait-shadow` 压低亮度。画面中部使用通用旋转线弧，左上角保留 44 点玻璃关闭键。常规等待时由读屏播报阶段与设备来源，需要操作时再就地显示简短提示。
+
+等待超时或收到失败时，原位切换为“无法打开”，保留等待页背景和关闭位置，移除旋转线弧并显示实际原因与可用动作。确认收到首帧后立刻用手机画面接管视口。控制会话已建立且确认手机熄屏时，在该会话的黑色视口显示点亮图标。
+
+熄屏与暂停都在已打开的画面中表达。熄屏时，在黑色视口中心放置 44 点圆形点亮键，以 `glass-clear` 和白色太阳图标呈现，读屏名称为“点亮屏幕”。暂停时保留最后确认的画面，在顶部安全区用小型高对比胶囊显示暂停图标和“已暂停”，普通字号下高 30 点，随字体设置增高。暂停后遇到断线时，在顶部提示内补充原因和检查连接入口。画面工具保留原吸附位置，仍可关闭。恢复后移除叠加状态。
+
+按下即时反馈，移出后松手可取消，确认后进度由真实回执驱动。菜单从触发点展开，拖动工具随指针连续移动，释放可被下一次操作打断。换页、选择和恢复尽量保持操作源的可见位置。减少动态时用静态状态或短淡入淡出保留同一反馈。详见[交互规则](prod/interaction-rules.md)。
+
+### 通知与电话
+
+- 通知列表按日期分段，日期下每条使用独立 `notification-list-item` 实体圆角背景，条目之间留间隔。左侧只显示 36 点原应用图标，中间标题一行、正文最多两行，溢出统一显示尾部省略号。右侧时间在上，单条清除图标在下。单条图标可见底为 26 点，命中为 44 点，与条目打开区域独立。右上角清除全部图标提供 44 点命中区。夜间卡片使用 `surface-dark`，等待反馈贴近对应行或页头。
+- 电话接力页用 `call-stage` 的深蓝实体面，联系人和通话阶段居中。已核验头像优先，缺失时用姓名首字；身份未知时使用中性人形符号。姓名用 `caller-name`，响铃用 `call-orbit` 环线，接通及待核对时环线收为低对比静态轮廓。接通保留联系人位置，实际计时用 `call-elapsed`。专用电话页、紧凑来电入口和声音选择器沿用同一组色值。
+- 底部 `call-dock` 保留稳定的动作区。响铃左侧为红色拒接键、右侧为绿色接听键，图标下有文字，手机画面接听另列。通话中麦克风和声音各有圆形控制和状态标签，红色挂断置于两者下方。只能接续手机画面时入口显示具体去向，状态待核对时操作区显示原因及检查动作。
+- 大字时通知卡随字高增高，仍按标题一行、正文最多两行显示，时间与清除保留独立命中。读屏可读出应用名与完整可访问文本。电话控件可换行或纵向滚动，响铃在减少动态模式下用静态环线和阶段文字。读屏播报阶段变化并将焦点保留在触发按钮或核对结果上。行为见[实时通知](prod/notifications.md)与[电话接力](prod/calls.md)。
 
 ### Flexible 布局
 
-依据父容器约束，手机稿不是缩放基准。普通页面及底部动作居中于 `page-content` 阅读列，列宽含原左右边距；远控和媒体不受限。窄屏、横屏、键盘及大字可换行、堆叠、滚动，末项可达；大屏侧栏加单一内容，短横屏用紧凑侧栏。窗口状态与能力边界见[平台与能力](prod/compatibility.md)。
+依据父容器约束重排。普通页面及底部动作居中于 `page-content` 阅读列，列宽含原左右边距。远控和媒体按源内容及可用视口布局。窄屏、低高度、键盘及大字可换行、堆叠或滚动，末项保持可达。[窗口状态与能力边界](prod/compatibility.md)
 
 正文可滚入页头与浮动导航背后，首屏避让放滚动内容内；可读性优先，系统玻璃外观或辅助偏好改变后，材料可加厚至实体，不强制始终透明。顶部保护只覆盖安全区及实际栏高，末段以 spacing.lg 渐退，在工具栏底部透明；位于玻璃采样前，不加实体 AppBar。底部避让导航／键盘，遮挡区阻止误点且将纵向拖动交回正文。远控等叠加内容单独定位。
 
-Ardot 独立顶层画板：规范／组件在左，完整页面居中按产品流程分组、每行最多八张，局部状态在右。分组标题与图层树使用相同阅读顺序。每种独有结构只保留一处完整示意：同一外壳切换表单，只展示一次完整页面，其余方式由对应内容组件表达；加载、空态、错误、菜单只展示变化部位。状态仅文案或示例数据不同则合并，用上下文注明实际原因；行为、动作或恢复路径不同才保留独立状态。共享母组件保留唯一原件，不另加无覆盖的展示副本；从未启用且没有实例使用的旧节点直接删除。
+Ardot 入口提供复核导览。左侧依次放设计规范、母组件、组件示例和图标库。中间从上到下按业务分区，区内按操作顺序从左到右排列完整页面，每行最多八张。确认、恢复和交付画板随触发它们的任务，例如选择目标目录归发送流程，系统打开方式归取回后的交付流程。同页全屏状态紧邻主稿，局部反馈、主题与字号样例、交互分镜放在同区右侧。跨流程的窗口与辅助偏好示例集中放在末区。画布与图层树共用业务分区顺序。删稿后收拢同排空位，移动画板时保留节点 ID 与原尺寸。
 
-局部状态按来源归入所属状态板，不为补充示例另开同主题画布。合并时保留独有交互和必要的明暗、大字、窄屏、辅助偏好示例，以当前页面与状态名称定位，删除失效说明与空容器。局部裁片的计数与可见示例保持一致；200% 大字示例同时放大字号与行高。入口提供三分区导览；画布整理不缩放完整页面，`scroll-viewport` 保留完整内容。说明用 canvas-label，规范底板用 canvas，产品页面保留自身配色。
+具有独立操作、内容结构或恢复路径的方式使用独立画板。相同页面外壳使用共享母组件，仅文案或示例数据不同的状态收在所属状态板。合并时保留独有交互和必要的适配示例，以当前页面与状态名称定位，删除失效说明与空容器。局部裁片的计数与可见示例保持一致，200% 大字示例同时放大字号与行高。共享母组件保留唯一原件，从未启用且没有实例使用的旧节点直接删除。`scroll-viewport` 保留完整内容。说明用 canvas-label，规范底板用 canvas，产品页面保留自身配色。
 
 ## Adaptive Windows & Form Factors
 
-适配依据当前窗口的可用宽高、方向、系统保留区与输入方式，不依据设备名称或固定屏幕尺寸猜测；布局只改变可见结构与操作密度。窗口状态、会话保留和能力边界见[平台与能力](prod/compatibility.md)。
+### 通用宽高阈值
+
+以当前窗口或系统分屏的安全可用矩形为准。先排除宿主窗口边框、实际安全区与系统保留区，再测量可用宽度 W 和高度 H。W 在分配应用自己的导航栏和窗格前测量。若铰链把视口分成多块，分别测量实际可用窗格。以下逻辑点数为邻接的设计阈值。 [Apple 布局指南](https://developer.apple.com/design/human-interface-guidelines/layout)
 
 | 窗口状态 | 页面结构 | 交互与材料 |
 | --- | --- | --- |
-| compact（通常 <600dp / vp） | 单列内容；底部导航；弹窗按可滚动实体面限制宽度 | 44 点触控目标；底栏可用 regular 玻璃；正文和弹窗实体面 |
-| medium（约 600–839） | 导航侧栏或 rail + 主内容；列表与详情按宽度切换 | 鼠标、键盘、触控和手写笔均可操作；菜单从触发点展开 |
-| expanded（≥840） | 侧栏沿可用窗口高度铺开 + 双栏工作区；桌面使用可移动、可缩放的独立控制窗口 | 不绘制手机式顶部状态条；标题、连接状态与当前窗口操作进入工作区工具栏 |
-| 折叠／双屏 | 外屏单列；展开双栏；半折避开铰链／折痕保留区 | 折叠只做最小必要移动；跨折叠连续内容不放置关键文字、输入或按钮 |
-| 鸿蒙浮窗／分屏 | 按实时窗口宽高重算单列、上下或左右双栏 | 不假定全屏；弹窗宽度受窗口约束，分隔线拖动后内容仍可达 |
+| W < 600 | 触控窗口单列与底部导航，列表点入详情 | 窄桌面保留工作区工具栏，空间不足时导航收进工具栏 |
+| 600 ≤ W < 840 | 约 72 点图标导航轨道加单一内容窗格 | 详情原位替换内容窗格，返回恢复列表 |
+| 840 ≤ W < 1080 | 约 208 点带文字侧栏加单一内容窗格 | 普通表单和详情使用不超过 640 点的阅读列，媒体与目录网格随窗格宽度变化 |
+| W ≥ 1080 | 带文字侧栏加列表／详情双栏 | 两个业务窗格均至少 360 点，并各自滚动。设备列表与工作台、传输列表与任务详情用该结构。没有对应详情的页面占用完整内容区 |
+| H < 480 或键盘占据操作区 | 优先保证可滚动正文与固定动作，次要工具归入更多 | 宽而矮的更新弹窗左右排列版本信息和更新说明，操作区固定。窄横屏可用紧凑侧导航，常规选项弹层按剩余高度滚动 |
 
-桌面、平板、折叠屏和移动端的独立窗口沿用控制会话的窗口视觉；系统不支持额外窗口时退回同页分栏。窗口最小尺寸保证标题、画面、退出与恢复动作可达，调整大小只改变布局。
+跨越阈值保留当前设备、选中项、任务、输入草稿、正在编辑的弹层、焦点和各窗格的滚动锚点。双栏收为单栏时保留用户当前关注的详情，返回可回到原列表位置。展开时，用同一个选中项恢复详情。桌面应用内容从工作区工具栏开始，宿主提供窗口标题和菜单。独立控制窗口保留同一控制会话与源比例，窗口更窄时让工具进入更多。系统缺少额外窗口能力时沿用同页分栏。 [响应式画板](https://ardot.tencent.com/file/749360133997361?node_id=9%3A1779)
 
-折叠屏状态覆盖外屏、完全展开、书本半折、桌面半折与旋转后展开；每种状态核对铰链／折痕避让、方向、安全区、长文字、减少动态和降低透明度。外屏单列、内屏双栏，横向姿态让工具栏、导航和标签栏贴合系统侧边垂直栏，内屏竖向姿态保留横向栏；重要内容不跨中间铰链。平台窗口合同与能力限制见[平台与能力](prod/compatibility.md)。
+### iPhone Duo 专项
 
-桌面工作区不提供默认顶部状态条；操作系统标题栏与窗口菜单由宿主负责，应用内容从工作区工具栏开始。移动端和折叠外屏可保留系统安全区与页面导航，平板及桌面不复制手机顶部状态条。
+以 iOS 27.1 SDK 及以上的全显示区域和竖向栏行为为目标。外屏竖向、外屏横向及内屏横向，工具栏与主导航沿系统指定外缘纵排。内屏竖向回到上下横栏。系统分屏时，两侧窗口各用自己的外缘，左侧窗口使用左缘。控件的主次顺序、任务和选择在旋转与开合时保持连续。 [Preparing your app for iPhone Duo](https://developer.apple.com/iphone-duo/prepare/) · [Designing for iPhone Duo](https://developer.apple.com/design/human-interface-guidelines/designing-for-iphone-duo)
 
-iPhone Duo 横向垂直导航胶囊贴合物理屏幕边缘，保留 24 点外边距；系统状态簇占用的完整 lateral inset 只用于页面内容避让，不重复施加到导航胶囊。
+| 姿态 | 邻接布局 |
+| --- | --- |
+| 外屏竖向与横向 | 单窗格。竖向控制区域由系统相机／状态、页面工具、主导航从上到下组成。矮窗口保留返回或关键动作，次要工具进入更多 |
+| 内屏横向全展开 | 竖向栏。设备列表与工作台在宽度均达到 280 点的两个安全窗格内并列；宽度不足时显示当前窗格 |
+| 内屏竖向全展开 | 横向页头和底部导航。内容量小的工作台使用居中阅读列，与外屏保持同一设备和任务 |
+| 书本半折 | 列表与详情可分别留在铰链两侧。相机启用时只调整会与新增保留区相交的内容 |
+| 桌面半折 | 邻接远控可将源画面放进上部安全窗格，控制工具放到下部安全窗格。可用空间仅能容纳一个窗格时保留画面及工具入口 |
+| 系统分屏与内屏弹层 | 分屏按各窗口的实际可用宽度分配窗格，竖向栏按系统外缘排列。内屏选项弹层优先在可用区域居中，遇折叠分隔时落在当前操作的安全窗格内 |
 
-适配验证同时覆盖真实窗口状态和视觉状态：浅／深色、200% 字体、键盘、安全区、鼠标／键盘／触控、降低透明度与减少动态。
+外屏相机区域持续预留，动态岛扩展时跟随系统更新。内屏相机启用时才增加保留区，半折同时避开折叠区。定制垂直玻璃栏使用宿主提供的物理边缘和实际布局位置。画稿采用 24 点外边距表达项目的视觉尺寸，正文按完整侧边安全区留白，玻璃栏本身只应用一次定位。工具栏优先使用图标，读屏保留动作名称；紧凑时优先露出返回、关闭和当前任务动作。 [Raise the bar with iPhone Duo](https://developer.apple.com/videos/play/tech-talks/111462/) · [Duo 专项画板](https://ardot.tencent.com/file/749360133997361?node_id=9%3A1786)
+
+阈值验证覆盖 599/600、839/840、1079/1080 和 479/480 的两侧，同时核对实际开合、分屏、键盘、浅深主题、200% 字体、减少动态和降低透明度。Ardot 的 Duo 尺寸用于演示，保留区与栏的位置最终按模拟器及真机宿主输出核验。
 
 ## Elevation & Depth
 
-玻璃仅用于按钮、底部栏和紧凑的弹出按钮集合，光学识别来自可感知的连续折射、背景透视、散射与离面分离；控制标签保持清楚。普通玻璃在浅深模式中都保留可辨的通透感，实体控制用于降低透明度等辅助偏好。静态光学参数只定义目标，系统材料在可用时优先采用，不能为追逐光学强度降低帧率或标签可读性。平静背景无需装饰图案、彩斑或额外固定描边。
+液态玻璃用于浮在内容上方的导航和操作。轮廓附近折射真实背景，中心按背景复杂度散射并调节明度，边缘高光随形状和交互变化。Apple 在 27 系列加强了复杂背景的散射，并用暗侧边缘与更亮的镜面高光提升层次。Ardot 以浅底、深底和实际照片表达这些视觉目标。[Apple 材料指南](https://developer.apple.com/design/human-interface-guidelines/materials) · [Meet Liquid Glass](https://developer.apple.com/videos/play/wwdc2025/219/) · [WWDC26 材料调整](https://developer.apple.com/videos/play/wwdc2026/102/?id=206)
 
 | 对象 | 材料 |
 | --- | --- |
-| 图标按钮、按钮工具组、底部导航／操作栏、紧凑弹出操作菜单、远端退出控件 | regular，保护未知背景上的标签 |
-| 照片／视频上的紧凑控制 | clear，亮色前景及媒体渐退保护 |
-| 确认／输入／帮助弹窗、应用打开方式面板、内容抽屉、恢复面板、侧栏、文字提示、设备卡、正文、表单、文件与通知 | 中性不透明实体内容面，浅深主题均无背景模糊或折射 |
+| 应用标题栏动作、底部导航、文件与相册浏览和批量操作栏、紧凑操作菜单、远控工具及退出 | regular，优先保证文字与图形可读 |
+| 照片或视频预览上的紧凑控件 | clear，配亮色前景，按画面亮度加局部保护 |
+| 正文、列表、设备卡、表单、说明提示、确认／输入／帮助弹窗、侧栏和内容抽屉 | 中性实体内容面 |
 | 主要按钮 | primary-action 实色 |
 
-紧凑弹出操作菜单只承载按钮集合；含正文、表单、确认说明或长内容的弹窗及抽屉使用实体面，不因浮于页面之上而使用玻璃。文字 Tooltip 与短暂消息同样使用实体面。相关玻璃动作共享材料，内部不重复包层；同页同平面共用折射层，背景先绘制，菜单保留独立浮层。材料参数统一用 `glass` token；不为同层每个小控件添加独立高光与重影。渲染后端不能仅因缺少 Impeller 图像过滤能力就改用实体材料，应使用生产玻璃库提供的适配路径；辅助偏好独立决定是否不透明。按压即时局部提亮及轻微形变，释放／取消弹簧归位，再次操作承接当前速度；工具组不抢内部手势。顶部工作区和媒体预览工具栏按钮不使用投影阴影，避免被标题栏或媒体渐变采样边界裁切；底部栏使用官方单一 `GlassTabBar` 渲染实例，交互、选中面与释放状态由同一实例持续管理，不叠加或卸载重挂载。操作菜单从触发点展开；实体抽屉保留可打断拖拽，贴底仅圆上角。减少动态关闭空间形变与弹性，降低透明度保留轮廓／焦点／位置并切实体。
+标题栏两侧的应用图标按钮用 regular。单图标居中放在 44×44 点圆形点击区。带文字的动作共用同一个玻璃胶囊，例如「清空记录」。相关操作可共享一个轮廓，图标与标签在玻璃前景绘制。顶部工作区与媒体预览使用克制的边缘分离，不加额外外投影。浅底用深前景，深底与媒体用亮前景。
 
-底栏保留上游目的地、语义与横拖；官方 `GlassTabBar` 同时持有轨道、选中面与交互状态，不重复外栏或自绘静态镜片。选中状态同时由文字／图形权重及清楚的选中面表达，不依赖折射或高光；受控选择对应实际页面，辅助偏好用实体清楚选中面。
+每组操作只绘制一个玻璃面，使用一致的材质。浮动菜单从原触发点展开并共享一张面，菜单项保留各自的点击区。远控工具由贴边把手展开，收起动作放在工具面内。按下即时产生局部高光与轻微形变，移出可取消，释放后回到稳定形态。拖动从触点开始跟随，改向或再次按下时承接当前形状和位置。[Apple 新设计系统](https://developer.apple.com/videos/play/wwdc2025/356/?time=348) · [SwiftUI 自定义玻璃](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views)
 
-媒体 `media-shade` 覆盖控制实际高度及安全区，再按 `media-protection.height` 渐退，先于玻璃绘制、不拦触摸。背景滚动／视频、按下／取消和辅助偏好需运行验证；静态稿仅核对材料目标。用照片、细线及密集文字检查连续折射和可读性，离散重影须修正采样。
+设备、传输、设置在同一个 284×64 点的 regular 玻璃底栏内等宽排列，窄视口允许缩窄轨道。每项图标在上、文字在下，沿同一竖轴居中。图标用 `icon.size`，文字用 `caption`，两者间距用 `spacing.micro`，大字时栏高随内容增长。同一个 `GlassTabBar` 持续管理整条轨道和一枚同心的选中镜片。静止时用轻薄明暗差、边缘光和更强的前景对比标记选中，图标及文字保持原位。点按或横拖时镜片在轨道内移动，释放后落在实际切换成功的目的地。
 
-玻璃光学参数中 opticalDepth 为厚度，refractionWidth 为边缘过渡及形状融合距离。生产后端与初始化见[应用入口](../app/lib/main.dart)。
+滚动内容延伸到浮动栏后方，末项预留可滚动的避让空间。内容与栏实际重叠时用一层渐退保护，在文件列表中逐渐降低穿过底栏的文字和分隔线的可见度。媒体的渐退只覆盖控件、安全区与必要的过渡范围，优先保留画面主体。明亮画面可从控件区约 35% 的暗化开始，按实际对比调整，足够暗的画面可省去额外暗化。单个预览画面中的顶部和底部控件使用同一 clear 材质。[Apple 滚动边缘指南](https://developer.apple.com/design/human-interface-guidelines/scroll-views#Scroll-edge-effects) · [Apple Clear 材质指南](https://developer.apple.com/design/human-interface-guidelines/materials#Liquid-Glass)
+
+原生控件在平台提供时使用系统材料。SwiftUI 的 `glassEffect` 作用于按键外形，`GlassEffectContainer` 共同渲染相邻形状，`interactive` 提供响应触控和指针的反馈。Flutter 使用项目所选生产玻璃库的光学及后端适配路径，既有 `glass` token 是项目参数。辅助偏好按平台设置处理。降低透明度或需要实体面提高对比时保留原尺寸、动作与焦点。减少动态时保留按压与选中反馈，收敛形变和回弹。
+
+复核时用干净浅底、深底、细线与密集文件名、明亮及暗色照片分别观察玻璃内外的分层和前景对比。Ardot 的 G1 材料对照与 F2/W8 的列表遮挡表达材质和相对层级。连续采样、按压、拖动打断和系统辅助偏好的实际表现需要真机验证。[G1 材料对照](https://ardot.tencent.com/file/749360133997361?node_id=2%3A3144) · [平台与能力](prod/compatibility.md)
 
 ## Shapes
 
@@ -747,12 +1058,30 @@ iPhone Duo 横向垂直导航胶囊贴合物理屏幕边缘，保留 24 点外�
 
 ## Components
 
-共享卡片、页头、行、开关、动作、导航和侧栏使用母组件实例。输入用 connection-field，保留已选值与标签的选择用 selection-field；候选点击展开。开关命中独立于轨道，选中及主要动作用黑白，次动作用中性实体，文字动作透明，普通动作使用 label；危险动作使用风险色并说明影响，取消保持普通样式。图标统一 Lucide，应用原图不改绘。
+### 应用更新弹窗
 
-远控各状态共用全屏结构，快捷工具及上下文插槽表达差异；熄屏／锁定提供直接点亮，退出可触及。应用打开弹层只含应用名、两种动作与取消；手机主控首次推荐手机屏幕，独立窗口为次选，之后沿用用户明确选择，动作纵排复用主次按钮，间距 12px；整页不因复用面板改成抽屉。
+「关于与更新」把当前版本、构建号和更新入口放在同组列表，更新记录按版本卡片排布。发现新版本后使用有遮罩的居中实体弹窗。版本对照、更新摘要与底部操作在各状态保持同一位置。完整发布说明通过「更新记录」进入，窄窗和大字时正文可滚动，操作始终可达。
+
+顶部的线环和中心图形是主要动效。弹窗进入时在约 200 毫秒内从轻微下移过渡到静止。准备下载与校验使用共用连续线弧，转速低于普通等待。收到可用总量后，线弧转成按真实字节推进的圆弧，中心显示百分比。下载与校验完成后，线环闭合，绿色对勾在约 220 毫秒内显现。点「安装更新」后，中心图形变为交付箭头，状态文字随系统回应更新。过渡从当前图形开始，减少动态时以静态阶段图标、实际进度和文字表示同一状态。读屏播报阶段切换、错误和完成。
+
+弹窗和设置入口展示同一次更新。下载中的「收起」、完成后的「稍后安装」可回到原任务，状态保留在「关于与更新」。下载取消、错误重试与商店交付的条件见[应用版本与更新](prod/app-updates.md)。
+
+### 共享控件
+
+共享卡片、页头、行、开关、动作、导航和侧栏使用母组件实例。输入用 `connection-field`，带标签及当前值的选择用 `selection-field`。开关命中独立于轨道，选中及主要动作用黑白，次动作用中性实体，文字动作透明，普通动作使用 label；危险动作使用风险色并说明影响，取消保持普通样式。图标统一 Lucide，应用原图不改绘。
+
+下拉框和选择行从当前窗口打开独立弹层。窄窗用贴底弹层，宽窗用居中弹窗。实体面配遮罩，在弹层内显示简短标题、取消方式和可滚动的选项。当前值用对勾或选中样式标明，选项整行可点且至少 44 点高。窗口缩放或放大文字时保持列表与取消动作可达。关闭后焦点回到原控件。选项属于同一个筛选表单时，可以直接在筛选弹层内展示分组选择，统一提交。
+
+设置中即时生效的偏好在行尾直接操作，布尔偏好用开关，有限互斥值用分段选择。需请求权限时由点按触发，确认生效后更新选中态。配对、导入与连接配置保留明确提交，失败信息放在受影响的字段旁，保留其他已输入值。紧凑设置行使用 `list-icon-compact` 与 `list-icon-glyph-compact`，控件命中仍遵循通用尺寸。
+
+设置主屏使用「使用偏好」与「本机数据」两组。外观分段在极窄窗口或大字设置下移到同一行组的下一行。后台保持与系统提醒使用独立开关，后台运行资格解释宿主状态。关于行尾读取实际安装版本。运行日志在同一弹层编辑级别与来源，确认后应用。
+
+“画面与控制”的清晰度行尾显示当前档位与向下箭头。弹层保留完整档位与中文说明，并以中性底和对勾突出当前项。紧凑宽度可将选择字段移到行内下一行。窗口比例共用同一选项样式，点“自定义”在弹层内进入输入。档位和生效规则见[屏幕偏好](prod/interaction-rules.md#比例清晰度与屏幕偏好)。
+
+远控各状态共用全屏结构，状态叠在原视口上，工具和退出位置保持可达。应用打开弹层只含应用名、两种动作与取消；手机主控首次推荐手机屏幕，独立窗口为次选，之后沿用用户明确选择，动作纵排复用主次按钮，间距 12px；整页不因复用面板改成抽屉。
 
 ## Do's and Don'ts
 
-普通路由使用 Cupertino 返回；文件选择态先按[选择规则](prod/content-and-transfer.md#文件选择与批量操作)退出选择，远控按[交互规则](prod/interaction-rules.md)。系统文字、减少动态、玻璃外观、透明度与对比偏好不另设产品开关；标准 Apple 组件跟随系统玻璃外观变化，Flutter 自绘层不伪造未公开的透明／着色状态，统一使用已验收的 iOS 27 regular/clear 预设。修改母组件同步核对实例与明暗、窄屏长文；token 更改运行生成漂移检查。
+普通路由使用 Cupertino 返回。文件选择态先按[选择规则](prod/content-and-transfer.md#文件选择与批量操作)退出选择，远控按[交互规则](prod/interaction-rules.md)。系统文字、减少动态、玻璃外观、透明度与对比偏好沿用平台能力，自绘层行为见[平台与能力](prod/compatibility.md)。修改母组件同步核对实例与明暗、窄屏长文。token 更改运行生成漂移检查。
 
 依据：[iOS 27 官方设计更新](https://www.apple.com/os/ios/)、[Principles of great design · WWDC26](https://developer.apple.com/videos/play/wwdc2026/250/)、[Communicate your brand identity on iOS · WWDC26](https://developer.apple.com/videos/play/wwdc2026/251/)、[Apple 无障碍指南](https://developer.apple.com/design/human-interface-guidelines/accessibility)、[Apple 字体指南](https://developer.apple.com/design/human-interface-guidelines/typography)、[Apple 材料指南](https://developer.apple.com/design/human-interface-guidelines/materials)、[Meet Liquid Glass](https://developer.apple.com/videos/play/wwdc2025/219/)、[Get to know the new design system](https://developer.apple.com/videos/play/wwdc2025/356/)。

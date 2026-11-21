@@ -2,24 +2,18 @@ import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/gallery/preview/widgets/media_controls_protection.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 
 class MediaPreviewToolbar extends StatelessWidget {
   const MediaPreviewToolbar({
     super.key,
     required this.title,
     required this.onBack,
-    required this.onSave,
-    required this.onShare,
   });
 
   final String title;
   final VoidCallback onBack;
-  final VoidCallback onSave;
-  final VoidCallback onShare;
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +35,10 @@ class MediaPreviewToolbar extends StatelessWidget {
                       : DesignTokens.componentGlassInteractionScale,
                   anchorStretch: !GlassMaterial.reduceMotion(context),
                   onPressed: onBack,
-                  icon: const Icon(LucideIcons.chevronLeft),
+                  icon: const Icon(
+                    LucideIcons.chevronLeft,
+                    color: DesignTokens.colorWhite,
+                  ),
                 ),
               ),
               const SizedBox(width: DesignTokens.spacingXs),
@@ -52,25 +49,6 @@ class MediaPreviewToolbar extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
-              ),
-              const SizedBox(width: DesignTokens.spacingXs),
-              GlassToolbarGroup(
-                variant: GlassVariant.clear,
-                children: [
-                  GlassActionIcon(
-                    tooltip: '保存原文件',
-                    color: Theme.of(context).colorScheme.onSurface,
-                    onPressed: onSave,
-                    icon: const Icon(LucideIcons.download),
-                  ),
-                  if (supportsSystemFileShare)
-                    GlassActionIcon(
-                      tooltip: '系统分享',
-                      color: Theme.of(context).colorScheme.onSurface,
-                      onPressed: onShare,
-                      icon: const Icon(LucideIcons.share2),
-                    ),
-                ],
               ),
             ],
           ),

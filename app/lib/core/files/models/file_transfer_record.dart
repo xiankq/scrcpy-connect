@@ -46,6 +46,7 @@ abstract class FileTransferRecord with _$FileTransferRecord {
     @Default(false) bool treeComplete,
     @Default(false) bool partialDestinationPossible,
     @Default(false) bool cleanupPending,
+    @Default(false) bool historyHidden,
     String? cleanupScopeId,
     String? cleanupScopeKey,
   }) = _FileTransferRecord;

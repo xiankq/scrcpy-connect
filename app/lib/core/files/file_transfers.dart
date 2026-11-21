@@ -30,4 +30,7 @@ abstract interface class FileTransfers {
 
   /// 仅移除记录，返回实际移除的任务标识；不删除保存的文件。
   Future<List<String>> removeTransfer(FileTransferTarget target);
+
+  /// 从传输中心隐藏已结束的记录，保留任务数据和暂存文件。
+  Future<void> clearTransferHistory(List<FileTransferTarget> targets);
 }

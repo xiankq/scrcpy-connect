@@ -9,7 +9,6 @@ class ConnectionAddressFields extends StatelessWidget {
     required this.port,
     required this.pairingCode,
     required this.pairing,
-    required this.completingPairing,
     required this.legacyTcp,
     required this.enabled,
     required this.onAddressChanged,
@@ -19,7 +18,6 @@ class ConnectionAddressFields extends StatelessWidget {
   final TextEditingController port;
   final TextEditingController pairingCode;
   final bool pairing;
-  final bool completingPairing;
   final bool legacyTcp;
   final bool enabled;
   final ValueChanged<String> onAddressChanged;
@@ -27,71 +25,104 @@ class ConnectionAddressFields extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    const contentPadding = EdgeInsets.all(
+      DesignTokens.componentConnectionFieldPadding,
+    );
+    final addressField = _labelled(
+      context,
+      pairing ? '手机地址' : 'IP 地址或主机名',
+      TextFormField(
+        style: textTheme.bodyMedium,
+        controller: address,
+        onChanged: onAddressChanged,
+        validator: validateAddress,
+        enabled: enabled,
+        autocorrect: false,
+        decoration: const InputDecoration(
+          hintText: '192.168.1.8',
+          contentPadding: contentPadding,
+        ),
+      ),
+    );
+    final portField = _labelled(
+      context,
+      pairing ? '配对端口' : '连接端口',
+      TextFormField(
+        style: textTheme.bodyMedium,
+        controller: port,
+        validator: validatePort,
+        enabled: enabled,
+        keyboardType: TextInputType.number,
+        decoration: const InputDecoration(contentPadding: contentPadding),
+      ),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (pairing) ...[
-          Text(
-            '在手机的“开发者选项 → 无线调试 → 使用配对码配对”中查看配对信息，填写后即可连接。',
-            style: textTheme.bodySmall,
-          ),
-          const SizedBox(height: DesignTokens.spacingMd),
-        ],
-        if (!pairing) ...[
-          if (completingPairing) ...[
-            Text('已配对，尚未连接', style: textTheme.bodyMedium),
-            const SizedBox(height: DesignTokens.spacingXs),
-          ],
-          Text(
-            legacyTcp
-                ? '已有调试授权：先通过 USB 允许按地址连接，仅在可信网络使用。'
-                : '使用手机无线调试主页面的连接端口。',
-            style: textTheme.bodySmall,
-          ),
-          const SizedBox(height: DesignTokens.spacingMd),
-        ],
-        TextFormField(
-          style: textTheme.bodyMedium,
-          controller: address,
-          onChanged: onAddressChanged,
-          validator: validateAddress,
-          enabled: enabled,
-          autocorrect: false,
-          decoration: const InputDecoration(
-            labelText: 'IP 地址或主机名',
-            hintText: '192.168.1.8',
-          ),
-        ),
-        const SizedBox(height: DesignTokens.spacingMd),
-        TextFormField(
-          style: textTheme.bodyMedium,
-          controller: port,
-          validator: validatePort,
-          enabled: enabled,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            labelText: pairing ? '配对端口' : '连接端口',
-            helperText: pairing
-                ? '配对窗口中的端口'
-                : legacyTcp
-                ? null
-                : '无线调试主页面中的端口',
-          ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final scale = MediaQuery.textScalerOf(context).scale(1);
+            return constraints.maxWidth < 275 * scale
+                ? Column(
+                    children: [
+                      addressField,
+                      const SizedBox(height: DesignTokens.spacingMd),
+                      portField,
+                    ],
+                  )
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 2, child: addressField),
+                      const SizedBox(width: DesignTokens.spacingSm),
+                      Expanded(child: portField),
+                    ],
+                  );
+          },
         ),
         if (pairing) ...[
           const SizedBox(height: DesignTokens.spacingMd),
-          TextFormField(
-            style: textTheme.bodyMedium,
-            controller: pairingCode,
-            enabled: enabled,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            validator: (value) =>
-                RegExp(r'^\d{6}$').hasMatch(value ?? '') ? null : '请输入六位配对码',
-            decoration: const InputDecoration(labelText: '配对码'),
+          _labelled(
+            context,
+            '六位配对码',
+            TextFormField(
+              style: textTheme.bodyMedium?.copyWith(
+                letterSpacing: DesignTokens.spacingXs,
+              ),
+              controller: pairingCode,
+              enabled: enabled,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              validator: (value) =>
+                  RegExp(r'^\d{6}$').hasMatch(value ?? '') ? null : '请输入六位配对码',
+              decoration: const InputDecoration(
+                counterText: '',
+                contentPadding: contentPadding,
+              ),
+            ),
           ),
         ],
+        const SizedBox(height: DesignTokens.spacingSm),
+        Text(
+          pairing
+              ? '在手机的无线调试中选择“使用配对码配对”，查看配对信息。'
+              : legacyTcp
+              ? '通过 USB 开启 IP 调试后填写连接地址。请在可信网络使用。'
+              : '使用手机无线调试主页面的连接地址和端口。',
+          style: textTheme.bodySmall,
+        ),
       ],
     );
   }
+
+  Widget _labelled(BuildContext context, String label, Widget field) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      ExcludeSemantics(
+        child: Text(label, style: Theme.of(context).textTheme.labelLarge),
+      ),
+      const SizedBox(height: DesignTokens.spacingXs),
+      Semantics(label: label, child: field),
+    ],
+  );
 }

@@ -45,13 +45,13 @@ class ContentShortcuts extends StatelessWidget {
               (
                 '相册',
                 LucideIcons.images,
-                DesignTokens.colorListIconPurple,
+                DesignTokens.colorListIconSlate,
                 () => GalleryRoute(deviceId: deviceId).push<void>(context),
               ),
               (
                 '通知',
                 LucideIcons.bell,
-                DesignTokens.colorListIconBlue,
+                DesignTokens.colorListIconCoral,
                 () =>
                     NotificationsRoute(deviceId: deviceId).push<void>(context),
               ),
@@ -64,39 +64,43 @@ class ContentShortcuts extends StatelessWidget {
             ])
               SizedBox(
                 width: constraints.maxWidth / balancedColumns,
-                child: InkWell(
-                  onTap: enabled ? item.$4 : onUnavailable,
-                  borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: DesignTokens.spacingXxs,
-                      vertical: DesignTokens.spacingXs,
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: DesignTokens.componentAppIconSize,
-                          height: DesignTokens.componentAppIconSize,
-                          decoration: BoxDecoration(
-                            color: item.$3,
-                            borderRadius: BorderRadius.circular(
-                              DesignTokens.roundedMd,
+                child: Semantics(
+                  button: true,
+                  label: item.$1,
+                  child: Tooltip(
+                    excludeFromSemantics: true,
+                    message: item.$1,
+                    child: InkWell(
+                      onTap: enabled ? item.$4 : onUnavailable,
+                      borderRadius: BorderRadius.circular(
+                        DesignTokens.roundedMd,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: DesignTokens.spacingXxs,
+                          vertical: DesignTokens.spacingXs,
+                        ),
+                        child: Center(
+                          child: Container(
+                            width: DesignTokens.componentAppIconSize,
+                            height: DesignTokens.componentAppIconSize,
+                            decoration: BoxDecoration(
+                              color: enabled
+                                  ? item.$3
+                                  : DesignTokens
+                                        .componentDeviceShortcutDisabledBackgroundColor,
+                              borderRadius: BorderRadius.circular(
+                                DesignTokens.roundedMd,
+                              ),
+                            ),
+                            child: Icon(
+                              item.$2,
+                              color: DesignTokens.colorWhite,
+                              size: DesignTokens.componentIconLargeSize,
                             ),
                           ),
-                          child: Icon(
-                            item.$2,
-                            color: DesignTokens.colorWhite,
-                            size: DesignTokens.componentIconLargeSize,
-                          ),
                         ),
-                        const SizedBox(height: DesignTokens.spacingXs),
-                        Text(
-                          item.$1,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),

@@ -10,7 +10,7 @@ List<TransferHistoryEntry> transferHistoryRows(
   FileTransferCollection data,
 ) {
   final groups = <String, List<FileTransferSnapshot>>{};
-  for (final raw in data.transfers) {
+  for (final raw in data.transfers.where((task) => !task.historyHidden)) {
     final task = transferView(devices, raw);
     final batch = task.batchId;
     groups

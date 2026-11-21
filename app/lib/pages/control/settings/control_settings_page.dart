@@ -10,21 +10,18 @@ import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/pages/control/settings/widgets/quality_option_row.dart';
-import 'package:scrcpy_connect/pages/control/settings/widgets/quality_options_sheet.dart';
 import 'package:scrcpy_connect/pages/control/settings/widgets/screen_ratio_picker.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
-import 'package:scrcpy_connect/widgets/choice_row.dart';
+import 'package:scrcpy_connect/widgets/choice_picker.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
-import 'package:scrcpy_connect/widgets/overlays.dart';
 
 String _codecReason(VideoCodecOption? option) {
   if (option == null) return '尚未确认这台设备的编码能力。';
@@ -172,95 +169,13 @@ class ControlSettingsPage extends HookConsumerWidget {
                   }
                 }
 
-                Future<QualityChoice<T>?> pick<T>(
-                  String title,
-                  IconData icon,
-                  List<QualityChoice<T>> options,
-                  T selected,
-                ) => showAppModalSheet<QualityChoice<T>>(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (_) => QualityOptionsSheet<T>(
-                    title: title,
-                    icon: icon,
-                    options: options,
-                    selected: selected,
-                  ),
-                );
-
-                Future<void> chooseCodec() async {
-                  final picked = await pick('编码格式', LucideIcons.film, [
-                    for (final item in codecs)
-                      QualityChoice(
-                        value: item.codec,
-                        label: item.codec.name,
-                        available: item.available,
-                        reason: _codecReason(item),
-                      ),
-                  ], current.codec);
-                  if (picked != null && context.mounted) {
-                    await apply(
-                      VideoQualityPatch(
-                        codec: picked.value,
-                        encoder: (name: null),
-                      ),
-                    );
-                  }
-                }
-
-                Future<void> chooseEncoder() async {
-                  final picked = await pick<String?>('视频编码器', LucideIcons.cpu, [
-                    QualityChoice(
-                      value: null,
-                      label: '自动选择',
-                      available: available,
-                      reason: available
-                          ? '由这台设备为所选格式选择编码器。'
-                          : _codecReason(codec),
-                    ),
-                    for (final encoder in codec?.encoders ?? <VideoEncoder>[])
-                      QualityChoice(
-                        value: encoder.name,
-                        label: encoder.name,
-                        available: available,
-                        reason: available
-                            ? '已从这台设备枚举。实际配置仍取决于设备资源。'
-                            : _codecReason(codec),
-                      ),
-                  ], current.encoder);
-                  if (picked != null && context.mounted) {
-                    await apply(
-                      VideoQualityPatch(encoder: (name: picked.value)),
-                    );
-                  }
-                }
-
-                final fields = [
-                  (
-                    title: '分辨率上限',
-                    icon: LucideIcons.monitor,
-                    value: current.maxSize,
-                    choices: data.maxSizes,
-                    label: (int n) => '$n px',
-                    patch: (int n) => VideoQualityPatch(maxSize: n),
-                  ),
-                  (
-                    title: '帧率',
-                    icon: LucideIcons.gauge,
-                    value: current.maxFps,
-                    choices: data.frameRates,
-                    label: (int n) => '$n fps',
-                    patch: (int n) => VideoQualityPatch(maxFps: n),
-                  ),
-                  (
-                    title: '码率',
-                    icon: LucideIcons.network,
-                    value: current.bitRate,
-                    choices: data.bitRates,
-                    label: (int n) => '${n ~/ 1000000} Mbps',
-                    patch: (int n) => VideoQualityPatch(bitRate: n),
-                  ),
-                ];
+                const clarity = {
+                  320: '320P（流畅）',
+                  720: '720P（均衡）',
+                  1080: '1080P（清晰）',
+                  1920: '1920P（超清）',
+                  0: '原画',
+                };
                 return GroupedListView(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -269,86 +184,30 @@ class ControlSettingsPage extends HookConsumerWidget {
                     if (applying.value) const ContentLoadingIndicator(),
                     for (final failure in applicationFailures.value)
                       StateNote('${failure.name}：${failure.reason}'),
-                    const SectionTitle('画面质量'),
                     SettingsGroup(
                       children: [
-                        for (final preset in data.presets)
-                          ChoiceRow<VideoQualityPreset>(
-                            value: preset,
-                            groupValue: current.preset,
-                            onChanged: applying.value || !available
-                                ? null
-                                : (next) {
-                                    if (next != null) {
-                                      apply(VideoQualityPatch(preset: next));
-                                    }
-                                  },
-                            title: Text(switch (preset) {
-                              .smooth => '流畅',
-                              .balanced => '均衡',
-                              .clear => '清晰',
-                            }),
-                            leading: const ListIconBadge(
-                              icon: LucideIcons.gauge,
-                              backgroundColor: DesignTokens.colorListIconMint,
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SectionTitle('详细画质'),
-                    SettingsGroup(
-                      children: [
-                        for (final field in fields)
-                          QualityOptionRow(
-                            title: field.title,
-                            icon: field.icon,
-                            currentValue: field.label(field.value),
-                            onTap: applying.value
-                                ? null
-                                : () async {
-                                    if (field.choices.isEmpty) {
-                                      feedback(
-                                        context,
-                                        '当前设备没有返回可选择的${field.title}选项',
-                                      );
-                                      return;
-                                    }
-                                    final picked = await pick(
-                                      field.title,
-                                      field.icon,
-                                      [
-                                        for (final n in field.choices)
-                                          QualityChoice(
-                                            value: n,
-                                            label: field.label(n),
-                                            available: available,
-                                            reason: available
-                                                ? ''
-                                                : '请先选择双方可用的编码格式。',
-                                          ),
-                                      ],
-                                      field.value,
+                        QualityOptionRow(
+                          title: '清晰度',
+                          icon: LucideIcons.monitor,
+                          currentValue:
+                              clarity[current.maxSize] ?? '${current.maxSize}P',
+                          onTap: applying.value || !available
+                              ? null
+                              : () async {
+                                  final next = await showChoicePicker<int>(
+                                    context: context,
+                                    title: '清晰度',
+                                    options: clarity.keys,
+                                    label: (option) => clarity[option]!,
+                                    isSelected: (option) =>
+                                        option == current.maxSize,
+                                  );
+                                  if (next != null && context.mounted) {
+                                    await apply(
+                                      VideoQualityPatch(maxSize: next),
                                     );
-                                    if (picked != null && context.mounted) {
-                                      await apply(field.patch(picked.value));
-                                    }
-                                  },
-                          ),
-                        QualityOptionRow(
-                          title: '编码格式',
-                          icon: LucideIcons.film,
-                          currentValue: codec?.codec.name ?? current.codec.name,
-                          onTap: applying.value || codecs.isEmpty
-                              ? null
-                              : chooseCodec,
-                        ),
-                        QualityOptionRow(
-                          title: '视频编码器',
-                          icon: LucideIcons.cpu,
-                          currentValue: current.encoder ?? '自动',
-                          onTap: applying.value || codec == null
-                              ? null
-                              : chooseEncoder,
+                                  }
+                                },
                         ),
                       ],
                     ),

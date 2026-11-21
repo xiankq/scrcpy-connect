@@ -7,17 +7,14 @@ import 'package:scrcpy_connect/core/devices/device_query_provider.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
-import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
-import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
-import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
-import 'package:scrcpy_connect/widgets/state_note.dart';
 
 class CallsPage extends HookConsumerWidget {
   const CallsPage({super.key, required this.device});
@@ -83,144 +80,238 @@ class CallsPage extends HookConsumerWidget {
     Future<void> openPhoneApp() => requestUi(currentSystemCall: false);
     Future<void> openCurrentCallUi() => requestUi(currentSystemCall: true);
 
-    return PageFrame(
-      title: '电话',
-      child: AsyncContent(
-        loading: result.isLoading,
-        data: result.asData?.value,
-        error: result.error,
-        onRefresh: refresh,
-        emptyTitle: '通话状态尚未核验',
-        alternative: TextButton(
-          onPressed: operation.value.opening ? null : openPhoneApp,
-          child: const Text('打开手机电话界面'),
-        ),
-        builder: (context, data) {
-          final state = data.status;
-          final verified = data.verified;
-          final calls = verified ? data.calls : const <DeviceCall>[];
-          Future<void> verify() async {
-            if (starting.value) return;
-            starting.value = true;
-            try {
-              await observation.startObservation(device.id);
-              if (observationCurrent()) refresh();
-            } catch (error) {
-              if (context.mounted && observationCurrent()) {
-                feedback(context, '$error');
+    final appText = Theme.of(context).textTheme.bodyMedium;
+    return Theme(
+      data: ConnectTokens.theme(
+        Brightness.dark,
+        fontFamily: appText?.fontFamily,
+        fontFamilyFallback: appText?.fontFamilyFallback,
+      ),
+      child: PageFrame(
+        title: '电话',
+        backgroundColor: DesignTokens.colorCallStage,
+        child: AsyncContent(
+          loading: result.isLoading,
+          data: result.asData?.value,
+          error: result.error,
+          onRefresh: refresh,
+          emptyTitle: '通话状态尚未核验',
+          alternative: TextButton(
+            onPressed: operation.value.opening ? null : openPhoneApp,
+            child: const Text('打开手机电话界面'),
+          ),
+          builder: (context, data) {
+            final state = data.status;
+            final verified = data.verified;
+            final calls = verified ? data.calls : const <DeviceCall>[];
+            Future<void> verify() async {
+              if (starting.value) return;
+              starting.value = true;
+              try {
+                await observation.startObservation(device.id);
+                if (observationCurrent()) refresh();
+              } catch (error) {
+                if (context.mounted && observationCurrent()) {
+                  feedback(context, '$error');
+                }
+              } finally {
+                if (observationCurrent()) starting.value = false;
               }
-            } finally {
-              if (observationCurrent()) starting.value = false;
             }
-          }
 
-          return GroupedListView(
-            padding: const EdgeInsets.all(DesignTokens.spacingMd),
-            children: [
-              StateNote(deviceName(device), icon: LucideIcons.smartphone),
-              ContentPanel(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const FeatureIcon(
-                      LucideIcons.phone,
-                      color: ConnectTokens.mint,
-                      size: DesignTokens.componentEmptyContentIconSize,
+            final current = calls.firstOrNull;
+            final caller = current?.aggregate == false
+                ? current?.name ?? current?.number
+                : null;
+            final ringing = current?.state == .ringing;
+            final phase = current != null
+                ? statusText(current.state.name)
+                : state == .stopped
+                ? '来电观察已停止'
+                : verified
+                ? '当前没有通话'
+                : '通话状态尚未核验';
+            final action = current == null ? openPhoneApp : openCurrentCallUi;
+            final canOpen =
+                current == null ||
+                data.canOpenSystemCallUi ||
+                data.canRetrySystemCallUi;
+            final text = Theme.of(context).textTheme;
+            return PageChromeBody(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Padding(
+                      padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '来自 ${deviceName(device)}',
+                            style: text.labelLarge?.copyWith(
+                              color: DesignTokens.colorCallMuted,
+                            ),
+                          ),
+                          const SizedBox(height: DesignTokens.spacingLg),
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: DesignTokens.colorCallRing.withValues(
+                                  alpha: .45,
+                                ),
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(
+                                DesignTokens.spacingXs,
+                              ),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: DesignTokens.colorCallRing
+                                        .withValues(alpha: ringing ? 1 : .5),
+                                  ),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(
+                                    DesignTokens.spacingMd,
+                                  ),
+                                  child: SizedBox.square(
+                                    dimension:
+                                        DesignTokens.componentCallAvatarSize,
+                                    child: CircleAvatar(
+                                      backgroundColor:
+                                          DesignTokens.colorCallAvatar,
+                                      foregroundColor:
+                                          DesignTokens.colorCallStage,
+                                      child: caller == null
+                                          ? Icon(
+                                              current == null
+                                                  ? LucideIcons.phone
+                                                  : LucideIcons.user,
+                                              size: DesignTokens
+                                                  .componentIconLargeSize,
+                                            )
+                                          : Text(
+                                              caller.characters.firstOrNull ??
+                                                  '·',
+                                              style: text.displaySmall
+                                                  ?.copyWith(
+                                                    color: DesignTokens
+                                                        .colorCallStage,
+                                                  ),
+                                            ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: DesignTokens.spacingLg),
+                          Semantics(
+                            liveRegion: true,
+                            child: Text(
+                              caller ?? (current == null ? phase : '来电者未知'),
+                              textAlign: TextAlign.center,
+                              style: text.headlineLarge?.copyWith(
+                                color: DesignTokens.colorWhite,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: DesignTokens.spacingXs),
+                          if (current != null)
+                            Text(
+                              phase,
+                              style: text.titleMedium?.copyWith(
+                                color: DesignTokens.colorCallMuted,
+                              ),
+                            ),
+                          const SizedBox(height: DesignTokens.spacingLg),
+                          Material(
+                            color: DesignTokens.colorCallDock,
+                            borderRadius: BorderRadius.circular(
+                              DesignTokens.componentCallDockRounded,
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(
+                                DesignTokens.spacingMd,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  if (current != null || !verified)
+                                    Text(
+                                      current != null
+                                          ? '声音仍在手机'
+                                          : data.reason ?? '核验后可查看手机来电状态。',
+                                      style: text.bodySmall?.copyWith(
+                                        color: DesignTokens.colorCallMuted,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  if (operation.value.failure
+                                      case final message?)
+                                    Text(
+                                      message,
+                                      style: text.bodyMedium?.copyWith(
+                                        color: DesignTokens.colorWhite,
+                                      ),
+                                    ),
+                                  const SizedBox(
+                                    height: DesignTokens.spacingSm,
+                                  ),
+                                  FilledButton.icon(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor:
+                                          DesignTokens.colorCallKey,
+                                      foregroundColor: DesignTokens.colorWhite,
+                                    ),
+                                    onPressed:
+                                        operation.value.opening || !canOpen
+                                        ? null
+                                        : action,
+                                    icon: Icon(
+                                      ringing
+                                          ? LucideIcons.phoneIncoming
+                                          : LucideIcons.phone,
+                                    ),
+                                    label: Text(
+                                      operation.value.opening
+                                          ? '正在打开…'
+                                          : current == null
+                                          ? '打开手机电话'
+                                          : ringing
+                                          ? '在手机画面接听'
+                                          : '打开手机通话界面',
+                                    ),
+                                  ),
+                                  if (!verified)
+                                    TextButton(
+                                      onPressed: starting.value ? null : verify,
+                                      child: Text(
+                                        state == .stopped ? '启用来电观察' : '检查通话状态',
+                                        style: text.labelLarge?.copyWith(
+                                          color: DesignTokens.colorWhite,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: DesignTokens.spacingLg),
-                    if (calls.isEmpty) ...[
-                      Text(
-                        state == DeviceCallAvailability.stopped
-                            ? '来电观察已停止'
-                            : verified
-                            ? '当前没有通话'
-                            : '通话状态尚未核验',
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                      const SizedBox(height: DesignTokens.spacingSm),
-                      const Text('可在手机原电话应用中接听、拨号、查找联系人和通话记录。'),
-                    ] else
-                      for (final call in calls) ...[
-                        Text(
-                          call.aggregate
-                              ? '来电者未知'
-                              : call.name ?? call.number ?? '来电者未知',
-                          style: Theme.of(context).textTheme.headlineMedium,
-                        ),
-                        Text(
-                          statusText(call.state.name),
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: DesignTokens.spacingSm),
-                      ],
-                    const SizedBox(height: DesignTokens.spacingMd),
-                    const Text('声音仍在手机'),
-                    if (!verified && (data.reason?.isNotEmpty ?? false))
-                      StateNote(data.reason!),
-                    if (calls.isNotEmpty) const Text('请在手机画面中接听或挂断。'),
-                    if (operation.value.failure != null)
-                      StateNote(operation.value.failure!),
-                    if (calls.isEmpty) ...[
-                      const SizedBox(height: DesignTokens.spacingLg),
-                      FilledButton.icon(
-                        onPressed: operation.value.opening
-                            ? null
-                            : openPhoneApp,
-                        icon: const Icon(LucideIcons.phone),
-                        label: Text(
-                          operation.value.opening ? '正在打开…' : '打开手机电话界面',
-                        ),
-                      ),
-                    ],
-                    if (verified &&
-                        calls.isNotEmpty &&
-                        (data.canOpenSystemCallUi ||
-                            data.canRetrySystemCallUi)) ...[
-                      const SizedBox(height: DesignTokens.spacingLg),
-                      FilledButton.icon(
-                        onPressed: operation.value.opening
-                            ? null
-                            : openCurrentCallUi,
-                        icon: const Icon(LucideIcons.phone),
-                        label: Text(
-                          operation.value.opening
-                              ? '正在打开…'
-                              : data.canRetrySystemCallUi
-                              ? '重试打开系统通话界面'
-                              : calls.any(
-                                  (call) =>
-                                      call.state == DeviceCallState.ringing,
-                                )
-                              ? '在手机画面接听'
-                              : '打开手机通话界面',
-                        ),
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
               ),
-              const SizedBox(height: DesignTokens.spacingLg),
-              OutlinedButton.icon(
-                onPressed: () => openRemoteRoute(context, deviceId: device.id),
-                icon: const Icon(LucideIcons.smartphone),
-                label: const Text('打开手机屏幕'),
-              ),
-              TextButton(
-                onPressed: () =>
-                    AppsRoute(deviceId: device.id).push<void>(context),
-                child: const Text('从全部应用打开电话'),
-              ),
-              TextButton(
-                onPressed: starting.value ? null : verify,
-                child: Text(
-                  state == DeviceCallAvailability.stopped
-                      ? '启用通知与来电观察'
-                      : '重新核验通话',
-                ),
-              ),
-            ],
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

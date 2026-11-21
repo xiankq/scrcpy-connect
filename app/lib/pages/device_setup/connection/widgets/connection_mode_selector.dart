@@ -1,15 +1,13 @@
-import 'package:material_ui/material_ui.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 
 import '../models/add_device_mode.dart';
 
 export '../models/add_device_mode.dart';
 
-class ConnectionModeSelector extends HookWidget {
+class ConnectionModeSelector extends StatelessWidget {
   const ConnectionModeSelector({
     super.key,
     required this.selected,
@@ -19,137 +17,101 @@ class ConnectionModeSelector extends HookWidget {
   final AddDeviceMode selected;
   final ValueChanged<AddDeviceMode> onChanged;
 
-  @override
-  Widget build(BuildContext context) {
-    final modeKeys = useMemoized(
-      () => {for (final mode in AddDeviceMode.values) mode: GlobalKey()},
-    );
-    useEffect(() {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!context.mounted) return;
-        final selectedContext = modeKeys[selected]?.currentContext;
-        if (selectedContext != null) {
-          Scrollable.ensureVisible(selectedContext, alignment: .5);
-        }
-      });
-      return null;
-    }, [selected]);
-
-    return ContentPanel(
-      padding: EdgeInsets.zero,
-      child: LayoutBuilder(
-        builder: (context, constraints) => SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final entry in const [
-                (
-                  AddDeviceMode.pairing,
-                  '配对码',
-                  LucideIcons.keyRound,
-                  ConnectTokens.blue,
-                ),
-                (
-                  AddDeviceMode.qr,
-                  '扫码',
-                  LucideIcons.qrCode,
-                  ConnectTokens.mint,
-                ),
-                (
-                  AddDeviceMode.usb,
-                  'USB',
-                  LucideIcons.usb,
-                  ConnectTokens.amber,
-                ),
-                (
-                  AddDeviceMode.ip,
-                  'IP 连接',
-                  LucideIcons.network,
-                  ConnectTokens.coral,
-                ),
-              ])
-                _ModeTab(
-                  key: modeKeys[entry.$1],
-                  label: entry.$2,
-                  icon: entry.$3,
-                  color: entry.$4,
-                  selected: selected == entry.$1,
-                  minWidth: constraints.maxWidth / AddDeviceMode.values.length,
-                  onTap: () => onChanged(entry.$1),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ModeTab extends StatelessWidget {
-  const _ModeTab({
-    super.key,
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.selected,
-    required this.minWidth,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final Color color;
-  final bool selected;
-  final double minWidth;
-  final VoidCallback onTap;
+  static const _tabs = [
+    (
+      AddDeviceMode.pairing,
+      '配对码',
+      LucideIcons.keyRound,
+      DesignTokens.componentConnectionIconPairingTextColor,
+    ),
+    (
+      AddDeviceMode.qr,
+      '扫码',
+      LucideIcons.scanQrCode,
+      DesignTokens.componentConnectionIconQrTextColor,
+    ),
+    (
+      AddDeviceMode.usb,
+      'USB',
+      LucideIcons.usb,
+      DesignTokens.componentConnectionIconUsbTextColor,
+    ),
+    (
+      AddDeviceMode.ip,
+      'IP 连接',
+      LucideIcons.wifi,
+      DesignTokens.componentConnectionIconIpTextColor,
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Semantics(
-      label: label,
-      button: true,
-      selected: selected,
-      child: InkWell(
-        onTap: onTap,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            minWidth: minWidth,
-            minHeight: DesignTokens.componentNavigationHeight,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: DesignTokens.spacingXs,
-              vertical: DesignTokens.spacingTight,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: DesignTokens.componentIconSize, color: color),
-                const SizedBox(height: DesignTokens.spacingXxs),
-                Text(
-                  label,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontSize: DesignTokens.typographyCaptionFontSize,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                    color: selected
-                        ? theme.colorScheme.onSurface
-                        : theme.colorScheme.onSurfaceVariant,
+    return ContentPanel(
+      padding: const EdgeInsets.all(
+        DesignTokens.componentConnectionTabsPadding,
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final columns =
+              constraints.maxWidth /
+                      MediaQuery.textScalerOf(context).scale(1) >=
+                  288
+              ? 4
+              : 2;
+          return Wrap(
+            children: [
+              for (final (mode, label, icon, color) in _tabs)
+                SizedBox(
+                  width: constraints.maxWidth / columns,
+                  child: Semantics(
+                    button: true,
+                    selected: selected == mode,
+                    child: Material(
+                      color: selected == mode
+                          ? theme.colorScheme.surfaceContainerHigh
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(
+                        DesignTokens.componentConnectionTabSelectedRounded,
+                      ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(
+                          DesignTokens.componentConnectionTabSelectedRounded,
+                        ),
+                        onTap: () => onChanged(mode),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: DesignTokens.spacingSm,
+                            horizontal: DesignTokens.spacingXxs,
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                icon,
+                                size: DesignTokens.componentIconSize,
+                                color: color,
+                              ),
+                              const SizedBox(height: DesignTokens.spacingXxs),
+                              Text(
+                                label,
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  fontWeight: selected == mode
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: DesignTokens.spacingXxs),
-                Container(
-                  width: DesignTokens.componentIconSize,
-                  height: DesignTokens.spacingHairline * 2,
-                  color: selected
-                      ? theme.colorScheme.onSurface
-                      : Colors.transparent,
-                ),
-              ],
-            ),
-          ),
-        ),
+            ],
+          );
+        },
       ),
     );
   }

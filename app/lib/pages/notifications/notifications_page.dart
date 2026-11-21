@@ -13,8 +13,6 @@ import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
-import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/widgets/devices/device_source_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
@@ -84,10 +82,6 @@ class NotificationsPage extends HookConsumerWidget {
     final notificationHeader = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        DeviceSourceRow(
-          device: device,
-          padding: const EdgeInsets.only(bottom: DesignTokens.spacingSm),
-        ),
         if (showEnableAlerts)
           Padding(
             padding: const EdgeInsets.only(bottom: DesignTokens.spacingSm),
@@ -121,6 +115,13 @@ class NotificationsPage extends HookConsumerWidget {
     final notificationsAccess = ref.watch(deviceNotificationsProvider);
     final queryProvider = deviceNotificationsSnapshotProvider(device.id);
     final query = ref.watch(queryProvider);
+    final snapshot = query.value;
+    final clearable = {
+      if (snapshot?.live == true)
+        for (final notification in snapshot!.notifications)
+          if (!notification.groupSummary && notification.canDismiss == true)
+            notification.id,
+    };
     void refresh() => ref.invalidate(queryProvider);
     final clearing = useValueNotifier(false, [notificationsAccess, device.id]);
     useListenable(clearing);
@@ -131,7 +132,7 @@ class NotificationsPage extends HookConsumerWidget {
         identical(currentClearing.value, clearing) &&
         identical(notificationsAccess, ref.read(deviceNotificationsProvider));
 
-    Future<void> clearAll() async {
+    Future<void> clearAll(Set<String> selected) async {
       if (clearing.value || !notificationsCurrent()) return;
       clearing.value = true;
       try {
@@ -145,18 +146,10 @@ class NotificationsPage extends HookConsumerWidget {
         var pending = 0;
         var failed = 0;
         final candidates = current.notifications
-            .where((item) => item.canDismiss == true)
+            .where(
+              (item) => selected.contains(item.id) && item.canDismiss == true,
+            )
             .toList();
-        if (candidates.isNotEmpty &&
-            (!await confirm(
-                  context,
-                  '清除全部通知？',
-                  '将清除 ${deviceName(device)} 当前可清除的 ${candidates.length} 条通知。常驻通知和无法核验的通知会保留；清除不代表原应用已读。',
-                  action: '清除通知',
-                ) ||
-                !notificationsCurrent())) {
-          return;
-        }
         for (final item in candidates) {
           // 每个不透明引用都在手机再次核验，不本机隐藏项目，也不重试结果未知的动作。
           if (!context.mounted || !notificationsCurrent()) return;
@@ -228,15 +221,17 @@ class NotificationsPage extends HookConsumerWidget {
         identical(currentStarting.value, starting) &&
         identical(observation, ref.read(deviceObservationProvider));
     return PageFrame(
-      title: '实时通知',
+      title: '通知',
       actions: [
         Semantics(
           liveRegion: true,
           value: clearing.value ? '正在清除通知' : '',
           child: GlassActionIcon(
             tooltip: '清除全部通知',
-            onPressed: clearing.value ? null : clearAll,
-            icon: const Icon(LucideIcons.checkCheck),
+            onPressed: clearing.value || clearable.isEmpty
+                ? null
+                : () => clearAll(clearable),
+            icon: const Icon(LucideIcons.listX),
           ),
         ),
       ],
@@ -266,14 +261,9 @@ class NotificationsPage extends HookConsumerWidget {
             }
           }
 
-          final notifications = data.notifications
-              .where(
-                (n) =>
-                    !n.groupSummary ||
-                    n.title.trim().isNotEmpty ||
-                    n.body.trim().isNotEmpty,
-              )
-              .toList();
+          final notifications =
+              data.notifications.where((n) => !n.groupSummary).toList()
+                ..sort((a, b) => (b.postedAt ?? 0).compareTo(a.postedAt ?? 0));
           final state = data.status;
           if (notifications.isEmpty && state != .available) {
             return emptyWithHeader(
@@ -319,6 +309,8 @@ class NotificationsPage extends HookConsumerWidget {
           final hasStatus =
               data.status == .limited && (data.reason?.isNotEmpty ?? false);
           final offset = hasStatus ? 2 : 1;
+          final now = DateTime.now();
+          final yesterday = DateTime(now.year, now.month, now.day - 1);
           Key notificationKey(DeviceNotification item) =>
               ValueKey('${device.id}:${item.id}');
           final indices = <Key, int>{
@@ -340,16 +332,46 @@ class NotificationsPage extends HookConsumerWidget {
                   return StateNote(data.reason!, icon: LucideIcons.circleAlert);
                 }
                 final notification = notifications[index - offset];
+                final position = index - offset;
+                final posted = notification.postedTime;
+                final firstOfDay =
+                    posted != null &&
+                    (position == 0 ||
+                        !DateUtils.isSameDay(
+                          posted,
+                          notifications[position - 1].postedTime,
+                        ));
                 return Padding(
                   key: notificationKey(notification),
                   padding: const EdgeInsets.only(
-                    bottom: DesignTokens.spacingSm,
+                    bottom: DesignTokens.componentNotificationListItemGap,
                   ),
-                  child: NotificationCard(
-                    device: device,
-                    notification: notification,
-                    clearing: clearing.value,
-                    onClear: () => clearNotification(notification),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (firstOfDay)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            top: DesignTokens.spacingXs,
+                            bottom: DesignTokens.spacingSm,
+                          ),
+                          child: Text(
+                            DateUtils.isSameDay(posted, now)
+                                ? '今天'
+                                : DateUtils.isSameDay(posted, yesterday)
+                                ? '昨天'
+                                : MaterialLocalizations.of(context)
+                                      .formatShortMonthDay(posted),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      NotificationCard(
+                        device: device,
+                        notification: notification,
+                        clearing: clearing.value,
+                        onClear: () => clearNotification(notification),
+                      ),
+                    ],
                   ),
                 );
               },

@@ -8,18 +8,18 @@ import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
+
+import '../widgets/settings_row.dart';
 
 class MediaCachePage extends HookConsumerWidget {
   const MediaCachePage({super.key});
@@ -36,8 +36,54 @@ class MediaCachePage extends HookConsumerWidget {
     useValueListenable(busy);
     final outcome = useValueNotifier<String?>(null, [cache]);
     useValueListenable(outcome);
+    final data = query.asData?.value;
+    final reclaimable = data?.reclaimableBytes ?? 0;
+    final protected = data?.protectedBytes ?? 0;
+    Future<void> clear() async {
+      if (!await confirm(
+            context,
+            '释放 ${_size(reclaimable)} 空间？',
+            '使用中的 ${_size(protected)} 将继续保留。清理后再次查看时，将从手机重新获取。',
+            action: '清理 ${_size(reclaimable)}',
+          ) ||
+          (!context.mounted || !ownsScope())) {
+        return;
+      }
+      busy.value = true;
+      try {
+        final deleted = await cache.clear();
+        if ((!context.mounted || !ownsScope())) return;
+        outcome.value = deleted == 0
+            ? '本次没有可回收内容，使用中的暂存已保留。'
+            : '已回收 ${_size(deleted)}，受保护内容已保留。';
+        ref.invalidate(cacheStatusProvider);
+      } catch (error) {
+        if (context.mounted && ownsScope()) {
+          feedback(context, '清理未完成：$error');
+        }
+      } finally {
+        if (context.mounted && ownsScope()) {
+          busy.value = false;
+        }
+      }
+    }
+
     return PageFrame(
       title: '媒体暂存',
+      bottomGlass: false,
+      bottom: data == null
+          ? null
+          : FilledButton(
+              style: FilledButton.styleFrom(
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(DesignTokens.componentButtonPrimaryRounded),
+                  ),
+                ),
+              ),
+              onPressed: busy.value || reclaimable == 0 ? null : clear,
+              child: Text(busy.value ? '正在清理…' : '清理可释放的暂存'),
+            ),
       actions: [
         GlassActionIcon(
           tooltip: '重新检查占用',
@@ -65,7 +111,6 @@ class MediaCachePage extends HookConsumerWidget {
         ),
         data: (data) {
           final used = data.usedBytes;
-          final budget = data.budgetBytes;
           final protected = data.protectedBytes;
           final reclaimable = data.reclaimableBytes;
           final reserved = data.reservedBytes;
@@ -73,122 +118,44 @@ class MediaCachePage extends HookConsumerWidget {
           return GroupedListView(
             padding: const EdgeInsets.all(DesignTokens.spacingMd),
             children: [
-              ContentPanel(
-                child: Padding(
-                  padding: const EdgeInsets.all(DesignTokens.spacingMd),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(
-                        LucideIcons.hardDrive,
-                        color: ConnectTokens.amber,
-                      ),
-                      const SizedBox(height: DesignTokens.spacingMd),
-                      Text(
-                        '已用 ${_size(used)}',
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                      const SizedBox(height: DesignTokens.spacingXs),
-                      Text('暂存预算 ${_size(budget)}'),
-                      Text(
-                        !data.spaceVerified
-                            ? '当前可用空间待核验'
-                            : '本次可用 ${_size(data.availableBytes)}',
-                      ),
-                      if (!data.spaceVerified)
-                        const StateNote('当前无法核验本机实际空间，新的原件准备暂时停止。'),
-                      const SizedBox(height: DesignTokens.spacingMd),
-                      Semantics(
-                        label: '暂存使用比例',
-                        value: budget > 0
-                            ? '${(used * 100 / budget).round()}%'
-                            : '尚未设置',
-                        child: LinearProgressIndicator(
-                          value: budget > 0 ? (used / budget).clamp(0, 1) : 0,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SectionTitle('空间去向'),
               SettingsGroup(
                 children: [
-                  ListTile(
-                    leading: const ListIconBadge(
-                      icon: LucideIcons.shieldCheck,
-                      backgroundColor: DesignTokens.colorListIconMint,
+                  for (final (label, amount, icon, color) in [
+                    (
+                      '已占用',
+                      used,
+                      LucideIcons.hardDrive,
+                      DesignTokens.colorListIconSlate,
                     ),
-                    title: const Text('受保护'),
-
-                    trailing: Text(_size(protected)),
-                  ),
-                  ListTile(
-                    leading: const ListIconBadge(
-                      icon: LucideIcons.brushCleaning,
-                      backgroundColor: DesignTokens.colorListIconBlue,
+                    (
+                      '可清理',
+                      reclaimable,
+                      LucideIcons.trash2,
+                      DesignTokens.colorListIconSlate,
                     ),
-                    title: const Text('可回收'),
-
-                    trailing: Text(_size(reclaimable)),
-                  ),
-                  if (reserved > 0)
-                    ListTile(
-                      leading: const ListIconBadge(
-                        icon: LucideIcons.download,
-                        backgroundColor: DesignTokens.colorListIconAmber,
-                      ),
-                      title: const Text('正在准备'),
-
-                      trailing: Text(_size(reserved)),
+                    (
+                      '使用中',
+                      protected,
+                      LucideIcons.lock,
+                      DesignTokens.colorListIconSlate,
+                    ),
+                    (
+                      '准备中',
+                      reserved,
+                      LucideIcons.timer,
+                      DesignTokens.colorListIconTransfer,
+                    ),
+                  ])
+                    SettingsRow(
+                      title: label,
+                      value: _size(amount),
+                      icon: icon,
+                      color: color,
                     ),
                 ],
               ),
-              const SizedBox(height: DesignTokens.spacingLg),
-              if (reclaimable == 0)
-                const StateNote('当前没有可清理项目。受保护内容仍在使用或等待外部读取，保存到系统位置也不会自动解除保护。'),
-              if (reclaimable > 0)
-                FilledButton.icon(
-                  onPressed: busy.value || reclaimable == 0
-                      ? null
-                      : () async {
-                          if (!await confirm(
-                                context,
-                                '清理可回收暂存？',
-                                '正在使用和已交给其他应用的内容会保留。下次查看已清理的内容时，将从手机重新获取。',
-                                action: '清理暂存',
-                              ) ||
-                              (!context.mounted || !ownsScope())) {
-                            return;
-                          }
-                          busy.value = true;
-                          try {
-                            final deleted = await cache.clear();
-                            if ((!context.mounted || !ownsScope())) return;
-                            outcome.value = deleted == 0
-                                ? '本次没有可回收内容，使用中的暂存已保留。'
-                                : '已回收 ${_size(deleted)}，受保护内容已保留。';
-                            ref.invalidate(cacheStatusProvider);
-                          } catch (error) {
-                            if (context.mounted && ownsScope()) {
-                              feedback(context, '清理未完成：$error');
-                            }
-                          } finally {
-                            if (context.mounted && ownsScope()) {
-                              busy.value = false;
-                            }
-                          }
-                        },
-                  icon: busy.value
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator.adaptive(
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Icon(LucideIcons.brushCleaning),
-                  label: Text(busy.value ? '正在清理' : '清理可回收暂存'),
-                ),
+              if (!data.spaceVerified)
+                const StateNote('当前无法核验本机实际空间，新的原件准备暂时停止。'),
               if (protectedItems.isNotEmpty) const SectionTitle('受保护原件'),
               for (final item in protectedItems)
                 ContentPanel(
@@ -260,10 +227,6 @@ class MediaCachePage extends HookConsumerWidget {
                 const SizedBox(height: DesignTokens.spacingMd),
                 StateNote(outcome.value!),
               ],
-              const SizedBox(height: DesignTokens.spacingLg),
-              const StateNote(
-                '这里只管理互联媒体预览和接收原件的暂存，不会删除手机上的原件或你已保存的文件。\n\n交给其他应用的原件会继续保留，避免分享尚未读取完成时被清理。',
-              ),
             ],
           );
         },

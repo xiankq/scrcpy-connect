@@ -60,6 +60,26 @@ class FileSearchPage extends HookConsumerWidget {
 
     return PageFrame(
       title: '文件搜索',
+      bottomGlass: false,
+      bottom: running
+          ? FilledButton(
+              onPressed: searchState.stopping ? null : operation.cancel,
+              child: Text(
+                searchState.stopping
+                    ? '正在停止…'
+                    : searchState.starting
+                    ? '正在开始搜索…'
+                    : '停止搜索',
+              ),
+            )
+          : FilledButton.icon(
+              onPressed: canSearch ? search : null,
+              icon: const Icon(
+                LucideIcons.search,
+                size: DesignTokens.componentIconActionSize,
+              ),
+              label: const Text('搜索'),
+            ),
       child: CustomScrollView(
         slivers: [
           const PageChromeSliver(),
@@ -81,29 +101,29 @@ class FileSearchPage extends HookConsumerWidget {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: DesignTokens.spacingSm),
-                  FileSearchScopeSelector(
-                    entireStorage: entireStorage.value,
-                    onChanged: (entire) => entireStorage.value = entire,
+                  TextField(
+                    controller: query,
+                    maxLength: 256,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) {
+                      if (canSearch && !running) search();
+                    },
+                    decoration: InputDecoration(
+                      hintText: '输入文件名',
+                      errorText: tooLong ? '搜索内容太长，请缩短文件名。' : null,
+                      counterText: '',
+                      prefixIcon: const Icon(
+                        LucideIcons.search,
+                        size: DesignTokens.componentIconActionSize,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: DesignTokens.spacingSm),
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final field = TextField(
-                        controller: query,
-                        maxLength: 256,
-                        textInputAction: TextInputAction.search,
-                        onSubmitted: (_) {
-                          if (canSearch && !running) search();
-                        },
-                        decoration: InputDecoration(
-                          hintText: '输入文件名',
-                          errorText: tooLong ? '搜索内容太长，请缩短文件名。' : null,
-                          counterText: '',
-                          prefixIcon: const Icon(
-                            LucideIcons.search,
-                            size: DesignTokens.componentIconActionSize,
-                          ),
-                        ),
+                      final scope = FileSearchScopeSelector(
+                        entireStorage: entireStorage.value,
+                        onChanged: (entire) => entireStorage.value = entire,
                       );
                       final type = FileSearchTypeField(
                         value: filter.value,
@@ -111,11 +131,11 @@ class FileSearchPage extends HookConsumerWidget {
                       );
                       if (constraints.maxWidth /
                               MediaQuery.textScalerOf(context).scale(1) <
-                          360) {
+                          282) {
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            field,
+                            scope,
                             const SizedBox(height: DesignTokens.spacingSm),
                             type,
                           ],
@@ -123,38 +143,16 @@ class FileSearchPage extends HookConsumerWidget {
                       }
                       return Row(
                         children: [
-                          Expanded(flex: 2, child: field),
+                          Expanded(child: scope),
                           const SizedBox(width: DesignTokens.spacingSm),
-                          Expanded(child: type),
+                          SizedBox(
+                            width:
+                                96 * MediaQuery.textScalerOf(context).scale(1),
+                            child: type,
+                          ),
                         ],
                       );
                     },
-                  ),
-                  const SizedBox(height: DesignTokens.spacingSm),
-                  SizedBox(
-                    width: double.infinity,
-
-                    child: running
-                        ? FilledButton(
-                            onPressed: searchState.stopping
-                                ? null
-                                : operation.cancel,
-                            child: Text(
-                              searchState.stopping
-                                  ? '正在停止…'
-                                  : searchState.starting
-                                  ? '正在开始搜索…'
-                                  : '停止搜索',
-                            ),
-                          )
-                        : FilledButton.icon(
-                            onPressed: canSearch ? search : null,
-                            icon: const Icon(
-                              LucideIcons.search,
-                              size: DesignTokens.componentIconActionSize,
-                            ),
-                            label: const Text('搜索'),
-                          ),
                   ),
                   if (result != null) ...[
                     const SizedBox(height: DesignTokens.spacingMd),

@@ -23,6 +23,7 @@ Future<void> retrieveFile(
   DeviceSnapshot device,
   FileCatalogEntry file, {
   bool share = false,
+  bool openAfterTransfer = false,
 }) async {
   final transfers = ref.read(fileTransfersProvider);
   final admission = ref.read(deviceReadinessProvider(device.id));
@@ -45,7 +46,8 @@ Future<void> retrieveFile(
     return;
   }
   String? directory;
-  final privateCache = share || Platform.isAndroid || Platform.isIOS;
+  final privateCache =
+      share || openAfterTransfer || Platform.isAndroid || Platform.isIOS;
   if (!privateCache) {
     directory = await FilePicker.getDirectoryPath(dialogTitle: '选择保存位置');
   }
@@ -72,7 +74,11 @@ Future<void> retrieveFile(
   if (result == null || !context.mounted || !current()) return;
   final transferId = result.transferId;
   if (privateCache && transferId != null && transferId.isNotEmpty) {
-    ReceiveContentRoute(taskId: transferId, share: share).push<void>(context);
+    ReceiveContentRoute(
+      taskId: transferId,
+      share: share,
+      $extra: openAfterTransfer ? true : null,
+    ).push<void>(context);
     return;
   }
   feedback(

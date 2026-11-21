@@ -54,7 +54,7 @@ bool transferStatusHasIssue(FileTransferStatus status) => switch (status) {
 
 /// 列表只显示远端设备，暂存位置的细节在详情页说明。
 String transferListDirection(FileTransferSnapshot task, String deviceName) =>
-    task.direction == .push ? '发送 · 本机 → $deviceName' : '接收 · $deviceName';
+    task.direction == .push ? '发送 · 本机 → $deviceName' : '接收 · $deviceName → 本机';
 
 /// 详情保留两端位置，并区分仍需保存到系统位置的私有暂存。
 String transferDetailDirection(FileTransferSnapshot task, String deviceName) {
@@ -85,6 +85,10 @@ String transferResultSize(FileTransferSnapshot task) {
 
 /// 状态行统一呈现进度与结果；结束后显示实际字节，执行中补充进度条对应的百分比。
 String transferStatusDescription(FileTransferSnapshot task) {
+  if (task.errorCode == 'result_unknown' || task.cleanupPending) {
+    final reason = task.error;
+    return reason == null || reason.isEmpty ? '结果待核对' : '结果待核对 · $reason';
+  }
   final status = task.status;
   final progress = transferByteSummary(task);
   switch (status) {

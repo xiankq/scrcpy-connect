@@ -10,10 +10,12 @@ class VirtualDisplayPolicy {
         height < 2 ||
         width > 4096 ||
         height > 4096 ||
-        maxSize < 320 ||
+        (maxSize != 0 && maxSize < 320) ||
         maxSize > 4096) {
       throw const RequestFailure('invalid_argument', '独立显示尺寸或编码器上限无效。');
     }
+    // 原画保留所请求的显示尺寸，编码器也不再施加独立的缩放上限。
+    if (maxSize == 0) return size;
     final longest = width > height ? width : height;
     final limit = maxSize ~/ 2 * 2;
     int scaled(int side, int ceiling) {

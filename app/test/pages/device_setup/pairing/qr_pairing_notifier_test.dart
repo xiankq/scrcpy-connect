@@ -187,7 +187,7 @@ void main() {
     setup.calls.single.result.complete(_paired('device'));
     await tester.pumpAndSettle();
     expect(find.text('已配对，尚未连接'), findsOneWidget);
-    expect(find.text('填写连接端口'), findsOneWidget);
+    expect(find.text('修改连接信息'), findsOneWidget);
     expect(setup.calls, hasLength(1));
     expect(management.cancellations, isEmpty);
     expect(tester.takeException(), isNull);

@@ -152,6 +152,10 @@ void main() {
         isA<FileFailure>().having((e) => e.code, 'code', 'restart_unavailable'),
       ),
     );
+    await transfers.clearTransferHistory([
+      const FileTransferTarget.task('old'),
+    ]);
+    expect((await transfers.readTransfer('old')).historyHidden, isFalse);
     expect(executor.copyCalls, 0);
     final records = await FileTransferJournal(directory).load();
     expect(records['old']!.sourceStamp, _Executor.stamp);
