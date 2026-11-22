@@ -215,7 +215,7 @@ class ConnectionAttemptNotifier extends _$ConnectionAttemptNotifier {
       if (_current(owner) && identical(owner.attempt, attempt)) {
         state = state.copyWith(
           phase: .cleanupRequired,
-          failure: SetupIssue('result_unknown', '取消结果尚未确认，请重新核对。$error'),
+          failure: SetupIssue('result_unknown', '暂时无法确认连接是否已取消。请先检查手机的连接状态。'),
         );
       }
       return false;

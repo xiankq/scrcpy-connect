@@ -62,7 +62,7 @@ class ScreenshotPage extends HookWidget {
           if (available.connectionState != ConnectionState.done)
             const Center(child: CircularProgressIndicator.adaptive())
           else if (available.data != true)
-            const StateNote('截图暂存已不可用，请返回手机画面重新截图。')
+            const StateNote('这张截图已不可用。请返回手机画面重新截图。')
           else ...[
             ClipRRect(
               borderRadius: BorderRadius.circular(DesignTokens.roundedLg),

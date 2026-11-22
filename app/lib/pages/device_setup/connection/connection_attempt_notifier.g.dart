@@ -66,7 +66,7 @@ final class ConnectionAttemptNotifierProvider
 }
 
 String _$connectionAttemptNotifierHash() =>
-    r'a842c12634139d87c7f1be405d981d9329757011';
+    r'c3148513fd75fec2e11092284dffbe4420920d3f';
 
 /// 一次手动连接的执行状态；页面持有表单、确认及导航。
 

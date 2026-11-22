@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
@@ -14,6 +15,7 @@ class AsyncContent<T extends Object> extends StatelessWidget {
     required this.onRefresh,
     required this.builder,
     this.emptyTitle = '暂时没有内容',
+    this.failure = '请稍后重试。',
     this.alternative,
   });
 
@@ -22,7 +24,7 @@ class AsyncContent<T extends Object> extends StatelessWidget {
   final Object? error;
   final VoidCallback onRefresh;
   final Widget Function(BuildContext, T) builder;
-  final String emptyTitle;
+  final String emptyTitle, failure;
   final Widget? alternative;
 
   @override
@@ -37,7 +39,9 @@ class AsyncContent<T extends Object> extends StatelessWidget {
         child: EmptyContent(
           icon: LucideIcons.circleAlert,
           title: emptyTitle,
-          message: error == null ? '' : '$error',
+          message: error == null
+              ? ''
+              : failureMessage(error, fallback: failure),
           action: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -47,7 +51,7 @@ class AsyncContent<T extends Object> extends StatelessWidget {
                   LucideIcons.refreshCw,
                   size: DesignTokens.componentIconActionSize,
                 ),
-                label: const Text('重新检查'),
+                label: const Text('重试'),
               ),
               ?alternative,
             ],

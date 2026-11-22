@@ -34,7 +34,7 @@ class DeviceFunctionChecks extends ConsumerWidget {
         final capabilities = data.capabilities;
         return SettingsGroup(
           children: [
-            if (capabilities.isEmpty) const StateNote('尚未检查这台设备的功能，请连接后重新检查。'),
+            if (capabilities.isEmpty) const StateNote('请先连接手机，再检查哪些功能可用。'),
             for (final cap in capabilities)
               ListTile(
                 leading: Icon(switch (cap.feature) {
@@ -100,7 +100,7 @@ String _statusText(DeviceFeatureStatus status) => switch (status) {
   .needsSetup => '需要设置',
   .unknown => '尚未检查',
   .stopped => '已停止',
-  .unverified => '状态待核验',
+  .unverified => '待检查',
 };
 
 String _featureName(DeviceFeature feature) => switch (feature) {

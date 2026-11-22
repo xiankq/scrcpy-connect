@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -184,7 +185,7 @@ class FileSearchPage extends HookConsumerWidget {
                     if (searchState.searchId != null)
                       TextButton(
                         onPressed: operation.refresh,
-                        child: const Text('重新核验本次搜索'),
+                        child: const Text('刷新搜索结果'),
                       ),
                   ],
                 ],
@@ -241,13 +242,15 @@ class FileSearchPage extends HookConsumerWidget {
                             },
                       unavailableReason: file.canOpen && path.isNotEmpty
                           ? null
-                          : file.reason ?? '文件名无法解析为有效路径，暂时无法操作。',
+                          : fileUnavailableReason(file),
                     );
                   }
                   var remainder = index - entries.length;
                   if (remainder < issues.length) {
                     final issue = issues[remainder];
-                    return StateNote('${issue.path}\n${issue.reason}');
+                    return StateNote(
+                      '${issue.path}\n${failureCodeMessage(issue.code, fallback: '无法搜索这个位置。请检查手机上的文件访问权限。')}',
+                    );
                   }
                   return Padding(
                     padding: const EdgeInsets.symmetric(
@@ -311,7 +314,7 @@ String _checkedRangeLine(
   if (status == .cancelled || status == .partial) {
     return '$base\n其余目录未搜索。';
   }
-  return '$base\n${issues.length} 个目录或项目未能完成；结果不完整。';
+  return '$base\n${issues.length} 个文件或文件夹无法搜索，结果可能不完整。';
 }
 
 String _countLabel(Object? value) {

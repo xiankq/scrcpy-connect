@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/files/system_documents.dart';
@@ -94,7 +95,9 @@ class _ConflictViewState extends State<_ConflictView> {
       if (!mounted || revision != _revision || owner != widget.operationId) {
         return;
       }
-      setState(() => _error = '尚未读到同名处理状态：$error');
+      setState(
+        () => _error = failureMessage(error, fallback: '无法读取同名文件的处理结果。请重新检查。'),
+      );
     }
   }
 
@@ -144,7 +147,12 @@ class _ConflictViewState extends State<_ConflictView> {
           owner == widget.operationId &&
           scope == _scope &&
           _pending?.conflictId == conflictId) {
-        setState(() => _error = '同名处理未确认：$error');
+        setState(
+          () => _error = failureMessage(
+            error,
+            fallback: '暂时无法确认同名文件是否已处理。请先检查结果。',
+          ),
+        );
       }
     } finally {
       if (mounted &&
@@ -186,8 +194,7 @@ class _ConflictViewState extends State<_ConflictView> {
           const SizedBox(height: DesignTokens.spacingXs),
           Text(pending.name),
           const SizedBox(height: DesignTokens.spacingXs),
-          const Text('此位置暂不支持替换同名内容；已有文件会保留。'),
-          const Text('保留两份会使用新名称。本机暂存会保留；取消不会删除已保存的项目。'),
+          const Text('保留两份时会为本次文件生成新名称。'),
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
             value: _applyToRemaining,

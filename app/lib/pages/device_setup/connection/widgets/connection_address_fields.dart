@@ -93,8 +93,9 @@ class ConnectionAddressFields extends StatelessWidget {
               enabled: enabled,
               keyboardType: TextInputType.number,
               maxLength: 6,
-              validator: (value) =>
-                  RegExp(r'^\d{6}$').hasMatch(value ?? '') ? null : '请输入六位配对码',
+              validator: (value) => RegExp(r'^\d{6}$').hasMatch(value ?? '')
+                  ? null
+                  : '请输入手机上显示的 6 位配对码',
               decoration: const InputDecoration(
                 counterText: '',
                 contentPadding: contentPadding,

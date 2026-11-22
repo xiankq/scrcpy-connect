@@ -103,12 +103,12 @@ class EmptyContent extends StatelessWidget {
     super.key,
     required this.icon,
     required this.title,
-    required this.message,
+    this.message,
     this.action,
   });
   final IconData icon;
   final String title;
-  final String message;
+  final String? message;
   final Widget? action;
   @override
   Widget build(BuildContext context) => Center(
@@ -135,16 +135,18 @@ class EmptyContent extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleLarge,
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(
-                height: DesignTokens.componentEmptyContentMessageGapHeight,
-              ),
-              Text(
-                message,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).textTheme.bodySmall?.color,
+              if (message != null) ...[
+                const SizedBox(
+                  height: DesignTokens.componentEmptyContentMessageGapHeight,
                 ),
-                textAlign: TextAlign.center,
-              ),
+                Text(
+                  message!,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).textTheme.bodySmall?.color,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
               if (action != null) ...[
                 const SizedBox(height: DesignTokens.componentEmptyContentGap),
                 action!,

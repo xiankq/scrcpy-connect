@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -56,7 +57,10 @@ class MediaPreviewPage extends HookConsumerWidget {
         ? EmptyContent(
             icon: LucideIcons.imageOff,
             title: '无法预览此内容',
-            message: '${result.error}',
+            message: failureMessage(
+              result.error,
+              fallback: '无法打开预览。请检查手机连接，也可以尝试保存原文件。',
+            ),
             action: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -83,7 +87,7 @@ class MediaPreviewPage extends HookConsumerWidget {
                 return EmptyContent(
                   icon: LucideIcons.imageOff,
                   title: '无法预览此格式',
-                  message: data?.reason ?? '可以保存原文件，或在被控手机上查看。',
+                  message: '无法预览这种内容。可以保存原文件，或在手机上查看。',
                   action: FilledButton(
                     onPressed: retrieve,
                     child: const Text('取回文件'),

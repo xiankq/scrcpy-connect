@@ -1,3 +1,7 @@
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+
+import 'connection_failure_note.dart';
+
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
@@ -12,6 +16,8 @@ class ConnectionAttemptStatus extends StatelessWidget {
     required this.cancelling,
     required this.deviceName,
     required this.paired,
+    required this.pairing,
+    required this.legacyTcp,
     required this.onCancel,
     required this.onEdit,
     required this.onRetry,
@@ -19,7 +25,7 @@ class ConnectionAttemptStatus extends StatelessWidget {
     this.failure,
   });
 
-  final bool busy, checking, cancelling, paired;
+  final bool busy, checking, cancelling, paired, pairing, legacyTcp;
   final String deviceName;
   final SetupIssue? failure;
   final VoidCallback onCancel, onEdit, onRetry, onRecheck;
@@ -45,14 +51,22 @@ class ConnectionAttemptStatus extends StatelessWidget {
         ? '正在取消连接'
         : pending
         ? '正在连接'
+        : needsCheck
+        ? '请检查连接'
         : '连接失败';
     final subtitle = pending
         ? deviceName.isNotEmpty
               ? deviceName
               : '正在与设备建立连接'
         : identityMismatch
-        ? '设备身份与保存的记录不一致。请核对连接信息。'
-        : failure?.message ?? '暂时未能连上手机。请检查网络和调试授权。';
+        ? '这个地址对应另一台手机。请返回核对手机上的连接信息。'
+        : needsCheck
+        ? '暂时无法确认手机是否已连接。'
+        : connectionFailureMessage(
+            RequestFailure(code, failure?.message ?? ''),
+            pairing: pairing && !paired,
+            legacyTcp: legacyTcp,
+          );
 
     return Scaffold(
       body: SafeArea(

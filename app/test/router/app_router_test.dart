@@ -72,12 +72,12 @@ void main() {
     expect(find.text('外观'), findsOneWidget);
     expect(find.text('使用偏好'), findsOneWidget);
     expect(find.text('本机数据'), findsOneWidget);
-    expect(find.text('后台运行资格'), findsOneWidget);
+    expect(find.text('后台运行'), findsOneWidget);
     unawaited(router.push<void>(const RouteErrorRoute().location));
     await _settle(tester);
     await tester.restartAndRestore();
     await _settle(tester);
-    expect(find.text('页面缺少必要的记录信息，请返回设备列表重新选择。'), findsOneWidget);
+    expect(find.text('找不到这项内容。请返回设备列表重新选择。'), findsOneWidget);
     expect(router.canPop(), isTrue);
     router.pop();
     await _settle(tester);
@@ -151,7 +151,7 @@ void main() {
       const RemoteRoute(deviceId: 'device').location,
     );
     await _settle(tester);
-    const message = '请从设备工作台明确打开画面。恢复这个位置不会自动创建新的控制会话。';
+    const message = '无法恢复手机画面。请回到设备工作台，点「打开手机屏幕」。';
     expect(find.text(message), findsOneWidget);
     expect(find.byType(ControlPage), findsNothing);
     expect(resources.reads, 1);
@@ -177,7 +177,7 @@ void main() {
       router.routeInformationProvider.value.uri.toString(),
       initial.location,
     );
-    expect(find.text('无法识别这个控制会话。请从设备工作台重新选择；不会自动创建新画面。'), findsOneWidget);
+    expect(find.text('这次打开的画面已不可用。请回到设备工作台重新打开。'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }

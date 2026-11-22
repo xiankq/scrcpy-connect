@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -51,7 +52,7 @@ class AdbIdentityPage extends HookConsumerWidget {
         if (response.fingerprint.isEmpty) {
           throw const RequestFailure(
             'identity_result_invalid',
-            '无法核验私钥更新结果，请重新读取。',
+            '暂时无法确认密钥是否已更新。请重新打开此页检查。',
           );
         }
         if (!ownsScope()) return;
@@ -60,7 +61,12 @@ class AdbIdentityPage extends HookConsumerWidget {
         notice.value = '私钥已更新，请在手机上重新授权。';
         revision.value++;
       } catch (error) {
-        if (ownsScope()) failure.value = '$error';
+        if (ownsScope()) {
+          failure.value = failureMessage(
+            error,
+            fallback: '无法更新调试密钥。请检查所选文件后重试。',
+          );
+        }
       } finally {
         if (ownsScope()) busy.value = false;
       }
@@ -152,7 +158,10 @@ class AdbIdentityPage extends HookConsumerWidget {
               ),
             ],
           ),
-          if (result.hasError) StateNote('${result.error}'),
+          if (result.hasError)
+            StateNote(
+              failureMessage(result.error, fallback: '无法读取调试密钥。请重新打开此页。'),
+            ),
           if (failure.value case final error?) StateNote(error),
           if (notice.value case final message?) StateNote(message),
           Center(
@@ -182,13 +191,13 @@ class _PrivateKeyInput extends HookWidget {
         final file = await FilePicker.pickFile(dialogTitle: '选择 PEM 私钥文件');
         if (!context.mounted || file == null) return;
         if ((file.lengthSync() ?? 0) > maxAdbPrivateKeyBytes) {
-          throw const AdbPrivateKeyFileFailure('私钥文件不能超过 32 KiB。');
+          throw const AdbPrivateKeyFileFailure('密钥文件太大。请选择不超过 32 KB 的文件。');
         }
         final bytes = BytesBuilder(copy: false);
         await for (final chunk in file.readAsByteStream()) {
           if (!context.mounted) return;
           if (bytes.length + chunk.length > maxAdbPrivateKeyBytes) {
-            throw const AdbPrivateKeyFileFailure('私钥文件不能超过 32 KiB。');
+            throw const AdbPrivateKeyFileFailure('密钥文件太大。请选择不超过 32 KB 的文件。');
           }
           bytes.add(chunk);
         }

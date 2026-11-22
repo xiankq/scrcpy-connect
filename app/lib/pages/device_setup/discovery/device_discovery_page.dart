@@ -37,6 +37,7 @@ class DeviceDiscoveryPage extends ConsumerWidget {
           error: state.error,
           onRefresh: refresh,
           emptyTitle: '暂时无法发现设备',
+          failure: '请让手机和本机连着同一 Wi-Fi，并打开手机的无线调试。',
           builder: (context, list) {
             if (list.isEmpty) {
               return GroupedListView(

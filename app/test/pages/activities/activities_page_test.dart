@@ -39,13 +39,15 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('暂时无法核验活动'), findsOneWidget);
-    await tester.tap(find.text('重新检查'));
+    expect(find.text('暂时无法读取活动'), findsOneWidget);
+    expect(find.textContaining('snapshot unavailable'), findsNothing);
+    expect(find.text('请稍后重试。'), findsOneWidget);
+    await tester.tap(find.text('重试'));
     await tester.pumpAndSettle();
     expect(reads, 2);
-    expect(find.text('暂时无法核验活动'), findsOneWidget);
+    expect(find.text('暂时无法读取活动'), findsOneWidget);
     expect(tester.takeException(), isNull);
-    await tester.tap(find.text('重新检查'));
+    await tester.tap(find.text('重试'));
     await tester.pumpAndSettle();
     expect(reads, 3);
     expect(find.text('暂无正在进行的活动'), findsOneWidget);

@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/files/document_operation_notifier.dart';
 import 'package:scrcpy_connect/core/files/file_transfers.dart';
@@ -300,7 +301,7 @@ class DocumentImportPage extends HookConsumerWidget {
           if (errorIndex < errors.length) {
             final error = errors[errorIndex];
             return StateNote(
-              '${error.path}：${error.message.isEmpty ? '系统无法读取此项' : error.message}',
+              '${error.path.isEmpty ? '' : '${error.path}\n'}${failureCodeMessage(error.code, fallback: '系统无法读取此项。请重新选择文件。')}',
               icon: LucideIcons.circleAlert,
             );
           }

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -82,7 +83,11 @@ class MediaThumbnail extends HookConsumerWidget {
                     ),
                     Flexible(
                       child: Text(
-                        imageFailure ?? '缩略图未能显示：${result.error ?? '未收到可用缩略图'}',
+                        imageFailure ??
+                            failureMessage(
+                              result.error,
+                              fallback: '无法显示缩略图。可以打开文件查看。',
+                            ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(

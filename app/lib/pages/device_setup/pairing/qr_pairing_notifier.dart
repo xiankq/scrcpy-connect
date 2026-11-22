@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
@@ -102,7 +103,7 @@ class QrPairingNotifier extends _$QrPairingNotifier {
         }
         state = QrPairingState(
           phase: cleanupRequired ? .cleanupRequired : .failed,
-          message: '配对结果不属于原设备，请重新检查。${cleanupRequired ? failure : ''}',
+          message: '这次配对匹配到了另一台手机。请检查后重新配对。',
         );
         return;
       }
@@ -119,9 +120,12 @@ class QrPairingNotifier extends _$QrPairingNotifier {
           paired.connected,
           paired.connectionFailure,
         )) {
-          (final error?, _, _) => '配对已完成，资源释放尚未确认。$error',
+          (Object(), _, _) => '已完成配对。请先检查手机的连接状态。',
           (_, true, _) => '配对与连接已完成。',
-          (_, _, final issue?) => '已配对，尚未连接。${issue.message}',
+          (_, _, final issue?) => failureMessage(
+            issue,
+            fallback: '已配对，但无法连上手机。请确认两台设备连着同一 Wi-Fi。',
+          ),
           _ => '已配对，尚未连接',
         },
       );
@@ -148,7 +152,9 @@ class QrPairingNotifier extends _$QrPairingNotifier {
           : expired
           ? .expired
           : .failed,
-      message: expired ? '二维码已过期，请重新生成。' : error?.toString() ?? '配对已结束，请重新生成。',
+      message: expired
+          ? '二维码已过期，请重新生成。'
+          : failureMessage(error, fallback: '无法完成配对。请重新生成二维码，让手机再扫一次。'),
     );
   }
 
@@ -197,7 +203,10 @@ class QrPairingNotifier extends _$QrPairingNotifier {
       return true;
     } catch (error) {
       if (_current(owner) && identical(owner.attempt, attempt)) {
-        state = state.copyWith(phase: .cleanupRequired, message: '$error');
+        state = state.copyWith(
+          phase: .cleanupRequired,
+          message: failureMessage(error, fallback: '上一次配对还没有完全结束。请先检查当前状态。'),
+        );
       }
       return false;
     } finally {

@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/files/document_operation_notifier.dart';
 import 'package:scrcpy_connect/core/files/system_documents.dart';
 import 'package:scrcpy_connect/hooks/use_document_picker.dart';
@@ -89,7 +90,9 @@ class DocumentExportForm extends HookConsumerWidget {
         : FileDeliveryMilestone.pending;
     if (transferId != null && (!cacheLease.hasData || cacheLease.hasError)) {
       return cacheLease.hasError
-          ? StateNote('无法保留这份暂存：${cacheLease.error}。请返回原设备重新取回。')
+          ? StateNote(
+              failureMessage(cacheLease.error, fallback: '临时文件已不可用。请从手机重新取回。'),
+            )
           : const Center(child: CircularProgressIndicator.adaptive());
     }
     final errors = result?.errors ?? <DocumentIssue>[];
@@ -106,7 +109,7 @@ class DocumentExportForm extends HookConsumerWidget {
       const SizedBox(height: DesignTokens.spacingLg),
       if (partial)
         const StateNote(
-          '这是已核验但不完整的本机暂存。请核对缺失项目，系统保存不会补齐尚未取回的内容。',
+          '目前只取回了部分文件。保存前请检查还缺哪些文件。',
           icon: LucideIcons.circleAlert,
         ),
       const Text('选择系统位置保存一份。只有系统确认写入完成后，才显示保存成功。本机暂存仍保留。'),
@@ -124,11 +127,11 @@ class DocumentExportForm extends HookConsumerWidget {
       ],
       if (operation.error != null)
         StateNote(operation.error!, icon: LucideIcons.circleAlert),
-      if (operation.refreshing) const StateNote('正在核验这份原件的系统保存记录…'),
+      if (operation.refreshing) const StateNote('正在检查这份文件是否已保存…'),
       if (!operation.loaded || status == 'pending' || unknown)
         TextButton(
           onPressed: operation.refreshing ? null : actions.refresh,
-          child: const Text('重新核验系统保存'),
+          child: const Text('检查保存结果'),
         ),
       if (result != null)
         ContentPanel(
@@ -146,7 +149,7 @@ class DocumentExportForm extends HookConsumerWidget {
                 'cancelled' => '本次系统保存已取消',
                 'failed' => '本次保存未开始',
                 'pending' => '上次系统保存尚未结束',
-                _ => '系统保存结果待核对',
+                _ => '保存结果待确认',
               }, style: Theme.of(context).textTheme.titleLarge),
               if (status == 'saved') const Text('如保存到了云盘，云端同步结果请在对应应用核对。'),
               if ((result.name ?? '').isNotEmpty)
@@ -217,7 +220,7 @@ class DocumentExportForm extends HookConsumerWidget {
         if (errorIndex < errors.length) {
           final error = errors[errorIndex];
           return StateNote(
-            '${error.path}：${error.message.isEmpty ? '系统尚未确认结果' : error.message}',
+            '${error.path.isEmpty ? '' : '${error.path}\n'}${failureCodeMessage(error.code, fallback: '暂时无法确认保存结果。请先查看保存位置。')}',
             icon: LucideIcons.circleAlert,
           );
         }

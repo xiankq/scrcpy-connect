@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/content/content_capabilities_provider.dart';
@@ -47,7 +48,10 @@ class SystemFileShareForm extends HookConsumerWidget {
         else if (kind == 'directory')
           const StateNote('当前系统分享不支持直接交付文件夹，请返回手机选择单个文件或使用已有传输方式。')
         else ...[
-          if (lease.hasError) StateNote('无法保留这份暂存：${lease.error}'),
+          if (lease.hasError)
+            StateNote(
+              failureMessage(lease.error, fallback: '临时文件已不可用。请从手机重新取回。'),
+            ),
           if (!ready && !lease.hasError) const ContentLoadingIndicator(),
           if (outcome.value != null) StateNote(outcome.value!),
           if (attempted.value && !busy.value)
@@ -73,7 +77,10 @@ class SystemFileShareForm extends HookConsumerWidget {
                       if (context.mounted) outcome.value = result;
                     } catch (error) {
                       if (context.mounted) {
-                        outcome.value = '系统分享结果未确认：$error。请先在接收应用核对。';
+                        outcome.value = failureMessage(
+                          error,
+                          fallback: '暂时无法确认分享是否完成。请先查看接收文件的应用。',
+                        );
                       }
                     } finally {
                       if (context.mounted) busy.value = false;
@@ -127,8 +134,8 @@ Future<String> sharePreparedFile(
     ShareParams(files: [XFile(localPath)], sharePositionOrigin: origin),
   );
   return switch (result.status) {
-    ShareResultStatus.success => '已交给系统选择的应用，请在接收应用核对。',
+    ShareResultStatus.success => '文件已交给所选应用。请打开该应用查看。',
     ShareResultStatus.dismissed => '已关闭系统分享，原文件暂存仍保留。',
-    ShareResultStatus.unavailable => '系统没有提供分享结果，请在接收应用核对；不会自动重复分享。',
+    ShareResultStatus.unavailable => '暂时无法确认分享是否完成。请先打开接收文件的应用查看。',
   };
 }

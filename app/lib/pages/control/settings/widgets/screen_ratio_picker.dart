@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/control/remote_display_settings.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
@@ -67,6 +68,11 @@ Future<void> chooseScreenRatio(
         );
     if (context.mounted && ownsScope()) feedback(context, '屏幕比例已保存，用于新建画面。');
   } catch (error) {
-    if (context.mounted && ownsScope()) feedback(context, '$error');
+    if (context.mounted && ownsScope()) {
+      feedback(
+        context,
+        failureMessage(error, fallback: '无法更改屏幕比例。请检查手机连接后重试。'),
+      );
+    }
   }
 }

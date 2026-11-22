@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/core/devices/device_management.dart';
@@ -77,11 +78,19 @@ class UsbSetupNotifier extends _$UsbSetupNotifier {
         state = UsbSetupState(
           phase: .cleanupRequired,
           result: matches ? known : null,
-          message: matches ? '$error' : 'USB连接结果不属于原设备，请重新检查。$error',
+          message: matches
+              ? '上一次 USB 连接还没有完全结束。请先检查当前状态。'
+              : '连接到了另一台手机。请检查 USB 线连接的是哪台手机。',
         );
       } else {
         owner.attempt = null;
-        state = UsbSetupState(phase: .failed, message: '$error');
+        state = UsbSetupState(
+          phase: .failed,
+          message: failureMessage(
+            error,
+            fallback: '无法通过 USB 连接。请解锁手机，确认 USB 调试已开启。',
+          ),
+        );
       }
     }
   }
@@ -108,7 +117,10 @@ class UsbSetupNotifier extends _$UsbSetupNotifier {
       await ref.read(deviceListProvider.notifier).refresh();
     } catch (error) {
       if (_current(owner) && identical(owner.attempt, attempt)) {
-        state = state.copyWith(phase: .cleanupRequired, message: '$error');
+        state = state.copyWith(
+          phase: .cleanupRequired,
+          message: failureMessage(error, fallback: '暂时无法取消 USB 检查。请点「重试取消」。'),
+        );
       }
     } finally {
       attempt.cancellation = null;

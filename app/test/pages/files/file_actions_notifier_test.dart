@@ -67,7 +67,7 @@ void main() {
     final pending = actions.createDirectory('first');
     mutations.pending.single.completeError(StateError('failed'));
     expect(await pending, isFalse);
-    expect(container.read(provider).error, contains('failed'));
+    expect(container.read(provider).error, contains('请刷新列表后查看结果'));
     expect(container.read(provider).busy, isFalse);
     final retried = actions.createDirectory('second');
     expect(container.read(provider).error, isNull);

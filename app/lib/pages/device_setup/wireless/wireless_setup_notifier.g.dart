@@ -64,7 +64,7 @@ final class WirelessSetupNotifierProvider
 }
 
 String _$wirelessSetupNotifierHash() =>
-    r'b921a3902484da57161080c5cc8428e314d37c38';
+    r'03c879bc8bccb03f1ae3dea374e1e0b7b2a42123';
 
 /// 持有本页读取、确认与切换意图；系统切换和回收仍归核心设置能力。
 

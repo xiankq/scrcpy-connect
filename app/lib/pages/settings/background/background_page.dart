@@ -35,7 +35,7 @@ class BackgroundPage extends HookConsumerWidget {
     }, [alerts]);
 
     return PageFrame(
-      title: '后台运行资格',
+      title: '后台运行',
       actions: [
         GlassActionIcon(
           tooltip: '重新检查',
@@ -61,7 +61,7 @@ class BackgroundPage extends HookConsumerWidget {
                 SettingsRow(
                   icon: LucideIcons.shieldCheck,
                   color: DesignTokens.colorListIconUtility,
-                  title: background.hasError ? '暂时无法核验后台运行资格' : '正在检查后台运行资格',
+                  title: background.hasError ? '无法读取后台运行状态' : '正在检查后台运行',
                   onTap: background.hasError ? refresh : null,
                 ),
             ],

@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/control/remote_display_settings.dart';
 import 'package:scrcpy_connect/core/control/control_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/control/video_quality_provider.dart';
@@ -24,17 +25,17 @@ import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 String _codecReason(VideoCodecOption? option) {
-  if (option == null) return '尚未确认这台设备的编码能力。';
-  if (option.encoders.isEmpty) return '设备未枚举到此格式的编码器。';
+  if (option == null) return '暂时无法确认手机支持哪些画面格式。';
+  if (option.encoders.isEmpty) return '手机无法使用这种画面格式。';
   if (option.decoder.evidence == VideoDecoderEvidence.unavailable) {
-    return option.decoder.reason;
+    return '本机无法播放这种画面格式。请选择其他格式。';
   }
   if (option.decoder.evidence != VideoDecoderEvidence.verified &&
       option.available) {
-    return '可尝试此格式；本机能否播放将在实际画面应用时确认。';
+    return '可以选择这种格式。打开手机画面后即可确认是否能播放。';
   }
-  if (!option.available) return '尚未确认本机可用的解码器。${option.decoder.reason}';
-  return '双方支持此格式，实际使用仍取决于设备资源。';
+  if (!option.available) return '暂时无法确认本机能否播放这种画面格式。请选择其他格式。';
+  return '本机和手机都支持这种画面格式。';
 }
 
 class ControlSettingsPage extends HookConsumerWidget {
@@ -81,7 +82,10 @@ class ControlSettingsPage extends HookConsumerWidget {
         } catch (error) {
           if (context.mounted &&
               identical(ref.read(settingsManagementProvider), settingsOwner)) {
-            feedback(context, '$error');
+            feedback(
+              context,
+              failureMessage(error, fallback: '无法保存画面设置。请稍后重试。'),
+            );
           }
         }
       },
@@ -140,7 +144,8 @@ class ControlSettingsPage extends HookConsumerWidget {
               data: query.value,
               error: query.error,
               onRefresh: refresh,
-              emptyTitle: '尚未获得可用的画面选项',
+              emptyTitle: '暂时无法读取画面选项',
+              failure: '请先连接手机，再重新打开「画面与控制」。',
               builder: (context, data) {
                 final current = data.current;
                 final codecs = data.codecs;
@@ -183,7 +188,7 @@ class ControlSettingsPage extends HookConsumerWidget {
                   children: [
                     if (applying.value) const ContentLoadingIndicator(),
                     for (final failure in applicationFailures.value)
-                      StateNote('${failure.name}：${failure.reason}'),
+                      StateNote('${failure.name} 的画面设置未能更新。请关闭该窗口后重新打开。'),
                     SettingsGroup(
                       children: [
                         QualityOptionRow(

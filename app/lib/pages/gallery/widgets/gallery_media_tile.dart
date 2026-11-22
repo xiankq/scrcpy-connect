@@ -4,6 +4,7 @@ import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/files/models/file_catalog_entry.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content/media_thumbnail.dart';
+import 'package:scrcpy_connect/widgets/file_browser.dart';
 
 class GalleryMediaTile extends StatelessWidget {
   const GalleryMediaTile({
@@ -39,7 +40,7 @@ class GalleryMediaTile extends StatelessWidget {
                   padding: const EdgeInsets.all(DesignTokens.spacingSm),
                   child: Center(
                     child: Text(
-                      file.reason ?? '文件名无法解析为有效路径，暂时无法操作。',
+                      fileUnavailableReason(file),
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),

@@ -74,7 +74,7 @@ class RemoteRecoveryPanel extends StatelessWidget {
       if (waitingForFirstFrame && onReturn != null)
         TextButton(onPressed: onReturn, child: const Text('返回')),
     ];
-    final message = presentation.error ?? '等待连接恢复后的首帧。';
+    final message = presentation.error ?? '连接恢复后，手机画面会继续显示。';
 
     if (waitingForFirstFrame) {
       return SafeArea(

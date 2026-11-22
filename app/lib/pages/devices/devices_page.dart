@@ -88,7 +88,7 @@ class DevicesPage extends HookConsumerWidget {
           pane: split,
           title: '设备',
           titleContent:
-              !showWelcome &&
+              appDevices.isNotEmpty &&
                   compactHeader &&
                   liquid.GlassVerticalBar.maybeOf(context) == null
               ? Row(
@@ -155,18 +155,7 @@ class DevicesPage extends HookConsumerWidget {
                                     .textTheme
                                     .headlineMedium,
                               ),
-                              const SizedBox(height: DesignTokens.spacingSm),
-                              ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  minHeight: DesignTokens
-                                      .componentEmptyDeviceIntroHeight,
-                                ),
-                                child: Text(
-                                  '通过无线调试或 USB 数据线连接 Android 手机。',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                              ),
-                              const SizedBox(height: DesignTokens.spacingLg),
+                              const SizedBox(height: DesignTokens.spacingXl),
                               SizedBox(
                                 width: double.infinity,
                                 child: FilledButton(
@@ -222,7 +211,7 @@ class DevicesPage extends HookConsumerWidget {
                       ),
                     ),
                   ),
-                  if (devices.isEmpty)
+                  if (devices.isEmpty && !appLoading && appDeviceError == null)
                     SliverFillRemaining(
                       hasScrollBody: false,
                       child: Padding(
@@ -234,35 +223,17 @@ class DevicesPage extends HookConsumerWidget {
                           ),
                         ),
                         child: EmptyContent(
-                          icon: query.text.isEmpty
-                              ? LucideIcons.smartphone
-                              : LucideIcons.search,
-                          title: query.text.isNotEmpty
-                              ? '没有找到设备'
-                              : appLoading
-                              ? '正在检查设备'
-                              : '添加你的第一台设备',
-                          message: query.text.isNotEmpty
-                              ? '试试其他名称或型号。'
-                              : '被控手机无需安装应用。使用无线调试或 USB 数据线，完成授权后连接。',
-                          action: query.text.isNotEmpty
-                              ? TextButton(
-                                  onPressed: query.clear,
-                                  child: const Text('清除搜索'),
-                                )
-                              : FilledButton.icon(
-                                  onPressed: () =>
-                                      AddDeviceRoute().push<void>(context),
-                                  icon: const Icon(
-                                    LucideIcons.plus,
-                                    size: DesignTokens.componentIconActionSize,
-                                  ),
-                                  label: const Text('添加设备'),
-                                ),
+                          icon: LucideIcons.search,
+                          title: '没有找到设备',
+                          message: '试试其他名称或型号。',
+                          action: TextButton(
+                            onPressed: query.clear,
+                            child: const Text('清除搜索'),
+                          ),
                         ),
                       ),
-                    )
-                  else
+                    ),
+                  if (devices.isNotEmpty)
                     SliverPadding(
                       padding: EdgeInsets.fromLTRB(
                         DesignTokens.spacingMd,

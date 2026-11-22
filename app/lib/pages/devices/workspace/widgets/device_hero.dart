@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
@@ -52,7 +53,10 @@ class DeviceHero extends HookConsumerWidget {
                   await connections.connectDevice(id);
                 } catch (error) {
                   if (context.mounted && isCurrent()) {
-                    feedback(context, '$error');
+                    feedback(
+                      context,
+                      failureMessage(error, fallback: '无法打开手机屏幕。请检查手机连接后重试。'),
+                    );
                   }
                 }
                 if (!isCurrent()) return;

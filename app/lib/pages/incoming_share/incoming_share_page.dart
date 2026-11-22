@@ -93,7 +93,7 @@ class IncomingSharePage extends HookConsumerWidget {
       includeText: includeText.value,
     );
 
-    final errors = share.errors;
+    final hasReadError = share.errors.isNotEmpty;
     final leading = <Widget>[
       const StateNote('选择设备后确认保存目录；提交时固定来源和目标，切换页面不改目标。'),
       if (latest == null && !submission.busy && !submission.completed)
@@ -194,14 +194,13 @@ class IncomingSharePage extends HookConsumerWidget {
         ),
     ];
     final errorsStart = leading.length;
-    final fileHeaderStart = errorsStart + errors.length;
+    final fileHeaderStart = errorsStart + (hasReadError ? 1 : 0);
     final filesStart = fileHeaderStart + fileHeader.length;
     final middleStart = filesStart + files.length;
     final devicesStart = middleStart + middle.length;
     final trailingStart = devicesStart + devices.length;
     final indices = <Key, int>{
-      for (var index = 0; index < errors.length; index++)
-        ValueKey(('incoming-error', index)): errorsStart + index,
+      if (hasReadError) const ValueKey('incoming-error'): errorsStart,
       for (var index = 0; index < files.length; index++)
         ValueKey(('incoming-file', share.shareId, index)): filesStart + index,
       for (var index = 0; index < devices.length; index++)
@@ -227,10 +226,9 @@ class IncomingSharePage extends HookConsumerWidget {
           itemBuilder: (context, index) {
             if (index < errorsStart) return leading[index];
             if (index < fileHeaderStart) {
-              final row = index - errorsStart;
               return StateNote(
-                errors[row],
-                key: ValueKey(('incoming-error', row)),
+                '有些分享内容无法读取。请回原应用重新分享这些内容。',
+                key: const ValueKey('incoming-error'),
                 icon: LucideIcons.circleAlert,
               );
             }

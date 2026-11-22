@@ -60,7 +60,7 @@ final class QrPairingNotifierProvider
   }
 }
 
-String _$qrPairingNotifierHash() => r'549e0522fba9e2c67d2b97f9fb41b24ea53909bf';
+String _$qrPairingNotifierHash() => r'd6ad17b88c4ae1612df8083a15745ae249ae96e1';
 
 final class QrPairingNotifierFamily extends $Family
     with

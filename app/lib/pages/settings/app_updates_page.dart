@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -57,7 +60,7 @@ class AppUpdatesPage extends HookConsumerWidget {
                           : '已安装 ${installed.version}',
                     ),
                     subtitle: Text(
-                      channel == null ? '当前构建未配置发布渠道。' : '检查更新后可查看发布说明。',
+                      channel == null ? '这个版本暂时无法在应用内检查更新。' : '检查更新后可查看发布说明。',
                     ),
                   ),
                 for (final release in releases.value)
@@ -101,39 +104,49 @@ class AppUpdatesPage extends HookConsumerWidget {
             latest.url,
             mode: LaunchMode.externalApplication,
           )) {
-            throw StateError('暂时无法打开发布渠道。');
+            throw StateError('无法打开更新页面。');
           }
-        });
+        }, failure: '无法打开更新页面。请检查网络后重试。');
       }
     }
 
     Future<void> check() async {
       if (checking.value) return;
       if (channel == null) {
-        status.value = '当前构建未配置发布渠道。';
+        status.value = '这个版本暂时无法在应用内检查更新。';
         return;
       }
       if (installed == null) return;
       checking.value = true;
       status.value = '正在检查…';
+      final List<AppRelease> accepted;
       try {
-        final accepted = await channel();
-        if (!context.mounted) return;
-        AppRelease? latest;
-        for (final release in accepted) {
-          if (release.isNewerThan(installed) &&
-              (latest == null || release.compareTo(latest) > 0)) {
-            latest = release;
-          }
-        }
-        releases.value = accepted;
-        status.value = latest == null ? '已是最新版本' : '发现 ${latest.version}';
-        if (latest != null) await present(latest, installed);
-      } catch (_) {
-        if (context.mounted) status.value = '检查失败，点按重试';
+        accepted = await channel();
+      } on Exception catch (error) {
+        final reason = switch (error) {
+          FormatException() => '无法读取更新记录',
+          SocketException() || TimeoutException() => '连接更新服务超时或中断。请稍后重试。',
+          HttpException() => '更新服务暂时不可用。请稍后重试。',
+          TlsException() => '无法验证更新服务。请稍后重试。',
+          _ => null,
+        };
+        if (reason == null) rethrow;
+        if (context.mounted) status.value = reason;
+        return;
       } finally {
         if (context.mounted) checking.value = false;
       }
+      if (!context.mounted) return;
+      AppRelease? latest;
+      for (final release in accepted) {
+        if (release.isNewerThan(installed) &&
+            (latest == null || release.compareTo(latest) > 0)) {
+          latest = release;
+        }
+      }
+      releases.value = accepted;
+      status.value = latest == null ? '已是最新版本' : '发现 ${latest.version}';
+      if (latest != null) await present(latest, installed);
     }
 
     return PageFrame(

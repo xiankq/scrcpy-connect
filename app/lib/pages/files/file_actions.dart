@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
@@ -34,7 +35,7 @@ Future<void> retrieveFile(
       ref.read(deviceReadinessProvider(device.id)).ready &&
       ref.read(deviceReadinessProvider(device.id)) == admission;
   if (share && !supportsSystemFileShare) {
-    feedback(context, '此系统不支持文件分享，请选择取回原文件并保存。');
+    feedback(context, '本机无法直接分享。你可以先取回并保存原文件。');
     return;
   }
   if (!ready()) {
@@ -112,7 +113,7 @@ Future<void> retrieveSelection(
       (canSubmit?.call() ?? true);
   if (!ready()) return;
   if (files.any((file) => !file.canOpen || file.path?.isNotEmpty != true)) {
-    feedback(context, '所选内容包含无法解析路径的文件，请重新选择可操作的文件。');
+    feedback(context, '部分选中的文件无法打开。请换个文件再试。');
     return;
   }
   final privateCache = Platform.isAndroid || Platform.isIOS;
@@ -169,7 +170,10 @@ Future<FileTransferSubmission?> _pull(
           },
         );
       } else {
-        feedback(context, '$error');
+        feedback(
+          context,
+          failureMessage(error, fallback: '无法开始取回文件。请检查手机连接后重试。'),
+        );
       }
     }
     return null;

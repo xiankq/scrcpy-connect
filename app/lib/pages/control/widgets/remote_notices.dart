@@ -51,7 +51,7 @@ final class RemoteNotices {
     final key = (error.code, error.reason);
     if (_errorKey == key) return;
     _errorKey = key;
-    _pending = '保持唤醒尚未确认：${error.reason}';
+    _pending = '暂时无法确认手机是否会保持亮屏。请先查看手机。';
     flush();
   }
 

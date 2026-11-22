@@ -45,7 +45,7 @@ class GalleryScanSummary extends StatelessWidget {
           scan.scanning
               ? '正在检查手机中的照片与视频'
               : switch (status) {
-                  .partial => '部分目录未能检查',
+                  .partial => '部分文件夹无法读取',
                   .cancelled => '已停止检查',
                   .completed => '已检查共享存储中的照片与视频',
                   .unknown || .scanning || null => '暂时无法读取相册',
@@ -128,7 +128,7 @@ class GalleryScanSummary extends StatelessWidget {
           StateNote(scan.error!),
           TextButton(
             onPressed: scan.scanId == null ? onRestart : onRefresh,
-            child: const Text('重新核验本次检查'),
+            child: const Text('刷新结果'),
           ),
         ],
       ],

@@ -119,6 +119,8 @@ class RuntimeLogsPage extends HookConsumerWidget {
               ? '本次运行未启用日志服务。'
               : logger.storageError != null
               ? '暂时无法写入本机存储，当前仅保留最近的内存记录。'
+              : logger.historyIncomplete
+              ? '部分日志无法读取，已显示可用记录。'
               : entries.isEmpty
               ? '暂无符合条件的日志。'
               : null;
@@ -145,7 +147,6 @@ class RuntimeLogsPage extends HookConsumerWidget {
                   icon: LucideIcons.download,
                   color: DesignTokens.colorListIconUtility,
                   title: '导出日志',
-                  subtitle: '日志不会自动上传',
                   onTap: logger == null || busy.value ? null : exportLogs,
                 ),
                 SettingsRow(

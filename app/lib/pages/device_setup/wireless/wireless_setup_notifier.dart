@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:adb/adb.dart' show AdbCancellation;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/devices/connection_validation.dart';
@@ -64,7 +65,11 @@ class WirelessSetupNotifier extends _$WirelessSetupNotifier {
       );
     } catch (error) {
       if (_current(owner) && identical(owner.reading, reading)) {
-        state = state.copyWith(phase: .failed, addresses: [], error: '$error');
+        state = state.copyWith(
+          phase: .failed,
+          addresses: [],
+          error: failureMessage(error, fallback: '无法找到手机的网络地址。请确认手机已连上 Wi-Fi。'),
+        );
       }
     } finally {
       if (identical(owner.reading, reading)) owner.reading = null;
@@ -90,7 +95,7 @@ class WirelessSetupNotifier extends _$WirelessSetupNotifier {
     );
     try {
       if (validatePort('$port') != null) {
-        throw const RequestFailure('invalid_argument', '请输入有效的连接端口。');
+        throw const RequestFailure('invalid_port', '请输入有效的连接端口。');
       }
       final network = await _readNetwork(owner, attempt.reading);
       if (!_accepts(owner, attempt)) return null;
@@ -120,7 +125,11 @@ class WirelessSetupNotifier extends _$WirelessSetupNotifier {
     } catch (error) {
       if (_accepts(owner, attempt)) {
         owner.attempt = null;
-        state = state.copyWith(phase: .failed, addresses: [], error: '$error');
+        state = state.copyWith(
+          phase: .failed,
+          addresses: [],
+          error: failureMessage(error, fallback: '无法读取手机的网络地址。请检查 USB 连接。'),
+        );
       }
       return null;
     }
@@ -192,7 +201,10 @@ class WirelessSetupNotifier extends _$WirelessSetupNotifier {
         phase: cleanupRequired ? .cleanupRequired : .failed,
         confirmation: null,
         result: known,
-        error: '$error',
+        error: failureMessage(
+          error,
+          fallback: '无法切换到无线连接。请保持 USB 连接并检查手机的 Wi-Fi。',
+        ),
         notice: attempt.requested ? '设备记录未确认更新，调试服务可能已重启，请核对连接状态。' : null,
       );
       await ref.read(deviceListProvider.notifier).refresh();
@@ -230,7 +242,10 @@ class WirelessSetupNotifier extends _$WirelessSetupNotifier {
       await ref.read(deviceListProvider.notifier).refresh();
     } catch (error) {
       if (_current(owner) && identical(owner.attempt, attempt)) {
-        state = state.copyWith(phase: .cleanupRequired, error: '$error');
+        state = state.copyWith(
+          phase: .cleanupRequired,
+          error: failureMessage(error, fallback: '暂时无法取消连接。请点「重试取消」。'),
+        );
       }
     } finally {
       attempt.cancellation = null;

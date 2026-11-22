@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/devices/device_notifications.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
@@ -52,11 +53,14 @@ class NotificationCard extends HookConsumerWidget {
           );
           if (!context.mounted || !isCurrent()) return;
           if (!result.located) {
-            feedback(context, result.message ?? '未能定位原内容，将打开手机界面');
+            feedback(context, '找不到这条通知的原内容。你可以打开手机屏幕查看。');
           }
         } catch (error) {
           if (!context.mounted || !isCurrent()) return;
-          feedback(context, '$error');
+          feedback(
+            context,
+            failureMessage(error, fallback: '无法在手机上打开这条通知。请解锁手机后再试。'),
+          );
           if (error is! RequestFailure ||
               error.code != 'authentication_required') {
             return;

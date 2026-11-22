@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -81,7 +82,8 @@ class ReceiveContentPage extends HookConsumerWidget {
         data: query.value,
         error: query.error,
         onRefresh: refresh,
-        emptyTitle: '暂时无法核验原文件',
+        emptyTitle: '暂时无法读取原文件',
+        failure: '请检查传输记录，确认文件是否已取回。',
         builder: (context, data) {
           final current = transferView(devices, data);
           return HookConsumer(
@@ -112,7 +114,12 @@ class ReceiveContentPage extends HookConsumerWidget {
                   );
                   if (ownsView()) shareResult.value = result;
                 } catch (error) {
-                  if (ownsView()) shareResult.value = '系统分享未确认完成：$error';
+                  if (ownsView()) {
+                    shareResult.value = failureMessage(
+                      error,
+                      fallback: '暂时无法确认分享是否完成。请先查看接收文件的应用。',
+                    );
+                  }
                 } finally {
                   if (ownsView()) busy.value = false;
                 }
@@ -264,7 +271,7 @@ class ReceiveContentPage extends HookConsumerWidget {
                       const ContentLoadingIndicator(),
                     const SizedBox(height: DesignTokens.spacingXs),
                     Text(
-                      '${bytes(completed)} / ${total > 0 ? bytes(total) : '大小待核验'}',
+                      '${bytes(completed)} / ${total > 0 ? bytes(total) : '大小未知'}',
                     ),
                     const StateNote('离开本页后传输可继续，在传输中心查看。'),
                   ],
@@ -318,10 +325,11 @@ class ReceiveContentPage extends HookConsumerWidget {
                   if (!pending && !ready && status != .conflict)
                     StateNote(
                       cacheLease.hasError
-                          ? '无法保留这份暂存：${cacheLease.error}'
-                          : current.error ??
-                                current.exportReason ??
-                                '原文件尚未完整取回。请在传输详情核对结果；不会自动重新传输。',
+                          ? failureMessage(
+                              cacheLease.error,
+                              fallback: '临时文件已不可用。请从手机重新取回。',
+                            )
+                          : transferIssueMessage(current),
                     ),
                   if (!pending &&
                       !ready &&
@@ -335,15 +343,9 @@ class ReceiveContentPage extends HookConsumerWidget {
                     ),
                   if (ready &&
                       !openAfterTransfer &&
-                      !share &&
-                      !supportsSystemDocumentSave)
-                    const StateNote('原文件已取回本机暂存；此主控当前通过系统分享交给其他应用保存。'),
-                  if (ready &&
-                      !openAfterTransfer &&
                       supportsSystemFileShare &&
                       (share || !supportsSystemDocumentSave) &&
                       current.kind != .directory) ...[
-                    const StateNote('将原文件副本交给系统选择的应用。分享面板返回不代表接收应用已经发送或保存。'),
                     if (shareResult.value != null)
                       StateNote(shareResult.value!),
                     if (shareResult.value != null)
@@ -383,7 +385,7 @@ class ReceiveContentPage extends HookConsumerWidget {
                             .push<void>(context),
                     child: const Text('查看本次传输详情'),
                   ),
-                  TextButton(onPressed: refresh, child: const Text('重新核验原文件')),
+                  TextButton(onPressed: refresh, child: const Text('刷新文件状态')),
                 ],
               );
             },

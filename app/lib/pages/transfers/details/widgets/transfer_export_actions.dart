@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/files/models/file_transfer_snapshot.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
@@ -73,7 +74,10 @@ class TransferExportActions extends ConsumerWidget {
                   if (context.mounted) feedback(context, result);
                 } catch (error) {
                   if (context.mounted) {
-                    feedback(context, '系统分享失败：$error');
+                    feedback(
+                      context,
+                      failureMessage(error, fallback: '无法打开系统分享。你可以先保存文件。'),
+                    );
                   }
                 }
               },
@@ -88,10 +92,7 @@ class TransferExportActions extends ConsumerWidget {
       if (current.canExportPartial &&
           (current.destinationScope != .privateCache || cacheReady) &&
           supportsSystemDocumentSave) ...[
-        StateNote(
-          '这是已核验但不完整的本机暂存。系统保存不会补齐失败、变化或跳过的项目。',
-          icon: LucideIcons.circleAlert,
-        ),
+        StateNote('目前只取回了部分文件。继续保存只会保存已取回的文件。', icon: LucideIcons.circleAlert),
         FilledButton.icon(
           onPressed: () => DocumentExportRoute(
             taskId: taskId,

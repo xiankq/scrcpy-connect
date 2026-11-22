@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -125,7 +126,12 @@ class TransferHistoryRow extends HookConsumerWidget {
         await transfers.removeTransfer(target);
         if (context.mounted && ownsScope()) refresh();
       } catch (error) {
-        if (context.mounted && ownsScope()) feedback(context, '$error');
+        if (context.mounted && ownsScope()) {
+          feedback(
+            context,
+            failureMessage(error, fallback: '无法更新这条传输。请先查看它的当前状态。'),
+          );
+        }
       } finally {
         if (context.mounted && ownsScope()) busy.value = false;
       }

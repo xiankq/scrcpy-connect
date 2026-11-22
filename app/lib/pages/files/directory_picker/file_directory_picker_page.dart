@@ -70,7 +70,8 @@ class FileDirectoryPickerPage extends HookConsumerWidget {
               data: query.data,
               error: query.error,
               onRefresh: refresh,
-              emptyTitle: '无法读取这个目录',
+              emptyTitle: '无法读取这个文件夹',
+              failure: '请检查手机连接后重试。',
               builder: (context, data) {
                 final directories = data.entries
                     .where((entry) => entry.isDirectory)

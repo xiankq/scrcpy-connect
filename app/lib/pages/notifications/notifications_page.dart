@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/devices/device_notifications.dart';
 import 'package:scrcpy_connect/core/devices/device_query_provider.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
@@ -55,25 +56,22 @@ class NotificationsPage extends HookConsumerWidget {
         if (status.supported &&
             status.permissionGranted == true &&
             status.notificationChannelEnabled != false) {
-          feedback(context, '系统通知提醒已开启；当前通知页可见时仅更新列表。');
+          feedback(context, '系统通知提醒已开启');
         } else if (!requested && status.canOpenSettings) {
           final opened = await alerts.openSettings();
           if (context.mounted) {
-            feedback(
-              context,
-              opened
-                  ? '请在系统设置中允许通知提醒；仍可在这里查看当前通知。'
-                  : '暂时无法打开系统通知设置；仍可在这里查看当前通知。',
-            );
+            feedback(context, opened ? '请在系统设置中允许通知提醒' : '无法打开系统通知设置');
           }
         } else {
-          feedback(
-            context,
-            '${status.reason.isEmpty ? '系统提醒尚未获准' : status.reason}；仍可在这里查看当前通知。',
-          );
+          feedback(context, status.reason.isEmpty ? '系统提醒尚未获准' : status.reason);
         }
       } catch (error) {
-        if (context.mounted) feedback(context, '系统提醒未能确认开启：$error');
+        if (context.mounted) {
+          feedback(
+            context,
+            failureMessage(error, fallback: '无法开启通知提醒。请在系统设置中检查通知权限。'),
+          );
+        }
       } finally {
         if (context.mounted) enablingAlerts.value = false;
       }
@@ -87,7 +85,7 @@ class NotificationsPage extends HookConsumerWidget {
             padding: const EdgeInsets.only(bottom: DesignTokens.spacingSm),
             child: OutlinedButton(
               onPressed: enablingAlerts.value ? null : enableAlerts,
-              child: Text(enablingAlerts.value ? '正在核验系统提醒…' : '开启系统提醒'),
+              child: Text(enablingAlerts.value ? '正在检查通知权限…' : '开启系统提醒'),
             ),
           ),
       ],
@@ -139,7 +137,7 @@ class NotificationsPage extends HookConsumerWidget {
         final current = await notificationsAccess.readNotifications(device.id);
         if (!context.mounted || !notificationsCurrent()) return;
         if (!current.live) {
-          feedback(context, '请先核验手机当前通知，再清除。');
+          feedback(context, '请先刷新通知列表，再清除通知。');
           return;
         }
         var cleared = 0;
@@ -177,12 +175,15 @@ class NotificationsPage extends HookConsumerWidget {
                 ? '没有可清除的通知；常驻通知由手机应用管理。'
                 : '已清除 $cleared 条通知'
                       '${pending > 0 ? '，$pending 条等待手机确认' : ''}'
-                      '${failed > 0 ? '，$failed 条未能确认，请刷新核对' : ''}。',
+                      '${failed > 0 ? '，$failed 条暂时无法确认，请刷新列表' : ''}。',
           );
         }
       } catch (error) {
         if (context.mounted && notificationsCurrent()) {
-          feedback(context, '$error');
+          feedback(
+            context,
+            failureMessage(error, fallback: '暂时无法确认哪些通知已清除。请先刷新列表。'),
+          );
         }
       } finally {
         if (notificationsCurrent()) clearing.value = false;
@@ -204,7 +205,10 @@ class NotificationsPage extends HookConsumerWidget {
       } catch (error) {
         if (context.mounted && notificationsCurrent()) {
           refresh();
-          feedback(context, '$error');
+          feedback(
+            context,
+            failureMessage(error, fallback: '暂时无法确认这条通知是否已清除。请先刷新列表。'),
+          );
         }
       } finally {
         if (notificationsCurrent()) clearing.value = false;
@@ -241,6 +245,7 @@ class NotificationsPage extends HookConsumerWidget {
         error: query.error,
         onRefresh: refresh,
         emptyTitle: '当前无法同步通知',
+        failure: '请确认手机已连接，也可以直接在手机上查看。',
         alternative: TextButton(
           onPressed: () => openRemoteRoute(context, deviceId: device.id),
           child: const Text('在手机上继续处理'),
@@ -254,7 +259,10 @@ class NotificationsPage extends HookConsumerWidget {
               if (observationCurrent()) refresh();
             } catch (error) {
               if (context.mounted && observationCurrent()) {
-                feedback(context, '$error');
+                feedback(
+                  context,
+                  failureMessage(error, fallback: '无法在手机上打开通知。请解锁手机后再试。'),
+                );
               }
             } finally {
               if (observationCurrent()) starting.value = false;
@@ -272,10 +280,10 @@ class NotificationsPage extends HookConsumerWidget {
                 title: switch (state) {
                   .needsSetup => '通知访问需要设置',
                   .stopped => '通知观察已停止',
-                  .unknown || .checking || .starting => '通知状态尚未核验',
+                  .unknown || .checking || .starting => '暂时无法读取手机通知',
                   .available || .limited => '通知同步受限',
                 },
-                message: data.reason ?? '这台设备尚未提供可靠的通知访问。你可以在手机原应用中处理。',
+                message: '无法读取手机通知。请解锁手机后刷新，也可以直接在手机上查看。',
                 action: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -286,7 +294,7 @@ class NotificationsPage extends HookConsumerWidget {
                     ),
                     TextButton(
                       onPressed: starting.value ? null : verify,
-                      child: Text(state == .stopped ? '启用通知与来电观察' : '重新核验通知'),
+                      child: Text(state == .stopped ? '开启通知与来电' : '刷新通知'),
                     ),
                   ],
                 ),
@@ -329,7 +337,10 @@ class NotificationsPage extends HookConsumerWidget {
                   return notificationHeader;
                 }
                 if (hasStatus && index == 1) {
-                  return StateNote(data.reason!, icon: LucideIcons.circleAlert);
+                  return const StateNote(
+                    '这里只能显示部分手机通知。其余通知请在手机上查看。',
+                    icon: LucideIcons.circleAlert,
+                  );
                 }
                 final notification = notifications[index - offset];
                 final position = index - offset;

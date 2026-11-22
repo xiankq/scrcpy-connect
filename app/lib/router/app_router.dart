@@ -150,7 +150,7 @@ Widget _remoteView(
   RemoteControlIntent? action,
 }) {
   if (session == null && intent is! RemoteLaunchIntent) {
-    return const RouteErrorPage(message: '请从设备工作台明确打开画面。恢复这个位置不会自动创建新的控制会话。');
+    return const RouteErrorPage(message: '无法恢复手机画面。请回到设备工作台，点「打开手机屏幕」。');
   }
   return ControlPage(
     key: ValueKey(
@@ -256,8 +256,8 @@ class RouteErrorRoute extends _AppPageRoute with $RouteErrorRoute {
   Widget build(BuildContext context, GoRouterState state) {
     return RouteErrorPage(
       message: reason == 'missing-session'
-          ? '无法识别这个控制会话。请从设备工作台重新选择；不会自动创建新画面。'
-          : '页面缺少必要的记录信息，请返回设备列表重新选择。',
+          ? '这次打开的画面已不可用。请回到设备工作台重新打开。'
+          : '找不到这项内容。请返回设备列表重新选择。',
     );
   }
 }
@@ -886,9 +886,7 @@ class DocumentExportRoute extends _AppPageRoute with $DocumentExportRoute {
             (partial ? task.partialLocalPath : task.localPath) ?? '';
         if ((partial ? task.canExportPartial : task.canExport) != true ||
             localPath.isEmpty) {
-          return RouteErrorPage(
-            message: task.exportReason ?? '当前任务没有可完整保存的本机内容，请在传输中心核对。',
-          );
+          return RouteErrorPage(message: '没有可保存的文件。请先在「传输」中查看结果。');
         }
         return DocumentExportPage(
           transferId: id,

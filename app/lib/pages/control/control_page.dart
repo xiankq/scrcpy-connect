@@ -121,7 +121,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
       if (mounted && presentation.errorCode == 'device_asleep') await start();
     } catch (failure) {
       if (mounted) {
-        notices.show('点亮屏幕尚未确认：${remoteFailure(failure)}');
+        notices.show(remoteFailure(failure, fallback: '暂时无法确认屏幕是否已点亮。请先查看手机。'));
       }
     } finally {
       if (mounted) setState(() => waking = false);
@@ -148,7 +148,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
       ).push<void>(context);
     } catch (failure) {
       if (mounted) {
-        notices.show('截图失败：${remoteFailure(failure)}');
+        notices.show(remoteFailure(failure, fallback: '无法截图。请等手机画面恢复后再试。'));
       }
     }
   }
@@ -181,7 +181,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
       ).pushReplacement(context);
     } catch (failure) {
       if (mounted && !presentation.exiting) {
-        notices.show('无法转为独立窗口：${remoteFailure(failure)}');
+        notices.show(remoteFailure(failure, fallback: '无法打开独立窗口。请在当前画面继续操作。'));
       }
     } finally {
       if (mounted) setState(() => converting = false);
@@ -282,8 +282,9 @@ class _ControlPageState extends ConsumerState<ControlPage>
       onChanged: () {
         if (mounted) setState(() {});
       },
-      onFailure: (failure) =>
-          notices.show('屏幕比例调整未确认：${remoteFailure(failure)}'),
+      onFailure: (failure) => notices.show(
+        remoteFailure(failure, fallback: '暂时无法确认屏幕比例是否已更新。请先查看手机画面。'),
+      ),
     );
     screenState = RemoteScreenState(
       window: window,
@@ -668,12 +669,16 @@ class _ControlPageState extends ConsumerState<ControlPage>
         if (feedback?.mounted != true) return;
         if (result.lockFailure case final failure?) {
           feedback!.showSnackBar(
-            appSnackBar('熄屏尚未确认：${remoteFailure(failure)}'),
+            appSnackBar(
+              remoteFailure(failure, fallback: '暂时无法确认手机是否已熄屏。请先查看手机。'),
+            ),
           );
         }
         if (result.closeFailure case final failure?) {
           feedback!.showSnackBar(
-            appSnackBar('关闭窗口尚未确认：${remoteFailure(failure)}'),
+            appSnackBar(
+              remoteFailure(failure, fallback: '暂时无法确认窗口是否已关闭。请先查看「当前活动」。'),
+            ),
           );
         }
         final receipt = result.receipt;
@@ -681,8 +686,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
         if (receipt?.sessionId == id &&
             keepActive != null &&
             !keepActive.cleanupConfirmed) {
-          final reason = keepActive.keepActiveError?.reason ?? '请稍后重新检查。';
-          feedback!.showSnackBar(appSnackBar('窗口已关闭，保持唤醒服务释放尚未确认：$reason'));
+          feedback!.showSnackBar(appSnackBar('窗口已关闭。请在手机上检查自动熄屏是否已恢复。'));
         }
       }),
     );

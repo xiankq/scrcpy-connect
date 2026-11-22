@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/overlays.dart';
 
@@ -27,13 +28,16 @@ Future<T?> performAction<T>(
   BuildContext context,
   Future<T> Function() action, {
   String? success,
+  String failure = '操作未完成。请稍后重试。',
 }) async {
   try {
     final result = await action();
     if (context.mounted && success != null) feedback(context, success);
     return result;
   } catch (error) {
-    if (context.mounted) feedback(context, '$error');
+    if (context.mounted) {
+      feedback(context, failureMessage(error, fallback: failure));
+    }
     return null;
   }
 }

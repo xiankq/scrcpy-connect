@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:path/path.dart' as p;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/devices/device_readiness_provider.dart';
@@ -83,7 +84,7 @@ class FileActionsNotifier extends _$FileActionsNotifier {
     final generation = _generation;
     if (!ref.read(deviceReadinessProvider(target.deviceId)).ready ||
         !ref.read(fileDirectoryProvider(target)).verified) {
-      state = const FileActionState(error: '设备已断开或目录尚未重新核验，请重连后再试。');
+      state = const FileActionState(error: '请确认手机已连接，再刷新这个文件夹。');
       return false;
     }
     state = const FileActionState(busy: true);
@@ -96,7 +97,11 @@ class FileActionsNotifier extends _$FileActionsNotifier {
       }
       return true;
     } catch (error) {
-      if (_current(generation)) state = FileActionState(error: '$error');
+      if (_current(generation)) {
+        state = FileActionState(
+          error: failureMessage(error, fallback: '暂时无法确认文件操作是否完成。请刷新列表后查看结果。'),
+        );
+      }
       return false;
     } finally {
       if (_current(generation) && state.busy) state = const FileActionState();

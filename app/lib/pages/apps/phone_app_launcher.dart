@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/control/models/video_session.dart';
 import 'package:scrcpy_connect/core/devices/device_apps.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
@@ -137,7 +138,12 @@ Future<void> openPhoneApp(
       onPhoneScreen: mode == AppOpenMode.phone,
     );
   } catch (error) {
-    if (context.mounted && ownsScope()) feedback(context, '$error');
+    if (context.mounted && ownsScope()) {
+      feedback(
+        context,
+        failureMessage(error, fallback: '暂时无法确认应用是否已打开。请先查看手机屏幕。'),
+      );
+    }
   } finally {
     release();
   }

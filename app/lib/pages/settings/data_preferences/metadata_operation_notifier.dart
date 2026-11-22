@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
@@ -56,7 +58,10 @@ class MetadataOperationNotifier extends _$MetadataOperationNotifier {
     await for (final chunk in File(path).openRead()) {
       if (!_current(owner)) return;
       if (bytes.length + chunk.length > 1024 * 1024) {
-        throw const FormatException('设备记录文件须小于 1 MB。');
+        throw const RequestFailure(
+          'metadata_file_too_large',
+          '设备记录文件须小于 1 MB。',
+        );
       }
       bytes.add(chunk);
     }
@@ -81,7 +86,7 @@ class MetadataOperationNotifier extends _$MetadataOperationNotifier {
         busy: true,
         message: result.records.alreadyImported
             ? '此文件已导入，已核对本机记录。'
-            : '设备记录已导入，请在被控手机重新核验授权。',
+            : '设备记录已导入。请在手机上重新允许调试。',
       );
     }
   });
@@ -134,7 +139,7 @@ class MetadataOperationNotifier extends _$MetadataOperationNotifier {
         state = const MetadataOperationState(
           busy: true,
           refreshPending: true,
-          message: '设备记录已导入，界面重新加载未完成；请重新加载记录，无需再次导入。',
+          message: '设备记录已导入。请点「重新加载记录」，无需再次导入。',
         );
       }
     }
@@ -158,7 +163,7 @@ class MetadataOperationNotifier extends _$MetadataOperationNotifier {
         state = MetadataOperationState(
           busy: true,
           refreshPending: state.refreshPending,
-          message: '$failure：$error',
+          message: failureMessage(error, fallback: '$failure。请检查所选文件或位置后重试。'),
         );
       }
     } finally {

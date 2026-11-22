@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/content/cache_status_provider.dart';
 import 'package:scrcpy_connect/core/content/content_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
@@ -59,7 +60,10 @@ class MediaCachePage extends HookConsumerWidget {
         ref.invalidate(cacheStatusProvider);
       } catch (error) {
         if (context.mounted && ownsScope()) {
-          feedback(context, '清理未完成：$error');
+          feedback(
+            context,
+            failureMessage(error, fallback: '无法清理媒体暂存。请关闭正在使用的文件后再试。'),
+          );
         }
       } finally {
         if (context.mounted && ownsScope()) {
@@ -101,7 +105,7 @@ class MediaCachePage extends HookConsumerWidget {
           child: EmptyContent(
             icon: LucideIcons.circleAlert,
             title: '暂时无法读取媒体暂存',
-            message: '$error',
+            message: failureMessage(error, fallback: '无法读取媒体暂存。请重试。'),
             action: OutlinedButton.icon(
               onPressed: () => ref.invalidate(cacheStatusProvider),
               icon: const Icon(LucideIcons.refreshCw),
@@ -155,7 +159,7 @@ class MediaCachePage extends HookConsumerWidget {
                 ],
               ),
               if (!data.spaceVerified)
-                const StateNote('当前无法核验本机实际空间，新的原件准备暂时停止。'),
+                const StateNote('暂时无法读取本机剩余空间。请检查存储空间后重试。'),
               if (protectedItems.isNotEmpty) const SectionTitle('受保护原件'),
               for (final item in protectedItems)
                 ContentPanel(
@@ -208,7 +212,14 @@ class MediaCachePage extends HookConsumerWidget {
                                         }
                                       } catch (error) {
                                         if (context.mounted && ownsScope()) {
-                                          feedback(context, '系统分享未确认完成：$error');
+                                          feedback(
+                                            context,
+                                            failureMessage(
+                                              error,
+                                              fallback:
+                                                  '暂时无法确认分享是否完成。请先查看接收文件的应用。',
+                                            ),
+                                          );
                                         }
                                       } finally {
                                         if (context.mounted && ownsScope()) {

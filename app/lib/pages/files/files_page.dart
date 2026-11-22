@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -138,7 +139,7 @@ class FilesPage extends HookConsumerWidget {
     Future<bool> mutate(Future<bool> Function() action) async {
       if (!ownsView()) return false;
       if (!canSubmit()) {
-        feedback(context, '设备已断开或目录尚未重新核验，请重连后再试。');
+        feedback(context, '请确认手机已连接，再刷新这个文件夹。');
         return false;
       }
       final completed = await action();
@@ -158,7 +159,12 @@ class FilesPage extends HookConsumerWidget {
       try {
         await ref.read(preferencesProvider.notifier).update(patch);
       } catch (error) {
-        if (context.mounted) feedback(context, '$error');
+        if (context.mounted) {
+          feedback(
+            context,
+            failureMessage(error, fallback: '无法打开这个位置。请检查手机连接后重试。'),
+          );
+        }
       }
     }
 
@@ -175,7 +181,7 @@ class FilesPage extends HookConsumerWidget {
             ),
       ];
       if (items.isEmpty) {
-        feedback(context, '所选文件没有可读取的本机路径，请从系统文件位置重新选择。');
+        feedback(context, '无法读取所选文件。请在系统文件选择器中重新选择。');
         return;
       }
       final submitted = await mutate(() => actions.send(items));
@@ -195,7 +201,7 @@ class FilesPage extends HookConsumerWidget {
         if (name.isEmpty ||
             name == '.' ||
             p.equals(p.normalize(source), p.rootPrefix(source))) {
-          feedback(context, '请选择有明确名称的文件夹');
+          feedback(context, '请选择一个有名称的文件夹。');
           return;
         }
         final submitted = await mutate(
@@ -234,7 +240,7 @@ class FilesPage extends HookConsumerWidget {
       final name = await askText(context, title: '重命名', initial: entry.name);
       if (name == null || !context.mounted) return;
       if (name.isEmpty || name.contains('/') || name == '.' || name == '..') {
-        feedback(context, '名称不能包含路径分隔符');
+        feedback(context, r'名称里不能使用 / 或 \');
         return;
       }
       if (entry case FileCatalogEntry(
@@ -245,7 +251,7 @@ class FilesPage extends HookConsumerWidget {
           () => actions.rename((path: path, expected: expected), name),
         );
       } else if (ownsView()) {
-        feedback(context, '缺少所选文件身份，请重新选择。');
+        feedback(context, '无法找到所选文件。请刷新列表后重新选择。');
       }
     }
 
@@ -406,9 +412,9 @@ class FilesPage extends HookConsumerWidget {
                     retrieveReason: !connected
                         ? '设备已断开，重连后才能取回原文件'
                         : !verified
-                        ? '目录尚未重新核验，请先重新检查'
+                        ? '请先刷新这个文件夹'
                         : !selectionVerified()
-                        ? '部分所选项未在本次范围内核验，请重新选择当前条目'
+                        ? '部分选中的文件已找不到，请重新选择'
                         : chosen.isEmpty
                         ? '请先选择文件'
                         : '所选内容暂不可取回',
@@ -437,7 +443,7 @@ class FilesPage extends HookConsumerWidget {
                               ];
                               if (sources.length != chosen.length) {
                                 if (ownsView()) {
-                                  feedback(context, '缺少所选文件身份，请重新选择。');
+                                  feedback(context, '无法找到所选文件。请刷新列表后重新选择。');
                                 }
                                 return;
                               }
@@ -447,7 +453,7 @@ class FilesPage extends HookConsumerWidget {
                     deleteReason: !connected
                         ? '设备已断开，重连后才能删除'
                         : !selectionVerified()
-                        ? '部分所选项未在本次范围内核验，请重新选择当前条目'
+                        ? '部分选中的文件已找不到，请重新选择'
                         : '请先选择文件',
                     onRename:
                         verified &&
@@ -544,7 +550,10 @@ class FilesPage extends HookConsumerWidget {
                                               name.contains('/') ||
                                               name == '.' ||
                                               name == '..') {
-                                            feedback(context, '文件夹名称不能包含路径分隔符');
+                                            feedback(
+                                              context,
+                                              r'文件夹名称里不能使用 / 或 \',
+                                            );
                                             return;
                                           }
                                           await mutate(
@@ -582,7 +591,10 @@ class FilesPage extends HookConsumerWidget {
                         : EmptyContent(
                             icon: LucideIcons.folderX,
                             title: '无法读取这个目录',
-                            message: '${query.error}',
+                            message: failureMessage(
+                              query.error,
+                              fallback: '无法读取这个文件夹。请检查手机连接后重试。',
+                            ),
                             action: TextButton(
                               onPressed: () => unawaited(refresh()),
                               child: const Text('重新检查'),
@@ -618,14 +630,14 @@ class FilesPage extends HookConsumerWidget {
                                 if (!verified)
                                   StateNote(
                                     !connected
-                                        ? '设备已断开，已保留当前目录与选择。重连并核验目录后才能提交操作。'
+                                        ? '手机已断开。已保留当前文件和选择，重新连接并刷新后可继续操作。'
                                         : query.error != null
-                                        ? '目录未能重新核验：${query.error}。当前显示上次内容，重新检查后才能提交操作。'
-                                        : '正在重新核验目录，当前内容与选择继续保留…',
+                                        ? '无法刷新文件夹。这里显示的是上次读取的内容。请刷新后再操作。'
+                                        : '正在刷新文件夹，当前选择会保留。',
                                   ),
                                 if (verified && !selectionVerified())
                                   const StateNote(
-                                    '部分所选项未出现在本次已核验范围，已保留选择并暂停批量操作。可重新全选当前已加载范围，或退出选择后刷新核验。',
+                                    '部分选中的文件已找不到。请重新全选当前列表，或退出选择后刷新。',
                                   ),
                                 if (!atStorageRoot)
                                   Row(

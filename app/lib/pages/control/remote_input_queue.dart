@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:scrcpy_connect/core/control/remote_control.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
 
 typedef RemoteInputDispatch = Future<void> Function(
@@ -70,7 +71,9 @@ final class RemoteInputQueue {
     // 有界队列预留一半容量给释放事件，文字和按下拥塞不能阻止页面撤销准入后释放已持有输入。
     final limit = action.isRelease || capacity < 16 ? capacity : capacity ~/ 2;
     if (_pending.length >= limit) {
-      return Future<void>.error(StateError('控制输入队列繁忙，请等待网络恢复。'));
+      return Future<void>.error(
+        const RequestFailure('control_busy', '操作太快了。请稍等片刻再试。'),
+      );
     }
     final waiter = Completer<void>();
     final entry = _PendingInput(action, target, binding, moveKey, waiter);

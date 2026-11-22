@@ -19,6 +19,7 @@ import 'package:scrcpy_connect/pages/device_setup/connection/models/connection_a
 import 'package:scrcpy_connect/pages/device_setup/connection/models/connection_attempt_state.dart';
 import 'package:scrcpy_connect/pages/device_setup/connection/connection_form_page.dart';
 import 'package:scrcpy_connect/pages/device_setup/connection/widgets/connection_address_fields.dart';
+import 'package:scrcpy_connect/pages/device_setup/connection/widgets/connection_attempt_status.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 
 const _endpoint = DeviceEndpoint(address: 'phone.local', port: 5555);
@@ -279,6 +280,51 @@ void main() {
     expect(container.read(provider).canSubmit, isFalse);
   });
 
+  testWidgets('窄屏大字仍可读到连接检查说明并使用操作按钮', (tester) async {
+    tester.view
+      ..physicalSize = const Size(320, 520)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var checks = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ConnectTokens.theme(Brightness.light),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(2)),
+          child: child!,
+        ),
+        home: ConnectionAttemptStatus(
+          busy: false,
+          checking: false,
+          cancelling: false,
+          paired: false,
+          pairing: true,
+          legacyTcp: false,
+          deviceName: '',
+          failure: const SetupIssue('result_unknown', 'transport owner 32'),
+          onCancel: () {},
+          onEdit: () {},
+          onRetry: () => fail('结果待确认时不能直接重新连接'),
+          onRecheck: () => checks++,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final explanation = find.text('暂时无法确认手机是否已连接。');
+    expect(explanation, findsOneWidget);
+    expect(find.textContaining('transport owner'), findsNothing);
+    final button = find.text('重新检查');
+    expect(
+      tester.getRect(explanation).bottom,
+      lessThan(tester.getTopLeft(button).dy),
+    );
+    await tester.tap(button);
+    expect(checks, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('连接失败返回配对码表单，主动切到 IP 才修改连接信息', (tester) async {
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -302,11 +348,22 @@ void main() {
       tester.getTopLeft(inputs.at(0)).dy,
       tester.getTopLeft(inputs.at(1)).dy,
     );
+    await tester.showKeyboard(inputs.at(2));
+    final codeFocus = tester
+        .widget<EditableText>(
+          find.descendant(
+            of: inputs.at(2),
+            matching: find.byType(EditableText),
+          ),
+        )
+        .focusNode;
+    expect(codeFocus.hasFocus, isTrue);
     fields.pairingCode.text = '123456';
     await tester.ensureVisible(find.text('配对并连接'));
     await tester.tap(find.text('配对并连接'));
     await tester.pump();
     expect(setup.calls, hasLength(1));
+    expect(codeFocus.hasFocus, isFalse);
     expect(fields.pairingCode.text, isEmpty);
     setup.calls.single.result.complete(_paired());
     await tester.pumpAndSettle();
@@ -339,7 +396,8 @@ void main() {
       const RequestFailure('timeout', 'connection timeout'),
     );
     await tester.pumpAndSettle();
-    expect(find.text('connection timeout'), findsOneWidget);
+    expect(find.text('connection timeout'), findsNothing);
+    expect(find.textContaining('手机没有及时响应'), findsOneWidget);
     expect(find.text('重试'), findsOneWidget);
     expect(setup.calls, hasLength(1));
     expect(tester.takeException(), isNull);

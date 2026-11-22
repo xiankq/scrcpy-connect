@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
@@ -44,7 +45,7 @@ class DeviceManagementPage extends ConsumerWidget {
             !await confirm(
               context,
               '开启自动剪贴板同步？',
-              '在当前可见且获焦的手机画面中，新复制的文字会在两端传送，可能包含密码、验证码或其他敏感内容。系统可能请求粘贴访问；开启只建立基线，不覆盖本机已有内容。',
+              '操作手机画面时，两端会同步新复制的文字，包括验证码和密码。',
               action: '开启同步',
             )) {
           return;
@@ -57,7 +58,9 @@ class DeviceManagementPage extends ConsumerWidget {
             .read(preferencesProvider.notifier)
             .updateDevice(id, DevicePreferences(clipboardSync: next));
       } catch (error) {
-        if (context.mounted) feedback(context, '$error');
+        if (context.mounted) {
+          feedback(context, failureMessage(error, fallback: '无法更改剪贴板同步。请重试。'));
+        }
       }
     }
 
@@ -90,7 +93,12 @@ class DeviceManagementPage extends ConsumerWidget {
                   try {
                     await management.renameDevice(id, name);
                   } catch (error) {
-                    if (context.mounted) feedback(context, '$error');
+                    if (context.mounted) {
+                      feedback(
+                        context,
+                        failureMessage(error, fallback: '无法保存设备名称。请重试。'),
+                      );
+                    }
                   }
                   if (context.mounted &&
                       identical(

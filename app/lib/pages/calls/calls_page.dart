@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/devices/device_calls.dart';
 import 'package:scrcpy_connect/core/devices/device_query_provider.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
@@ -66,7 +67,10 @@ class CallsPage extends HookConsumerWidget {
           )) {
             operation.value = (opening: true, failure: message);
           } else {
-            feedback(context, '$error');
+            feedback(
+              context,
+              failureMessage(error, fallback: '暂时无法确认操作是否生效。请先查看手机上的来电状态。'),
+            );
           }
         }
       } finally {
@@ -95,7 +99,8 @@ class CallsPage extends HookConsumerWidget {
           data: result.asData?.value,
           error: result.error,
           onRefresh: refresh,
-          emptyTitle: '通话状态尚未核验',
+          emptyTitle: '暂时无法读取通话状态',
+          failure: '请检查手机连接，或直接在手机上查看。',
           alternative: TextButton(
             onPressed: operation.value.opening ? null : openPhoneApp,
             child: const Text('打开手机电话界面'),
@@ -112,7 +117,10 @@ class CallsPage extends HookConsumerWidget {
                 if (observationCurrent()) refresh();
               } catch (error) {
                 if (context.mounted && observationCurrent()) {
-                  feedback(context, '$error');
+                  feedback(
+                    context,
+                    failureMessage(error, fallback: '无法打开来电界面。请直接在手机上处理。'),
+                  );
                 }
               } finally {
                 if (observationCurrent()) starting.value = false;
@@ -130,7 +138,7 @@ class CallsPage extends HookConsumerWidget {
                 ? '来电观察已停止'
                 : verified
                 ? '当前没有通话'
-                : '通话状态尚未核验';
+                : '暂时无法读取通话状态';
             final action = current == null ? openPhoneApp : openCurrentCallUi;
             final canOpen =
                 current == null ||
@@ -247,7 +255,7 @@ class CallsPage extends HookConsumerWidget {
                                     Text(
                                       current != null
                                           ? '声音仍在手机'
-                                          : data.reason ?? '核验后可查看手机来电状态。',
+                                          : '暂时无法读取来电状态。请直接在手机上查看。',
                                       style: text.bodySmall?.copyWith(
                                         color: DesignTokens.colorCallMuted,
                                       ),

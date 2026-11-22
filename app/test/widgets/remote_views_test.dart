@@ -74,6 +74,25 @@ void main() {
     expect(videos.calls, ['stop:session']);
   });
 
+  test('关闭失败保留原租约，重试关闭同一会话', () async {
+    final videos = _Videos()..stopping = Completer<VideoStopReceipt>();
+    final registry = SessionViewRegistry(videos);
+    final lease = registry.claim('session', visible: true);
+    final first = lease.close();
+    final failure = StateError('stop failed');
+    final expectation = expectLater(first, throwsA(same(failure)));
+    await Future<void>.delayed(Duration.zero);
+    videos.stopping!.completeError(failure);
+    await expectation;
+    expect(lease.ownsBinding, isTrue);
+    expect(lease.isCurrent, isFalse);
+    expect(await lease.resume(), isNull);
+    videos.stopping = null;
+    expect((await lease.close())?.sessionId, 'session');
+    expect(videos.calls, ['stop:session', 'stop:session']);
+    expect(lease.ownsBinding, isFalse);
+  });
+
   test('窗口销毁可等待且去重，视图退役不丢失原会话的清理责任', () async {
     final videos = _Videos()..stopping = Completer<VideoStopReceipt>();
     final audio = _Audio();

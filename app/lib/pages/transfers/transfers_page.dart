@@ -2,6 +2,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/files/file_transfers.dart';
 import 'package:scrcpy_connect/core/files/transfer_query_provider.dart';
@@ -66,7 +67,12 @@ class TransfersPage extends HookConsumerWidget {
         selection.value = null;
         await refresh();
       } catch (error) {
-        if (context.mounted) feedback(context, '$error');
+        if (context.mounted) {
+          feedback(
+            context,
+            failureMessage(error, fallback: '无法清空传输记录。请刷新列表后再试。'),
+          );
+        }
       } finally {
         if (context.mounted) clearing.value = false;
       }

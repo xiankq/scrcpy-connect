@@ -72,7 +72,7 @@ void main() {
     );
     await cancel;
     expect(container.read(provider).phase, UsbSetupPhase.cleanupRequired);
-    expect(container.read(provider).message, contains('still owned'));
+    expect(container.read(provider).message, contains('重试取消'));
     await actions.check();
     expect(setup.calls, hasLength(1));
     final retry = actions.cancel();
@@ -120,7 +120,7 @@ void main() {
     await Future.wait([first, second]);
     expect(container.read(provider).phase, UsbSetupPhase.failed);
     expect(container.read(provider).result, isNull);
-    expect(container.read(provider).message, contains('不属于原设备'));
+    expect(container.read(provider).message, contains('连接到了另一台手机'));
     expect(container.read(other).result!.deviceId, 'device');
   });
 

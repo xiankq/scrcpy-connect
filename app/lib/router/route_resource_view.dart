@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/pages/route_error/route_error_page.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -38,7 +39,10 @@ class _RouteResourceViewState<T extends Object>
     builder: (context, snapshot) {
       if (snapshot.hasError) {
         return RouteErrorPage(
-          message: '${snapshot.error}',
+          message: failureMessage(
+            snapshot.error,
+            fallback: '无法打开此页面。请返回上一页后重试。',
+          ),
           onRetry: () => setState(() => resource = widget.load()),
         );
       }

@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -72,7 +73,7 @@ class DeviceDetailsPage extends ConsumerWidget {
         data: query.value,
         error: query.isLoading ? null : query.error,
         onRefresh: refresh,
-        emptyTitle: '设备数据暂不可用',
+        emptyTitle: '暂时无法读取设备信息',
         builder: (context, reading) {
           final data = reading.value;
           final system = data.system;
@@ -208,7 +209,7 @@ class DeviceDetailsPage extends ConsumerWidget {
             padding: const EdgeInsets.all(DesignTokens.spacingMd),
             children: [
               StateNote(deviceName(device), icon: LucideIcons.smartphone),
-              if (reading.stale) const StateNote('设备离线，以下为本机记录；动态数据尚未更新。'),
+              if (reading.stale) const StateNote('手机已断开。以下是上次读取的信息。'),
               if (updated != null)
                 StateNote(
                   '${reading.stale ? '最近连接' : '更新于'} ${updated.toString().split('.').first}',
@@ -237,7 +238,12 @@ class DeviceDetailsPage extends ConsumerWidget {
                         ),
                       ),
                     if (failures[group.$1] != null)
-                      StateNote(failures[group.$1]!.message),
+                      StateNote(
+                        failureCodeMessage(
+                          failures[group.$1]!.code,
+                          fallback: '无法读取这部分信息。请检查手机连接后刷新。',
+                        ),
+                      ),
                     if (group.$1 == DeviceDetailSection.memory &&
                         failures[DeviceDetailSection.storage] != null)
                       const StateNote('存储信息未获取'),

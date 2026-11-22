@@ -26,8 +26,6 @@
 
 商店或系统接管更新时，弹窗提供「前往商店」或对应渠道入口，下载和安装进度由渠道显示。Google Play 的弹性更新可在取得进度回执时显示应用内下载状态，下载完成由用户确认安装或重启。App Store 分发遵循商店更新，桌面应用依实际安装渠道进入系统更新或受信任的安装程序。各渠道独立验证后才显示其支持的操作。[Google Play 弹性更新](https://developer.android.com/guide/playcore/in-app-updates/kotlin-java#flexible) · [Apple App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/) · [Windows App Installer 更新设置](https://learn.microsoft.com/en-us/windows/msix/app-installer/update-settings)
 
-设计稿中的 0.2.0、安装包大小和下载量用于示范状态。正式内容来自实际发布记录和下载回执。
-
 ## 构建渠道配置
 
 当前外部交付模式通过 `--dart-define=APP_UPDATE_FEED=<HTTPS 地址>` 配置。构建流水线为每个安装渠道和平台提供对应的发布清单。清单为 JSON 数组，每条提供稳定版 `version`、整数 `build`、ISO 8601 格式的 `publishedAt`、字符串数组 `notes`、HTTPS 渠道入口 `url`，可选提供安装包 `bytes`。发布渠道负责兼容性筛选与安装。未提供地址的构建显示实际安装版本和开源许可，检查更新时说明渠道尚未配置。

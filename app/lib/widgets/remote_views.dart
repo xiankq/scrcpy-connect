@@ -194,11 +194,9 @@ class SessionViewRegistry {
     final operation = (_tails[view.id] ?? Future<void>.value()).then((_) async {
       await afterInput;
       if (!_owns(view)) return null;
-      try {
-        return await videos.stopVideo(ControlTarget(sessionId: view.id));
-      } finally {
-        if (_owns(view)) _owners.remove(view.id);
-      }
+      final receipt = await videos.stopVideo(ControlTarget(sessionId: view.id));
+      if (_owns(view)) _owners.remove(view.id);
+      return receipt;
     });
     final tail = operation.then<void>(
       (_) {},
@@ -221,6 +219,7 @@ class SessionViewRegistry {
       // 即使旧视图已被替换，也必须先排空其释放输入再恢复新视图。
       await afterInput;
       if (!_owns(view)) return null;
+      if (_closed.contains(view.id)) return null;
       if (visible && !_accepting) return null;
       if ((_uncertain && visible) || (revision != view._revision && !release)) {
         return null;
@@ -266,7 +265,11 @@ class SessionViewLease {
   bool _visible;
   bool _released = false;
   int _revision = 0;
-  bool get isCurrent => _registry._accepting && !_released && ownsBinding;
+  bool get isCurrent =>
+      _registry._accepting &&
+      !_registry._closed.contains(id) &&
+      !_released &&
+      ownsBinding;
 
   /// 有序释放仍在排空最后输入时，视图仍持有绑定。
   bool get ownsBinding => _registry._owns(this);
@@ -289,7 +292,13 @@ class SessionViewLease {
     _released = true;
     _revision++;
     if (ownsBinding) _registry._closed.add(id);
-    return _registry._close(this, afterInput);
+    return _registry._close(this, afterInput).catchError((
+      Object error,
+      StackTrace stack,
+    ) {
+      _released = false;
+      Error.throwWithStackTrace(error, stack);
+    });
   }
 
   Future<VideoPlaybackReceipt?> release({Future<void>? afterInput}) {

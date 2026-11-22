@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/files/file_transfers.dart';
 import 'package:scrcpy_connect/core/files/transfer_query_provider.dart';
@@ -106,11 +107,17 @@ class TransferDetailsPage extends HookConsumerWidget {
                 ),
                 const SizedBox(height: DesignTokens.spacingMd),
                 if (current.kind == .directory && current.status == .finalizing)
-                  const StateNote('目录结构已建立，仍在核验所选内容。请等待批次实际结果。'),
-                if ((current.exportReason ?? '').isNotEmpty)
-                  StateNote((current.exportReason ?? '')),
+                  const StateNote('已建好文件夹，正在检查里边的文件。'),
+                if ((current.exportReason ?? '').isNotEmpty &&
+                    !current.canExport)
+                  const StateNote('这个文件暂时无法保存。请先查看传输结果。'),
                 if (cacheLease.hasError)
-                  StateNote('暂存原件不可用：${cacheLease.error}。请重新取回原件后再保存或分享。'),
+                  StateNote(
+                    failureMessage(
+                      cacheLease.error,
+                      fallback: '临时文件已不可用。请从手机重新取回后再保存或分享。',
+                    ),
+                  ),
               ];
               final trailing = <Widget>[
                 if (conflictItem != null)
@@ -183,12 +190,12 @@ class TransferDetailsPage extends HookConsumerWidget {
                       .cancelled,
                     ].contains(status))
                   const StateNote(
-                    '批次不会整体重放。请在逐项结果中打开要重试的项，确认来源和目标后单独重新传输。',
+                    '请在列表里打开还没传完的项目，逐项检查后再重试。',
                     icon: LucideIcons.info,
                   ),
                 if (batch && status == .completedWithSkips)
                   const StateNote(
-                    '部分内容因符号链接或特殊文件被跳过，未作为完整原件传输。',
+                    '有些链接或特殊文件无法复制，已跳过。请查看每项结果。',
                     icon: LucideIcons.info,
                   ),
                 TransferExportActions(
@@ -197,13 +204,15 @@ class TransferDetailsPage extends HookConsumerWidget {
                   cacheReady: cacheLease.hasData && !cacheLease.hasError,
                 ),
                 if (<FileTransferStatus>[
-                  .failed,
-                  .partial,
-                  .interrupted,
-                  .paused,
-                ].contains(status))
+                      .failed,
+                      .partial,
+                      .interrupted,
+                      .paused,
+                    ].contains(status) ||
+                    current.cleanupPending ||
+                    current.errorCode == 'result_unknown')
                   StateNote(
-                    (current.error ?? '请核对逐项结果。已完成与未完成内容分别保留，不会自动重复有未知结果的操作。'),
+                    transferIssueMessage(current),
                     icon: LucideIcons.circleAlert,
                   ),
                 const SizedBox(height: DesignTokens.spacingMd),

@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:scrcpy_connect/core/control/models/app_launch_record.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/pages/control/remote_input_queue.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
 import 'package:scrcpy_connect/pages/control/remote_window.dart';
@@ -116,15 +117,21 @@ class RemoteInputOwner {
       captureGeneration: action.isInput ? _bindingCaptures[outgoing] : null,
       deviceId: action is ControlLaunchApplication ? window.deviceId : null,
     );
-    return _inputQueue.enqueue(action, target, outgoing).catchError((
-      Object error,
-    ) {
-      if (!_disposed && outgoing == presentation.binding) {
-        presentation.revokeControl();
-        presentation.failInput('$error', 'control_busy');
-        _onChanged();
-      }
-    });
+    return _inputQueue
+        .enqueue(action, target, outgoing)
+        .then<void>(
+          (_) {},
+          onError: (Object error, StackTrace stack) {
+            if (error is! RequestFailure || error.code != 'control_busy') {
+              Error.throwWithStackTrace(error, stack);
+            }
+            if (!_disposed && outgoing == presentation.binding) {
+              presentation.revokeControl();
+              presentation.failInput(error.message, error.code);
+              _onChanged();
+            }
+          },
+        );
   }
 
   bool _admitsInput(
@@ -482,11 +489,6 @@ class RemoteInputOwner {
     _disposed = true;
     text.removeListener(_textChanged);
     text.dispose();
-    unawaited(
-      afterInput.then<void>(
-        (_) => _inputQueue.close(),
-        onError: (Object _, StackTrace _) => _inputQueue.close(),
-      ),
-    );
+    unawaited(afterInput.whenComplete(_inputQueue.close));
   }
 }

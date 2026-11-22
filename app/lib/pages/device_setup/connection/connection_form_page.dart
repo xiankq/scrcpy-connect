@@ -173,6 +173,7 @@ class ConnectionFormPage extends HookConsumerWidget {
               deviceId: targetDeviceId(),
               configure: configuring || reauthorizing,
             );
+      FocusScope.of(context).unfocus();
       if (pairing) code.clear();
       attemptPage.value = true;
       await actions.submit(request);
@@ -461,6 +462,8 @@ class ConnectionFormPage extends HookConsumerWidget {
                 checking: flow.checking,
                 cancelling: flow.cancelling,
                 failure: flow.failure,
+                pairing: pairing,
+                legacyTcp: legacyTcp,
                 paired:
                     flow.pairing?.recorded == true ||
                     (pairing && flow.pairing != null),

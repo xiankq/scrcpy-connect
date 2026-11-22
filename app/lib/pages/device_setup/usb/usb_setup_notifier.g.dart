@@ -63,7 +63,7 @@ final class UsbSetupNotifierProvider
   }
 }
 
-String _$usbSetupNotifierHash() => r'cf81466c7fba534d4c36a9eab9e07ace1909ae72';
+String _$usbSetupNotifierHash() => r'312dec98a1b75027a56cbe3dac1e6fc0d85da59b';
 
 /// 页面只负责确认与呈现；本次尝试的准入、取消和迟到回执由同一所有者管理。
 

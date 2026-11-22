@@ -167,7 +167,7 @@ void main() {
     await container.pump();
     expect(container.read(provider).phase, QrPairingPhase.failed);
     expect(container.read(provider).receipt, isNull);
-    expect(container.read(provider).message, contains('不属于原设备'));
+    expect(container.read(provider).message, contains('匹配到了另一台手机'));
   });
 
   testWidgets('添加页接纳配对后的设备身份，保留结果且不自动生成另一次二维码', (tester) async {

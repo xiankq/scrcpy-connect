@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/activities/activities_provider.dart';
 import 'package:scrcpy_connect/core/control/models/session_activity.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
@@ -47,7 +48,7 @@ class ActivitiesPage extends HookConsumerWidget {
         data: query.value,
         error: query.error,
         onRefresh: refresh,
-        emptyTitle: '暂时无法核验活动',
+        emptyTitle: '暂时无法读取活动',
         builder: (context, data) {
           final unresolved = data.pendingApplications;
           final unresolvedIds = unresolved
@@ -70,7 +71,6 @@ class ActivitiesPage extends HookConsumerWidget {
                 EmptyContent(
                   icon: LucideIcons.activity,
                   title: '暂无正在进行的活动',
-                  message: '此设备的连接、控制会话、传输、声音与通话会显示在这里。',
                   action: TextButton(
                     onPressed: refresh,
                     child: const Text('重新检查'),
@@ -177,7 +177,12 @@ class _PendingLaunch extends HookConsumerWidget {
       try {
         await operation();
       } catch (error) {
-        if (context.mounted && ownsScope()) feedback(context, '未完成：$error');
+        if (context.mounted && ownsScope()) {
+          feedback(
+            context,
+            failureMessage(error, fallback: '暂时无法确认窗口是否已关闭。请先查看窗口状态。'),
+          );
+        }
       } finally {
         if (ownsScope()) busy.value = false;
       }
@@ -191,7 +196,7 @@ class _PendingLaunch extends HookConsumerWidget {
         children: [
           Text(session.name, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: DesignTokens.spacingXs),
-          Text(session.reason ?? '应用打开请求可能已提交，尚未确认画面。'),
+          Text('暂时无法确认应用是否已打开。请先查看手机屏幕。'),
           Wrap(
             spacing: DesignTokens.spacingSm,
             children: [

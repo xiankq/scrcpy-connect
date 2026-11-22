@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/control/models/video_session.dart';
 import 'package:scrcpy_connect/core/media/models/video_session_view.dart';
@@ -208,7 +209,7 @@ class RemotePresentation {
     _launch = _Launch.normal;
     _verification = _Verification.pending;
     _connecting = false;
-    _error = '会话结果尚待核验，请重新检查。';
+    _error = '暂时无法确认手机画面是否还在。请检查连接。';
   }
 
   void bindStart(
@@ -240,7 +241,10 @@ class RemotePresentation {
     }
     if (result.textureId == null) {
       if (submittedAppStart) _launch = _Launch.unknown;
-      _error = result.session.reason ?? '尚未获得设备的实时画面。请检查设备连接和视频能力。';
+      _error = failureCodeMessage(
+        result.session.failureCode,
+        fallback: '无法打开手机画面。请检查手机连接后重试。',
+      );
     }
   }
 
@@ -278,7 +282,7 @@ class RemotePresentation {
     _connecting = false;
     _controlAvailable = false;
     _errorCode = 'app_launch_unknown';
-    _error = '应用打开请求的结果未知，应用可能已打开或迁移。请在手机核对；检查不会再次打开应用。';
+    _error = '暂时无法确认应用是否已打开。请先查看手机屏幕。';
   }
 
   RemoteBinding permitDetachedCleanup() {
@@ -371,7 +375,7 @@ class RemotePresentation {
     if (recovered == null || !recovered.live) {
       if (_session case final previous?) _session = _withoutOutput(previous);
       _verification = _Verification.ended;
-      _error = '原会话已结束或无法核验。请检查当前活动，不会自动创建新窗口。';
+      _error = '无法恢复原来的画面。请先查看「当前活动」。';
     } else {
       final existing = recovered.toView();
       if (existing.session.status == .failed &&
@@ -426,7 +430,10 @@ class RemotePresentation {
     _controlAvailable = false;
     _paused = true;
     _connecting = false;
-    _error = data.session.reason ?? '画面调整未完成，请在画面与控制中重试。';
+    _error = failureCodeMessage(
+      data.session.failureCode,
+      fallback: '无法更改画面设置。请在「画面与控制」中重试。',
+    );
     _errorCode = 'quality_rebuild_failed';
   }
 

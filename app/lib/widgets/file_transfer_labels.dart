@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/files/models/file_transfer_plan.dart';
 import 'package:scrcpy_connect/core/files/models/file_transfer_snapshot.dart';
@@ -83,21 +84,34 @@ String transferResultSize(FileTransferSnapshot task) {
   return actual > 0 ? bytes(actual) : '';
 }
 
+/// Details can provide guidance without repeating native or persisted text.
+String transferIssueMessage(FileTransferSnapshot task) {
+  if (task.cleanupPending || task.errorCode == 'result_unknown') {
+    return '暂时无法确认哪些文件已传完。请先查看目标位置，再决定是否重试。';
+  }
+  return failureCodeMessage(
+    task.errorCode,
+    fallback: switch (task.status) {
+      .paused => '传输已暂停。检查手机连接后，可以继续传输。',
+      .interrupted => '传输已中断，已完成的部分会保留。请查看详情后再继续。',
+      .partial || .partialFailure => '只传完了部分文件。请在详情中查看哪些文件未完成。',
+      _ => '传输未能完成。请检查手机连接和目标位置后再试。',
+    },
+  );
+}
+
 /// 状态行统一呈现进度与结果；结束后显示实际字节，执行中补充进度条对应的百分比。
 String transferStatusDescription(FileTransferSnapshot task) {
   if (task.errorCode == 'result_unknown' || task.cleanupPending) {
-    final reason = task.error;
-    return reason == null || reason.isEmpty ? '结果待核对' : '结果待核对 · $reason';
+    return '结果待确认';
   }
   final status = task.status;
   final progress = transferByteSummary(task);
   switch (status) {
     case .failed:
-      final reason = (task.error ?? '');
-      return reason.isEmpty ? statusText(status.name) : '失败 · $reason';
+      return '传输失败';
     case .interrupted:
-      final reason = (task.error ?? '连接中断，已完成部分保留');
-      return '已中断 · $reason';
+      return '已中断，已完成部分保留';
     case .cancelled:
       return '已停止，已完成部分保留';
     case .completed:
@@ -107,9 +121,9 @@ String transferStatusDescription(FileTransferSnapshot task) {
       final size = transferResultSize(task);
       return size.isEmpty ? '已完成 · 部分内容已跳过' : '已完成 · 部分内容已跳过 · $size';
     case .partial:
-      return progress.isEmpty ? '部分完成，请核对逐项结果' : '部分完成 · $progress';
+      return progress.isEmpty ? '部分完成，请查看每项结果' : '部分完成 · $progress';
     case .partialFailure:
-      return progress.isEmpty ? '部分传输失败，请核对逐项结果' : '部分传输失败 · $progress';
+      return progress.isEmpty ? '部分传输失败，请查看每项结果' : '部分传输失败 · $progress';
     case .queued:
     case .running:
     case .finalizing:

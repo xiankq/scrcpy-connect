@@ -309,7 +309,6 @@ abstract final class DesignTokens {
   static const componentEmptyContentPadding = 16.0;
   static const componentEmptyContentVerticalPadding = 40.0;
   static const componentEmptyContentWidth = 380.0;
-  static const componentEmptyDeviceIntroHeight = 44.0;
   static const componentEmptyDeviceIntroPadding = 54.0;
   static const componentEmptyDeviceIntroWidth = 440.0;
   static const componentFeatureIconOpacity = 0.1;

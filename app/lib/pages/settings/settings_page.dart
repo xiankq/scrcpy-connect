@@ -2,6 +2,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/platform/background_status_provider.dart';
 import 'package:scrcpy_connect/core/platform/platform_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
@@ -47,7 +48,9 @@ class SettingsPage extends HookConsumerWidget {
       try {
         await operation();
       } catch (error) {
-        if (context.mounted && current()) feedback(context, '$error');
+        if (context.mounted && current()) {
+          feedback(context, failureMessage(error, fallback: '无法保存设置。请重试。'));
+        }
       } finally {
         if (current()) busy.value = false;
       }
@@ -100,7 +103,7 @@ class SettingsPage extends HookConsumerWidget {
       if (!context.mounted || !current()) return;
       ref.invalidate(backgroundStatusProvider);
       if (enabled && (result.requested == false || result.stopped)) {
-        feedback(context, result.reason);
+        feedback(context, '无法在后台保持连接。请让应用保持在前台。');
         return;
       }
       await save(PreferenceChanges(backgroundKeepAlive: enabled));
@@ -150,7 +153,7 @@ class SettingsPage extends HookConsumerWidget {
           DesignTokens.spacingLg,
         ),
         children: [
-          if (preferences.error case final error?) StateNote('偏好尚未读取：$error'),
+          if (preferences.error case final error?) StateNote(error),
           heading('使用偏好'),
           SettingsGroup(
             children: [
@@ -238,7 +241,7 @@ class SettingsPage extends HookConsumerWidget {
                 compact: true,
                 icon: LucideIcons.shieldCheck,
                 color: DesignTokens.colorListIconMint,
-                title: '后台运行资格',
+                title: '后台运行',
                 onTap: openBackground,
               ),
             ],
