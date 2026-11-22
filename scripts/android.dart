@@ -227,8 +227,13 @@ Future<Map<String, Object>> verifyApk(
   final package = lines
       .where((line) => line.startsWith('package: '))
       .firstOrNull;
-  if (package == null || package.contains("name=''")) {
-    throw StateError('The final APK has no readable package identity.');
+  if (package == null ||
+      !package.startsWith("package: name='dev.scrcpyconnect.scrcpy_connect'")) {
+    throw StateError('The final APK has an unexpected application ID.');
+  }
+  if (!lines.contains("application-label:'邻接'") ||
+      !lines.any((line) => line.startsWith('application-icon-'))) {
+    throw StateError('The final APK lacks the app label or launcher icon.');
   }
   if (!lines.any((line) => line.startsWith('launchable-activity:'))) {
     throw StateError('The final APK has no launchable activity.');

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs><clipPath id="tile-mask"><rect x="40" y="40" width="944" height="944" rx="213"/></clipPath></defs>
+<g clip-path="url(#tile-mask)">
+  <title>邻接</title>
+  <desc>两道错位的弧形围出一块相连的工作区。</desc>
+  <defs>
+    <linearGradient id="tile-light" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#F1F6FF"/>
+      <stop offset="1" stop-color="#CADBFC"/>
+    </linearGradient>
+  </defs>
+  <rect id="tile" width="1024" height="1024" fill="url(#tile-light)"/>
+  <g id="mark">
+    <path fill="#2657D5" d="M246 560 V455 C246 337 337 249 456 249 H570 C611 249 632 224 659 199 C682 178 715 180 736 201 C758 223 758 257 736 279 L689 326 C657 357 626 367 581 367 H466 C405 367 362 407 362 466 V560 C362 592 336 618 304 618 C272 618 246 592 246 560 Z"/>
+    <path fill="#D7512B" d="M778 464 V569 C778 687 687 775 568 775 H454 C413 775 392 800 365 825 C342 846 309 844 288 823 C266 801 266 767 288 745 L335 698 C367 667 398 657 443 657 H558 C619 657 662 617 662 558 V464 C662 432 688 406 720 406 C752 406 778 432 778 464 Z"/>
+  </g>
+</g></svg>

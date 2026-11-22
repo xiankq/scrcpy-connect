@@ -1,0 +1,4 @@
+APP_DISPLAY_NAME = 邻接
+
+// Both Apple hosts use the installed app's existing identity.
+PRODUCT_BUNDLE_IDENTIFIER = dev.scrcpyconnect.scrcpyConnect

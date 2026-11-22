@@ -9,8 +9,11 @@
 | 生成及漂移检查 | `generate.dart` / `generate.dart --check` |
 | 完整门禁 | `check.sh`；`--android` 默认仅 arm64 调试包 |
 | 设计 token | [design_tokens](design_tokens/README.md) |
+| 应用图标导出与漂移检查 | `npm run generate --prefix scripts/app_icons` / `npm run check --prefix scripts/app_icons` |
 
 构建入口会核验最终产物；Android 的独立 `verify` 复用同一签名、ABI、manifest 与共享资源检查。`generate` 负责生成物和共享资源同步，设备端源码及产物构建统一由 `servers/build.dart` 处理。`src/` 仅放公共实现，不作为命令入口。
+
+应用图标从 [SVG 主稿](../designs/assets/app-icon.svg)导出。修改后用 Node 20.9+ 执行 `npm ci --ignore-scripts --prefix scripts/app_icons`，再运行图标生成与检查。平台构建直接使用已提交的资源。
 
 
 测试选择与运行见[测试说明](../test/README.md)；受控产物及来源保留规则见[执行端约束](../servers/AGENTS.md)。

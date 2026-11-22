@@ -8,11 +8,14 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:args/args.dart';
 import 'package:path/path.dart' as p;
-import 'package:xml/xml.dart';
 
 import 'src/repository_tooling.dart';
 
 final root = repositoryRoot();
+const macApplication = 'Interconnect.app';
+const windowsExecutable = 'Interconnect.exe';
+const linuxExecutable = 'interconnect';
+const linuxApplicationId = 'dev.scrcpyconnect.scrcpy_connect';
 
 int peMachine(File path) {
   final bytes = path.readAsBytesSync();
@@ -59,7 +62,7 @@ void verifyWindows(Directory bundle) {
   const adbFiles = {'adb.exe', 'AdbWinApi.dll', 'AdbWinUsbApi.dll'};
   int? adbMachine;
   for (final name in [
-    'scrcpy_connect.exe',
+    windowsExecutable,
     'flutter_windows.dll',
     'interop_scrcpy_bridge.dll',
     'media_codec_plugin.dll',
@@ -132,7 +135,7 @@ Future<void> verifyLinux(Directory bundle) async {
   final files = bundleFiles(bundle).toList();
   _rejectApplicationBridge(files);
   for (final name in [
-    'scrcpy_connect',
+    linuxExecutable,
     'libflutter_linux_gtk.so',
     'libinterop_scrcpy_bridge.so',
     'libmedia_codec_plugin.so',
@@ -158,9 +161,33 @@ Future<void> verifyLinux(Directory bundle) async {
       bytes.closeSync();
     }
   }
+  final desktopEntry = File(
+    p.join(bundle.path, 'share', 'applications', '$linuxApplicationId.desktop'),
+  );
+  final icon = File(
+    p.join(
+      bundle.path,
+      'share',
+      'icons',
+      'hicolor',
+      'scalable',
+      'apps',
+      '$linuxApplicationId.svg',
+    ),
+  );
+  if (!desktopEntry.existsSync() || !icon.existsSync()) {
+    throw StateError('Linux bundle lacks its desktop entry or app icon');
+  }
+  final desktopFields = desktopEntry.readAsLinesSync();
+  if (!desktopFields.contains('Exec=$linuxExecutable') ||
+      !desktopFields.contains('Icon=$linuxApplicationId')) {
+    throw StateError(
+      'Linux desktop entry does not match its executable and icon',
+    );
+  }
   final entries = [
     ...files.where(
-      (file) => const ['scrcpy_connect', 'adb'].contains(p.basename(file.path)),
+      (file) => const [linuxExecutable, 'adb'].contains(p.basename(file.path)),
     ),
     ...files.where((file) => p.basename(file.path).contains('.so')),
   ];
@@ -212,41 +239,34 @@ void installMediaNotices(Directory bundle, String platform) {
   );
 }
 
-Future<String> bundleExecutable(File plist) async {
-  final bytes = plist.readAsBytesSync();
-  if (bytes.length >= 6 &&
-      ascii.decode(bytes.take(6).toList(), allowInvalid: true) == 'bplist') {
-    // 二进制 plist 属于 Apple 原生构建输出，plutil 同时支持两种编码。
-    final result = await runTool([
-      'plutil',
-      '-convert',
-      'json',
-      '-o',
-      '-',
-      plist.path,
-    ], quiet: true);
-    return (jsonDecode(result.stdout as String)
-            as Map<String, dynamic>)['CFBundleExecutable']
-        as String;
-  }
-  final document = XmlDocument.parse(utf8.decode(bytes));
-  final values = document.findAllElements('dict').first.childElements.toList();
-  for (var i = 0; i + 1 < values.length; i++) {
-    if (values[i].name.local == 'key' &&
-        values[i].innerText == 'CFBundleExecutable') {
-      return values[i + 1].innerText;
-    }
-  }
-  throw const FormatException('Info.plist lacks CFBundleExecutable');
-}
-
 Future<void> verifyApple(Directory bundle, String platform) async {
   final contents = platform == 'macos'
       ? Directory(p.join(bundle.path, 'Contents'))
       : bundle;
-  final name = await bundleExecutable(
-    File(p.join(contents.path, 'Info.plist')),
-  );
+  final result = await runTool([
+    'plutil',
+    '-convert',
+    'json',
+    '-o',
+    '-',
+    p.join(contents.path, 'Info.plist'),
+  ], quiet: true);
+  final info = jsonDecode(result.stdout as String) as Map<String, dynamic>;
+  final name = info['CFBundleExecutable'] as String;
+  if (info['CFBundleIdentifier'] != 'dev.scrcpyconnect.scrcpyConnect' ||
+      info['CFBundleDisplayName'] != '邻接') {
+    throw StateError('Unexpected $platform application identity');
+  }
+  if (platform == 'macos') {
+    final icon = File(p.join(contents.path, 'Resources', 'AppIcon.icns'));
+    if (!icon.existsSync()) throw StateError('macOS bundle lacks AppIcon.icns');
+  } else {
+    for (final key in ['CFBundleIcons', 'CFBundleIcons~ipad']) {
+      if (info[key]?['CFBundlePrimaryIcon']?['CFBundleIconName'] != 'AppIcon') {
+        throw StateError('iOS bundle lacks AppIcon for $key');
+      }
+    }
+  }
   final binary = platform == 'macos'
       ? p.join(contents.path, 'MacOS', name)
       : p.join(contents.path, name);
@@ -342,6 +362,8 @@ Future<void> archiveBundle(
           .relative(entity.path, from: bundle.path)
           .split(p.separator)
           .join('/');
+      // A previous incremental build can leave the former launcher beside the new one.
+      if (name == 'scrcpy_connect.exe') continue;
       if (entity is File) {
         final bytes = entity.readAsBytesSync();
         archive.addFile(ArchiveFile(name, bytes.length, bytes));
@@ -405,23 +427,17 @@ Future<void> main(List<String> arguments) async {
         p.join(application.path, 'build/linux/x64/release/bundle'),
       );
     } else {
-      final directory = Directory(
+      bundle = Directory(
         p.join(
           application.path,
           platform == 'ios'
-              ? 'build/ios/iphoneos'
-              : 'build/macos/Build/Products/Release',
+              ? 'build/ios/iphoneos/Runner.app'
+              : 'build/macos/Build/Products/Release/$macApplication',
         ),
       );
-      final bundles = directory
-          .listSync()
-          .whereType<Directory>()
-          .where((directory) => directory.path.endsWith('.app'))
-          .toList();
-      if (bundles.length != 1) {
-        throw StateError('Expected one final application in ${directory.path}');
+      if (!bundle.existsSync()) {
+        throw StateError('Missing final application at ${bundle.path}');
       }
-      bundle = bundles.single;
     }
     if (!(args['verify-only'] as bool)) installMediaNotices(bundle, platform);
     switch (platform) {

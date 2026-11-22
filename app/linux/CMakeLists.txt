@@ -3,7 +3,8 @@ cmake_minimum_required(VERSION 3.13)
 project(runner LANGUAGES CXX)
 
 # 应用可执行文件名称，同时决定磁盘上的文件名。
-set(BINARY_NAME "scrcpy_connect")
+set(BINARY_NAME "interconnect")
+set(APP_DISPLAY_NAME "邻接")
 # 应用唯一 GTK 标识，参考 https://wiki.gnome.org/HowDoI/ChooseApplicationID。
 set(APPLICATION_ID "dev.scrcpyconnect.scrcpy_connect")
 
@@ -80,6 +81,13 @@ set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib")
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
+
+configure_file(interconnect.desktop.in "${CMAKE_CURRENT_BINARY_DIR}/${APPLICATION_ID}.desktop" @ONLY)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${APPLICATION_ID}.desktop"
+  DESTINATION "share/applications" COMPONENT Runtime)
+install(FILES runner/interconnect.svg
+  DESTINATION "share/icons/hicolor/scalable/apps"
+  RENAME "${APPLICATION_ID}.svg" COMPONENT Runtime)
 
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)

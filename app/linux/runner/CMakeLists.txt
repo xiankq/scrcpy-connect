@@ -11,8 +11,8 @@ add_executable(${BINARY_NAME}
 # 应用标准构建设置；有不同要求时可移除。
 apply_standard_settings(${BINARY_NAME})
 
-# 添加应用 ID 的预处理定义。
-add_definitions(-DAPPLICATION_ID="${APPLICATION_ID}")
+target_compile_definitions(${BINARY_NAME} PRIVATE
+  APPLICATION_ID="${APPLICATION_ID}" APP_DISPLAY_NAME="${APP_DISPLAY_NAME}")
 
 # 添加依赖库，应用专用依赖也在此加入。
 target_link_libraries(${BINARY_NAME} PRIVATE flutter)

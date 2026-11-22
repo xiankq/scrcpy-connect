@@ -15,6 +15,14 @@ flutter run -d <device>
 
 完整检查在仓库根运行 `./scripts/check.sh`。Android 打包与桌面构建见[脚本入口](scripts/README.md)。
 
+## 应用标识与桌面启动
+
+中文产品名为「邻接」，英文名为 Interconnect。macOS 交付 `Interconnect.app`，Windows 入口是 `Interconnect.exe`，Linux 入口是 `interconnect`。Windows 从旧交付包升级后，指向旧文件名的快捷方式需指到新入口。
+
+Android 的 Application ID、Apple 端的 Bundle ID、Linux 的 GTK 应用 ID、Windows 的通知 AppUserModelID 和应用数据目录均沿用现有身份。更换身份需单独评估存储、授权、签名与覆盖升级。
+
+Linux 可直接运行解包目录下的 `./interconnect`。要添加到应用菜单，将解包目录加入桌面会话的 `PATH`，把随包的 `share/applications/` 与 `share/icons/` 内容分别安装到 `${XDG_DATA_HOME:-$HOME/.local/share}/applications/` 和 `${XDG_DATA_HOME:-$HOME/.local/share}/icons/`。保留解包目录下可执行文件与资源的相对位置。
+
 ## 工作区
 
 | 目录 | 内容 |

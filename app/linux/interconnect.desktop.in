@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=@APP_DISPLAY_NAME@
+Name[en]=Interconnect
+Comment=跨设备控制与文件工作台
+Comment[en]=Control your devices and transfer files
+Exec=@BINARY_NAME@
+Icon=@APPLICATION_ID@
+Categories=Utility;
+Terminal=false

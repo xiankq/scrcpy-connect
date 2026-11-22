@@ -153,14 +153,21 @@ static void my_application_activate(GApplication* application) {
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "邻接");
+    gtk_header_bar_set_title(header_bar, APP_DISPLAY_NAME);
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "邻接");
+    gtk_window_set_title(window, APP_DISPLAY_NAME);
   }
 
   gtk_window_set_default_size(window, 1280, 720);
+  g_autofree gchar* executable = g_file_read_link("/proc/self/exe", nullptr);
+  if (executable != nullptr) {
+    g_autofree gchar* directory = g_path_get_dirname(executable);
+    g_autofree gchar* icons = g_build_filename(directory, "share", "icons", nullptr);
+    gtk_icon_theme_append_search_path(gtk_icon_theme_get_default(), icons);
+  }
+  gtk_window_set_default_icon_name(APPLICATION_ID);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
@@ -227,6 +234,7 @@ static void my_application_init(MyApplication* self) {}
 MyApplication* my_application_new() {
   // 使用应用 ID 作为进程名，帮助 GTK 与桌面环境关联对应的 .desktop 文件，使系统能以应用身份识别运行进程。
   g_set_prgname(APPLICATION_ID);
+  g_set_application_name(APP_DISPLAY_NAME);
 
   return MY_APPLICATION(g_object_new(my_application_get_type(),
                                      "application-id", APPLICATION_ID, "flags",

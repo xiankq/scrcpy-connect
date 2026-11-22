@@ -1,9 +1,9 @@
 # 项目级配置。
 cmake_minimum_required(VERSION 3.14)
-project(scrcpy_connect LANGUAGES CXX)
+project(interconnect LANGUAGES CXX)
 
 # 应用可执行文件名称，同时决定磁盘上的文件名。
-set(BINARY_NAME "scrcpy_connect")
+set(BINARY_NAME "Interconnect")
 
 # 明确启用现代 CMake 行为，避免新版 CMake 警告。
 cmake_policy(VERSION 3.14...3.25)

@@ -882,6 +882,12 @@ frontmatter 的 maxWidth、gap、verticalPadding、opacity、scale、stretch 及
 
 专用页只保留一个主视觉焦点。能从设备名称、来电者、文件名或真实内容辨认任务时，去掉重复用途标题、大数字面板、示意设备图和装饰渐变。连接、进度、来源与声音位置靠短文案和实际数据表达。一项事实出现一次，优先放在它影响的操作旁。相邻事实直接排列，只有能整组操作或阅读的内容才共用一个圆角容器。
 
+### 应用图标
+
+邻接的标记由两道错位的实色弧组成。两端朝相反方向偏转，为中间的工作区留出开口。浅蓝底、钴蓝与橘红为默认外观，两道形状在 16–32 像素下仍靠轮廓和留白区分。系统单色外观沿用完整轮廓。启动器外观和应用内主题各由相应的系统及应用设置决定。
+
+iOS 与 iPadOS 使用出血方形，由系统施加遮罩，提供默认、深色和灰度着色外观资源。Android 把前景、底色和主题单色分开，前景置于 108 dp 画板的中央安全区。macOS Dock 使用带外缘留白的版本。Windows 用多分辨率 ICO，Linux 的应用菜单与窗口共用同一 SVG 图标。日常工具栏和通知继续使用各自的语义图标。主标记和遮罩见[图标源文件](assets/app-icon.svg)与 [Ardot 标识稿](https://ardot.tencent.com/file/749360133997361?node_id=12%3A985)。[Apple 图标规范](https://developer.apple.com/design/human-interface-guidelines/app-icons/) · [Android 自适应图标规范](https://developer.android.com/develop/ui/compose/system/icon_design_adaptive)
+
 ## Colors
 
 浅色用 `canvas` 浅灰与白色内容面，深色用纯黑与中性深灰内容面。正文用 `text`，元数据用 `secondary`。主动作浅色黑底白字、深色白底黑字。次要动作使用中性实体面，单行文字动作跟随同级正文。
