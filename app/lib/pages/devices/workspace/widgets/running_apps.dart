@@ -10,7 +10,6 @@ import 'package:scrcpy_connect/pages/apps/phone_app_launcher.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/devices/device_access.dart';
-import 'package:scrcpy_connect/widgets/content.dart';
 
 import 'workspace_app_grid.dart';
 
@@ -48,13 +47,14 @@ class RunningApps extends HookConsumerWidget {
       });
       return timer.cancel;
     }, [online, id]);
-    final apps = result?.asData?.value.apps ?? const <DeviceApp>[];
-    final loading = online && result?.isLoading == true && apps.isEmpty;
+    final apps = result?.value?.apps ?? const <DeviceApp>[];
+    final loading = result != null && result.isLoading && !result.hasValue;
     return SliverToBoxAdapter(
       child: WorkspaceAppGrid(
         title: '正在运行',
         deviceId: id,
         apps: apps,
+        loading: loading,
         onOpen: (app) async {
           await openPhoneApp(
             context,
@@ -74,9 +74,7 @@ class RunningApps extends HookConsumerWidget {
         ),
         empty: Padding(
           padding: const EdgeInsets.symmetric(vertical: DesignTokens.spacingSm),
-          child: loading
-              ? const ContentLoadingIndicator()
-              : result?.hasError == true
+          child: result?.hasError == true
               ? TextButton(onPressed: refresh, child: const Text('读取失败，重试'))
               : Text(
                   online ? '当前没有正在运行的应用' : '连接设备后查看正在运行的应用',

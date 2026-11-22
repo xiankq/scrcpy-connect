@@ -171,6 +171,11 @@ void main() {
   });
 
   testWidgets('添加页接纳配对后的设备身份，保留结果且不自动生成另一次二维码', (tester) async {
+    tester.view
+      ..physicalSize = const Size(1280, 720)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -184,6 +189,8 @@ void main() {
     expect(setup.calls, hasLength(1));
     setup.calls.single.deliver();
     await tester.pumpAndSettle();
+    expect(tester.getCenter(find.textContaining('扫描此二维码。')).dx, 640);
+    expect(tester.getCenter(find.widgetWithText(FilledButton, '重新生成')).dx, 640);
     setup.calls.single.result.complete(_paired('device'));
     await tester.pumpAndSettle();
     expect(find.text('已配对，尚未连接'), findsOneWidget);

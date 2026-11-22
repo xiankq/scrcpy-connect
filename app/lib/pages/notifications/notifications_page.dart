@@ -13,6 +13,7 @@ import 'package:scrcpy_connect/pages/notifications/widgets/notification_card.dar
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
+import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
@@ -235,11 +236,24 @@ class NotificationsPage extends HookConsumerWidget {
             onPressed: clearing.value || clearable.isEmpty
                 ? null
                 : () => clearAll(clearable),
-            icon: const Icon(LucideIcons.listX),
+            icon: const Icon(AppIcons.clearNotifications),
           ),
         ),
       ],
       child: AsyncContent(
+        loadingPlaceholder: GroupedListView(
+          padding: const EdgeInsets.all(DesignTokens.spacingMd),
+          children: [
+            notificationHeader,
+            const SkeletonRows(
+              height: DesignTokens.componentNotificationListItemHeight,
+              leadingSize: DesignTokens.componentNotificationAppIconSize,
+              lines: 3,
+              cardRadius: DesignTokens.componentNotificationListItemRounded,
+              gap: DesignTokens.componentNotificationListItemGap,
+            ),
+          ],
+        ),
         loading: query.isLoading,
         data: query.value,
         error: query.error,

@@ -4,7 +4,6 @@ import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/files/file_search.dart';
 import 'package:scrcpy_connect/core/files/file_search_notifier.dart';
@@ -15,6 +14,7 @@ import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
+import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -76,7 +76,7 @@ class FileSearchPage extends HookConsumerWidget {
           : FilledButton.icon(
               onPressed: canSearch ? search : null,
               icon: const Icon(
-                LucideIcons.search,
+                AppIcons.search,
                 size: DesignTokens.componentIconActionSize,
               ),
               label: const Text('搜索'),
@@ -114,7 +114,7 @@ class FileSearchPage extends HookConsumerWidget {
                       errorText: tooLong ? '搜索内容太长，请缩短文件名。' : null,
                       counterText: '',
                       prefixIcon: const Icon(
-                        LucideIcons.search,
+                        AppIcons.search,
                         size: DesignTokens.componentIconActionSize,
                       ),
                     ),
@@ -192,13 +192,21 @@ class FileSearchPage extends HookConsumerWidget {
               ),
             ),
           ),
-          if (result == null &&
-              searchState.error == null &&
-              !searchState.starting)
+          if (searchState.starting && result == null)
+            const SliverPadding(
+              padding: EdgeInsets.symmetric(horizontal: DesignTokens.spacingMd),
+              sliver: SliverToBoxAdapter(
+                child: SkeletonRows(
+                  height: DesignTokens.componentRowLargeHeight,
+                  trailing: true,
+                ),
+              ),
+            )
+          else if (result == null && searchState.error == null)
             const SliverFillRemaining(
               hasScrollBody: false,
               child: EmptyContent(
-                icon: LucideIcons.search,
+                icon: AppIcons.search,
                 title: '在手机文件中查找',
                 message: '按文件名查找，也可选择类型。搜索只读取名称，结果会随可访问范围检查逐步出现。',
               ),

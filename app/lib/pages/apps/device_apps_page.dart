@@ -10,6 +10,7 @@ import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 
@@ -24,11 +25,47 @@ class DeviceAppsPage extends HookConsumerWidget {
     final provider = installedDeviceAppsProvider(device.id);
     final result = ref.watch(provider);
     void refresh() => ref.invalidate(provider);
+    final searchBar = SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+        child: TextField(
+          controller: query,
+          decoration: const InputDecoration(
+            hintText: '搜索应用',
+            prefixIcon: Icon(
+              AppIcons.search,
+              size: DesignTokens.componentIconActionSize,
+            ),
+          ),
+        ),
+      ),
+    );
     return PageFrame(
       title: '全部应用',
       child: AsyncContent(
         loading: result.isLoading,
-        data: result.asData?.value,
+        data: result.value,
+        loadingPlaceholder: CustomScrollView(
+          slivers: [
+            const PageChromeSliver(),
+            searchBar,
+            const SliverPadding(
+              padding: EdgeInsets.symmetric(
+                horizontal: DesignTokens.spacingMd,
+                vertical: DesignTokens.spacingXs,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: SkeletonRows(
+                  height:
+                      DesignTokens.componentRowHeight + DesignTokens.spacingXxs,
+                  lines: 1,
+                  trailing: true,
+                ),
+              ),
+            ),
+            const PageChromeBottomSliver(),
+          ],
+        ),
         error: result.error,
         onRefresh: refresh,
         emptyTitle: '暂时无法读取应用',
@@ -47,21 +84,7 @@ class DeviceAppsPage extends HookConsumerWidget {
           return CustomScrollView(
             slivers: [
               const PageChromeSliver(),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(DesignTokens.spacingMd),
-                  child: TextField(
-                    controller: query,
-                    decoration: const InputDecoration(
-                      hintText: '搜索应用',
-                      prefixIcon: Icon(
-                        LucideIcons.search,
-                        size: DesignTokens.componentIconActionSize,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+              searchBar,
               if (apps.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
@@ -114,7 +137,7 @@ class DeviceAppsPage extends HookConsumerWidget {
                           ),
                           trailing: IconButton(
                             tooltip: '更改打开方式',
-                            icon: const Icon(LucideIcons.ellipsis),
+                            icon: const Icon(AppIcons.more),
                             onPressed: () => openPhoneApp(
                               context,
                               ref,

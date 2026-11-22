@@ -7,6 +7,7 @@ import 'package:scrcpy_connect/core/devices/device_setup.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
+import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
@@ -27,11 +28,22 @@ class DeviceDiscoveryPage extends ConsumerWidget {
         GlassActionIcon(
           onPressed: refresh,
           tooltip: '刷新',
-          icon: const Icon(LucideIcons.refreshCw),
+          icon: const Icon(AppIcons.refresh),
         ),
       ],
       child: ConnectionContent(
         child: AsyncContent<List<DiscoveredDevice>>(
+          loadingPlaceholder: const GroupedListView(
+            padding: EdgeInsets.all(DesignTokens.spacingMd),
+            children: [
+              SkeletonRows(
+                height: DesignTokens.componentRowLargeHeight,
+                gap: DesignTokens.spacingXxs,
+                lines: 3,
+                trailing: true,
+              ),
+            ],
+          ),
           loading: state.isLoading,
           data: state.value,
           error: state.error,
@@ -44,7 +56,7 @@ class DeviceDiscoveryPage extends ConsumerWidget {
                 padding: const EdgeInsets.all(DesignTokens.spacingMd),
                 children: [
                   EmptyContent(
-                    icon: LucideIcons.radar,
+                    icon: AppIcons.connectionDiscovery,
                     title: '未发现设备',
                     message: '检查手机无线调试与网络后重新查找。',
                     action: FilledButton(

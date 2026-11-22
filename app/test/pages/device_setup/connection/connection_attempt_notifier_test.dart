@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:adb/adb.dart' show AdbCancellation;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_connection_control.dart';
@@ -20,6 +21,7 @@ import 'package:scrcpy_connect/pages/device_setup/connection/models/connection_a
 import 'package:scrcpy_connect/pages/device_setup/connection/connection_form_page.dart';
 import 'package:scrcpy_connect/pages/device_setup/connection/widgets/connection_address_fields.dart';
 import 'package:scrcpy_connect/pages/device_setup/connection/widgets/connection_attempt_status.dart';
+import 'package:scrcpy_connect/pages/device_setup/connection/widgets/connection_mode_selector.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 
 const _endpoint = DeviceEndpoint(address: 'phone.local', port: 5555);
@@ -322,6 +324,67 @@ void main() {
     );
     await tester.tap(button);
     expect(checks, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('添加设备的 USB 状态卡、表单和主操作在宽窗内共用中轴', (tester) async {
+    tester.view
+      ..physicalSize = const Size(1280, 720)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: ConnectTokens.theme(Brightness.light),
+          darkTheme: ConnectTokens.theme(Brightness.dark),
+          builder: (context, child) => MediaQuery.withClampedTextScaling(
+            minScaleFactor: MediaQuery.sizeOf(context).width < 400 ? 2 : 1,
+            child: child!,
+          ),
+          home: const ConnectionFormPage(initialMode: AddDeviceMode.usb),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final tabs = find.byType(ConnectionModeSelector);
+    final status = find.text('连接手机');
+    final statusIcon = find.byIcon(LucideIcons.circle);
+    final check = find.widgetWithText(FilledButton, '检查连接');
+    expect(tester.getCenter(tabs).dx, 640);
+    expect(tester.getCenter(status).dx, 640);
+    expect(tester.getCenter(statusIcon).dx, 640);
+    expect(tester.getCenter(check).dx, 640);
+    expect(
+      tester.getRect(status).top,
+      greaterThan(tester.getRect(tabs).bottom),
+    );
+
+    for (final (label, action) in [('配对码', '配对并连接'), ('IP 连接', '连接设备')]) {
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+      expect(tester.getCenter(find.byType(ConnectionAddressFields)).dx, 640);
+      expect(
+        tester.getCenter(find.widgetWithText(FilledButton, action)).dx,
+        640,
+      );
+    }
+
+    await tester.tap(find.text('USB'));
+    tester.view.physicalSize = const Size(320, 520);
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    await tester.pumpAndSettle();
+    expect(tester.getCenter(status).dx, 160);
+    expect(tester.getCenter(statusIcon).dx, 160);
+    expect(tester.getCenter(check).dx, 160);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -380));
+    await tester.pumpAndSettle();
+    final help = find.widgetWithText(TextButton, 'USB 连接帮助');
+    expect(tester.getRect(help).bottom, lessThan(tester.getRect(check).top));
+    expect(help.hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

@@ -13,6 +13,7 @@ import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
+import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
@@ -44,6 +45,13 @@ class ActivitiesPage extends HookConsumerWidget {
     return PageFrame(
       title: '当前活动',
       child: AsyncContent<ActivityCollection>(
+        loadingPlaceholder: GroupedListView(
+          padding: const EdgeInsets.all(DesignTokens.spacingMd),
+          children: [
+            WorkspaceCallCard(device: device),
+            const SkeletonRows(lines: 1, trailing: true),
+          ],
+        ),
         loading: query.isLoading,
         data: query.value,
         error: query.error,
@@ -115,6 +123,7 @@ class ActivitiesPage extends HookConsumerWidget {
                   ActionRow(
                     key: ValueKey(activity.target),
                     icon: LucideIcons.activity,
+                    color: DesignTokens.colorListIconMint,
                     title: activity.name,
                     trailing: Tooltip(
                       message: statusText(activity.status),

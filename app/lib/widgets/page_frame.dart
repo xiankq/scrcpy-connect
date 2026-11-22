@@ -157,6 +157,14 @@ class _PageFrameState extends State<PageFrame> {
                   DesignTokens.spacingSm,
             );
       final top = workspaceToolbar ? 0.0 : safe.top + toolbarHeight + extraTop;
+      final sideInsets = EdgeInsets.only(
+        left: verticalBar?.edge == liquid.GlassVerticalBarEdge.leading
+            ? safe.left + extraSide
+            : 0,
+        right: verticalBar?.edge == liquid.GlassVerticalBarEdge.trailing
+            ? safe.right + extraSide
+            : 0,
+      );
       final backLabel = MaterialLocalizations.of(context).backButtonTooltip;
       final onBack = widget.onBack ?? () => closePage<void>(context);
       final reduceMotion = GlassMaterial.reduceMotion(context);
@@ -298,30 +306,23 @@ class _PageFrameState extends State<PageFrame> {
             child: SafeArea(
               top: false,
               bottom: false,
-              minimum: EdgeInsets.only(
-                left: verticalBar?.edge == liquid.GlassVerticalBarEdge.leading
-                    ? safe.left + extraSide
-                    : 0,
-                right: verticalBar?.edge == liquid.GlassVerticalBarEdge.trailing
-                    ? safe.right + extraSide
-                    : 0,
-              ),
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (workspaceToolbar)
-                      _WorkspaceToolbar(
-                        title: widget.title,
-                        titleContent: widget.titleContent,
-                        leading: widget.leading,
-                        actions: widget.actions,
-                        trailingAction: widget.trailingAction,
-                        onBack: onBack,
-                        hasBack: hasBack,
-                      ),
-                    Expanded(
+              minimum: sideInsets,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (workspaceToolbar)
+                    _WorkspaceToolbar(
+                      title: widget.title,
+                      titleContent: widget.titleContent,
+                      leading: widget.leading,
+                      actions: widget.actions,
+                      trailingAction: widget.trailingAction,
+                      onBack: onBack,
+                      hasBack: hasBack,
+                    ),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.topCenter,
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(
                           maxWidth: DesignTokens.componentPageContentMaxWidth,
@@ -352,23 +353,24 @@ class _PageFrameState extends State<PageFrame> {
                                 child: widget.child,
                               ),
                             ),
-                            Positioned(
-                              top: 0,
-                              left: 0,
-                              right: 0,
-                              child: PageChromeProtection(
-                                height: top,
-                                backgroundColor:
-                                    widget.backgroundColor ??
-                                    Theme.of(context).scaffoldBackgroundColor,
+                            if (_scrolled)
+                              Positioned(
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                child: PageChromeProtection(
+                                  height: top,
+                                  backgroundColor:
+                                      widget.backgroundColor ??
+                                      Theme.of(context).scaffoldBackgroundColor,
+                                ),
                               ),
-                            ),
                           ],
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -380,6 +382,7 @@ class _PageFrameState extends State<PageFrame> {
                   bottom: MediaQuery.viewInsetsOf(context).bottom,
                 ),
                 child: SafeArea(
+                  minimum: sideInsets,
                   child: Align(
                     alignment: Alignment.topCenter,
                     heightFactor: 1,

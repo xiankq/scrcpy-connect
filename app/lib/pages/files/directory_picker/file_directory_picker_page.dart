@@ -8,6 +8,7 @@ import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
+import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
@@ -66,6 +67,18 @@ class FileDirectoryPickerPage extends HookConsumerWidget {
           body: PageChromePadding.removeTop(
             context: context,
             child: AsyncContent(
+              loadingPlaceholder: GroupedListView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: DesignTokens.spacingMd,
+                ),
+                children: [
+                  SkeletonRows(
+                    key: ValueKey(path.value),
+                    lines: 1,
+                    trailing: true,
+                  ),
+                ],
+              ),
               loading: query.loading,
               data: query.data,
               error: query.error,
@@ -89,7 +102,8 @@ class FileDirectoryPickerPage extends HookConsumerWidget {
                       final directory = directories[index];
                       return ActionRow(
                         key: ValueKey(directory.path),
-                        icon: LucideIcons.folder,
+                        icon: AppIcons.files,
+                        color: DesignTokens.colorListIconDocument,
                         title: directory.name,
                         onTap:
                             directory.path?.isNotEmpty != true ||

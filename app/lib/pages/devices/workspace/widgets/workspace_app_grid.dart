@@ -3,6 +3,7 @@ import 'package:scrcpy_connect/core/devices/device_apps.dart';
 import 'package:scrcpy_connect/pages/apps/widgets/phone_app_icon.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
 
 class WorkspaceAppGrid extends StatelessWidget {
   const WorkspaceAppGrid({
@@ -13,6 +14,7 @@ class WorkspaceAppGrid extends StatelessWidget {
     required this.onOpen,
     required this.empty,
     this.action,
+    this.loading = false,
   });
 
   final String title;
@@ -21,6 +23,7 @@ class WorkspaceAppGrid extends StatelessWidget {
   final ValueChanged<DeviceApp> onOpen;
   final Widget empty;
   final Widget? action;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) => ContentPanel(
@@ -35,7 +38,7 @@ class WorkspaceAppGrid extends StatelessWidget {
             ?action,
           ],
         ),
-        if (apps.isEmpty)
+        if (apps.isEmpty && !loading)
           Center(child: empty)
         else
           LayoutBuilder(
@@ -44,6 +47,27 @@ class WorkspaceAppGrid extends StatelessWidget {
                   (constraints.maxWidth / DesignTokens.componentAppCellWidth)
                       .floor()
                       .clamp(1, 6);
+              if (loading) {
+                return LoadingSkeleton(
+                  child: Row(
+                    children: [
+                      for (var index = 0; index < columns; index++)
+                        const Expanded(
+                          child: SizedBox(
+                            height: DesignTokens.componentRowHeight,
+                            child: Center(
+                              child: SkeletonBlock(
+                                width: DesignTokens.componentAppIconSize,
+                                height: DesignTokens.componentAppIconSize,
+                                radius: DesignTokens.componentAppIconRounded,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              }
               return Wrap(
                 children: [
                   for (final app in apps)

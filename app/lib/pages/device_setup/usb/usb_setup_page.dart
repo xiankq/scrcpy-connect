@@ -101,7 +101,9 @@ class UsbSetupPage extends HookConsumerWidget {
 
     if (usbSupported == null) {
       return frame(
-        const SliverToBoxAdapter(child: Text('正在检查本机 USB 能力…')),
+        const SliverToBoxAdapter(
+          child: Text('正在检查本机 USB 能力…', textAlign: TextAlign.center),
+        ),
         null,
       );
     }
@@ -120,7 +122,7 @@ class UsbSetupPage extends HookConsumerWidget {
               DesignTokens.spacingMd * 2,
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             ExcludeSemantics(
               child: Row(
@@ -167,10 +169,18 @@ class UsbSetupPage extends HookConsumerWidget {
             const SizedBox(height: DesignTokens.spacingMd),
             Semantics(
               liveRegion: true,
-              child: Text(title, style: theme.textTheme.titleMedium),
+              child: Text(
+                title,
+                style: theme.textTheme.titleMedium,
+                textAlign: TextAlign.center,
+              ),
             ),
             const SizedBox(height: DesignTokens.spacingXs),
-            Text(message, style: theme.textTheme.bodyMedium),
+            Text(
+              message,
+              style: theme.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),
@@ -291,7 +301,7 @@ class UsbSetupPage extends HookConsumerWidget {
                             : 'USB 设备 ${index + 1}',
                       ),
                       trailing: const Icon(
-                        LucideIcons.chevronRight,
+                        AppIcons.forward,
                         size: DesignTokens.componentIconSmallSize,
                       ),
                       onTap: device.device?.status == .connected

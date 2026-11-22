@@ -17,6 +17,7 @@ class AsyncContent<T extends Object> extends StatelessWidget {
     this.emptyTitle = '暂时没有内容',
     this.failure = '请稍后重试。',
     this.alternative,
+    this.loadingPlaceholder,
   });
 
   final bool loading;
@@ -26,13 +27,15 @@ class AsyncContent<T extends Object> extends StatelessWidget {
   final Widget Function(BuildContext, T) builder;
   final String emptyTitle, failure;
   final Widget? alternative;
+  final Widget? loadingPlaceholder;
 
   @override
   Widget build(BuildContext context) {
     if (loading && data == null) {
-      return const PageChromeBody(
-        child: Center(child: CircularProgressIndicator.adaptive()),
-      );
+      return loadingPlaceholder ??
+          const PageChromeBody(
+            child: Center(child: CircularProgressIndicator.adaptive()),
+          );
     }
     if (error != null || data == null) {
       return PageChromeBody(
@@ -48,7 +51,7 @@ class AsyncContent<T extends Object> extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed: onRefresh,
                 icon: const Icon(
-                  LucideIcons.refreshCw,
+                  AppIcons.refresh,
                   size: DesignTokens.componentIconActionSize,
                 ),
                 label: const Text('重试'),

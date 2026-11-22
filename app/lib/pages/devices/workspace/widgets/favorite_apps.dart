@@ -13,6 +13,8 @@ import 'package:scrcpy_connect/pages/apps/phone_app_launcher.dart';
 import 'package:scrcpy_connect/pages/apps/widgets/phone_app_icon.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
+import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -75,7 +77,7 @@ class FavoriteApps extends ConsumerWidget {
       },
       empty: TextButton.icon(
         onPressed: edit,
-        icon: const Icon(LucideIcons.plus),
+        icon: const Icon(AppIcons.add),
         label: const Text('添加常用应用'),
       ),
       action: favorites.isEmpty
@@ -121,7 +123,7 @@ class _EditFavorites extends HookConsumerWidget {
           const PageChromeSliver(),
           SliverToBoxAdapter(
             child: ListTile(
-              leading: const Icon(LucideIcons.listChecks),
+              leading: const Icon(AppIcons.selectAll),
               title: const Text('选择应用'),
               enabled: online,
               onTap: online
@@ -200,6 +202,15 @@ class _ChooseApps extends HookConsumerWidget {
         child: const Text('完成'),
       ),
       child: AsyncContent<List<DeviceApp>>(
+        loadingPlaceholder: const GroupedListView(
+          children: [
+            SkeletonRows(
+              lines: 1,
+              leadingSize: DesignTokens.componentAppIconSize,
+              trailing: true,
+            ),
+          ],
+        ),
         loading: result.isLoading,
         data: result.value,
         error: result.error,
