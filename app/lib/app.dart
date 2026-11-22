@@ -27,6 +27,7 @@ import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
 import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
+import 'package:scrcpy_connect/router/remote_windows.dart';
 import 'package:scrcpy_connect/widgets/models/device_audio_view_snapshot.dart';
 
 class ConnectApp extends HookConsumerWidget {
@@ -197,7 +198,7 @@ class _SessionPresentation extends HookConsumerWidget {
       child: AppPresentationHost(
         navigator: navigator,
         router: router,
-        child: child,
+        child: RemoteWindows(router: router, child: child),
       ),
     );
   }

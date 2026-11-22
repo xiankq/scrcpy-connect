@@ -8,8 +8,8 @@ import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/pages/control/remote_input_owner.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/motion.dart';
 import 'package:scrcpy_connect/widgets/ambient_loading_field.dart';
-import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
@@ -77,6 +77,7 @@ class RemoteStage extends StatelessWidget {
     required this.onWake,
     required this.onClose,
     required this.controls,
+    this.onSwitchWindow,
   });
 
   final RemotePresentation presentation;
@@ -86,6 +87,7 @@ class RemoteStage extends StatelessWidget {
   final bool independent, ime, sensitive, needsWake, screenOff;
   final FocusNode inputFocus;
   final VoidCallback? onWake, onClose;
+  final VoidCallback? onSwitchWindow;
   final Widget recovery, controls;
 
   @override
@@ -102,16 +104,24 @@ class RemoteStage extends StatelessWidget {
         icon: const Icon(AppIcons.close),
       ),
     );
+    final switchWait = onSwitchWindow == null
+        ? null
+        : GlassToolbarIconButton(
+            semanticLabel: '切换窗口',
+            onPressed: onSwitchWindow,
+            icon: const Icon(LucideIcons.layers),
+          );
     final loading = waiting || presentation.connecting;
     final abnormal =
         presentation.error != null ||
         (presentation.paused && !presentation.connecting) ||
         presentation.stateUnverified ||
         presentation.appLaunchUnknown;
+    final showMotion = !abnormal && !presentation.exiting;
     final stage = abnormal
         ? '无法打开'
         : independent
-        ? '正在打开独立窗口'
+        ? '正在打开独立应用画面'
         : '正在打开手机屏幕';
     return Stack(
       children: [
@@ -123,24 +133,35 @@ class RemoteStage extends StatelessWidget {
             onViewport: onViewport,
           ),
         ),
-        if (loading && !screenOff)
-          Positioned.fill(
-            key: const ValueKey('remote-first-frame-wait'),
-            child: AmbientLoadingField(
-              semanticsLabel: '$deviceLabel，$stage',
-              animating:
-                  !abnormal && presentation.connecting && !presentation.exiting,
-              showParticles: false,
-              overlay: abnormal
-                  ? recovery
-                  : Center(
-                      child: ContentLoadingIndicator(
-                        size: DesignTokens.componentIconLargeSize,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
+        Positioned.fill(
+          child: AnimatedSwitcher(
+            duration: reduceMotionOf(context) || screenOff
+                ? Duration.zero
+                : contentArrivalDuration,
+            switchOutCurve: panelCurve,
+            layoutBuilder: (current, outgoing) => Stack(
+              fit: StackFit.expand,
+              children: [
+                for (final child in outgoing)
+                  IgnorePointer(
+                    child: ExcludeSemantics(
+                      child: TickerMode(enabled: false, child: child),
                     ),
+                  ),
+                ?current,
+              ],
             ),
+            child: loading && !screenOff
+                ? AmbientLoadingField(
+                    key: const ValueKey('remote-first-frame-wait'),
+                    semanticsLabel: '$deviceLabel，$stage',
+                    animating: showMotion,
+                    showParticles: showMotion,
+                    overlay: abnormal ? recovery : null,
+                  )
+                : const SizedBox.shrink(),
           ),
+        ),
         if (presentation.qualityRebuilding)
           const Align(
             alignment: Alignment.bottomCenter,
@@ -234,7 +255,7 @@ class RemoteStage extends StatelessWidget {
         if (!waiting)
           controls
         else if (sideToolbar != null)
-          GlassSideToolbar(bar: sideToolbar, children: [closeWait])
+          GlassSideToolbar(bar: sideToolbar, children: [closeWait, ?switchWait])
         else
           Positioned(
             left:
@@ -242,7 +263,7 @@ class RemoteStage extends StatelessWidget {
                 (DesktopWindowInsets.of(context)?.left ?? 0) +
                 20,
             top: MediaQuery.paddingOf(context).top + 12,
-            child: closeWait,
+            child: Row(children: [closeWait, ?switchWait]),
           ),
       ],
     );

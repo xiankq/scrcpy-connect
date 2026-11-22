@@ -199,6 +199,7 @@ class RemoteWindow {
           final session = view.session;
           return session.deviceId == deviceId &&
               session.packageName == packageName &&
+              !session.recordOnly &&
               (session.launchOutcome == .unknown || session.live);
         }).firstOrNull;
       }
@@ -368,9 +369,8 @@ class RemoteWindow {
     presentation.showUnknownAppLaunch(_unverifiedView(record.snapshot));
   }
 
-  Future<String?> convertToIndependent({
+  Future<String?> verifiedForegroundApp({
     required bool Function() canSendInput,
-    required Future<void> Function() releaseInputs,
   }) async {
     if (!isCurrent) return null;
     final binding = presentation.binding;
@@ -415,14 +415,6 @@ class RemoteWindow {
         verified.deviceId != id) {
       throw const RequestFailure('foreground_unavailable', '手机前台应用已变化，请重试。');
     }
-    await owned!.close(afterInput: releaseInputs());
-    if (!isCurrent ||
-        presentation.exiting ||
-        presentation.binding != binding ||
-        connectionId() != connection) {
-      return null;
-    }
-    presentation.detachBinding();
     return package;
   }
 

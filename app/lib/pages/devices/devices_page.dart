@@ -12,6 +12,7 @@ import 'package:scrcpy_connect/pages/devices/widgets/first_device_illustration.d
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
+import 'package:scrcpy_connect/router/remote_windows.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
@@ -126,15 +127,18 @@ class DevicesPage extends HookConsumerWidget {
                   ],
                 )
               : null,
-          actions: showWelcome || useSideToolbar
+          actions: useSideToolbar
               ? null
               : [
-                  Padding(
-                    padding: const EdgeInsetsDirectional.only(
-                      end: DesignTokens.spacingXs,
+                  if (RemoteWindows.hasWindows(context))
+                    const RemoteWindowsButton(),
+                  if (!showWelcome)
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(
+                        end: DesignTokens.spacingXs,
+                      ),
+                      child: addButton,
                     ),
-                    child: addButton,
-                  ),
                 ],
           child: RefreshIndicator(
             onRefresh: ref.read(deviceListProvider.notifier).refresh,
@@ -373,6 +377,8 @@ class DevicesPage extends HookConsumerWidget {
                 ),
           sideActions: [
             if (useSideToolbar) ...[
+              if (RemoteWindows.hasWindows(context))
+                const RemoteWindowsButton(),
               if (!showWelcome) addButton,
               ?manageButton,
             ],

@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/control/models/video_session.dart';
+import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/devices/device_apps.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -12,6 +13,7 @@ import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart
 import 'package:scrcpy_connect/core/media/video_sessions.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
+import 'package:scrcpy_connect/router/remote_windows.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/overlays.dart';
@@ -61,6 +63,7 @@ Future<void> openPhoneApp(
       context,
       deviceId: deviceId,
       sessionId: record.sessionId,
+      appName: app.name,
     );
 
     var list = await sessions();
@@ -131,10 +134,25 @@ Future<void> openPhoneApp(
       await openRecord(current);
       return;
     }
+    if (current != null && mode == AppOpenMode.phone) {
+      final windows = RemoteWindows.maybeOf(context);
+      final pane = windows?.windowFor((
+        deviceId: deviceId,
+        packageName: package,
+      ));
+      if (pane?.close case final close?) {
+        if (!await close()) return;
+      } else {
+        await videos.stopVideo(ControlTarget(sessionId: current.sessionId));
+        if (pane != null && windows?.mounted == true) windows!.remove(pane);
+      }
+      if (!context.mounted || !ownsScope()) return;
+    }
     await openRemoteRoute(
       context,
       deviceId: deviceId,
       packageName: package,
+      appName: app.name,
       onPhoneScreen: mode == AppOpenMode.phone,
     );
   } catch (error) {
@@ -172,12 +190,12 @@ Future<AppOpenMode?> _chooseMode(
             ),
             const SizedBox(height: DesignTokens.spacingSm),
             Tooltip(
-              message: windowAvailable ? '' : '此设备当前不支持独立窗口',
+              message: windowAvailable ? '' : '此设备当前不支持独立应用画面',
               child: OutlinedButton(
                 onPressed: windowAvailable
                     ? () => Navigator.pop(context, AppOpenMode.window)
                     : null,
-                child: const Text('在独立窗口打开'),
+                child: const Text('打开独立应用画面'),
               ),
             ),
             const SizedBox(height: DesignTokens.spacingXs),

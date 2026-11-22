@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/physics.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/motion.dart';
 import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_press_feedback.dart';
@@ -21,6 +22,7 @@ class ExitHandle extends StatefulWidget {
     this.onConvert,
     this.onKeyboard,
     this.onRotate,
+    this.onSwitchWindow,
     this.independent = false,
   });
   final VoidCallback onExit;
@@ -28,6 +30,7 @@ class ExitHandle extends StatefulWidget {
   final String connectionLabel;
   final Widget? soundControl;
   final VoidCallback? onSleep, onScreenshot, onConvert, onKeyboard, onRotate;
+  final VoidCallback? onSwitchWindow;
   final bool independent;
   static const initialTopFraction = 0.44;
 
@@ -67,8 +70,7 @@ Rect _dragBoundsFor(Size viewport, MediaQueryData media) {
   );
 }
 
-class _ExitHandleState extends State<ExitHandle>
-    with SingleTickerProviderStateMixin {
+class _ExitHandleState extends State<ExitHandle> with TickerProviderStateMixin {
   static const _handleSize = DesignTokens.componentRemoteExitSize;
   static const _peekWidth = DesignTokens.componentRemoteExitPeekWidth;
   static const _hitWidth = DesignTokens.componentRemoteExitHitWidth;
@@ -78,6 +80,12 @@ class _ExitHandleState extends State<ExitHandle>
       AnimationController.unbounded(vsync: this)..addListener(() {
         setState(() => offset = Offset(animation.value, offset.dy));
       });
+  late final AnimationController panel = AnimationController(
+    vsync: this,
+    duration: panelOpenDuration,
+    reverseDuration: panelCloseDuration,
+  );
+  late final panelProgress = panel.drive(CurveTween(curve: panelCurve));
   Rect dragBounds = Rect.zero;
   Offset offset = Offset.zero;
   bool initialized = false;
@@ -112,7 +120,26 @@ class _ExitHandleState extends State<ExitHandle>
         .whenComplete(() => setState(() {}));
   }
 
-  void closePanel() => setState(() => expanded = false);
+  void openPanel() {
+    animation.stop();
+    setState(() => expanded = true);
+    if (reduceMotionOf(context)) {
+      panel.value = 1;
+    } else {
+      panel.forward();
+    }
+  }
+
+  void closePanel() {
+    setState(() => expanded = false);
+    if (reduceMotionOf(context)) {
+      panel.value = 0;
+    } else {
+      panel.reverse().whenComplete(() {
+        if (mounted) setState(() {});
+      });
+    }
+  }
 
   VoidCallback? closeThen(VoidCallback? callback) => callback == null
       ? null
@@ -124,6 +151,7 @@ class _ExitHandleState extends State<ExitHandle>
   @override
   void dispose() {
     animation.dispose();
+    panel.dispose();
     super.dispose();
   }
 
@@ -176,7 +204,7 @@ class _ExitHandleState extends State<ExitHandle>
 
       return Stack(
         children: [
-          if (expanded) ...[
+          if (expanded)
             Positioned.fill(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
@@ -184,118 +212,181 @@ class _ExitHandleState extends State<ExitHandle>
                 excludeFromSemantics: true,
               ),
             ),
+          if (expanded || panel.value > 0)
             Positioned(
               left: panelLeft,
               top: panelTop,
               width: panelWidth,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: bottomEdge - panelTop),
-                child: Glass(
-                  key: const ValueKey('remote-tool-panel'),
-                  radius: DesignTokens.roundedLg,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '画面工具',
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: '收起画面工具',
-                              onPressed: closePanel,
-                              icon: const Icon(AppIcons.viewOptions),
-                            ),
-                          ],
+              child: IgnorePointer(
+                ignoring: !expanded,
+                child: ExcludeSemantics(
+                  excluding: !expanded,
+                  child: FadeTransition(
+                    opacity: panelProgress,
+                    child: SlideTransition(
+                      position: panelProgress.drive(
+                        Tween(
+                          begin: Offset(right ? .065 : -.065, 0),
+                          end: Offset.zero,
                         ),
-                        Text(
-                          widget.independent ? '独立窗口' : '整机画面',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
+                      ),
+                      child: ScaleTransition(
+                        alignment: Alignment(
+                          right ? 1 : -1,
+                          ((dy - panelTop) / panelHeight * 2 - 1)
+                              .clamp(-1.0, 1.0)
+                              .toDouble(),
                         ),
-                        const SizedBox(height: DesignTokens.spacingMd),
-                        LayoutBuilder(
-                          builder: (context, limits) {
-                            final tileWidth =
-                                limits.maxWidth /
-                                (limits.maxWidth < 192 ? 2 : 3);
-                            return Wrap(
-                              runSpacing: DesignTokens.spacingXs,
-                              children: [
-                                for (final action in [
-                                  widget.soundControl ??
-                                      const RemoteToolAction(
-                                        icon: LucideIcons.volume2,
-                                        label: '设备声音',
+                        scale: panelProgress.drive(Tween(begin: .91, end: 1.0)),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: bottomEdge - panelTop,
+                          ),
+                          child: Glass(
+                            key: const ValueKey('remote-tool-panel'),
+                            radius: DesignTokens.roundedLg,
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.fromLTRB(
+                                16,
+                                12,
+                                16,
+                                20,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          '画面工具',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleLarge,
+                                        ),
                                       ),
-                                  RemoteToolAction(
-                                    icon: LucideIcons.sun,
-                                    label: '熄屏',
-                                    onPressed: closeThen(widget.onSleep),
+                                      IconButton(
+                                        tooltip: '收起画面工具',
+                                        onPressed: closePanel,
+                                        icon: const Icon(AppIcons.viewOptions),
+                                      ),
+                                    ],
                                   ),
-                                  RemoteToolAction(
-                                    icon: LucideIcons.camera,
-                                    label: '截图',
-                                    onPressed: closeThen(widget.onScreenshot),
+                                  Text(
+                                    widget.independent ? '独立应用' : '整机画面',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
+                                        ),
                                   ),
-                                  if (!widget.independent)
-                                    RemoteToolAction(
-                                      icon: LucideIcons.layers,
-                                      label: '独立窗口',
-                                      onPressed: closeThen(widget.onConvert),
+                                  const SizedBox(
+                                    height: DesignTokens.spacingMd,
+                                  ),
+                                  LayoutBuilder(
+                                    builder: (context, limits) {
+                                      final tileWidth =
+                                          limits.maxWidth /
+                                          (limits.maxWidth < 192 ? 2 : 3);
+                                      return Wrap(
+                                        runSpacing: DesignTokens.spacingXs,
+                                        children: [
+                                          for (final action in [
+                                            widget.soundControl ??
+                                                const RemoteToolAction(
+                                                  icon: LucideIcons.volume2,
+                                                  label: '设备声音',
+                                                ),
+                                            RemoteToolAction(
+                                              icon: LucideIcons.sun,
+                                              label: '熄屏',
+                                              onPressed: closeThen(
+                                                widget.onSleep,
+                                              ),
+                                            ),
+                                            RemoteToolAction(
+                                              icon: LucideIcons.camera,
+                                              label: '截图',
+                                              onPressed: closeThen(
+                                                widget.onScreenshot,
+                                              ),
+                                            ),
+                                            if (!widget.independent)
+                                              RemoteToolAction(
+                                                icon: LucideIcons.layers,
+                                                label: '打开独立应用',
+                                                onPressed: closeThen(
+                                                  widget.onConvert,
+                                                ),
+                                              ),
+                                            RemoteToolAction(
+                                              icon: LucideIcons.keyboard,
+                                              label: '键盘',
+                                              onPressed: closeThen(
+                                                widget.onKeyboard,
+                                              ),
+                                            ),
+                                            RemoteToolAction(
+                                              icon: LucideIcons.rotateCw,
+                                              label: '旋转',
+                                              onPressed: closeThen(
+                                                widget.onRotate,
+                                              ),
+                                            ),
+                                            if (widget.onSwitchWindow != null)
+                                              RemoteToolAction(
+                                                icon: LucideIcons.layers,
+                                                label: '切换窗口',
+                                                onPressed: closeThen(
+                                                  widget.onSwitchWindow,
+                                                ),
+                                              ),
+                                          ])
+                                            SizedBox(
+                                              width: tileWidth,
+                                              child: action,
+                                            ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                  const SizedBox(
+                                    height: DesignTokens.spacingLg,
+                                  ),
+                                  FilledButton(
+                                    style: FilledButton.styleFrom(
+                                      fixedSize: const Size.fromHeight(50),
+                                      backgroundColor: Theme.of(context)
+                                          .colorScheme
+                                          .surface,
+                                      foregroundColor: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(
+                                          DesignTokens.roundedMd,
+                                        ),
+                                      ),
                                     ),
-                                  RemoteToolAction(
-                                    icon: LucideIcons.keyboard,
-                                    label: '键盘',
-                                    onPressed: closeThen(widget.onKeyboard),
+                                    onPressed: closeThen(widget.onExit),
+                                    child: const Text('关闭画面'),
                                   ),
-                                  RemoteToolAction(
-                                    icon: LucideIcons.rotateCw,
-                                    label: '旋转',
-                                    onPressed: closeThen(widget.onRotate),
-                                  ),
-                                ])
-                                  SizedBox(width: tileWidth, child: action),
-                              ],
-                            );
-                          },
-                        ),
-                        const SizedBox(height: DesignTokens.spacingLg),
-                        FilledButton(
-                          style: FilledButton.styleFrom(
-                            fixedSize: const Size.fromHeight(50),
-                            backgroundColor: Theme.of(context)
-                                .colorScheme
-                                .surface,
-                            foregroundColor: Theme.of(context)
-                                .colorScheme
-                                .onSurface,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                DesignTokens.roundedMd,
+                                ],
                               ),
                             ),
                           ),
-                          onPressed: closeThen(widget.onExit),
-                          child: const Text('关闭画面'),
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ] else
+          if (!expanded)
             Positioned(
               key: const ValueKey('remote-tool-handle-position'),
               left: handleLeft,
@@ -334,10 +425,7 @@ class _ExitHandleState extends State<ExitHandle>
                     onPanCancel: () {
                       if (dragging) settle();
                     },
-                    onTap: () {
-                      animation.stop();
-                      setState(() => expanded = true);
-                    },
+                    onTap: openPanel,
                     child: Align(
                       alignment: right
                           ? Alignment.centerRight

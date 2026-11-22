@@ -8,14 +8,16 @@
 
 | 平台 | 窗口与姿态来源 |
 | --- | --- |
-| Android | WindowManager 提供尺寸和折叠特征。分割窗格依据 `FoldingFeature.isSeparating`。独立控制使用 `FlutterEngineGroup` 和单独的 Activity 任务。 |
-| iOS 与 iPadOS | 使用 scene 和 `FlutterEngineGroup` 创建独立窗口。系统恢复 scene 时沿用原会话身份；iPhone Duo 通过 `foldable` 取得外屏、内屏和折叠保留区。 |
-| macOS、Windows、Linux | `desktop_multi_window` 维护独立引擎与窗口身份。窗口操作由宿主提供，应用页头避让原生控件。各端布局见[桌面沉浸式窗口](../design.md#桌面沉浸式窗口)。 |
+| Android | WindowManager 提供尺寸和折叠特征。分割窗格依据 `FoldingFeature.isSeparating`。原生目标复用 `FlutterEngineGroup` 和 Activity document task，每个最近任务标记设备和画面。 |
+| iOS 与 iPadOS | 窗口尺寸和安全区来自 Scene。原生目标在 `supportsMultipleScenes` 为真时使用 UIKit 场景和 `FlutterEngineGroup`，以原会话恢复场景。iPhone Duo 通过 `foldable` 取得外屏、内屏和折叠保留区。 |
+| macOS、Windows、Linux | 桌面窗口操作由宿主提供，应用页头避让原生控件。现有 `desktop_multi_window` 适配器为独立引擎提供窗口能力。各端布局见[桌面沉浸式窗口](../design.md#桌面沉浸式窗口)。 |
 | HarmonyOS | 具备 Flutter 布局契约。原生宿主待接入，适配时由 `windowSizeChange` 更新尺寸、`windowStatusChange` 更新模式、`foldStatusChange` 触发姿态重查。API 12+ 可使用 `FoldSplitContainer`。 |
 
 宿主将可用边界、安全区、保留区、姿态和模式投影为 `WindowEnvironment`。半折的安全窗格见[iPhone Duo 专项](../design.md#iphone-duo-专项)。
 
-窗口验收覆盖真实创建、调整大小、折叠、切换、恢复、关闭和迟到的回执。[Android FoldingFeature](https://developer.android.com/reference/androidx/window/layout/FoldingFeature) · [Apple iPhone Duo 准备指南](https://developer.apple.com/iphone-duo/prepare/) · [HarmonyOS Window API](https://developer.huawei.com/consumer/en/doc/harmonyos-references/arkts-apis-window-window/)
+当前交付在主控应用内保留并切换远控窗口。原生子窗口开放条件是主窗口与子窗口共用一个连接及会话所有者，子窗口按实际引擎注册自己的画面输出，并且每路输入、暂停与关闭只作用于所属会话。旧的多引擎启动参数会提示回主窗口继续，避免整套应用恢复流程接管连接。
+
+窗口验收覆盖两台设备同时控制、同一设备的整机与独立应用并行、重复打开聚焦原窗口、尺寸和折叠变化、后台和恢复、关闭单窗，以及活动中的 USB 连接保留。原生系统恢复以设备和会话身份接续，失效时提供关闭入口。 [Flutter 多引擎](https://docs.flutter.dev/add-to-app/multiple-flutters) · [Android 最近任务](https://developer.android.com/guide/components/activities/recents) · [UIKit 多场景](https://developer.apple.com/documentation/uikit/uiapplication/supportsmultiplescenes) · [桌面窗口库](https://pub.dev/packages/desktop_multi_window) · [HarmonyOS Window API](https://developer.huawei.com/consumer/en/doc/harmonyos-references/arkts-apis-window-window/)
 
 ## 功能条件与替代路径
 

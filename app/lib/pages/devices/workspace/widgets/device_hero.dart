@@ -7,6 +7,7 @@ import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/device_summary.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
+import 'package:scrcpy_connect/router/remote_windows.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/devices/device_access.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
@@ -30,6 +31,7 @@ class DeviceHero extends HookConsumerWidget {
     final online = device.status == DeviceConnectionStatus.connected;
     final lifecycle = useAppLifecycleState();
     final visible =
+        RemoteWindows.isVisible(context) &&
         ModalRoute.isCurrentOf(context) != false &&
         (lifecycle == null || lifecycle == AppLifecycleState.resumed);
     final connectionId = device.connectionId;

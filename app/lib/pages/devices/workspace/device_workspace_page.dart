@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/router/remote_windows.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
@@ -42,7 +43,11 @@ class DeviceWorkspacePage extends ConsumerWidget {
       onBack: onBack,
       title: '设备工作台',
       titleContent: const SizedBox.shrink(),
-      actions: [?manageButton],
+      actions: [
+        if (!pane && RemoteWindows.hasWindows(context))
+          const RemoteWindowsButton(),
+        ?manageButton,
+      ],
       child: CustomScrollView(
         slivers: [
           const PageChromeSliver(),

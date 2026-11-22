@@ -86,14 +86,19 @@ List<RouteBase> typedRoutes(GlobalKey<NavigatorState> root) {
 GoRouter createAppRouter({
   String initialLocation = '/devices',
   GlobalKey<NavigatorState>? navigatorKey,
+  Object? initialExtra,
+  RouteObserver<ModalRoute<dynamic>>? observer,
 }) {
   GoRouter.optionURLReflectsImperativeAPIs = true;
   final root = navigatorKey ?? GlobalKey<NavigatorState>();
   return GoRouter(
     navigatorKey: root,
-    restorationScopeId: 'connect-router',
-    observers: [sessionRouteObserver],
+    restorationScopeId: observer == null ? 'connect-router' : null,
+    observers: [observer ?? sessionRouteObserver],
     initialLocation: initialLocation,
+    initialExtra: initialExtra,
+    overridePlatformDefaultLocation: observer != null,
+    routerNeglect: observer != null,
     routes: typedRoutes(root),
     errorPageBuilder: (context, state) => MaterialPage<void>(
       key: state.pageKey,

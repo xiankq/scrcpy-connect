@@ -121,6 +121,8 @@ class RemotePresentation {
 
   void suppressInitialAction() => _initialActionApplied = true;
 
+  void allowInitialAction() => _initialActionApplied = false;
+
   bool takeInitialAction({
     required bool foreground,
     required bool ownerCurrent,

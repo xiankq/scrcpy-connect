@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:scrcpy/scrcpy.dart' show ScrcpyControlCompletion;
 import 'package:scrcpy_connect/core/clipboard/clipboard_focus_notifier.dart';
 import 'package:scrcpy_connect/core/control/control_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
@@ -33,12 +34,176 @@ import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart
 import 'package:scrcpy_connect/core/settings/settings_management.dart';
 import 'package:scrcpy_connect/pages/control/control_page.dart';
 import 'package:scrcpy_connect/pages/control/widgets/remote_surface.dart';
+import 'package:scrcpy_connect/router/navigation.dart';
+import 'package:scrcpy_connect/router/remote_windows.dart';
 import 'package:scrcpy_connect/router/route_observers.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/models/device_audio_view_snapshot.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
 
 void main() {
+  testWidgets('整机和独立应用按设备保留，重开聚焦已有窗口，关闭只停止所属会话', (tester) async {
+    final tablet = _device.copyWith(id: 'tablet', name: 'Tablet');
+    final dependencies = _Session([_device, tablet]);
+    final control = _Control();
+    final videos = _Videos()
+      ..startPlan = (plan) async {
+        final id = plan.packageName ?? plan.deviceId;
+        return VideoSessionView(
+          session: VideoSessionSnapshot(
+            sessionId: id,
+            deviceId: plan.deviceId,
+            name: id,
+            kind: .screen,
+            packageName: plan.packageName,
+            status: .streaming,
+            captureGeneration: 2,
+            generation: 3,
+            width: 100,
+            height: 200,
+          ),
+          wake: KeepAwakeSnapshot(deviceId: plan.deviceId),
+          output: _output().copyWith(sessionId: id, deviceId: plan.deviceId),
+        );
+      };
+    final container = ProviderContainer(
+      overrides: [
+        appSessionProvider.overrideWithValue(dependencies),
+        deviceReaderProvider.overrideWithValue(dependencies.devices),
+        settingsManagementProvider.overrideWithValue(dependencies.settings),
+        runtimeEventsProvider.overrideWithValue(const Stream.empty()),
+        videoSessionsProvider.overrideWithValue(videos),
+        remoteControlProvider.overrideWithValue(control),
+        deviceInspectionProvider.overrideWithValue(_Inspection()),
+        deviceAppsProvider.overrideWithValue(_Apps()),
+        videoDisplayProvider.overrideWithValue(_Displays()),
+      ],
+    );
+    final views = RemoteViews(
+      videos: videos,
+      audio: _Audio(),
+      events: const Stream.empty(),
+      current: () => true,
+      readSnapshot: () => const DeviceAudioViewSnapshot(
+        devices: [],
+        reconciliationPending: false,
+      ),
+      onAudioError: (_) {},
+    );
+    late BuildContext workbench;
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, _) {
+            workbench = context;
+            return const Scaffold(body: RemoteWindowsButton());
+          },
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: RemoteViewsScope(
+          views: views,
+          child: MaterialApp.router(
+            theme: ConnectTokens.theme(Brightness.light),
+            routerConfig: router,
+            builder: (context, child) =>
+                RemoteWindows(router: router, child: child!),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final windows = RemoteWindows.maybeOf(workbench)!;
+
+    await openRemoteRoute(workbench, deviceId: 'device');
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<ControlPage>(find.byType(ControlPage)).device.id,
+      'device',
+    );
+    windows.showWorkbench();
+    await tester.pumpAndSettle();
+    expect(videos.pauses, ['device']);
+    expect(videos.stops, isEmpty);
+
+    await openRemoteRoute(workbench, deviceId: tablet.id);
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<ControlPage>(find.byType(ControlPage)).device.id,
+      tablet.id,
+    );
+    windows.showWorkbench();
+    await tester.pumpAndSettle();
+    const package = 'com.example.remote';
+    await openRemoteRoute(
+      workbench,
+      deviceId: 'device',
+      packageName: package,
+      appName: '示例应用',
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<ControlPage>(find.byType(ControlPage)).packageName,
+      package,
+    );
+    windows.showWorkbench();
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(RemoteWindowsButton),
+        matching: find.byType(IconButton),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('手机屏幕'), findsNWidgets(2));
+    await tester.tap(find.text('示例应用'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<ControlPage>(find.byType(ControlPage)).packageName,
+      package,
+    );
+    expect(videos.starts, 3);
+
+    final pane = windows.windowFor((deviceId: 'device', packageName: package))!;
+    final closed = pane.close!();
+    await tester.pumpAndSettle();
+    expect(await closed, isTrue);
+    expect(videos.stops, [package]);
+    await openRemoteRoute(workbench, deviceId: 'device');
+    await tester.pumpAndSettle();
+    expect(videos.starts, 3);
+    expect(videos.resumes, contains('device'));
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(control.sent.map((call) => call.$1.sessionId), ['device', 'device']);
+    expect(control.sent.map((call) => (call.$2 as ControlKey).keyCode), [4, 4]);
+
+    await openRemoteRoute(
+      workbench,
+      deviceId: 'device',
+      packageName: package,
+      onPhoneScreen: true,
+    );
+    await tester.pumpAndSettle();
+    expect(videos.starts, 3);
+    expect(control.sent.last.$1.sessionId, 'device');
+    expect(
+      control.sent.last.$2,
+      const ControlAction.launchApplication(package),
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    views.dispose();
+    router.dispose();
+    container.dispose();
+  });
+
   testWidgets('声明式路由覆盖和恢复控制页时安全转移剪贴板焦点', (tester) async {
     final videos = _Videos();
     final dependencies = _Session();
@@ -422,15 +587,22 @@ VideoOutputReceipt _output() => const VideoOutputReceipt(
 );
 
 class _Session implements AppSession {
+  _Session([List<DeviceSnapshot> records = const [_device]])
+    : devices = _Devices(records),
+      initialState = AppState(
+        devices: records,
+        loading: false,
+        settings: Preferences(
+          deviceSettings: {
+            for (final device in records)
+              device.id: const DevicePreferences(wakeOnConnect: false),
+          },
+        ),
+      );
+
   @override
-  final initialState = AppState(
-    devices: [_device],
-    loading: false,
-    settings: Preferences(
-      deviceSettings: {'device': const DevicePreferences(wakeOnConnect: false)},
-    ),
-  );
-  final DeviceReader devices = _Devices();
+  final AppState initialState;
+  final DeviceReader devices;
   final SettingsManagement settings = _Settings();
   @override
   Stream<RuntimeEvent> get events => const Stream.empty();
@@ -444,6 +616,8 @@ class _Session implements AppSession {
 
 class _Videos implements VideoSessions {
   final starting = Completer<VideoSessionView>();
+  Future<VideoSessionView> Function(VideoSessionPlan)? startPlan;
+  final _opened = <String, VideoSessionView>{};
   final stops = <String>[];
   final pauses = <String>[];
   final resumes = <String>[];
@@ -455,9 +629,11 @@ class _Videos implements VideoSessions {
   }
 
   @override
-  Future<VideoSessionView> startVideo(VideoSessionPlan plan) {
+  Future<VideoSessionView> startVideo(VideoSessionPlan plan) async {
     starts++;
-    return starting.future;
+    final view = await (startPlan?.call(plan) ?? starting.future);
+    _opened[view.sessionId] = view;
+    return view;
   }
 
   @override
@@ -483,16 +659,8 @@ class _Videos implements VideoSessions {
 
   VideoPlaybackReceipt _playback(String id, VideoSessionStatus status) =>
       VideoPlaybackReceipt(
-        session: VideoSessionSnapshot(
-          sessionId: id,
-          deviceId: 'device',
-          name: 'Phone',
-          kind: .screen,
-          status: status,
-          captureGeneration: 2,
-          generation: 3,
-        ),
-        output: _output().copyWith(paused: status == .paused),
+        session: _opened[id]!.session.copyWith(status: status),
+        output: _opened[id]!.output!.copyWith(paused: status == .paused),
       );
 
   @override
@@ -524,8 +692,16 @@ class _Audio implements RemoteAudio {
 }
 
 class _Control implements RemoteControl {
+  final sent = <(ControlTarget, ControlAction)>[];
+
   @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+  Future<ControlReceipt> sendControl(
+    ControlTarget target,
+    ControlAction action,
+  ) async {
+    sent.add((target, action));
+    return const ControlReceipt.delivered(ScrcpyControlCompletion.written);
+  }
 }
 
 class _Apps implements DeviceApps {
@@ -539,6 +715,13 @@ class _Displays implements VideoDisplayControl {
 }
 
 class _Devices implements DeviceReader {
+  _Devices(this.devices);
+  final List<DeviceSnapshot> devices;
+
+  @override
+  Future<DeviceSnapshot> readDevice(String deviceId) async =>
+      devices.singleWhere((device) => device.id == deviceId);
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

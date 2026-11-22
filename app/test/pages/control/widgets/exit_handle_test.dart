@@ -84,6 +84,12 @@ void main() {
       final panel = find.byKey(const ValueKey('remote-tool-panel'));
       expect(tester.widget<Glass>(panel).variant, GlassVariant.regular);
       expect(tester.getSize(panel).width, 272);
+      final opening = tester.getRect(panel);
+      await tester.pump(const Duration(milliseconds: 100));
+      final entering = tester.getRect(panel);
+      await tester.pumpAndSettle();
+      expect(opening.width, lessThan(entering.width));
+      expect(entering.width, lessThan(tester.getRect(panel).width));
       final sound = tester.getCenter(find.text('设备声音'));
       final sleep = tester.getCenter(find.text('熄屏'));
       final keyboard = tester.getCenter(find.text('键盘'));
@@ -93,8 +99,18 @@ void main() {
 
       await tester.tap(find.byTooltip('收起画面工具'));
       await tester.pump();
-      expect(panel, findsNothing);
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(panel, findsOneWidget);
       expect(control, findsOneWidget);
+      final closing = tester.getRect(panel);
+      await tester.tap(control);
+      await tester.pump();
+      expect(tester.getRect(panel), closing);
+      await tester.pumpAndSettle();
+      expect(panel, findsOneWidget);
+      await tester.tap(find.byTooltip('收起画面工具'));
+      await tester.pumpAndSettle();
+      expect(panel, findsNothing);
     },
   );
 }

@@ -6,6 +6,7 @@ import 'package:scrcpy_connect/core/devices/current_device_notifier.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
+import 'package:scrcpy_connect/router/remote_windows.dart';
 
 /// 只有已核验且可交互的设备页面能取得焦点；远控画面另行核对会话所有权。
 class VisibleDeviceFocus extends ConsumerStatefulWidget {
@@ -72,7 +73,9 @@ class _VisibleDeviceFocusState extends ConsumerState<VisibleDeviceFocus>
       if (pending) _invalidate();
     });
     final pending = ref.watch(recovery);
-    final current = ModalRoute.isCurrentOf(context) == true;
+    final current =
+        ModalRoute.isCurrentOf(context) == true &&
+        RemoteWindows.isVisible(context);
     if (!current || pending || !_foreground || widget.deviceId.isEmpty) {
       _invalidate();
     } else if (!_active) {
