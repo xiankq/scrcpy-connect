@@ -64,7 +64,7 @@ final class GalleryScanNotifierProvider
 }
 
 String _$galleryScanNotifierHash() =>
-    r'cdb542112008c41a7b3a26bd6a194359bc14e527';
+    r'89acb0644c7c066556a376c4c28e66bf63cf3169';
 
 /// 每页独立拥有后台检查；可见集合与新终态分开，采用新集合由用户决定。
 

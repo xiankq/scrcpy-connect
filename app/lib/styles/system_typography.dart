@@ -27,22 +27,21 @@ final class SystemTypography extends ChangeNotifier {
       return;
     }
     _lifecycle = AppLifecycleListener(onResume: () => unawaited(_refresh()));
-    _subscription = _events.receiveBroadcastStream().listen(
-      _accept,
-      onError: (Object error) {
-        // 暂时不可读时保留最近的真实字族，返回前台后再次读取。
-      },
-    );
+    _subscription = _events
+        .receiveBroadcastStream()
+        .handleError(
+          (Object _) {},
+          test: (error) => error is MissingPluginException,
+        )
+        .listen(_accept);
     unawaited(_refresh());
   }
 
   Future<void> _refresh() async {
     try {
       _accept(await _methods.invokeMethod<Object?>('read'));
-    } on PlatformException {
-      // 不以读取失败覆盖最后确认的系统字族。
     } on MissingPluginException {
-      // 未安装宿主桥时使用主题的平台系统字族后备。
+      // 旧宿主使用主题的系统字族。
     }
   }
 
@@ -66,7 +65,7 @@ final class SystemTypography extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _lifecycle?.dispose();
-    _subscription?.cancel().ignore();
+    unawaited(_subscription?.cancel());
     super.dispose();
   }
 }

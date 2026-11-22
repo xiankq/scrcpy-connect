@@ -78,7 +78,7 @@ void main() {
     await actions.importDirectory();
     expect(documents.imports, hasLength(1));
     expect(container.read(provider).result?.managedSourceId, 'retained');
-    expect(container.read(provider).error, contains('release failed'));
+    expect(container.read(provider).error, contains('上次选择的文件仍在使用'));
     expect(container.read(provider).busy, isFalse);
     documents.releaseFailure = null;
     final retry = actions.importDirectory();

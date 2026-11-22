@@ -95,7 +95,7 @@ class SystemNotifications {
     } catch (_) {
       if (!_disposed && _current()) {
         status = const SystemNotificationStatus(
-          reason: '系统提醒暂时无法初始化，请稍后检查系统设置。',
+          reason: '暂时无法开启系统提醒。请检查系统通知设置。',
         );
         _changed();
       }
@@ -124,7 +124,7 @@ class SystemNotifications {
       }
     } catch (_) {
       if (!_disposed && _current() && epoch == _statusEpoch) {
-        status = const SystemNotificationStatus(reason: '尚未确认系统提醒权限，请稍后重试。');
+        status = const SystemNotificationStatus(reason: '无法读取通知权限。请在系统设置中检查。');
         configure();
         _changed();
       }
@@ -135,22 +135,14 @@ class SystemNotifications {
   Future<SystemNotificationStatus> requestPermission() async {
     await initialize();
     if (_disposed || !_current()) return status;
-    try {
-      await sink.requestPermission();
-    } catch (_) {
-      // 重新读取实际状态。
-    }
+    await sink.requestPermission();
     return refreshStatus();
   }
 
   Future<bool> openSettings() async {
     await initialize();
     if (_disposed || !_current()) return false;
-    try {
-      return await sink.openSettings();
-    } catch (_) {
-      return false;
-    }
+    return sink.openSettings();
   }
 
   void configure() {
@@ -207,7 +199,7 @@ class SystemNotifications {
       _presentation = SystemNotificationActivation(
         target: target,
         available: available,
-        reason: available ? '' : '这条系统提醒已失效或暂时无法核验，请查看设备当前状态。',
+        reason: available ? '' : '这条提醒已不可用。请在应用内查看手机的最新状态。',
       );
     }
     return _presentation;
@@ -268,7 +260,7 @@ class SystemNotifications {
         callChannelEnabled: status.callChannelEnabled,
         canRequest: status.canRequest,
         canOpenSettings: status.canOpenSettings,
-        reason: '系统提醒操作尚未确认，请检查通知设置。',
+        reason: '暂时无法确认系统提醒是否已开启。请检查通知设置。',
       );
       _changed();
     });

@@ -126,8 +126,9 @@ final class ThumbnailJobService implements ThumbnailJobs {
       return !_closed &&
           !_retiredConnections.contains(job.connection) &&
           identical(requireConnection(job.device), job.connection);
-    } catch (_) {
-      return false;
+    } on RequestFailure catch (error) {
+      if (error.code == 'disconnected') return false;
+      rethrow;
     }
   }
 

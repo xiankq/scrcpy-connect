@@ -117,6 +117,24 @@ void main() {
     await retired;
     expect(events.hasListener, isFalse);
   });
+
+  test('查找失败保留队列和错误，成功读取后才判定分享不存在', () async {
+    final actions = container.read(shareInboxProvider.notifier);
+    final initial = actions.load();
+    source.reads.single.complete([
+      const IncomingShare(shareId: 'known', status: .ready),
+    ]);
+    await initial;
+    final reading = actions.find('unknown');
+    final failure = StateError('share queue unavailable');
+    final expectation = expectLater(reading, throwsA(same(failure)));
+    source.reads.last.completeError(failure);
+    await expectation;
+    expect(container.read(shareInboxProvider).shares.single.shareId, 'known');
+    final missing = actions.find('unknown');
+    source.reads.last.complete([]);
+    expect(await missing, isNull);
+  });
 }
 
 class _Shares implements IncomingShares {

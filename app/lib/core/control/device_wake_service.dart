@@ -379,8 +379,8 @@ final class DeviceWakeService {
     }
     try {
       onChanged(DeviceKeepAwakeChanged(entry.state));
-    } catch (_) {
-      // 观察者失败不转移或丢弃捕获的关闭责任。
+    } catch (error, stack) {
+      Zone.current.handleUncaughtError(error, stack);
     }
   }
 }

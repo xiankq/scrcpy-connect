@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
@@ -87,7 +88,7 @@ class GalleryScanNotifier extends _$GalleryScanNotifier {
         state = state.copyWith(
           starting: false,
           paging: false,
-          error: '相册检查未能开始：$failure',
+          error: failureMessage(failure, fallback: '无法读取手机相册。请检查手机连接后重试。'),
         );
       }
     }
@@ -219,7 +220,7 @@ class GalleryScanNotifier extends _$GalleryScanNotifier {
           read == (append ? owner.pagingRead : owner.read)) {
         state = state.copyWith(
           paging: append ? false : state.paging,
-          error: '相册检查未完成：$failure',
+          error: failureMessage(failure, fallback: '无法继续读取相册。请下拉刷新。'),
         );
       }
     }
@@ -242,7 +243,10 @@ class GalleryScanNotifier extends _$GalleryScanNotifier {
       state = state.copyWith(stopping: false);
     } catch (failure) {
       if (_current(owner, generation)) {
-        state = state.copyWith(stopping: false, error: '停止检查尚未确认：$failure');
+        state = state.copyWith(
+          stopping: false,
+          error: failureMessage(failure, fallback: '暂时无法确认是否停止读取。请先查看相册状态。'),
+        );
       }
     }
   }

@@ -103,7 +103,7 @@ class LocalNotificationSink implements SystemNotificationSink {
   @override
   Future<SystemNotificationStatus> status() async {
     if (kIsWeb) {
-      return const SystemNotificationStatus(reason: '此平台尚未验证系统提醒。');
+      return const SystemNotificationStatus(reason: '本机暂时无法显示系统提醒。请在应用内查看。');
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -145,11 +145,11 @@ class LocalNotificationSink implements SystemNotificationSink {
         return _appleStatus(permission);
       case TargetPlatform.windows:
         return const SystemNotificationStatus(
-          reason: 'Windows 系统提醒仍需验证打包身份及撤回行为。',
+          reason: 'Windows 上暂时无法显示系统提醒。请在应用内查看。',
         );
       case TargetPlatform.linux:
       case TargetPlatform.fuchsia:
-        return const SystemNotificationStatus(reason: '此平台尚未验证系统提醒。');
+        return const SystemNotificationStatus(reason: '本机暂时无法显示系统提醒。请在应用内查看。');
     }
   }
 

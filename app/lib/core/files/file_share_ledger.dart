@@ -161,8 +161,8 @@ final class FileShareLedger implements FilePublicationLeases {
     // 监听器只得到不可与账本共享的投影，不参与磁盘提交结果。
     try {
       _onChanged?.call(event);
-    } catch (_) {
-      /* 呈现失败不撤销已经完成的提交。 */
+    } catch (error, stack) {
+      Zone.current.handleUncaughtError(error, stack);
     }
   }
 

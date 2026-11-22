@@ -314,7 +314,7 @@ final class DeviceResources {
   CompanionService get _companion {
     if (_companionInstance == null) _checkCreation();
     return _companionInstance ??= CompanionService(
-      requireConnection: _devices.requireConnection,
+      currentConnection: _devices.current,
       recovery: CompanionRecovery(_directory),
       deviceSerial: (id) => _records.current.find(id)?.serial,
       serverBytes: _companionBytes,

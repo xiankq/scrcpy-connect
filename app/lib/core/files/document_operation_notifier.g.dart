@@ -66,7 +66,7 @@ final class DocumentOperationNotifierProvider
 }
 
 String _$documentOperationNotifierHash() =>
-    r'37f46f58d15b807f0c128171288ec04042bc1732';
+    r'09ba5363e2ebf082ae4242631a7bdc11beec72e7';
 
 /// 导入与系统保存共用的提交、取消和记录回读；视图负责打开选择器。
 

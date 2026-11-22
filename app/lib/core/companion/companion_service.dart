@@ -10,6 +10,7 @@ import 'package:scrcpy_connect/core/companion/companion_update.dart';
 import 'package:scrcpy_connect/core/companion/models/companion_config.dart';
 import 'package:scrcpy_connect/core/companion/models/companion_event.dart';
 import 'package:scrcpy_connect/core/devices/device_connection.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
 final class _Deployment {
   _Deployment(this.device, this.connection, this.client);
@@ -27,7 +28,7 @@ final class _Deployment {
 /// 通知及通话的用户意图、订阅代次由 DeviceObservationService 负责。
 final class CompanionService {
   CompanionService({
-    required this.requireConnection,
+    required this.currentConnection,
     required Uint8List serverBytes,
     required this.config,
     required this.onChanged,
@@ -35,7 +36,7 @@ final class CompanionService {
     this.deviceSerial,
   }) : _serverBytes = Uint8List.fromList(serverBytes);
 
-  final DeviceConnection Function(String) requireConnection;
+  final DeviceConnection? Function(String) currentConnection;
   final Uint8List _serverBytes;
   final CompanionConfig config;
   final void Function(CompanionEvent) onChanged;
@@ -50,13 +51,9 @@ final class CompanionService {
 
   Stream<CompanionUpdate> get updates => _updates.stream;
 
-  DeviceConnection? currentConnection(String device) {
-    try {
-      return requireConnection(device);
-    } catch (_) {
-      return null;
-    }
-  }
+  DeviceConnection requireConnection(String device) =>
+      currentConnection(device) ??
+      (throw const RequestFailure('disconnected', '这台设备当前没有可用连接。'));
 
   bool hasActive(String device) {
     final entry = _deployments[device];
@@ -244,8 +241,8 @@ final class CompanionService {
   void _emitEvent(CompanionEvent event) {
     try {
       onChanged(event);
-    } catch (_) {
-      // 仅隔离应用事件消费者；远端 RPC、部署和资源回收错误不经过此捕获。
+    } catch (error, stack) {
+      Zone.current.handleUncaughtError(error, stack);
     }
   }
 

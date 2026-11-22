@@ -103,9 +103,16 @@ Future<List<AppRelease>> readAppReleases(Uri url) async {
         .bind(response)
         .join()
         .timeout(const Duration(seconds: 10));
-    final records = (jsonDecode(body) as List).cast<Map<String, Object?>>();
-    return records.map(AppRelease.fromJson).toList(growable: false)
-      ..sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
+    final records = jsonDecode(body);
+    if (records is! List) throw const FormatException('更新记录应为列表。');
+    final releases = <AppRelease>[];
+    for (final record in records) {
+      if (record is! Map<String, Object?>) {
+        throw const FormatException('更新记录格式不正确。');
+      }
+      releases.add(AppRelease.fromJson(record));
+    }
+    return releases..sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
   } finally {
     client.close(force: true);
   }

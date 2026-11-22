@@ -27,22 +27,21 @@ final class SystemVisualPreferences extends ChangeNotifier {
       return;
     }
     _lifecycle = AppLifecycleListener(onResume: () => unawaited(_refresh()));
-    _subscription = _events.receiveBroadcastStream().listen(
-      _accept,
-      onError: (Object error) {
-        // 读取失败保留最近的真实值，返回前台时再次核对。
-      },
-    );
+    _subscription = _events
+        .receiveBroadcastStream()
+        .handleError(
+          (Object _) {},
+          test: (error) => error is MissingPluginException,
+        )
+        .listen(_accept);
     unawaited(_refresh());
   }
 
   Future<void> _refresh() async {
     try {
       _accept(await _channel.invokeMethod<Object?>('read'));
-    } on PlatformException {
-      // 不把暂时不可读误报为系统已关闭该设置。
     } on MissingPluginException {
-      // 未安装宿主桥时继续使用框架已有的辅助偏好。
+      // 旧宿主使用框架提供的辅助偏好。
     }
   }
 
@@ -61,7 +60,7 @@ final class SystemVisualPreferences extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _lifecycle?.dispose();
-    _subscription?.cancel().ignore();
+    unawaited(_subscription?.cancel());
     super.dispose();
   }
 }

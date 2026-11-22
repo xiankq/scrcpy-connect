@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
@@ -73,7 +74,10 @@ class FileSearchNotifier extends _$FileSearchNotifier {
       await _refresh(owner, generation, next.target);
     } catch (error) {
       if (_current(owner, generation)) {
-        state = state.copyWith(starting: false, error: '$error');
+        state = state.copyWith(
+          starting: false,
+          error: failureMessage(error, fallback: '无法开始搜索。请检查手机连接后重试。'),
+        );
       }
     }
   }
@@ -118,7 +122,9 @@ class FileSearchNotifier extends _$FileSearchNotifier {
     } catch (error) {
       if (_current(owner, generation) &&
           readGeneration == owner.readGeneration) {
-        state = state.copyWith(error: '$error');
+        state = state.copyWith(
+          error: failureMessage(error, fallback: '无法继续搜索。请检查手机连接后再试。'),
+        );
       }
     }
   }
@@ -136,7 +142,10 @@ class FileSearchNotifier extends _$FileSearchNotifier {
       }
     } catch (error) {
       if (_current(owner, generation)) {
-        state = state.copyWith(stopping: false, error: '停止搜索未确认：$error');
+        state = state.copyWith(
+          stopping: false,
+          error: failureMessage(error, fallback: '暂时无法确认搜索是否已停止。请先刷新结果。'),
+        );
       }
     }
   }

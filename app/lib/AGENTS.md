@@ -19,3 +19,8 @@
 - 路由沿用 `router/app_router.dart` 的 typed route；导航动作通过 `router/navigation.dart`，资源解析通过 `router/route_resource_resolver.dart`。调整路由同时核对返回、深链及资源失效的行为。
 - 非控件视觉定义归 `styles/`；组件消费语义 token。视觉数值唯一维护在 [design.md](../../designs/design.md)，通过[生成器](../../scripts/design_tokens/README.md)更新 `styles/generated/`。
 - 修改共享控件时核对设计稿母组件及受影响实例；运行态检查明暗主题、窄容器、大字、安全区和辅助偏好。GPU 效果以实际渲染取证。
+
+## 失败与诊断
+
+- 能力层把可恢复故障转成带操作语义的结果。Notifier 保留已知数据并发布失败或待核对，页面提供就近动作。意外异常交给应用错误边界，保留堆栈。日志记录动作、阶段与脱敏字段。
+- 异步串行队列可以在派生等待链上吸收已结算的错误，原调用仍收到失败。后台订阅、主动刷新和任务清理的失败要有状态、事件或诊断归属。插件缺失、用户取消及允许部分完成的逐项错误按接口契约处理。
