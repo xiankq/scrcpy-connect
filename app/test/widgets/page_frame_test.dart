@@ -3,130 +3,147 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/core/platform/window_environment.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
-import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/window_environment_scope.dart';
+import 'package:scrcpy_connect/widgets/workspace_panes.dart';
 
 void main() {
-  testWidgets('freeform desktop windows keep the workspace toolbar', (
+  testWidgets('Duo split panes put actions on the physical window edge', (
     tester,
   ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: MediaQuery(
-          data: const MediaQueryData(size: Size(720, 900)),
-          child: WindowEnvironmentScope(
-            readHostEnvironment: () async => const WindowEnvironment(
-              width: 720,
-              height: 900,
-              mode: WindowMode.freeform,
-              windowId: 'desktop:window-7',
-            ),
-            watchHostEnvironment: () => const Stream.empty(),
-            child: const PageFrame(
-              root: true,
-              title: '设备',
-              child: Center(child: Text('内容')),
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    for (final edge in liquid.GlassVerticalBarEdge.values) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: liquid.GlassVerticalBar(
+            data: liquid.GlassVerticalBarData(edge: edge, width: 120, top: 24),
+            child: WorkspacePanes(
+              builder: (context, split, useSideToolbar) {
+                expect(split, isTrue);
+                expect(useSideToolbar, isTrue);
+                return (
+                  list: const SizedBox.expand(),
+                  detail: const SizedBox.expand(),
+                  sideActions: [
+                    IconButton(onPressed: () {}, icon: const Icon(Icons.add)),
+                    IconButton(
+                      onPressed: () {},
+                      icon: const Icon(Icons.settings),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),
-      ),
-    );
-    await tester.pump();
-
-    expect(find.byType(AppBar), findsNothing);
-    expect(find.text('设备'), findsOneWidget);
-    expect(find.text('内容'), findsOneWidget);
-    expect(tester.takeException(), isNull);
+      );
+      final actions = find.byType(GlassToolbarGroup);
+      expect(actions, findsNWidgets(2));
+      final x = edge == liquid.GlassVerticalBarEdge.leading ? 42.0 : 1158.0;
+      expect(tester.getCenter(actions.first), Offset(x, 46));
+      expect(tester.getCenter(actions.last).dx, x);
+      expect(tester.takeException(), isNull);
+    }
   });
 
-  testWidgets('freeform desktop detail pages keep workspace chrome', (
+  testWidgets('正文与底部操作在同一安全窗格内水平居中', (tester) async {
+    const bodyKey = ValueKey('page-body');
+    const bottomKey = ValueKey('page-bottom');
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    for (final width in [1280.0, 390.0]) {
+      tester.view.physicalSize = Size(width, 720);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(padding: const EdgeInsets.only(left: 40)),
+              child: const PageFrame(
+                title: '连接',
+                bottom: SizedBox(key: bottomKey, height: 50),
+                child: SizedBox.expand(key: bodyKey),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final body = tester.getRect(find.byKey(bodyKey));
+      final bottom = tester.getRect(find.byKey(bottomKey));
+      expect(
+        body.width,
+        width == 1280 ? DesignTokens.componentPageContentMaxWidth : width - 40,
+      );
+      expect(body.center.dx, (width + 40) / 2);
+      expect(bottom.center.dx, body.center.dx);
+    }
+  });
+
+  testWidgets('desktop window titles stay above scrolling content', (
     tester,
   ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: MediaQuery(
-          data: const MediaQueryData(size: Size(720, 900)),
-          child: WindowEnvironmentScope(
-            readHostEnvironment: () async => const WindowEnvironment(
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(720, 900);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    const cases = [
+      (WindowMode.freeform, 'desktop:window-7', true),
+      (WindowMode.freeform, 'desktop:window-8', false),
+      (WindowMode.fullScreen, 'macos:42', false),
+    ];
+    for (final (mode, windowId, root) in cases) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WindowEnvironmentScope(
+            key: ValueKey(windowId),
+            readHostEnvironment: () async => WindowEnvironment(
               width: 720,
               height: 900,
-              mode: WindowMode.freeform,
-              windowId: 'desktop:window-8',
+              mode: mode,
+              windowId: windowId,
             ),
             watchHostEnvironment: () => const Stream.empty(),
             child: PageFrame(
-              title: '设备详情',
-              root: false,
-              child: const SizedBox.expand(),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    expect(find.byType(AppBar), findsNothing);
-    expect(find.text('设备详情'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('desktop full screen windows keep workspace chrome', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: MediaQuery(
-          data: const MediaQueryData(size: Size(720, 900)),
-          child: WindowEnvironmentScope(
-            readHostEnvironment: () async => const WindowEnvironment(
-              width: 720,
-              height: 900,
-              mode: WindowMode.fullScreen,
-              windowId: 'macos:42',
-            ),
-            watchHostEnvironment: () => const Stream.empty(),
-            child: PageFrame(title: '全屏桌面', child: const SizedBox.expand()),
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    expect(find.byType(AppBar), findsNothing);
-    expect(find.text('全屏桌面'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('compact navigation keeps the title plane opaque', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: MediaQuery(
-          data: const MediaQueryData(size: Size(390, 844)),
-          child: WindowEnvironmentScope(
-            readHostEnvironment: () async => const WindowEnvironment(
-              width: 390,
-              height: 844,
-              windowId: 'phone:window-1',
-            ),
-            watchHostEnvironment: () => const Stream.empty(),
-            child: const PageFrame(
-              root: true,
+              root: root,
               title: '设备',
-              child: SizedBox.expand(),
+              child: ListView(
+                children: [
+                  for (var row = 1; row <= 30; row++)
+                    SizedBox(height: 64, child: Text('内容 $row')),
+                ],
+              ),
             ),
           ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    expect(find.byType(GlassSurfaceGroup), findsNothing);
-    expect(find.byType(AppBar), findsOneWidget);
-    expect(tester.takeException(), isNull);
+      final title = find.text('设备');
+      final row = find.text('内容 5');
+      final titleBefore = tester.getRect(title);
+      final rowBefore = tester.getTopLeft(row).dy;
+      expect(find.byType(AppBar), findsNothing);
+      expect(
+        tester.getTopLeft(find.byType(ListView)).dy,
+        greaterThanOrEqualTo(titleBefore.bottom),
+      );
+
+      await tester.drag(find.byType(ListView), const Offset(0, -128));
+      await tester.pumpAndSettle();
+
+      expect(tester.getRect(title), titleBefore);
+      expect(tester.getTopLeft(row).dy, lessThan(rowBefore - 64));
+      expect(tester.takeException(), isNull);
+    }
   });
 
   testWidgets('Duo side bar moves page actions out of the title plane', (
@@ -151,8 +168,8 @@ void main() {
               ),
               watchHostEnvironment: () => const Stream.empty(),
               child: PageFrame(
-                root: true,
                 title: '设备',
+                onBack: () {},
                 actions: [
                   IconButton(
                     key: actionKey,
@@ -170,50 +187,72 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byType(GlassVerticalToolbarGroup), findsOneWidget);
+    final action = find.byType(GlassToolbarGroup);
+    final back = find.byType(GlassToolbarIconButton);
+    expect(action, findsOneWidget);
+    expect(back, findsOneWidget);
+    expect(tester.getSize(action), const Size.square(44));
+    expect(tester.getSize(back), const Size.square(44));
+    expect(tester.getCenter(action).dx, tester.getCenter(back).dx);
+    expect(
+      tester.getTopLeft(action).dy,
+      greaterThan(tester.getBottomLeft(back).dy),
+    );
     expect(find.byKey(actionKey), findsOneWidget);
     expect(tester.getTopLeft(find.byKey(actionKey)).dx, greaterThan(300));
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Duo navigation shell exposes its side bar to page chrome', (
+  testWidgets('Duo navigation shell puts actions inside the system edge', (
     tester,
   ) async {
     final previousPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = previousPlatform);
+
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(402, 874);
+    tester.view.viewPadding = const FakeViewPadding(right: 84);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetViewPadding);
+
+    var opened = false;
+    const actionKey = ValueKey('duo-shell-action');
     await tester.pumpWidget(
-      MediaQuery(
-        data: const MediaQueryData(
-          size: Size(402, 874),
-          viewPadding: EdgeInsets.only(right: 84),
-        ),
-        child: MaterialApp(
-          home: liquid.GlassNavigationShell(
-            child: PageFrame(
-              root: true,
-              title: '设备',
-              actions: [
-                IconButton(
-                  key: const ValueKey('duo-shell-action'),
-                  onPressed: null,
-                  icon: const Icon(Icons.add),
-                ),
-              ],
-              child: const SizedBox.expand(),
-            ),
+      MaterialApp(
+        home: liquid.GlassNavigationShell(
+          child: PageFrame(
+            root: true,
+            title: '设备',
+            actions: [
+              IconButton(
+                key: actionKey,
+                onPressed: () => opened = true,
+                icon: const Icon(Icons.add),
+              ),
+            ],
+            child: const SizedBox.expand(),
           ),
         ),
       ),
     );
     await tester.pump();
 
-    expect(find.byType(GlassVerticalToolbarGroup), findsOneWidget);
-    expect(find.byKey(const ValueKey('duo-shell-action')), findsOneWidget);
-    expect(tester.takeException(), isNull);
+    final action = find.byKey(actionKey);
+    expect(tester.getTopLeft(action).dx, greaterThanOrEqualTo(402 - 84));
+    expect(tester.getTopRight(action).dx, lessThanOrEqualTo(402));
+    expect(
+      find.descendant(of: find.byType(AppBar), matching: action),
+      findsNothing,
+    );
+    await tester.tap(action);
+    expect(opened, isTrue);
   });
 
-  testWidgets('Duo side bar also owns a trailing text action', (tester) async {
+  testWidgets('Duo keeps trailing text actions in the horizontal title row', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: MediaQuery(
@@ -247,11 +286,11 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byType(GlassVerticalToolbarGroup), findsOneWidget);
-    expect(find.byKey(const ValueKey('duo-trailing-action')), findsOneWidget);
+    final action = find.byKey(const ValueKey('duo-trailing-action'));
+    expect(find.byType(GlassToolbarGroup), findsNothing);
     expect(
-      tester.getTopLeft(find.byKey(const ValueKey('duo-trailing-action'))).dx,
-      greaterThan(300),
+      find.descendant(of: find.byType(AppBar), matching: action),
+      findsOneWidget,
     );
     expect(tester.takeException(), isNull);
   });

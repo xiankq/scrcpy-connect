@@ -21,7 +21,7 @@ import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/content/cached_file_image.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_action_bar.dart';
 import 'package:scrcpy_connect/widgets/media_cache_blocker.dart';
 
 class MediaPreviewPage extends HookConsumerWidget {
@@ -109,7 +109,7 @@ class MediaPreviewPage extends HookConsumerWidget {
                     errorBuilder: (_, e, _) => Center(
                       child: Text(
                         '$e',
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: DesignTokens.colorWhite),
                       ),
                     ),
                   ),
@@ -124,17 +124,17 @@ class MediaPreviewPage extends HookConsumerWidget {
         result.hasError ||
         mediaSource.isEmpty;
     final actions = <(String, IconData, VoidCallback)>[
-      ('取回文件', LucideIcons.download, retrieve),
+      ('取回原件', AppIcons.download, retrieve),
       if (supportsSystemFileShare)
         (
           '分享',
-          LucideIcons.share2,
+          AppIcons.share,
           () => retrieveFile(context, ref, device, file, share: true),
         ),
       if (!reserveChrome)
         (
           originalSize.value ? '适合屏幕' : '原尺寸',
-          originalSize.value ? LucideIcons.minimize2 : LucideIcons.maximize2,
+          originalSize.value ? AppIcons.fitScreen : AppIcons.originalSize,
           () => originalSize.value = !originalSize.value,
         ),
     ];
@@ -175,106 +175,70 @@ class MediaPreviewPage extends HookConsumerWidget {
       child: Theme(
         data: mediaTheme,
         child: Builder(
-          builder: (context) => Scaffold(
-            backgroundColor: DesignTokens.colorMediaInk,
-            body: Stack(
-              fit: StackFit.expand,
-              children: [
-                Positioned.fill(
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      top: reserveChrome
-                          ? chromeInset
-                          : DesignTokens.spacingZero,
-                      bottom: reserveChrome
-                          ? MediaQuery.paddingOf(context).bottom +
-                                DesignTokens.componentFileActionBarHeight +
-                                DesignTokens.spacingMd * 2
-                          : DesignTokens.spacingZero,
-                    ),
-                    child: preview,
+          builder: (context) {
+            final actionBar = SafeArea(
+              top: false,
+              minimum: const EdgeInsets.all(DesignTokens.spacingMd),
+              child: Center(
+                heightFactor: 1,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth:
+                        DesignTokens.componentMediaPreviewBarWidth +
+                        2 * DesignTokens.spacingXs,
+                  ),
+                  child: GlassActionBar(
+                    variant: GlassVariant.clear,
+                    actions: [
+                      for (final (label, icon, onPressed) in actions)
+                        GlassActionBarButton(
+                          label: label,
+                          icon: Icon(icon),
+                          onPressed: onPressed,
+                        ),
+                    ],
                   ),
                 ),
-                Align(
-                  alignment: Alignment.topCenter,
-                  child: MediaPreviewToolbar(
-                    title: file.name,
-                    onBack: () => closePage<void>(context),
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: MediaControlsProtection(
-                    edge: MediaControlsEdge.bottom,
-                    child: SafeArea(
-                      top: false,
-                      minimum: const EdgeInsets.all(DesignTokens.spacingMd),
-                      child: Center(
-                        heightFactor: 1,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(
-                            maxWidth:
-                                DesignTokens.componentMediaPreviewBarWidth,
-                          ),
-                          child: LayoutBuilder(
-                            builder: (context, constraints) => GlassToolbarGroup(
-                              variant: GlassVariant.clear,
-                              children: [
-                                for (final (label, icon, onPressed) in actions)
-                                  SizedBox(
-                                    width:
-                                        constraints.maxWidth / actions.length,
-                                    child: Tooltip(
-                                      message: label,
-                                      excludeFromSemantics: true,
-                                      child: TextButton(
-                                        style: TextButton.styleFrom(
-                                          minimumSize: const Size(
-                                            0,
-                                            DesignTokens
-                                                .componentFileActionBarHeight,
-                                          ),
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: DesignTokens.spacingXs,
-                                          ),
-                                          foregroundColor:
-                                              DesignTokens.colorWhite,
-                                        ),
-                                        onPressed: onPressed,
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              icon,
-                                              size: DesignTokens
-                                                  .componentIconActionSize,
-                                            ),
-                                            const SizedBox(
-                                              height: DesignTokens.spacingMicro,
-                                            ),
-                                            Text(
-                                              label,
-                                              textAlign: TextAlign.center,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .labelMedium,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
+              ),
+            );
+            return Scaffold(
+              backgroundColor: DesignTokens.colorMediaInk,
+              body: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (reserveChrome)
+                    Column(
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.only(top: chromeInset),
+                            child: preview,
                           ),
                         ),
+                        actionBar,
+                      ],
+                    )
+                  else ...[
+                    preview,
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: MediaControlsProtection(
+                        edge: MediaControlsEdge.bottom,
+                        child: actionBar,
                       ),
                     ),
+                  ],
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: MediaPreviewToolbar(
+                      title: file.name,
+                      onBack: () => closePage<void>(context),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );

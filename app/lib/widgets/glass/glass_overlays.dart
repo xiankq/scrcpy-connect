@@ -33,6 +33,13 @@ class GlassActionIcon extends StatelessWidget {
       constraints: constraints,
       style: style,
     );
-    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
+    final label = tooltip;
+    return label == null
+        ? button
+        : Tooltip(
+            message: label,
+            excludeFromSemantics: true,
+            child: Semantics(label: label, child: button),
+          );
   }
 }

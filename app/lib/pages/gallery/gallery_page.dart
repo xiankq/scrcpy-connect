@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -15,6 +16,9 @@ import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_action_bar.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
+import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 
@@ -79,6 +83,13 @@ class GalleryPage extends HookConsumerWidget {
     }, [actions, history, source]);
     final status = scan.result?.status;
     final media = scan.items;
+    final reading =
+        scan.error == null && (scan.scanning || scan.result == null);
+    const gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
+      maxCrossAxisExtent: 160,
+      crossAxisSpacing: DesignTokens.spacingXs,
+      mainAxisSpacing: DesignTokens.spacingXs,
+    );
     Future<void> reload() async {
       if (selected.value.isNotEmpty || scan.scanning) return;
       await actions.start();
@@ -95,53 +106,54 @@ class GalleryPage extends HookConsumerWidget {
 
     final selecting = selected.value.isNotEmpty;
     final chosen = media.where((file) => selected.value.contains(file.path));
-    return PageFrame(
+    void closeSelection() => selected.value = {};
+    final page = PageFrame(
       title: selecting ? '已选择 ${chosen.length} 项' : '手机相册',
-      onBack: selecting ? () => selected.value = {} : null,
-      bottomRadius: DesignTokens.roundedFull,
-      bottom: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          if (!selecting)
-            Expanded(
-              child: _GalleryAction(
-                label: '刷新',
-                icon: LucideIcons.refreshCw,
-                onPressed: scan.scanning ? null : reload,
-              ),
-            ),
+      leading: selecting
+          ? GlassToolbarIconButton(
+              semanticLabel: '退出选择',
+              icon: const Icon(AppIcons.close),
+              onPressed: closeSelection,
+            )
+          : null,
+      bottomGlass: false,
+      bottom: GlassActionBar(
+        actions: [
           if (selecting)
-            Expanded(
-              child: _GalleryAction(
-                label: '取回原件',
-                icon: LucideIcons.download,
-                onPressed: chosen.isEmpty
-                    ? null
-                    : () => retrieveSelection(
-                        context,
-                        ref,
-                        device,
-                        chosen
-                            .map(
-                              (file) => (
-                                path: file.path,
-                                name: file.name,
-                                canOpen: file.canOpen,
-                              ),
-                            )
-                            .toList(),
-                      ),
-              ),
+            GlassActionBarButton(
+              label: '取回原件',
+              icon: const Icon(AppIcons.download),
+              onPressed: chosen.isEmpty
+                  ? null
+                  : () => retrieveSelection(
+                      context,
+                      ref,
+                      device,
+                      chosen
+                          .map(
+                            (file) => (
+                              path: file.path,
+                              name: file.name,
+                              canOpen: file.canOpen,
+                            ),
+                          )
+                          .toList(),
+                    ),
+            )
+          else ...[
+            GlassActionBarButton(
+              label: '刷新',
+              icon: const Icon(AppIcons.refresh),
+              onPressed: scan.scanning ? null : reload,
             ),
-          Expanded(
-            child: _GalleryAction(
-              label: selecting ? '取消选择' : '选择',
-              icon: selecting ? LucideIcons.x : LucideIcons.squareCheck,
+            GlassActionBarButton(
+              label: '选择',
+              icon: const Icon(AppIcons.selectMode),
               onPressed: media.isEmpty
                   ? null
-                  : () => selected.value = selecting ? {} : {'__select__'},
+                  : () => selected.value = {'__select__'},
             ),
-          ),
+          ],
         ],
       ),
       child: RefreshIndicator(
@@ -165,6 +177,7 @@ class GalleryPage extends HookConsumerWidget {
                   children: [
                     GalleryScanSummary(
                       scan: scan,
+                      reading: reading,
                       onCancel: actions.cancel,
                       onRefresh: actions.refresh,
                       device: device,
@@ -181,7 +194,29 @@ class GalleryPage extends HookConsumerWidget {
                 ),
               ),
             ),
-            if (media.isEmpty && !scan.scanning)
+            if (media.isEmpty && reading && !scan.showingPrevious)
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: DesignTokens.spacingMd,
+                ),
+                sliver: SliverToBoxAdapter(
+                  child: LoadingSkeleton(
+                    child: GridView.builder(
+                      primary: false,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: gridDelegate,
+                      itemCount:
+                          (MediaQuery.sizeOf(context).width /
+                                  gridDelegate.maxCrossAxisExtent)
+                              .ceil() *
+                          4,
+                      itemBuilder: (_, _) => const SkeletonBlock(),
+                    ),
+                  ),
+                ),
+              )
+            else if (media.isEmpty && !reading)
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: EmptyContent(
@@ -202,11 +237,7 @@ class GalleryPage extends HookConsumerWidget {
                 horizontal: DesignTokens.spacingMd,
               ),
               sliver: SliverGrid.builder(
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 160,
-                  crossAxisSpacing: DesignTokens.spacingXs,
-                  mainAxisSpacing: DesignTokens.spacingXs,
-                ),
+                gridDelegate: gridDelegate,
                 itemCount: media.length,
                 itemBuilder: (context, i) {
                   final file = media[i];
@@ -223,6 +254,11 @@ class GalleryPage extends HookConsumerWidget {
                             ? next.remove(path)
                             : next.add(path);
                         selected.value = next;
+                      } else if (file.mime.startsWith('video/')) {
+                        FileDetailsRoute(
+                          deviceId: device.id,
+                          path: path,
+                        ).push<void>(context);
                       } else {
                         MediaPreviewRoute(
                           deviceId: device.id,
@@ -246,29 +282,21 @@ class GalleryPage extends HookConsumerWidget {
         ),
       ),
     );
+    return CallbackShortcuts(
+      bindings: {
+        if (selecting)
+          const SingleActivator(LogicalKeyboardKey.escape): closeSelection,
+      },
+      child: Focus(
+        autofocus: true,
+        child: PopScope(
+          canPop: !selecting,
+          onPopInvokedWithResult: (popped, _) {
+            if (!popped && selecting) closeSelection();
+          },
+          child: page,
+        ),
+      ),
+    );
   }
-}
-
-class _GalleryAction extends StatelessWidget {
-  const _GalleryAction({
-    required this.label,
-    required this.icon,
-    required this.onPressed,
-  });
-  final String label;
-  final IconData icon;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) => TextButton(
-    onPressed: onPressed,
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: DesignTokens.componentIconSize),
-        const SizedBox(height: DesignTokens.spacingXxs),
-        Text(label, textAlign: TextAlign.center),
-      ],
-    ),
-  );
 }

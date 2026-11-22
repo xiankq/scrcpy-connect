@@ -1,5 +1,5 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:scrcpy_connect/pages/gallery/preview/widgets/media_controls_protection.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
@@ -19,45 +19,48 @@ class MediaPreviewToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final window = DesktopWindowInsets.of(context);
+    final side = liquid.GlassVerticalBar.maybeOf(context);
+    final atLeft = side?.edge == liquid.GlassVerticalBarEdge.leading;
+    final backLabel = MaterialLocalizations.of(context).backButtonTooltip;
+    final back = Tooltip(
+      message: backLabel,
+      excludeFromSemantics: true,
+      child: GlassToolbarIconButton(
+        semanticLabel: backLabel,
+        variant: GlassVariant.clear,
+        onPressed: onBack,
+        icon: const Icon(AppIcons.back),
+      ),
+    );
     final verticalPadding = window == null
         ? DesignTokens.spacingMd
         : (DesignTokens.componentPageHeaderHeight -
                   DesignTokens.componentIconButtonSize) /
               2;
-    return MediaControlsProtection(
+    final header = MediaControlsProtection(
       child: SafeArea(
         bottom: false,
+        minimum: EdgeInsets.only(
+          left: atLeft ? side!.width : 0,
+          right: side != null && !atLeft ? side.width : 0,
+        ),
         child: Padding(
           padding: EdgeInsets.fromLTRB(
             window != null && window.left > 0
-                ? window.left
+                ? window.left + DesignTokens.spacingXs
                 : DesignTokens.spacingMd,
             verticalPadding,
             window != null && window.right > 0
-                ? window.right
+                ? window.right + DesignTokens.spacingXs
                 : DesignTokens.spacingMd,
             verticalPadding,
           ),
           child: Row(
             children: [
-              Tooltip(
-                message: MaterialLocalizations.of(context).backButtonTooltip,
-                child: GlassToolbarIconButton(
-                  semanticLabel: MaterialLocalizations.of(context)
-                      .backButtonTooltip,
-                  variant: GlassVariant.clear,
-                  interactionScale: GlassMaterial.reduceMotion(context)
-                      ? 1
-                      : DesignTokens.componentGlassInteractionScale,
-                  anchorStretch: !GlassMaterial.reduceMotion(context),
-                  onPressed: onBack,
-                  icon: const Icon(
-                    LucideIcons.chevronLeft,
-                    color: DesignTokens.colorWhite,
-                  ),
-                ),
-              ),
-              const SizedBox(width: DesignTokens.spacingXs),
+              if (side == null) ...[
+                back,
+                const SizedBox(width: DesignTokens.spacingXs),
+              ],
               Expanded(
                 child: DesktopWindowDragArea(
                   child: SizedBox(
@@ -78,6 +81,42 @@ class MediaPreviewToolbar extends StatelessWidget {
           ),
         ),
       ),
+    );
+    if (side == null) return header;
+    return Stack(
+      children: [
+        Align(alignment: Alignment.topCenter, child: header),
+        GlassSideToolbar(
+          bar: side,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Positioned(
+                  left: -DesignTokens.spacingSm,
+                  right: -DesignTokens.spacingSm,
+                  top: -DesignTokens.spacingSm,
+                  bottom: -DesignTokens.spacingSm,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(
+                          colors: [
+                            DesignTokens.colorMediaShade,
+                            DesignTokens.colorTransparent,
+                          ],
+                          stops: [0.15, 1],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                back,
+              ],
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

@@ -2,15 +2,62 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/content/content_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/content/content_preview.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/files/models/file_catalog_entry.dart';
 import 'package:scrcpy_connect/pages/gallery/preview/media_preview_page.dart';
+import 'package:scrcpy_connect/pages/gallery/preview/widgets/media_preview_toolbar.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 
 void main() {
+  testWidgets('Duo 照片返回键使用侧边 clear 圆键，画面仍可操作', (tester) async {
+    var backTaps = 0;
+    var mediaTaps = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: liquid.GlassVerticalBar(
+            data: const liquid.GlassVerticalBarData(
+              edge: liquid.GlassVerticalBarEdge.trailing,
+              width: 84,
+              top: 120,
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => mediaTaps++,
+                ),
+                MediaPreviewToolbar(
+                  title: 'test.png',
+                  onBack: () => backTaps++,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    final back = find.byType(GlassToolbarIconButton);
+    expect(
+      tester.widget<GlassToolbarIconButton>(back).variant,
+      GlassVariant.clear,
+    );
+    expect(tester.getTopLeft(back).dy, 120);
+    expect(tester.getCenter(back).dx, 800 - 42);
+    expect(tester.getCenter(find.text('test.png')).dy, lessThan(120));
+    await tester.tap(back);
+    await tester.tapAt(const Offset(400, 400));
+    expect(backTaps, 1);
+    expect(mediaTaps, 1);
+  });
+
   testWidgets('图片取回和系统分享位于底栏，画面可切换原尺寸', (tester) async {
     final content = _Content();
     await tester.pumpWidget(
@@ -29,7 +76,7 @@ void main() {
         ),
       ),
     );
-    final retrieve = find.widgetWithText(TextButton, '取回文件');
+    final retrieve = find.widgetWithText(TextButton, '取回原件');
     expect(retrieve, findsOneWidget);
     expect(
       tester.getCenter(retrieve).dy,

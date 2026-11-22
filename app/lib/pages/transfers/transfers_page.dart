@@ -14,6 +14,7 @@ import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
+import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/workspace_panes.dart';
@@ -78,146 +79,163 @@ class TransfersPage extends HookConsumerWidget {
       }
     }
 
+    final actions = [
+      if (finished.value)
+        GlassActionIcon(
+          tooltip: '清空记录',
+          onPressed: visible.isEmpty || clearing.value ? null : clearHistory,
+          icon: const Icon(AppIcons.delete),
+        ),
+      GlassActionIcon(
+        tooltip: '刷新任务',
+        onPressed: refresh,
+        icon: const Icon(AppIcons.refresh),
+      ),
+    ];
     return WorkspacePanes(
       onCloseDetail: selected == null ? null : () => selection.value = null,
       hasContent: visible.isNotEmpty || selected != null,
-      builder: (context, split) {
+      builder: (context, split, useSideToolbar) {
         final current = selected ?? (split ? visible.firstOrNull : null);
         final representative = current == null
             ? null
             : _representative(current);
+        Widget buildList({required bool loading}) => RefreshIndicator(
+          onRefresh: refresh,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              const PageChromeSliver(),
+              SliverPadding(
+                padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                sliver: SliverToBoxAdapter(
+                  child: ContentPanel(
+                    padding: const EdgeInsets.all(
+                      DesignTokens.componentConnectionTabsPadding,
+                    ),
+                    child: Row(
+                      children: [
+                        for (final (done, label) in [
+                          (false, '传输中'),
+                          (true, '已结束'),
+                        ])
+                          Expanded(
+                            child: Semantics(
+                              selected: finished.value == done,
+                              child: TextButton(
+                                style: TextButton.styleFrom(
+                                  backgroundColor: finished.value == done
+                                      ? Theme.of(context)
+                                            .colorScheme
+                                            .surfaceContainerHigh
+                                      : null,
+                                  foregroundColor: finished.value == done
+                                      ? Theme.of(context).colorScheme.onSurface
+                                      : Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                  shape: const RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.all(
+                                      Radius.circular(
+                                        DesignTokens
+                                            .componentConnectionTabSelectedRounded,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                onPressed: () {
+                                  if (finished.value == done) return;
+                                  finished.value = done;
+                                  selection.value = null;
+                                },
+                                child: Text(label, textAlign: TextAlign.center),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (loading)
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: DesignTokens.spacingMd,
+                  ),
+                  sliver: SliverToBoxAdapter(
+                    child: SkeletonRows(
+                      height:
+                          DesignTokens.componentRowLargeHeight +
+                          (finished.value
+                              ? DesignTokens.spacingMd
+                              : DesignTokens.spacingLg),
+                      leadingSize: DesignTokens.componentIconButtonSize,
+                      cardRadius: DesignTokens.roundedLg,
+                      gap: DesignTokens.spacingSm,
+                      lines: 3,
+                      trailing: true,
+                      progress: !finished.value,
+                    ),
+                  ),
+                )
+              else if (visible.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: EmptyContent(
+                    icon: LucideIcons.arrowUpDown,
+                    title: finished.value ? '暂无已结束的传输' : '暂无正在传输的任务',
+                    message: finished.value
+                        ? '完成、失败或取消的任务会出现在这里。'
+                        : '发送和接收文件时，可在这里查看进度。',
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: DesignTokens.spacingMd,
+                  ),
+                  sliver: SliverList.separated(
+                    itemCount: visible.length,
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(height: DesignTokens.spacingSm),
+                    itemBuilder: (context, index) {
+                      final row = visible[index];
+                      return TransferHistoryRow(
+                        key: ValueKey((source, row.id)),
+                        row: row,
+                        selected: split && row.id == current?.id,
+                        refresh: refresh,
+                        onOpen: () {
+                          if (split) {
+                            selection.value = row.id;
+                          } else {
+                            TransferDetailsRoute(
+                              taskId: _representative(row).id,
+                            ).push<void>(context);
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ),
+              const PageChromeBottomSliver(),
+            ],
+          ),
+        );
         return (
           list: PageFrame(
             root: embedded,
             pane: split,
             title: '文件传输',
-            actions: [
-              if (finished.value)
-                GlassActionIcon(
-                  tooltip: '清空记录',
-                  onPressed: visible.isEmpty || clearing.value
-                      ? null
-                      : clearHistory,
-                  icon: const Icon(LucideIcons.trash2),
-                ),
-              GlassActionIcon(
-                tooltip: '刷新任务',
-                onPressed: refresh,
-                icon: const Icon(LucideIcons.refreshCw),
-              ),
-            ],
+            actions: useSideToolbar ? null : actions,
             child: AsyncContent<List<TransferHistoryEntry>>(
               loading: query.isLoading,
               data: query.value,
               error: query.error,
               onRefresh: refresh,
               emptyTitle: '暂时无法读取传输任务',
-              builder: (context, _) => RefreshIndicator(
-                onRefresh: refresh,
-                child: CustomScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  slivers: [
-                    const PageChromeSliver(),
-                    SliverPadding(
-                      padding: const EdgeInsets.all(DesignTokens.spacingMd),
-                      sliver: SliverToBoxAdapter(
-                        child: ContentPanel(
-                          padding: const EdgeInsets.all(
-                            DesignTokens.componentConnectionTabsPadding,
-                          ),
-                          child: Row(
-                            children: [
-                              for (final (done, label) in [
-                                (false, '传输中'),
-                                (true, '已结束'),
-                              ])
-                                Expanded(
-                                  child: Semantics(
-                                    selected: finished.value == done,
-                                    child: TextButton(
-                                      style: TextButton.styleFrom(
-                                        backgroundColor: finished.value == done
-                                            ? Theme.of(context)
-                                                  .colorScheme
-                                                  .surfaceContainerHigh
-                                            : null,
-                                        foregroundColor: finished.value == done
-                                            ? Theme.of(context)
-                                                  .colorScheme
-                                                  .onSurface
-                                            : Theme.of(context)
-                                                  .colorScheme
-                                                  .onSurfaceVariant,
-                                        shape: const RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.all(
-                                            Radius.circular(
-                                              DesignTokens
-                                                  .componentConnectionTabSelectedRounded,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      onPressed: () {
-                                        if (finished.value == done) return;
-                                        finished.value = done;
-                                        selection.value = null;
-                                      },
-                                      child: Text(
-                                        label,
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (visible.isEmpty)
-                      SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: EmptyContent(
-                          icon: LucideIcons.arrowUpDown,
-                          title: finished.value ? '暂无已结束的传输' : '暂无正在传输的任务',
-                          message: finished.value
-                              ? '完成、失败或取消的任务会出现在这里。'
-                              : '发送和接收文件时，可在这里查看进度。',
-                        ),
-                      )
-                    else
-                      SliverPadding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: DesignTokens.spacingMd,
-                        ),
-                        sliver: SliverList.separated(
-                          itemCount: visible.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: DesignTokens.spacingSm),
-                          itemBuilder: (context, index) {
-                            final row = visible[index];
-                            return TransferHistoryRow(
-                              key: ValueKey((source, row.id)),
-                              row: row,
-                              selected: split && row.id == current?.id,
-                              refresh: refresh,
-                              onOpen: () {
-                                if (split) {
-                                  selection.value = row.id;
-                                } else {
-                                  TransferDetailsRoute(
-                                    taskId: _representative(row).id,
-                                  ).push<void>(context);
-                                }
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                    const PageChromeBottomSliver(),
-                  ],
-                ),
-              ),
+              loadingPlaceholder: buildList(loading: true),
+              builder: (context, _) => buildList(loading: false),
             ),
           ),
           detail: representative == null
@@ -228,6 +246,7 @@ class TransfersPage extends HookConsumerWidget {
                   pane: split,
                   onBack: split ? null : () => selection.value = null,
                 ),
+          sideActions: useSideToolbar ? actions : const [],
         );
       },
     );

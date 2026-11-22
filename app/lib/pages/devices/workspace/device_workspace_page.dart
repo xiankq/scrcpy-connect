@@ -9,11 +9,9 @@ import 'package:scrcpy_connect/pages/devices/workspace/widgets/device_hero.dart'
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/favorite_apps.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/running_apps.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/workspace_call_card.dart';
-import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -22,12 +20,14 @@ class DeviceWorkspacePage extends ConsumerWidget {
   const DeviceWorkspacePage({
     super.key,
     required this.device,
+    required this.manageButton,
     this.pane = false,
     this.onBack,
   });
   final bool pane;
   final VoidCallback? onBack;
   final DeviceSnapshot device;
+  final Widget? manageButton;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -41,14 +41,7 @@ class DeviceWorkspacePage extends ConsumerWidget {
       pane: pane,
       onBack: onBack,
       title: '设备工作台',
-      actions: [
-        GlassActionIcon(
-          tooltip: '设备管理',
-          icon: const Icon(LucideIcons.settings),
-          onPressed: () =>
-              DeviceManagementRoute(deviceId: id).push<void>(context),
-        ),
-      ],
+      actions: [?manageButton],
       child: CustomScrollView(
         slivers: [
           const PageChromeSliver(),

@@ -12,6 +12,7 @@ class GalleryScanSummary extends StatelessWidget {
   const GalleryScanSummary({
     super.key,
     required this.scan,
+    required this.reading,
     required this.device,
     required this.onRestart,
     required this.onCancel,
@@ -20,6 +21,7 @@ class GalleryScanSummary extends StatelessWidget {
   });
 
   final GalleryScanState scan;
+  final bool reading;
   final DeviceSnapshot device;
   final VoidCallback onRestart;
   final VoidCallback onCancel;
@@ -42,7 +44,7 @@ class GalleryScanSummary extends StatelessWidget {
         if (scan.hasUpdate)
           TextButton(onPressed: onUpdate, child: const Text('更新照片')),
         Text(
-          scan.scanning
+          reading
               ? '正在检查手机中的照片与视频'
               : switch (status) {
                   .partial => '部分文件夹无法读取',
@@ -50,7 +52,7 @@ class GalleryScanSummary extends StatelessWidget {
                   .completed => '已检查共享存储中的照片与视频',
                   .unknown || .scanning || null => '暂时无法读取相册',
                 },
-          style: status == .completed && !scan.scanning
+          style: status == .completed && !reading
               ? Theme.of(context).textTheme.bodySmall
               : Theme.of(context).textTheme.bodyLarge,
         ),
@@ -58,7 +60,7 @@ class GalleryScanSummary extends StatelessWidget {
         LayoutBuilder(
           builder: (context, constraints) {
             final details = Text(
-              scan.scanning
+              reading
                   ? '已检查 ${progress?.visitedDirectories ?? 0} 个文件夹、${progress?.visitedEntries ?? 0} 项'
                   : '已显示 ${scan.items.length} / ${data?.total ?? 0} 项 · 按文件修改时间排列',
               style: Theme.of(context).textTheme.bodySmall,
@@ -116,9 +118,10 @@ class GalleryScanSummary extends StatelessWidget {
             );
           },
         ),
-        if (scan.scanning) ...[
+        if (reading && scan.scanning) ...[
           const SizedBox(height: DesignTokens.spacingSm),
-          const ContentLoadingIndicator(),
+          if (scan.showingPrevious || scan.items.isNotEmpty)
+            const ContentLoadingIndicator(),
           TextButton(
             onPressed: scan.scanId == null || scan.stopping ? null : onCancel,
             child: Text(scan.stopping ? '正在停止检查' : '停止检查'),

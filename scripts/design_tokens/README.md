@@ -10,7 +10,7 @@ npm run lint --prefix scripts/design_tokens
 node scripts/design_tokens/ardot.mjs > /tmp/interconnect-ardot-design-system.json
 ```
 
-需要 Node 18.17 及以上与 workspace Dart SDK。修改规范后提交生成输出。`--check` 检查生成漂移。支持字段以 emitter 为准，未知键、未知单位或缺失消费常量会失败。
+需要 Node 18.17 及以上与 workspace Dart SDK。修改规范后提交生成输出。`--check` 检查生成漂移、应用视觉代码中的硬编码颜色和可直接识别的共享操作图标。支持字段以 emitter 为准，未知键、未知单位或缺失消费常量会失败。
 
 ## 更新 Ardot
 

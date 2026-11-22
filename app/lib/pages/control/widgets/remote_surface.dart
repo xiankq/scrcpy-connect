@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:media_codec/media_codec.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
@@ -90,6 +91,17 @@ class RemoteStage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final waiting = presentation.awaitingFirstFrame;
+    final sideToolbar = liquid.GlassVerticalBar.maybeOf(context);
+    final closeWait = Tooltip(
+      message: '关闭等待',
+      excludeFromSemantics: true,
+      child: GlassToolbarIconButton(
+        key: const ValueKey('remote-first-frame-close'),
+        semanticLabel: '关闭等待',
+        onPressed: onClose,
+        icon: const Icon(AppIcons.close),
+      ),
+    );
     final loading = waiting || presentation.connecting;
     final abnormal =
         presentation.error != null ||
@@ -212,30 +224,26 @@ class RemoteStage extends StatelessWidget {
                 variant: GlassVariant.clear,
                 semanticLabel: '点亮屏幕',
                 onPressed: onWake,
-                icon: const Icon(LucideIcons.sun, color: Colors.white),
+                icon: const Icon(
+                  LucideIcons.sun,
+                  color: DesignTokens.colorWhite,
+                ),
               ),
             ),
           ),
-        if (waiting)
+        if (!waiting)
+          controls
+        else if (sideToolbar != null)
+          GlassSideToolbar(bar: sideToolbar, children: [closeWait])
+        else
           Positioned(
             left:
                 MediaQuery.paddingOf(context).left +
                 (DesktopWindowInsets.of(context)?.left ?? 0) +
                 20,
             top: MediaQuery.paddingOf(context).top + 12,
-            child: Tooltip(
-              message: '关闭等待',
-              excludeFromSemantics: true,
-              child: GlassToolbarIconButton(
-                key: const ValueKey('remote-first-frame-close'),
-                semanticLabel: '关闭等待',
-                onPressed: onClose,
-                icon: const Icon(LucideIcons.x),
-              ),
-            ),
-          )
-        else
-          controls,
+            child: closeWait,
+          ),
       ],
     );
   }

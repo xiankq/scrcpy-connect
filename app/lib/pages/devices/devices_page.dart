@@ -14,6 +14,7 @@ import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
+import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -36,6 +37,8 @@ class DevicesPage extends HookConsumerWidget {
       deviceListProvider.select((state) => state.error),
     );
     final selection = useState(initialDevice?.id);
+    final initialLoad = appDevices.isEmpty && appLoading;
+    final showSearch = appDevices.isNotEmpty || initialLoad;
     final showWelcome =
         appDevices.isEmpty && !appLoading && appDeviceError == null;
     final query = useTextEditingController();
@@ -52,7 +55,7 @@ class DevicesPage extends HookConsumerWidget {
       decoration: InputDecoration(
         hintText: '搜索设备名称或型号',
         prefixIcon: const Icon(
-          LucideIcons.search,
+          AppIcons.search,
           size: DesignTokens.componentIconActionSize,
         ),
         suffixIcon: query.text.isEmpty
@@ -61,7 +64,7 @@ class DevicesPage extends HookConsumerWidget {
                 tooltip: '清除搜索',
                 onPressed: query.clear,
                 icon: const Icon(
-                  LucideIcons.x,
+                  AppIcons.close,
                   size: DesignTokens.componentIconActionSize,
                 ),
               ),
@@ -70,12 +73,13 @@ class DevicesPage extends HookConsumerWidget {
     final addButton = GlassActionIcon(
       onPressed: () => AddDeviceRoute().push<void>(context),
       tooltip: '添加设备',
-      icon: const Icon(LucideIcons.plus),
+      icon: const Icon(AppIcons.add),
     );
     Widget buildList(
       BuildContext context,
       bool split,
       String? currentId,
+      bool useSideToolbar,
     ) => LayoutBuilder(
       builder: (context, constraints) {
         const contentPadding = EdgeInsets.symmetric(
@@ -88,7 +92,7 @@ class DevicesPage extends HookConsumerWidget {
           pane: split,
           title: '设备',
           titleContent:
-              appDevices.isNotEmpty &&
+              showSearch &&
                   compactHeader &&
                   liquid.GlassVerticalBar.maybeOf(context) == null
               ? Row(
@@ -99,7 +103,7 @@ class DevicesPage extends HookConsumerWidget {
                   ],
                 )
               : null,
-          actions: showWelcome ? null : [addButton],
+          actions: showWelcome || useSideToolbar ? null : [addButton],
           child: RefreshIndicator(
             onRefresh: ref.read(deviceListProvider.notifier).refresh,
             child: CustomScrollView(
@@ -187,14 +191,14 @@ class DevicesPage extends HookConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (appDevices.isNotEmpty &&
+                          if (showSearch &&
                               (!compactHeader ||
                                   liquid.GlassVerticalBar.maybeOf(context) !=
                                       null)) ...[
                             const SizedBox(height: DesignTokens.spacingSm),
                             searchField,
                           ],
-                          if (appLoading)
+                          if (appLoading && !initialLoad)
                             const Padding(
                               padding: EdgeInsets.only(
                                 top: DesignTokens.spacingMd,
@@ -223,7 +227,7 @@ class DevicesPage extends HookConsumerWidget {
                           ),
                         ),
                         child: EmptyContent(
-                          icon: LucideIcons.search,
+                          icon: AppIcons.search,
                           title: '没有找到设备',
                           message: '试试其他名称或型号。',
                           action: TextButton(
@@ -233,7 +237,29 @@ class DevicesPage extends HookConsumerWidget {
                         ),
                       ),
                     ),
-                  if (devices.isNotEmpty)
+                  if (initialLoad)
+                    SliverPadding(
+                      padding: contentPadding,
+                      sliver: SliverToBoxAdapter(
+                        child: SkeletonRows(
+                          height: compactHeader
+                              ? DesignTokens
+                                    .componentDeviceListItemCompactHeight
+                              : DesignTokens.componentDeviceListItemHeight,
+                          leadingSize:
+                              DesignTokens.componentDeviceIdentityWidth,
+                          leadingHeight: compactHeader
+                              ? DesignTokens
+                                    .componentDeviceIdentityCompactHeight
+                              : DesignTokens.componentDeviceIdentityHeight,
+                          trailing: true,
+                          cardRadius:
+                              DesignTokens.componentDeviceListItemRounded,
+                          gap: DesignTokens.spacingMd,
+                        ),
+                      ),
+                    )
+                  else if (devices.isNotEmpty)
                     SliverPadding(
                       padding: EdgeInsets.fromLTRB(
                         DesignTokens.spacingMd,
@@ -280,10 +306,19 @@ class DevicesPage extends HookConsumerWidget {
     return WorkspacePanes(
       onCloseDetail: selected == null ? null : closeDetail,
       hasContent: devices.isNotEmpty || selected != null,
-      builder: (context, split) {
+      builder: (context, split, useSideToolbar) {
         final detail = selected ?? (split ? devices.firstOrNull : null);
+        final manageButton = detail == null
+            ? null
+            : GlassActionIcon(
+                tooltip: '设备管理',
+                icon: const Icon(AppIcons.deviceManagement),
+                onPressed: () =>
+                    DeviceManagementRoute(deviceId: detail.id)
+                        .push<void>(context),
+              );
         return (
-          list: buildList(context, split, detail?.id),
+          list: buildList(context, split, detail?.id, useSideToolbar),
           detail: detail == null
               ? const SizedBox.shrink()
               : DeviceWorkspacePage(
@@ -291,7 +326,11 @@ class DevicesPage extends HookConsumerWidget {
                   device: detail,
                   pane: split,
                   onBack: split ? null : closeDetail,
+                  manageButton: useSideToolbar ? null : manageButton,
                 ),
+          sideActions: [
+            if (useSideToolbar) ...[if (!showWelcome) addButton, ?manageButton],
+          ],
         );
       },
     );

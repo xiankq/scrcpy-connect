@@ -392,7 +392,7 @@ void main() {
     final navigation = find.byKey(const ValueKey('app-bottom-navigation'));
     expect(navigation, findsOneWidget);
     expect(tester.getBottomRight(navigation).dx, closeTo(402, 1));
-    expect(find.byType(GlassVerticalToolbarGroup), findsNothing);
+    expect(find.byType(GlassSideToolbar), findsNothing);
     expect(find.text('添加第一台设备'), findsOneWidget);
     expect(find.text('添加设备'), findsOneWidget);
     expect(find.byType(TextField), findsNothing);

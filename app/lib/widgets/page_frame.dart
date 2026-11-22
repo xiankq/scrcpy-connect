@@ -5,7 +5,6 @@ import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart' show Drag;
 import 'package:go_router/go_router.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
@@ -167,11 +166,10 @@ class _PageFrameState extends State<PageFrame> {
       );
       final backLabel = MaterialLocalizations.of(context).backButtonTooltip;
       final onBack = widget.onBack ?? () => closePage<void>(context);
-      final reduceMotion = GlassMaterial.reduceMotion(context);
       final appBar = AppBar(
         toolbarHeight: toolbarHeight,
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
+        backgroundColor: DesignTokens.colorTransparent,
+        surfaceTintColor: DesignTokens.colorTransparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         forceMaterialTransparency: true,
@@ -198,13 +196,8 @@ class _PageFrameState extends State<PageFrame> {
                               excludeFromSemantics: true,
                               child: GlassToolbarIconButton(
                                 semanticLabel: backLabel,
-                                interactionScale: reduceMotion
-                                    ? 1
-                                    : DesignTokens
-                                          .componentGlassInteractionScale,
-                                anchorStretch: !reduceMotion,
                                 onPressed: onBack,
-                                icon: const Icon(LucideIcons.chevronLeft),
+                                icon: const Icon(AppIcons.back),
                               ),
                             ),
                           ),
@@ -218,27 +211,26 @@ class _PageFrameState extends State<PageFrame> {
               overflow: TextOverflow.ellipsis,
               style: _titleStyle(context),
             ),
-        actions:
-            verticalBar != null ||
-                ((widget.actions == null || widget.actions!.isEmpty) &&
-                    widget.trailingAction == null)
-            ? null
-            : [
-                if (widget.actions != null && widget.actions!.isNotEmpty)
-                  Padding(
-                    padding: EdgeInsets.only(
-                      right: widget.trailingAction == null
-                          ? DesignTokens.spacingZero
-                          : DesignTokens.spacingXs,
-                    ),
-                    child: Center(
-                      child: GlassToolbarGroup(children: widget.actions!),
-                    ),
-                  ),
-                if (widget.trailingAction != null)
-                  Center(child: widget.trailingAction!),
-                const SizedBox(width: DesignTokens.spacingMd),
-              ],
+        actions: [
+          if (verticalBar == null &&
+              widget.actions != null &&
+              widget.actions!.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(
+                right: widget.trailingAction == null
+                    ? DesignTokens.spacingZero
+                    : DesignTokens.spacingXs,
+              ),
+              child: Center(
+                child: GlassToolbarGroup(children: widget.actions!),
+              ),
+            ),
+          if (widget.trailingAction != null)
+            Center(child: widget.trailingAction!),
+          if (widget.trailingAction != null ||
+              (verticalBar == null && (widget.actions?.isNotEmpty ?? false)))
+            const SizedBox(width: DesignTokens.spacingMd),
+        ],
       );
       final scaffold = Scaffold(
         backgroundColor: widget.backgroundColor,
@@ -418,50 +410,25 @@ class _PageFrameState extends State<PageFrame> {
                 ),
               ),
       );
-      final hasVerticalActions =
-          widget.leading != null ||
-          hasBack ||
-          (widget.actions != null && widget.actions!.isNotEmpty) ||
-          widget.trailingAction != null;
-      if (verticalBar == null || !hasVerticalActions) {
-        return scaffold;
-      }
+      if (verticalBar == null) return scaffold;
       final verticalActions = <Widget>[
         if (widget.leading != null)
           widget.leading!
         else if (hasBack)
           GlassToolbarIconButton(
             semanticLabel: backLabel,
-            interactionScale: reduceMotion
-                ? 1
-                : DesignTokens.componentGlassInteractionScale,
-            anchorStretch: !reduceMotion,
             onPressed: onBack,
-            icon: const Icon(LucideIcons.chevronLeft),
+            icon: const Icon(AppIcons.back),
           ),
-        ...?widget.actions,
-        if (widget.trailingAction != null) widget.trailingAction!,
+        for (final action in widget.actions ?? const <Widget>[])
+          GlassToolbarGroup(children: [action]),
       ];
+      if (verticalActions.isEmpty) return scaffold;
       return Stack(
         fit: StackFit.expand,
         children: [
           scaffold,
-          Positioned(
-            top: verticalBar.top,
-            left: verticalBar.edge == liquid.GlassVerticalBarEdge.leading
-                ? 0
-                : null,
-            right: verticalBar.edge == liquid.GlassVerticalBarEdge.trailing
-                ? 0
-                : null,
-            width: verticalBar.width,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: DesignTokens.spacingSm,
-              ),
-              child: GlassVerticalToolbarGroup(children: verticalActions),
-            ),
-          ),
+          GlassSideToolbar(bar: verticalBar, children: verticalActions),
         ],
       );
     },
@@ -492,7 +459,6 @@ class _WorkspaceToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final backLabel = MaterialLocalizations.of(context).backButtonTooltip;
-    final reduceMotion = GlassMaterial.reduceMotion(context);
     final window = DesktopWindowInsets.of(context);
     final rowPadding = window == null
         ? DesignTokens.spacingSm
@@ -537,12 +503,8 @@ class _WorkspaceToolbar extends StatelessWidget {
                 excludeFromSemantics: true,
                 child: GlassToolbarIconButton(
                   semanticLabel: backLabel,
-                  interactionScale: reduceMotion
-                      ? 1
-                      : DesignTokens.componentGlassInteractionScale,
-                  anchorStretch: !reduceMotion,
                   onPressed: onBack,
-                  icon: const Icon(LucideIcons.chevronLeft),
+                  icon: const Icon(AppIcons.back),
                 ),
               ),
             if (leading != null || hasBack)

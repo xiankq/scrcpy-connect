@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -140,6 +140,27 @@ export function run(args = process.argv.slice(2)) {
     let existing;
     try { existing = readFileSync(output, 'utf8'); } catch { /* Missing output is stale. */ }
     if (existing !== result.source) throw new Error('Design tokens are stale; run node scripts/design_tokens/generate.mjs');
+    const exclusiveRoles = new Set([
+      'back', 'forward', 'add', 'search', 'refresh', 'more', 'delete', 'download',
+      'share', 'view-options', 'select-all', 'deselect-all', 'clear-notifications',
+    ]);
+    const sharedGlyphs = readIcons().filter(icon => exclusiveRoles.has(icon.role));
+    const app = resolve(root, 'app/lib');
+    const violations = [];
+    for (const file of readdirSync(app, { recursive: true })) {
+      if (!file.endsWith('.dart') || file.endsWith('.g.dart')) continue;
+      const lines = readFileSync(resolve(app, file), 'utf8').split('\n');
+      for (const [index, line] of lines.entries()) {
+        if (line.trimStart().startsWith('//')) continue;
+        const glyph = /\bLucideIcons\.(\w+)\b/.exec(line)?.[1];
+        const role = sharedGlyphs.find(icon => icon.constant === glyph);
+        if (role) violations.push(`${file}:${index + 1} use AppIcons.${role.name}`);
+        if (/\b(?:Colors\.\w+|Color\s*\(\s*0x|Color\.from(?:ARGB|RGBO)\s*\()/.test(line)) {
+          violations.push(`${file}:${index + 1} use a theme role or DesignTokens`);
+        }
+      }
+    }
+    if (violations.length) throw new Error(violations.join('\n'));
   } else {
     mkdirSync(dirname(output), { recursive: true });
     writeFileSync(output, result.source);

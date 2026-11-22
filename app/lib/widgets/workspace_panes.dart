@@ -5,6 +5,7 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
 import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 
 /// Lists and details share the same mounted panes across window changes.
 final class WorkspacePanes extends StatelessWidget {
@@ -15,7 +16,12 @@ final class WorkspacePanes extends StatelessWidget {
     this.hasContent = true,
   });
 
-  final ({Widget list, Widget detail}) Function(BuildContext, bool) builder;
+  final ({Widget list, Widget detail, List<Widget> sideActions}) Function(
+    BuildContext,
+    bool split,
+    bool useSideToolbar,
+  )
+  builder;
   final VoidCallback? onCloseDetail;
   final bool hasContent;
 
@@ -63,7 +69,8 @@ final class WorkspacePanes extends StatelessWidget {
       final detailWidth = split
           ? available - listWidth - dividerWidth
           : singleWidth;
-      final panes = builder(context, split);
+      final sideToolbar = split ? verticalBar : null;
+      final panes = builder(context, split, sideToolbar != null);
 
       // MediaQuery still describes the host view. The lateral bar/padding is
       // already reserved by this split, so each PageFrame receives pane insets.
@@ -125,6 +132,14 @@ final class WorkspacePanes extends StatelessWidget {
               ),
             ),
           ),
+          if (sideToolbar != null && panes.sideActions.isNotEmpty)
+            GlassSideToolbar(
+              bar: sideToolbar,
+              children: [
+                for (final action in panes.sideActions)
+                  GlassToolbarGroup(children: [action]),
+              ],
+            ),
         ],
       );
       return PopScope(

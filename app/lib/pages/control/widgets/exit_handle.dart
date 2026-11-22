@@ -210,7 +210,7 @@ class _ExitHandleState extends State<ExitHandle>
                             IconButton(
                               tooltip: '收起画面工具',
                               onPressed: closePanel,
-                              icon: const Icon(LucideIcons.slidersHorizontal),
+                              icon: const Icon(AppIcons.viewOptions),
                             ),
                           ],
                         ),
@@ -344,6 +344,7 @@ class _ExitHandleState extends State<ExitHandle>
                           : Alignment.centerLeft,
                       child: Glass(
                         radius: DesignTokens.roundedFull,
+                        circular: !docked,
                         child: SizedBox(
                           width: docked ? _peekWidth : _handleSize,
                           height: _hitHeight,
@@ -365,7 +366,7 @@ class _ExitHandleState extends State<ExitHandle>
                                     ),
                                   ),
                                 )
-                              : const Icon(LucideIcons.slidersHorizontal),
+                              : const Icon(AppIcons.viewOptions),
                         ),
                       ),
                     ),
@@ -398,6 +399,7 @@ class RemoteToolAction extends StatelessWidget {
     final action = TextButton(
       style: TextButton.styleFrom(
         foregroundColor: Theme.of(context).colorScheme.onSurface,
+        textStyle: Theme.of(context).textTheme.bodySmall,
         minimumSize: const Size(0, 66),
         padding: const EdgeInsets.symmetric(
           horizontal: DesignTokens.spacingMicro,

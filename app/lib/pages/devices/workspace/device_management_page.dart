@@ -111,18 +111,21 @@ class DeviceManagementPage extends ConsumerWidget {
               ),
               ActionRow(
                 icon: LucideIcons.network,
+                color: DesignTokens.colorListIconMint,
                 title: '连接配置',
                 onTap: () =>
                     DeviceConnectionRoute(deviceId: id).push<void>(context),
               ),
               ActionRow(
-                icon: LucideIcons.slidersHorizontal,
+                icon: AppIcons.viewOptions,
+                color: DesignTokens.colorListIconBlue,
                 title: '画面与控制',
                 onTap: () => QualityRoute(deviceId: id).push<void>(context),
               ),
               ConnectSwitchRow(
                 title: const Text('自动同步剪贴板'),
                 icon: LucideIcons.clipboard,
+                iconColor: DesignTokens.colorListIconTransfer,
                 value: preferences.clipboardSync ?? false,
                 onChanged: saveClipboard,
               ),
@@ -133,6 +136,7 @@ class DeviceManagementPage extends ConsumerWidget {
               ),
               ActionRow(
                 icon: LucideIcons.unplug,
+                color: DesignTokens.colorListIconCoral,
                 title: online ? '断开设备连接' : '停止连接',
                 enabled: canStop,
                 onTap: !canStop
@@ -140,7 +144,7 @@ class DeviceManagementPage extends ConsumerWidget {
                     : () => stopDeviceConnection(context, ref, current),
               ),
               ActionRow(
-                icon: LucideIcons.trash2,
+                icon: AppIcons.delete,
                 title: '移除设备',
                 destructive: true,
                 onTap: () async {
