@@ -1,8 +1,6 @@
 import 'package:flutter_rust_bridge_hooks/flutter_rust_bridge_hooks.dart';
 import 'package:code_assets/code_assets.dart';
 
-import 'dart:io';
-
 void main(List<String> args) async {
   await build(args, (input, output) async {
     if (!input.config.buildCodeAssets) return;
@@ -16,44 +14,12 @@ void main(List<String> args) async {
       ])
         input.packageRoot.resolve('../../rust/adb/api/$source'),
     ]);
-    final environment = <String, String>{};
-    final code = input.config.code;
-    if (code.targetOS == OS.android) {
-      // native_toolchain_rust 1.0.7 固定使用 API 35；此处遵循 runner 的最低 API，
-      // 避免构建成功却无法在 API 24 运行。
-      final triples = switch (code.targetArchitecture) {
-        Architecture.arm64 => (
-          'aarch64-linux-android',
-          'aarch64-linux-android',
-        ),
-        Architecture.arm => (
-          'armv7-linux-androideabi',
-          'armv7a-linux-androideabi',
-        ),
-        Architecture.x64 => ('x86_64-linux-android', 'x86_64-linux-android'),
-        _ => throw UnsupportedError('Unsupported Android architecture'),
-      };
-      final binaryDirectory = code.cCompiler!.compiler.resolve('.');
-      final api = code.android.targetNdkApi;
-      final suffix = Platform.isWindows ? '.cmd' : '';
-      final clang = File.fromUri(
-        binaryDirectory.resolve('${triples.$2}$api-clang$suffix'),
-      ).path;
-      final clangCpp = File.fromUri(
-        binaryDirectory.resolve('${triples.$2}$api-clang++$suffix'),
-      ).path;
-      final key = triples.$1.replaceAll('-', '_');
-      environment['CC_$key'] = clang;
-      environment['CXX_$key'] = clangCpp;
-      environment['CARGO_TARGET_${key.toUpperCase()}_LINKER'] = clang;
-    }
     await FlutterRustBridgeNativeAssetsBuilder(
       cratePath: '../../rust/adb/bridge',
       assetName: 'src/native/generated/frb_generated.io.dart',
       assetRouting: input.config.linkingEnabled
           ? [ToLinkHook(input.packageName)]
           : const [ToAppBundle()],
-      extraCargoEnvironmentVariables: environment,
     ).run(input: input, output: output);
     // Flutter 的 build depfile 只登记直接打包的输出；交给 link hook 的库仍是
     // 后续链接的必需输入。显式登记后，库文件缺失会重跑构建，不能复用悬空回执。

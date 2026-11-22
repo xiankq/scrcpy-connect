@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:scrcpy_connect/core/errors/failure_message.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
@@ -14,6 +13,7 @@ import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
+import 'package:scrcpy_connect/widgets/documents/document_picker.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
 import 'package:scrcpy_connect/widgets/media_cache_blocker.dart';
@@ -50,7 +50,7 @@ Future<void> retrieveFile(
   final privateCache =
       share || openAfterTransfer || Platform.isAndroid || Platform.isIOS;
   if (!privateCache) {
-    directory = await FilePicker.getDirectoryPath(dialogTitle: '选择保存位置');
+    directory = await DocumentPicker.pickLocalDirectory(dialogTitle: '选择保存位置');
   }
   if (!privateCache && directory == null) return;
   directory ??= (await receivedDirectory()).path;
@@ -119,7 +119,7 @@ Future<void> retrieveSelection(
   final privateCache = Platform.isAndroid || Platform.isIOS;
   final directory = privateCache
       ? (await receivedDirectory()).path
-      : await FilePicker.getDirectoryPath(
+      : await DocumentPicker.pickLocalDirectory(
           dialogTitle: '保存 ${files.length} 项原文件',
         );
   if (directory == null || !context.mounted) return;

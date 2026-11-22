@@ -33,6 +33,7 @@ import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/devices/device_source_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
+import 'package:scrcpy_connect/widgets/documents/document_picker.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_action_bar.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
@@ -195,7 +196,7 @@ class FilesPage extends HookConsumerWidget {
     Future<void> uploadDirectory() async {
       if (Platform.isIOS || !canSubmit()) return;
       if (!Platform.isAndroid) {
-        final source = await FilePicker.getDirectoryPath(
+        final source = await DocumentPicker.pickLocalDirectory(
           dialogTitle: '选择发送的文件夹',
         );
         if (source == null || !context.mounted) return;

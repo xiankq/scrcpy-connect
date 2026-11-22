@@ -7,14 +7,19 @@ import 'package:scrcpy_connect/core/files/models/document_selection.dart';
 abstract final class DocumentPicker {
   static const _channel = MethodChannel('dev.scrcpyconnect/platform');
 
+  static Future<String?> pickLocalDirectory({
+    required String dialogTitle,
+  }) async {
+    final directory = await FilePicker.pickDirectory(dialogTitle: dialogTitle);
+    return directory?.toFilePath();
+  }
+
   static Future<DocumentSelectionResult> choose(
     DocumentSelectionRequest selection,
   ) async {
     if (selection.mode == .desktopExport) {
       final name = selection.name!;
-      final parent = await FilePicker.getDirectoryPath(
-        dialogTitle: '选择保存 $name 的位置',
-      );
+      final parent = await pickLocalDirectory(dialogTitle: '选择保存 $name 的位置');
       return parent == null
           ? const DocumentSelectionCancelled()
           : DocumentDestinationSelected(p.join(parent, name));

@@ -4,7 +4,7 @@
 
 ## 开发
 
-准备 Flutter 3.50+（Dart 3.14+）、`rust-toolchain.toml` 指定的Rust、JDK21和Android SDK：
+准备 Flutter 3.50.1 或更新的稳定版（Dart 3.14+）、`rust-toolchain.toml` 指定的 Rust、JDK 21 和 Android SDK。
 
 ```sh
 flutter pub get --enforce-lockfile
