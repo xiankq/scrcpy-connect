@@ -24,6 +24,7 @@ import 'package:scrcpy_connect/widgets/app_presentation_host.dart';
 import 'package:scrcpy_connect/widgets/app_session_scope.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
+import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
 import 'package:scrcpy_connect/widgets/models/device_audio_view_snapshot.dart';
 
@@ -32,10 +33,12 @@ class ConnectApp extends HookConsumerWidget {
     super.key,
     this.initialLocation = '/devices',
     this.glassReady = true,
+    this.desktopWindow = false,
   });
 
   final String initialLocation;
   final bool glassReady;
+  final bool desktopWindow;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -91,7 +94,7 @@ class ConnectApp extends HookConsumerWidget {
       themeMode: mode,
       builder: (context, child) {
         final content = KeyedSubtree(key: contentKey, child: child!);
-        return FoldableProvider(
+        final application = FoldableProvider(
           // Expose the hinge while the iPhone Duo is partially open.
           bridgeMode: DisplayFeatureBridgeMode.full,
           child: WindowEnvironmentScope(
@@ -117,6 +120,9 @@ class ConnectApp extends HookConsumerWidget {
             ),
           ),
         );
+        return desktopWindow
+            ? DesktopWindowFrame(child: application)
+            : application;
       },
     );
   }

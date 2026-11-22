@@ -10,6 +10,7 @@ import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
+import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 
 class PageFrame extends StatefulWidget {
@@ -128,12 +129,11 @@ class _PageFrameState extends State<PageFrame> {
                       !['/devices', '/transfers', '/settings'].contains(
                         router.routeInformationProvider.value.uri.path,
                       )));
-      // A desktop/freeform window owns its workspace chrome for every route,
-      // including detail pages. Keeping the root-only guard here makes a
-      // narrow desktop detail window regress to a phone-style AppBar.
+      final hasWindowChrome = DesktopWindowInsets.of(context) != null;
       final platformBar = liquid.GlassVerticalBar.maybeOf(context);
       final workspaceToolbar =
           widget.pane ||
+          hasWindowChrome ||
           (platformBar == null &&
               windowEnvironmentOf(context).usesWorkspaceToolbar);
       final verticalBar = workspaceToolbar ? null : platformBar;
@@ -465,9 +465,7 @@ class _PageFrameState extends State<PageFrame> {
   );
 }
 
-/// The expanded workspace toolbar is part of the page content plane. It
-/// carries page identity and actions without recreating a phone status bar at
-/// the top of a desktop window.
+/// Carries page identity and actions within the workspace.
 class _WorkspaceToolbar extends StatelessWidget {
   const _WorkspaceToolbar({
     required this.title,
@@ -492,6 +490,12 @@ class _WorkspaceToolbar extends StatelessWidget {
     final theme = Theme.of(context);
     final backLabel = MaterialLocalizations.of(context).backButtonTooltip;
     final reduceMotion = GlassMaterial.reduceMotion(context);
+    final window = DesktopWindowInsets.of(context);
+    final rowPadding = window == null
+        ? DesignTokens.spacingSm
+        : (DesignTokens.componentPageHeaderHeight -
+                  DesignTokens.componentIconButtonSize) /
+              2;
     final trailing = <Widget>[
       if (actions != null && actions!.isNotEmpty)
         GlassToolbarGroup(children: actions!),
@@ -504,10 +508,14 @@ class _WorkspaceToolbar extends StatelessWidget {
       ),
       child: Padding(
         padding: EdgeInsets.fromLTRB(
-          DesignTokens.spacingMd,
-          MediaQuery.paddingOf(context).top + DesignTokens.spacingSm,
-          DesignTokens.spacingMd,
-          DesignTokens.spacingSm,
+          window == null
+              ? DesignTokens.spacingMd
+              : math.max(DesignTokens.spacingMd, window.left),
+          MediaQuery.paddingOf(context).top + rowPadding,
+          window == null
+              ? DesignTokens.spacingMd
+              : math.max(DesignTokens.spacingMd, window.right),
+          rowPadding,
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -531,14 +539,27 @@ class _WorkspaceToolbar extends StatelessWidget {
             if (leading != null || hasBack)
               const SizedBox(width: DesignTokens.spacingSm),
             Expanded(
-              child:
-                  titleContent ??
-                  Text(
-                    title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.headlineSmall,
+              child: DesktopWindowDragArea(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: window == null
+                        ? 0
+                        : DesignTokens.componentIconButtonSize,
                   ),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    heightFactor: 1,
+                    child:
+                        titleContent ??
+                        Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.headlineSmall,
+                        ),
+                  ),
+                ),
+              ),
             ),
             if (trailing.isNotEmpty) ...[
               const SizedBox(width: DesignTokens.spacingMd),

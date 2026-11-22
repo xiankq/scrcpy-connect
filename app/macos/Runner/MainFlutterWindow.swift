@@ -8,12 +8,15 @@ class MainFlutterWindow: NSWindow {
   private var visualPreferences: SystemVisualPreferences?
   private var environmentEvents: WindowEnvironmentEvents?
   private var platformMethods: FlutterMethodChannel?
+  private var windowChrome: DesktopWindowChrome?
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
     let windowFrame = self.frame
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
+    windowChrome = DesktopWindowChrome(
+      window: self, messenger: flutterViewController.engine.binaryMessenger)
 
     RegisterGeneratedPlugins(registry: flutterViewController)
     FlutterMultiWindowPlugin.setOnWindowCreatedCallback { controller in
@@ -78,6 +81,7 @@ private final class MacOSWindowServices {
   private let visualPreferences: SystemVisualPreferences
   private let environmentEvents: WindowEnvironmentEvents?
   private let platformMethods: FlutterMethodChannel
+  private let windowChrome: DesktopWindowChrome?
   private weak var window: NSWindow?
 
   init(controller: FlutterViewController) {
@@ -86,8 +90,10 @@ private final class MacOSWindowServices {
     window = controller.view.window
     if let window {
       environmentEvents = WindowEnvironmentEvents(window: window, messenger: messenger)
+      windowChrome = DesktopWindowChrome(window: window, messenger: messenger)
     } else {
       environmentEvents = nil
+      windowChrome = nil
     }
     platformMethods = FlutterMethodChannel(
       name: "dev.scrcpyconnect/platform", binaryMessenger: messenger)
@@ -117,6 +123,127 @@ private final class MacOSWindowServices {
     platformMethods.setMethodCallHandler(nil)
     visualPreferences.dispose()
     environmentEvents?.dispose()
+  }
+}
+
+private final class DesktopWindowChrome {
+  private let methods: FlutterMethodChannel
+  private var observers: [NSObjectProtocol] = []
+  private var dragMonitor: Any?
+  private var dragOffset: NSPoint?
+  private var dragLocation = NSPoint.zero
+  private var dragging = false
+  private var restoreFrame: NSRect?
+
+  init(window: NSWindow, messenger: FlutterBinaryMessenger) {
+    window.styleMask.insert(.fullSizeContentView)
+    window.titleVisibility = .hidden
+    window.titlebarAppearsTransparent = true
+    window.titlebarSeparatorStyle = .none
+    window.contentMinSize = NSSize(width: 400, height: 300)
+    window.isMovableByWindowBackground = false
+    window.collectionBehavior.insert(.fullScreenPrimary)
+    for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+      window.standardWindowButton(button)?.isHidden = true
+    }
+    methods = FlutterMethodChannel(
+      name: "dev.scrcpyconnect/desktop_window", binaryMessenger: messenger)
+    methods.setMethodCallHandler { [weak self, weak window] call, result in
+      guard let window else {
+        result(FlutterError(code: "unavailable", message: "Window is closed", details: nil))
+        return
+      }
+      switch call.method {
+      case "state":
+        result(Self.state(of: window))
+        return
+      case "close":
+        result(nil)
+        window.performClose(nil)
+        return
+      case "minimize":
+        window.miniaturize(nil)
+      case "toggleFullscreen":
+        window.toggleFullScreen(nil)
+      case "toggleMaximized":
+        guard !window.styleMask.contains(.fullScreen) else { result(nil); return }
+        switch UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") {
+        case "Minimize": window.miniaturize(nil)
+        case "None": break
+        default: self?.toggleFill(window)
+        }
+      case "move":
+        if let self, self.dragOffset != nil, !window.styleMask.contains(.fullScreen) {
+          self.dragging = true
+          self.move(window)
+        }
+      default:
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      result(nil)
+    }
+    // Flutter identifies the drag region after pointer events reach the engine.
+    // Keep the initial pointer offset and track the remainder in AppKit.
+    dragMonitor = NSEvent.addLocalMonitorForEvents(
+      matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
+    ) { [weak self, weak window] event in
+      guard let self, let window, event.window === window else { return event }
+      switch event.type {
+      case .leftMouseDown:
+        self.dragging = false
+        self.dragOffset = event.locationInWindow
+        self.dragLocation = window.convertPoint(toScreen: event.locationInWindow)
+      case .leftMouseDragged, .leftMouseUp:
+        self.dragLocation = window.convertPoint(toScreen: event.locationInWindow)
+        if self.dragging { self.move(window) }
+        // A quick drag can end before the engine's move request arrives.
+        // Keep its final location until the next press.
+        if event.type == .leftMouseUp { self.dragging = false }
+      default:
+        break
+      }
+      return event
+    }
+    observers = [NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification]
+      .map { name in
+        NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) {
+          [weak self, weak window] _ in
+          guard let window else { return }
+          self?.methods.invokeMethod("stateChanged", arguments: Self.state(of: window))
+        }
+      }
+  }
+
+  private func move(_ window: NSWindow) {
+    guard let dragOffset else { return }
+    window.setFrameOrigin(
+      NSPoint(x: dragLocation.x - dragOffset.x, y: dragLocation.y - dragOffset.y))
+  }
+
+  private func toggleFill(_ window: NSWindow) {
+    guard let workArea = window.screen?.visibleFrame else { return }
+    let target: NSRect
+    if window.frame == workArea {
+      guard let restoreFrame else { return }
+      self.restoreFrame = nil
+      target = restoreFrame
+    } else {
+      restoreFrame = window.frame
+      target = workArea
+    }
+    window.setFrameOrigin(target.origin)
+    window.setFrame(target, display: true)
+  }
+
+  private static func state(of window: NSWindow) -> String {
+    window.styleMask.contains(.fullScreen) ? "fullscreen" : "normal"
+  }
+
+  deinit {
+    methods.setMethodCallHandler(nil)
+    observers.forEach(NotificationCenter.default.removeObserver)
+    if let dragMonitor { NSEvent.removeMonitor(dragMonitor) }
   }
 }
 

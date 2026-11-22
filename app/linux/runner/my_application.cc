@@ -1,9 +1,7 @@
 #include "my_application.h"
 
 #include <flutter_linux/flutter_linux.h>
-#ifdef GDK_WINDOWING_X11
-#include <gdk/gdkx.h>
-#endif
+#include <array>
 
 #include "flutter/generated_plugin_registrant.h"
 #include <desktop_multi_window/desktop_multi_window_plugin.h>
@@ -126,6 +124,106 @@ void register_system_typography(FlView* view) {
       nullptr);
 }
 
+const char* window_state(GdkWindowState state) {
+  if (state & GDK_WINDOW_STATE_FULLSCREEN) return "fullscreen";
+  if (state & GDK_WINDOW_STATE_MAXIMIZED) return "maximized";
+  return "normal";
+}
+
+void handle_desktop_window(FlMethodChannel*, FlMethodCall* call, gpointer data) {
+  auto* window = GTK_WINDOW(data);
+  const gchar* method = fl_method_call_get_name(call);
+  if (g_str_equal(method, "state")) {
+    auto* backing = gtk_widget_get_window(GTK_WIDGET(window));
+    g_autoptr(FlValue) state = fl_value_new_string(
+        backing == nullptr ? "normal" : window_state(gdk_window_get_state(backing)));
+    fl_method_call_respond_success(call, state, nullptr);
+    return;
+  }
+  if (g_str_equal(method, "close")) {
+    fl_method_call_respond_success(call, nullptr, nullptr);
+    gtk_window_close(window);
+    return;
+  }
+  if (g_str_equal(method, "minimize")) {
+    gtk_window_iconify(window);
+  } else if (g_str_equal(method, "toggleFullscreen")) {
+    gtk_window_unfullscreen(window);
+  } else if (g_str_equal(method, "toggleMaximized")) {
+    if (gtk_window_is_maximized(window)) {
+      gtk_window_unmaximize(window);
+    } else {
+      gtk_window_maximize(window);
+    }
+  } else if (g_str_equal(method, "move") || g_str_equal(method, "resize")) {
+    auto* display = gtk_widget_get_display(GTK_WIDGET(window));
+    auto* pointer = gdk_seat_get_pointer(gdk_display_get_default_seat(display));
+    gint x, y;
+    gdk_device_get_position(pointer, nullptr, &x, &y);
+    auto* backing = gtk_widget_get_window(GTK_WIDGET(window));
+    if (g_str_equal(method, "move")) {
+      gdk_window_begin_move_drag_for_device(backing, pointer, 1, x, y,
+                                            GDK_CURRENT_TIME);
+    } else {
+      constexpr std::array<const char*, 8> edges = {
+          "topLeft", "top", "topRight", "left", "right",
+          "bottomLeft", "bottom", "bottomRight"};
+      FlValue* value = fl_method_call_get_args(call);
+      if (fl_value_get_type(value) == FL_VALUE_TYPE_STRING) {
+        const char* edge = fl_value_get_string(value);
+        for (unsigned i = 0; i < edges.size(); ++i) {
+          if (g_str_equal(edge, edges[i])) {
+            gdk_window_begin_resize_drag_for_device(
+                backing, static_cast<GdkWindowEdge>(i), pointer, 1, x, y,
+                GDK_CURRENT_TIME);
+            fl_method_call_respond_success(call, nullptr, nullptr);
+            return;
+          }
+        }
+      }
+      fl_method_call_respond_error(call, "invalid_edge", "Unknown resize edge",
+                                   nullptr, nullptr);
+      return;
+    }
+  } else {
+    fl_method_call_respond_not_implemented(call, nullptr);
+    return;
+  }
+  fl_method_call_respond_success(call, nullptr, nullptr);
+}
+
+void register_desktop_window(FlView* view) {
+  auto* window = GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(view)));
+  if (auto* titlebar = gtk_window_get_titlebar(window)) gtk_widget_hide(titlebar);
+  gtk_window_set_decorated(window, FALSE);
+  gtk_window_set_title(window, APP_DISPLAY_NAME);
+  gtk_widget_set_size_request(GTK_WIDGET(view), 400, 300);
+
+  auto* messenger = fl_engine_get_binary_messenger(fl_view_get_engine(view));
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  auto* channel = fl_method_channel_new(
+      messenger, "dev.scrcpyconnect/desktop_window", FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(channel, handle_desktop_window, window,
+                                            nullptr);
+  g_signal_connect_object(
+      window, "window-state-event",
+      G_CALLBACK(+[](GtkWidget*, GdkEventWindowState* event, FlMethodChannel* channel) -> gboolean {
+        g_autoptr(FlValue) state =
+            fl_value_new_string(window_state(event->new_window_state));
+        fl_method_channel_invoke_method(channel, "stateChanged", state,
+                                         nullptr, nullptr, nullptr);
+        return FALSE;
+      }),
+      channel, static_cast<GConnectFlags>(0));
+  g_signal_connect(
+      view, "destroy", G_CALLBACK(+[](GtkWidget*, FlMethodChannel* channel) {
+        fl_method_channel_set_method_call_handler(channel, nullptr, nullptr,
+                                                  nullptr);
+        g_object_unref(channel);
+      }),
+      channel);
+}
+
 }  // namespace
 
 // 收到 Flutter 首帧时调用。
@@ -138,27 +236,6 @@ static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
-
-  // GNOME 使用常见的标题栏；X 上非 GNOME 环境使用传统标题栏以适配平铺等窗口管理器。Wayland 默认支持标题栏，未来出现不兼容情况时再调整。
-  gboolean use_header_bar = TRUE;
-#ifdef GDK_WINDOWING_X11
-  GdkScreen* screen = gtk_window_get_screen(window);
-  if (GDK_IS_X11_SCREEN(screen)) {
-    const gchar* wm_name = gdk_x11_screen_get_window_manager_name(screen);
-    if (g_strcmp0(wm_name, "GNOME Shell") != 0) {
-      use_header_bar = FALSE;
-    }
-  }
-#endif
-  if (use_header_bar) {
-    GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
-    gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, APP_DISPLAY_NAME);
-    gtk_header_bar_set_show_close_button(header_bar, TRUE);
-    gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
-  } else {
-    gtk_window_set_title(window, APP_DISPLAY_NAME);
-  }
 
   gtk_window_set_default_size(window, 1280, 720);
   g_autofree gchar* executable = g_file_read_link("/proc/self/exe", nullptr);
@@ -181,6 +258,7 @@ static void my_application_activate(GApplication* application) {
   fl_view_set_background_color(view, &background_color);
   gtk_widget_show(GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
+  register_desktop_window(view);
 
   // Flutter 开始绘制后显示窗口；视图必须先实现，才能开始渲染。
   g_signal_connect_swapped(view, "first-frame", G_CALLBACK(first_frame_cb),
@@ -189,7 +267,10 @@ static void my_application_activate(GApplication* application) {
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
   desktop_multi_window_plugin_set_window_created_callback(
-      [](FlPluginRegistry* registry) { fl_register_plugins(registry); });
+      [](FlPluginRegistry* registry) {
+        register_desktop_window(FL_VIEW(registry));
+        fl_register_plugins(registry);
+      });
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }

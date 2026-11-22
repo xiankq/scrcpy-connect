@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/gallery/preview/widgets/media_controls_protection.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 
@@ -17,11 +18,26 @@ class MediaPreviewToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final window = DesktopWindowInsets.of(context);
+    final verticalPadding = window == null
+        ? DesignTokens.spacingMd
+        : (DesignTokens.componentPageHeaderHeight -
+                  DesignTokens.componentIconButtonSize) /
+              2;
     return MediaControlsProtection(
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.all(DesignTokens.spacingMd),
+          padding: EdgeInsets.fromLTRB(
+            window != null && window.left > 0
+                ? window.left
+                : DesignTokens.spacingMd,
+            verticalPadding,
+            window != null && window.right > 0
+                ? window.right
+                : DesignTokens.spacingMd,
+            verticalPadding,
+          ),
           child: Row(
             children: [
               Tooltip(
@@ -43,11 +59,19 @@ class MediaPreviewToolbar extends StatelessWidget {
               ),
               const SizedBox(width: DesignTokens.spacingXs),
               Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium,
+                child: DesktopWindowDragArea(
+                  child: SizedBox(
+                    height: DesignTokens.componentIconButtonSize,
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],

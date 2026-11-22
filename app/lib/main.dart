@@ -22,6 +22,7 @@ Future<void> main([List<String> args = const []]) async {
   runApp(
     AppStartup(
       initialLocation: launch.initialLocation,
+      desktopWindow: Platform.isMacOS || Platform.isWindows || Platform.isLinux,
       initializeGlass: () async {
         await binding.waitUntilFirstFrameRasterized;
         await GlassMaterial.initialize();

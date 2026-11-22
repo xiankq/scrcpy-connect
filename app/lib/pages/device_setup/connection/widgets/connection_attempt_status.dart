@@ -3,6 +3,7 @@ import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'connection_failure_note.dart';
 
 import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/devices/models/device_setup_receipt.dart';
@@ -69,116 +70,120 @@ class ConnectionAttemptStatus extends StatelessWidget {
           );
 
     return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(DesignTokens.spacingLg),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 440),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ExcludeSemantics(
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 296),
-                            child: Row(
-                              children: [
-                                _ConnectionEndpoint(icon: LucideIcons.monitor),
-                                Expanded(
-                                  child: Divider(
-                                    color: accent.withValues(alpha: .45),
+      body: DesktopStage(
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(DesignTokens.spacingLg),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 440),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ExcludeSemantics(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 296),
+                              child: Row(
+                                children: [
+                                  _ConnectionEndpoint(
+                                    icon: LucideIcons.monitor,
                                   ),
-                                ),
-                                DecoratedBox(
-                                  decoration: ShapeDecoration(
-                                    color: theme.colorScheme.surface,
-                                    shape: const CircleBorder(),
-                                  ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(
-                                      DesignTokens.spacingSm,
+                                  Expanded(
+                                    child: Divider(
+                                      color: accent.withValues(alpha: .45),
                                     ),
-                                    child: pending
-                                        ? ContentLoadingIndicator(
-                                            size: DesignTokens
-                                                .componentIconActionSize,
-                                            color: accent,
-                                          )
-                                        : Icon(
-                                            LucideIcons.unlink,
-                                            color: accent,
-                                            size: DesignTokens
-                                                .componentIconActionSize,
-                                          ),
                                   ),
-                                ),
-                                Expanded(
-                                  child: Divider(
-                                    color: accent.withValues(alpha: .45),
+                                  DecoratedBox(
+                                    decoration: ShapeDecoration(
+                                      color: theme.colorScheme.surface,
+                                      shape: const CircleBorder(),
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(
+                                        DesignTokens.spacingSm,
+                                      ),
+                                      child: pending
+                                          ? ContentLoadingIndicator(
+                                              size: DesignTokens
+                                                  .componentIconActionSize,
+                                              color: accent,
+                                            )
+                                          : Icon(
+                                              LucideIcons.unlink,
+                                              color: accent,
+                                              size: DesignTokens
+                                                  .componentIconActionSize,
+                                            ),
+                                    ),
                                   ),
-                                ),
-                                _ConnectionEndpoint(
-                                  icon: LucideIcons.smartphone,
-                                ),
-                              ],
+                                  Expanded(
+                                    child: Divider(
+                                      color: accent.withValues(alpha: .45),
+                                    ),
+                                  ),
+                                  _ConnectionEndpoint(
+                                    icon: LucideIcons.smartphone,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: DesignTokens.spacingXl),
-                        Semantics(
-                          liveRegion: true,
-                          child: Text(
-                            title,
-                            style: theme.textTheme.headlineMedium,
+                          const SizedBox(height: DesignTokens.spacingXl),
+                          Semantics(
+                            liveRegion: true,
+                            child: Text(
+                              title,
+                              style: theme.textTheme.headlineMedium,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          const SizedBox(height: DesignTokens.spacingXs),
+                          Text(
+                            subtitle,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
                             textAlign: TextAlign.center,
                           ),
-                        ),
-                        const SizedBox(height: DesignTokens.spacingXs),
-                        Text(
-                          subtitle,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(DesignTokens.spacingMd),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: pending
-                      ? OutlinedButton(
-                          onPressed: cancelling ? null : onCancel,
-                          child: const Text('取消连接'),
-                        )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (!identityMismatch && !paired)
-                              FilledButton(
-                                onPressed: needsCheck ? onRecheck : onRetry,
-                                child: Text(needsCheck ? '重新检查' : '重试'),
+              Padding(
+                padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: pending
+                        ? OutlinedButton(
+                            onPressed: cancelling ? null : onCancel,
+                            child: const Text('取消连接'),
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (!identityMismatch && !paired)
+                                FilledButton(
+                                  onPressed: needsCheck ? onRecheck : onRetry,
+                                  child: Text(needsCheck ? '重新检查' : '重试'),
+                                ),
+                              TextButton(
+                                onPressed: onEdit,
+                                child: const Text('返回修改'),
                               ),
-                            TextButton(
-                              onPressed: onEdit,
-                              child: const Text('返回修改'),
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

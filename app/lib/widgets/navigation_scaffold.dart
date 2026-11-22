@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:foldable/foldable.dart';
@@ -10,6 +12,7 @@ import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_press_feedback.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
+import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 
 class NavigationScaffold extends HookConsumerWidget {
   const NavigationScaffold({super.key, required this.navigationShell});
@@ -247,6 +250,17 @@ class AppNavigationShell extends StatelessWidget {
               !duoInnerPortrait &&
               (sizeClass != WindowSizeClass.compact || divider != null);
           final compactSidebar = sizeClass == WindowSizeClass.medium || short;
+          final desktop = DesktopWindowInsets.of(context);
+          final navigationWidth = compactSidebar
+              ? DesignTokens.componentSidebarCompactWidth
+              : DesignTokens.componentSidebarWidth;
+          final page = sidebar && desktop != null
+              ? DesktopWindowInsets(
+                  left: math.max(0.0, desktop.left - navigationWidth),
+                  right: desktop.right,
+                  child: child,
+                )
+              : child;
           return _NavigationLayout(
             sidebar: sidebar,
             visible: visible,
@@ -270,6 +284,11 @@ class AppNavigationShell extends StatelessWidget {
                           children: [
                             SafeArea(
                               right: false,
+                              minimum: EdgeInsets.only(
+                                top: compactSidebar && (desktop?.left ?? 0) > 0
+                                    ? DesignTokens.componentPageHeaderHeight
+                                    : 0,
+                              ),
                               child: SizedBox(
                                 key: const ValueKey('app-sidebar'),
                                 width: sidebarWidth,
@@ -293,6 +312,17 @@ class AppNavigationShell extends StatelessWidget {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
+                                          if (!compactSidebar &&
+                                              (desktop?.left ?? 0) > 0)
+                                            const DesktopWindowDragArea(
+                                              child: SizedBox(
+                                                height:
+                                                    DesignTokens
+                                                        .componentPageHeaderHeight -
+                                                    DesignTokens.spacingSm,
+                                                width: double.infinity,
+                                              ),
+                                            ),
                                           if (!compactSidebar && !short)
                                             Padding(
                                               padding:
@@ -398,7 +428,7 @@ class AppNavigationShell extends StatelessWidget {
                         );
                       },
                     ),
-                  Expanded(key: const ValueKey('app-content'), child: child),
+                  Expanded(key: const ValueKey('app-content'), child: page),
                 ],
               ),
             ),

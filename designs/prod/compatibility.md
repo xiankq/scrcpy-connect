@@ -10,7 +10,7 @@
 | --- | --- |
 | Android | WindowManager 提供尺寸和折叠特征。分割窗格依据 `FoldingFeature.isSeparating`。独立控制使用 `FlutterEngineGroup` 和单独的 Activity 任务。 |
 | iOS 与 iPadOS | 使用 scene 和 `FlutterEngineGroup` 创建独立窗口。系统恢复 scene 时沿用原会话身份；iPhone Duo 通过 `foldable` 取得外屏、内屏和折叠保留区。 |
-| macOS、Windows、Linux | `desktop_multi_window` 维护独立引擎与窗口身份。可用尺寸变化时重新安排导航和窗格。 |
+| macOS、Windows、Linux | `desktop_multi_window` 维护独立引擎与窗口身份。主窗口与独立窗口均使用应用顶栏，宿主执行窗口操作。可用尺寸变化时重新安排导航和窗格。 |
 | HarmonyOS | 具备 Flutter 布局契约。原生宿主待接入，适配时由 `windowSizeChange` 更新尺寸、`windowStatusChange` 更新模式、`foldStatusChange` 触发姿态重查。API 12+ 可使用 `FoldSplitContainer`。 |
 
 宿主将可用边界、安全区、保留区、姿态和模式投影为 `WindowEnvironment`。每个控制窗口独立拥有设备、应用任务、视频捕获和输入焦点。宿主不支持额外窗口时使用同页分栏，保留会话身份。半折默认选择安全单窗格，用不同窗格分别呈现画面与工具的布局见[交互稿](../interaction-motion.md#响应式窗口与辅助交互)。

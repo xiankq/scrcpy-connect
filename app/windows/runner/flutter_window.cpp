@@ -1,4 +1,5 @@
 #include "flutter_window.h"
+#include "desktop_window_chrome.h"
 
 #include <optional>
 #include <flutter/event_channel.h>
@@ -104,10 +105,12 @@ bool FlutterWindow::OnCreate() {
     auto* flutter_view_controller =
         reinterpret_cast<flutter::FlutterViewController*>(controller);
     RegisterPlugins(flutter_view_controller->engine());
+    RegisterDesktopWindowChrome(flutter_view_controller);
   });
   system_typography_ = std::make_unique<SystemTypography>(
       flutter_controller_->engine()->messenger());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
+  RegisterDesktopWindowChrome(flutter_controller_.get());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();

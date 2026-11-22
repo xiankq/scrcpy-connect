@@ -4,6 +4,7 @@ import 'package:foldable/foldable.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
+import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 
 /// Lists and details share the same mounted panes across window changes.
 final class WorkspacePanes extends StatelessWidget {
@@ -70,7 +71,17 @@ final class WorkspacePanes extends StatelessWidget {
       final paneMedia = split
           ? media.removePadding(removeLeft: true, removeRight: true)
           : media;
-      Widget inPane(Widget child) => MediaQuery(data: paneMedia, child: child);
+      final desktop = DesktopWindowInsets.of(context);
+      Widget inPane(Widget child, {required bool detail}) => MediaQuery(
+        data: paneMedia,
+        child: split && desktop != null
+            ? DesktopWindowInsets(
+                left: detail ? 0 : desktop.left,
+                right: detail ? desktop.right : 0,
+                child: child,
+              )
+            : child,
+      );
 
       final closeDetail = split ? null : onCloseDetail;
       final showDetail = closeDetail != null;
@@ -86,7 +97,7 @@ final class WorkspacePanes extends StatelessWidget {
               excluding: showDetail && !split,
               child: Offstage(
                 offstage: showDetail && !split,
-                child: inPane(panes.list),
+                child: inPane(panes.list, detail: false),
               ),
             ),
           ),
@@ -109,7 +120,7 @@ final class WorkspacePanes extends StatelessWidget {
               excluding: !showDetail && !split,
               child: Offstage(
                 offstage: !showDetail && !split,
-                child: inPane(panes.detail),
+                child: inPane(panes.detail, detail: true),
               ),
             ),
           ),

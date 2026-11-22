@@ -41,6 +41,7 @@ import 'package:scrcpy_connect/router/models/remote_control_intent.dart';
 import 'package:scrcpy_connect/router/models/remote_launch_intent.dart';
 import 'package:scrcpy_connect/router/route_observers.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
+import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 
 import 'package:scrcpy_connect/widgets/dialogs.dart' show confirm, appSnackBar;
 import 'package:scrcpy_connect/widgets/remote_failure.dart';
@@ -808,55 +809,57 @@ class _ControlPageState extends ConsumerState<ControlPage>
                   )
                 : null,
             // 视频占满可绘制视口，叠加控件自行扣除安全区与系统手势边距。
-            body: RemoteStage(
-              presentation: presentation,
-              inputs: inputs,
-              onViewport: displaySizing.observeViewport,
-              deviceLabel: deviceName(widget.device),
-              independent: widget.packageName != null,
-              recovery: recovery,
-              ime: ime,
-              sensitive: false,
-              inputFocus: inputFocus,
-              needsWake:
-                  screenState.screenOn == false ||
-                  screenState.screenLocked == true ||
-                  (screenState.screenOn == null &&
-                      screenState.screenLocked == null &&
-                      presentation.errorCode == 'device_asleep'),
-              screenOff:
-                  screenState.screenOn == false ||
-                  screenState.screenOn == null &&
-                      presentation.errorCode == 'device_asleep',
-              onWake: waking ? null : wakeScreen,
-              onClose: presentation.exiting ? null : leave,
-              controls: ExitHandle(
-                key: const ValueKey('remote-exit-handle'),
-                onExit: leave,
+            body: DesktopStage(
+              child: RemoteStage(
+                presentation: presentation,
+                inputs: inputs,
+                onViewport: displaySizing.observeViewport,
+                deviceLabel: deviceName(widget.device),
                 independent: widget.packageName != null,
-                onSleep: canSendInput ? () => pressNavigationKey(223) : null,
-                onConvert:
-                    canSendInput &&
-                        !converting &&
-                        (int.tryParse(
-                                  (widget.device.apiLevel?.toString() ?? ''),
-                                ) ??
-                                29) >=
-                            29
-                    ? convertToIndependent
-                    : null,
-                onScreenshot: valid && view?.isCurrent == true
-                    ? screenshot
-                    : null,
-                onKeyboard: canSendInput ? showKeyboard : null,
-                onRotate: canSendInput
-                    ? () => unawaited(send(const ControlAction.rotate()))
-                    : null,
-                deviceLabel: deviceName(currentDevice ?? widget.device),
-                connectionLabel: unverified || currentDevice == null
-                    ? '连接状态待核对'
-                    : deviceStatusText(currentDevice),
-                soundControl: RemoteAudioControl(deviceId: widget.device.id),
+                recovery: recovery,
+                ime: ime,
+                sensitive: false,
+                inputFocus: inputFocus,
+                needsWake:
+                    screenState.screenOn == false ||
+                    screenState.screenLocked == true ||
+                    (screenState.screenOn == null &&
+                        screenState.screenLocked == null &&
+                        presentation.errorCode == 'device_asleep'),
+                screenOff:
+                    screenState.screenOn == false ||
+                    screenState.screenOn == null &&
+                        presentation.errorCode == 'device_asleep',
+                onWake: waking ? null : wakeScreen,
+                onClose: presentation.exiting ? null : leave,
+                controls: ExitHandle(
+                  key: const ValueKey('remote-exit-handle'),
+                  onExit: leave,
+                  independent: widget.packageName != null,
+                  onSleep: canSendInput ? () => pressNavigationKey(223) : null,
+                  onConvert:
+                      canSendInput &&
+                          !converting &&
+                          (int.tryParse(
+                                    (widget.device.apiLevel?.toString() ?? ''),
+                                  ) ??
+                                  29) >=
+                              29
+                      ? convertToIndependent
+                      : null,
+                  onScreenshot: valid && view?.isCurrent == true
+                      ? screenshot
+                      : null,
+                  onKeyboard: canSendInput ? showKeyboard : null,
+                  onRotate: canSendInput
+                      ? () => unawaited(send(const ControlAction.rotate()))
+                      : null,
+                  deviceLabel: deviceName(currentDevice ?? widget.device),
+                  connectionLabel: unverified || currentDevice == null
+                      ? '连接状态待核对'
+                      : deviceStatusText(currentDevice),
+                  soundControl: RemoteAudioControl(deviceId: widget.device.id),
+                ),
               ),
             ),
           ),
