@@ -171,7 +171,7 @@ class NotificationCard extends HookConsumerWidget {
                         tooltip: '清除通知',
                         onPressed: clearing ? null : onClear,
                         icon: const Icon(
-                          LucideIcons.x,
+                          AppIcons.close,
                           size: DesignTokens.componentIconSmallSize,
                         ),
                       ),

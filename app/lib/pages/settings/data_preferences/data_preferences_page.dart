@@ -35,7 +35,7 @@ class DataPreferencesPage extends HookConsumerWidget {
             children: [
               SettingsRow(
                 compact: true,
-                icon: LucideIcons.download,
+                icon: AppIcons.download,
                 color: DesignTokens.colorListIconPurple,
                 title: '导入记录',
                 onTap: operation.busy
@@ -75,7 +75,7 @@ class DataPreferencesPage extends HookConsumerWidget {
               if (operation.refreshPending)
                 SettingsRow(
                   compact: true,
-                  icon: LucideIcons.refreshCw,
+                  icon: AppIcons.refresh,
                   color: DesignTokens.colorListIconSlate,
                   title: '重新加载记录',
                   onTap: operation.busy ? null : actions.refreshRecords,

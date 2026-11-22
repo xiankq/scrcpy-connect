@@ -186,13 +186,13 @@ class AppUpdatesPage extends HookConsumerWidget {
               ),
               ListTile(
                 leading: const FeatureIcon(
-                  LucideIcons.refreshCw,
+                  AppIcons.refresh,
                   size: DesignTokens.componentListIconSize,
                 ),
                 title: const Text('检查更新'),
                 trailing: status.value == null
                     ? const Icon(
-                        LucideIcons.chevronRight,
+                        AppIcons.forward,
                         size: DesignTokens.componentIconSmallSize,
                       )
                     : _UpdateStatus(text: status.value!),
@@ -216,7 +216,7 @@ class AppUpdatesPage extends HookConsumerWidget {
                 ),
                 title: const Text('更新记录'),
                 trailing: const Icon(
-                  LucideIcons.chevronRight,
+                  AppIcons.forward,
                   size: DesignTokens.componentIconSmallSize,
                 ),
                 onTap: showHistory,
@@ -233,6 +233,7 @@ class AppUpdatesPage extends HookConsumerWidget {
               ),
               ActionRow(
                 icon: LucideIcons.fileText,
+                color: DesignTokens.colorListIconDocument,
                 title: '开源许可',
                 onTap: () => showLicensePage(
                   context: context,
@@ -296,7 +297,7 @@ class _UpdatePrompt extends StatelessWidget {
                   color: DesignTokens.colorAccentBlue,
                 ),
               ),
-              _UpdateMark(icon: LucideIcons.download),
+              _UpdateMark(icon: AppIcons.download),
             ],
           ),
         ),

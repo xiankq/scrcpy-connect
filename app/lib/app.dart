@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
@@ -207,9 +208,9 @@ ThemeData _appTheme(Brightness brightness, String? fontFamily) =>
       actionIconTheme: ActionIconThemeData(
         backButtonIconBuilder: (context) => Transform.flip(
           flipX: Directionality.of(context) == TextDirection.rtl,
-          child: const Icon(LucideIcons.chevronLeft),
+          child: const Icon(AppIcons.back),
         ),
-        closeButtonIconBuilder: (_) => const Icon(LucideIcons.x),
+        closeButtonIconBuilder: (_) => const Icon(AppIcons.close),
         drawerButtonIconBuilder: (_) => const Icon(LucideIcons.menu),
         endDrawerButtonIconBuilder: (_) => const Icon(LucideIcons.menu),
       ),

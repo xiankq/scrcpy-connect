@@ -58,7 +58,7 @@ class TransferResultRow extends StatelessWidget {
           ),
           if (onOpen != null)
             GlassMenuButton(
-              icon: const Icon(LucideIcons.ellipsis),
+              icon: const Icon(AppIcons.more),
               tooltip: '查看此项传输',
               actions: [
                 GlassMenuAction(

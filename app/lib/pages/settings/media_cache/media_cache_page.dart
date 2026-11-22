@@ -94,7 +94,7 @@ class MediaCachePage extends HookConsumerWidget {
           onPressed: busy.value
               ? null
               : () => ref.invalidate(cacheStatusProvider),
-          icon: const Icon(LucideIcons.refreshCw),
+          icon: const Icon(AppIcons.refresh),
         ),
       ],
       child: query.when(
@@ -108,7 +108,7 @@ class MediaCachePage extends HookConsumerWidget {
             message: failureMessage(error, fallback: '无法读取媒体暂存。请重试。'),
             action: OutlinedButton.icon(
               onPressed: () => ref.invalidate(cacheStatusProvider),
-              icon: const Icon(LucideIcons.refreshCw),
+              icon: const Icon(AppIcons.refresh),
               label: const Text('重新检查'),
             ),
           ),
@@ -134,7 +134,7 @@ class MediaCachePage extends HookConsumerWidget {
                     (
                       '可清理',
                       reclaimable,
-                      LucideIcons.trash2,
+                      AppIcons.delete,
                       DesignTokens.colorListIconSlate,
                     ),
                     (

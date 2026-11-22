@@ -103,7 +103,7 @@ class _FileTypeTile extends StatelessWidget {
             side: BorderSide(
               color: selected
                   ? theme.colorScheme.onSurface
-                  : Colors.transparent,
+                  : DesignTokens.colorTransparent,
               width: 1.5,
             ),
           ),

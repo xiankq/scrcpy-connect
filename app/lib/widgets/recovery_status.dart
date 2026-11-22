@@ -63,9 +63,7 @@ class _RecoveryStatusState extends ConsumerState<RecoveryStatus> {
               child: SingleChildScrollView(
                 child: StateNote(
                   failed ? '暂时无法确认手机的连接状态。请重新检查。' : '正在检查手机的连接状态，请稍候。',
-                  icon: failed
-                      ? LucideIcons.circleAlert
-                      : LucideIcons.refreshCw,
+                  icon: failed ? LucideIcons.circleAlert : AppIcons.refresh,
                 ),
               ),
             ),
@@ -73,7 +71,7 @@ class _RecoveryStatusState extends ConsumerState<RecoveryStatus> {
               OutlinedButton.icon(
                 onPressed: _retrying ? null : _retry,
                 icon: const Icon(
-                  LucideIcons.refreshCw,
+                  AppIcons.refresh,
                   size: DesignTokens.componentIconActionSize,
                 ),
                 label: const Text('重新检查'),

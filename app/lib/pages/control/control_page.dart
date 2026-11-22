@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:scrcpy_connect/core/control/models/app_launch_record.dart';
 import 'package:material_ui/material_ui.dart';
@@ -798,7 +799,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
             if (!focused) unawaited(releaseInputs());
           },
           child: Scaffold(
-            backgroundColor: Colors.black,
+            backgroundColor: DesignTokens.colorBlack,
             resizeToAvoidBottomInset: true,
             bottomNavigationBar: showNavigationBar && !loadingBackdrop
                 ? RemoteNavigationBar(

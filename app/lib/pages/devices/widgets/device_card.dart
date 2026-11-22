@@ -104,7 +104,7 @@ class DeviceCard extends HookConsumerWidget {
                   GlassMenuButton(
                     tooltip: '设备操作',
                     icon: const Icon(
-                      LucideIcons.ellipsis,
+                      AppIcons.more,
                       size: DesignTokens.componentIconSmallSize,
                     ),
                     actions: [
@@ -144,7 +144,7 @@ class DeviceCard extends HookConsumerWidget {
                       ),
                       GlassMenuAction(
                         label: '连接配置',
-                        icon: const Icon(LucideIcons.settings2),
+                        icon: const Icon(AppIcons.deviceManagement),
                         onPressed: pending.value
                             ? null
                             : () =>
@@ -153,7 +153,7 @@ class DeviceCard extends HookConsumerWidget {
                       ),
                       GlassMenuAction(
                         label: '移除此设备',
-                        icon: const Icon(LucideIcons.trash2),
+                        icon: const Icon(AppIcons.delete),
                         destructive: true,
                         onPressed: pending.value
                             ? null

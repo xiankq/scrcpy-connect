@@ -82,7 +82,7 @@ class QrPairingPage extends HookConsumerWidget {
       if (hasQr)
         Center(
           child: Container(
-            color: Colors.white,
+            color: DesignTokens.colorWhite,
             padding: const EdgeInsets.all(DesignTokens.spacingMd),
             child: QrImageView(
               data: state.payload!,

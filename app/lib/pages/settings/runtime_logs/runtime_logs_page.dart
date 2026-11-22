@@ -130,7 +130,7 @@ class RuntimeLogsPage extends HookConsumerWidget {
               children: [
                 SettingsRow(
                   compact: true,
-                  icon: LucideIcons.slidersHorizontal,
+                  icon: AppIcons.viewOptions,
                   color: DesignTokens.colorListIconUtility,
                   title: '筛选',
                   value: filterLabel.isEmpty ? '全部' : filterLabel,
@@ -144,14 +144,14 @@ class RuntimeLogsPage extends HookConsumerWidget {
               children: [
                 SettingsRow(
                   compact: true,
-                  icon: LucideIcons.download,
+                  icon: AppIcons.download,
                   color: DesignTokens.colorListIconUtility,
                   title: '导出日志',
                   onTap: logger == null || busy.value ? null : exportLogs,
                 ),
                 SettingsRow(
                   compact: true,
-                  icon: LucideIcons.trash2,
+                  icon: AppIcons.delete,
                   color: DesignTokens.colorListIconCoral,
                   title: '清空日志',
                   destructive: true,

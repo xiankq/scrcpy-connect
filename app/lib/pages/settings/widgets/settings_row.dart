@@ -1,4 +1,3 @@
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
@@ -60,7 +59,7 @@ class SettingsRow extends StatelessWidget {
                       if (value != null)
                         const SizedBox(width: DesignTokens.spacingXs),
                       const Icon(
-                        LucideIcons.chevronRight,
+                        AppIcons.forward,
                         size: DesignTokens.componentIconSmallSize,
                       ),
                     ],

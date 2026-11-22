@@ -262,7 +262,7 @@ class TransferHistoryRow extends HookConsumerWidget {
                   )
                 else
                   GlassMenuButton(
-                    icon: const Icon(LucideIcons.ellipsis),
+                    icon: const Icon(AppIcons.more),
                     tooltip: '传输操作',
                     actions: [
                       GlassMenuAction(
@@ -272,7 +272,7 @@ class TransferHistoryRow extends HookConsumerWidget {
                       ),
                       GlassMenuAction(
                         label: active ? '停止并移除…' : '移除记录',
-                        icon: const Icon(LucideIcons.trash2),
+                        icon: const Icon(AppIcons.delete),
                         destructive: true,
                         onPressed: remove,
                       ),

@@ -6,7 +6,6 @@ import 'package:foldable/foldable.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_press_feedback.dart';
@@ -74,8 +73,9 @@ class NavigationScaffold extends HookConsumerWidget {
         ),
         iconLabelSpacing: DesignTokens.spacingMicro,
         iconSize: DesignTokens.componentIconSize,
-        labelFontSize: theme.textTheme.labelLarge!.fontSize!,
-        textStyle: theme.textTheme.labelLarge,
+        labelFontSize: DesignTokens.typographyCaptionFontSize,
+        textStyle: theme.textTheme.bodySmall,
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
         selectedIconColor: theme.colorScheme.primary,
         selectedLabelColor: theme.colorScheme.primary,
         unselectedIconColor: theme.colorScheme.onSurfaceVariant,
@@ -175,9 +175,9 @@ class NavigationScaffold extends HookConsumerWidget {
 }
 
 const appDestinations = [
-  (LucideIcons.smartphone, '设备', '/devices'),
-  (LucideIcons.arrowUpDown, '传输', '/transfers'),
-  (LucideIcons.settings2, '设置', '/settings'),
+  (AppIcons.navigationDevices, '设备', '/devices'),
+  (AppIcons.navigationTransfers, '传输', '/transfers'),
+  (AppIcons.navigationSettings, '设置', '/settings'),
 ];
 
 /// 普通路由共用的导航外壳；沉浸页面位于根 Navigator。

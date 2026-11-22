@@ -32,6 +32,7 @@ class DeviceFunctionChecks extends ConsumerWidget {
       emptyTitle: '暂时无法检查功能',
       builder: (context, data) {
         final capabilities = data.capabilities;
+        final dark = Theme.of(context).brightness == Brightness.dark;
         return SettingsGroup(
           children: [
             if (capabilities.isEmpty) const StateNote('请先连接手机，再检查哪些功能可用。'),
@@ -70,10 +71,15 @@ class DeviceFunctionChecks extends ConsumerWidget {
                       },
                       size: DesignTokens.componentIconSmallSize,
                       color: switch (cap.status) {
-                        .available => DesignTokens.colorSuccess,
+                        .available =>
+                          dark
+                              ? DesignTokens.colorSuccessDark
+                              : DesignTokens.colorSuccess,
                         .unavailable => Theme.of(context).colorScheme.error,
                         .limited || .needsSetup =>
-                          DesignTokens.componentConnectionIconUsbTextColor,
+                          dark
+                              ? DesignTokens.colorWarningDark
+                              : DesignTokens.colorDiagnosticWarning,
                         _ => Theme.of(context).colorScheme.onSurfaceVariant,
                       },
                     ),

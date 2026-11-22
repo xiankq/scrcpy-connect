@@ -44,7 +44,7 @@ class FileSearchScopeSelector extends StatelessWidget {
                 child: Material(
                   color: entireStorage == entire
                       ? theme.colorScheme.surface
-                      : Colors.transparent,
+                      : DesignTokens.colorTransparent,
                   borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(DesignTokens.roundedMd),

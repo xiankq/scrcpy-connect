@@ -4,7 +4,6 @@ import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/content/models/cached_content.dart';
 import 'package:scrcpy_connect/core/content/thumbnail_queue_provider.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
@@ -59,7 +58,7 @@ class MediaThumbnail extends HookConsumerWidget {
                 tooltip: '重试缩略图',
                 onPressed: () => retry.value++,
                 icon: const Icon(
-                  LucideIcons.refreshCw,
+                  AppIcons.refresh,
                   size: DesignTokens.componentIconActionSize,
                   color: ConnectTokens.coral,
                 ),
@@ -100,7 +99,7 @@ class MediaThumbnail extends HookConsumerWidget {
                       tooltip: '重试缩略图',
                       onPressed: () => retry.value++,
                       icon: const Icon(
-                        LucideIcons.refreshCw,
+                        AppIcons.refresh,
                         size: DesignTokens.componentIconActionSize,
                         color: ConnectTokens.coral,
                       ),

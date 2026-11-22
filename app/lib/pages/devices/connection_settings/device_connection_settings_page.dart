@@ -1,6 +1,5 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/devices/connection_validation.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
@@ -32,7 +31,8 @@ class DeviceConnectionSettingsPage extends HookConsumerWidget {
               padding: const EdgeInsets.only(top: DesignTokens.spacingLg),
               child: ContentPanel(
                 child: ActionRow(
-                  icon: LucideIcons.wifi,
+                  icon: AppIcons.connectionIp,
+                  color: DesignTokens.colorListIconMint,
                   title: '转为 IP 连接',
                   onTap: () =>
                       DeviceIpRoute(deviceId: device.id).push<void>(context),

@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/devices/connection_validation.dart';
 import 'package:scrcpy_connect/core/devices/device_connection_control.dart';
 import 'package:scrcpy_connect/core/devices/device_setup.dart';
@@ -280,13 +279,13 @@ class ConnectionFormPage extends HookConsumerWidget {
                                         minTileHeight: DesignTokens
                                             .componentConnectionNearbyEntryHeight,
                                         leading: const Icon(
-                                          LucideIcons.radar,
+                                          AppIcons.connectionDiscovery,
                                           color: DesignTokens
                                               .componentConnectionIconNearbyTextColor,
                                         ),
                                         title: const Text('附近设备'),
                                         trailing: const Icon(
-                                          LucideIcons.chevronRight,
+                                          AppIcons.forward,
                                           size: DesignTokens
                                               .componentIconSmallSize,
                                         ),
@@ -434,7 +433,7 @@ class ConnectionFormPage extends HookConsumerWidget {
                                         }),
                                       ),
                                       const Icon(
-                                        LucideIcons.chevronRight,
+                                        AppIcons.forward,
                                         size:
                                             DesignTokens.componentIconSmallSize,
                                       ),

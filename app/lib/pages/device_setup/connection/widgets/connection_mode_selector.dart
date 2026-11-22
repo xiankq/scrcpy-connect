@@ -1,4 +1,3 @@
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
@@ -21,25 +20,25 @@ class ConnectionModeSelector extends StatelessWidget {
     (
       AddDeviceMode.pairing,
       '配对码',
-      LucideIcons.keyRound,
+      AppIcons.connectionPairing,
       DesignTokens.componentConnectionIconPairingTextColor,
     ),
     (
       AddDeviceMode.qr,
       '扫码',
-      LucideIcons.scanQrCode,
+      AppIcons.connectionScan,
       DesignTokens.componentConnectionIconQrTextColor,
     ),
     (
       AddDeviceMode.usb,
       'USB',
-      LucideIcons.usb,
+      AppIcons.connectionUsb,
       DesignTokens.componentConnectionIconUsbTextColor,
     ),
     (
       AddDeviceMode.ip,
       'IP 连接',
-      LucideIcons.wifi,
+      AppIcons.connectionIp,
       DesignTokens.componentConnectionIconIpTextColor,
     ),
   ];
@@ -70,7 +69,7 @@ class ConnectionModeSelector extends StatelessWidget {
                     child: Material(
                       color: selected == mode
                           ? theme.colorScheme.surfaceContainerHigh
-                          : Colors.transparent,
+                          : DesignTokens.colorTransparent,
                       borderRadius: BorderRadius.circular(
                         DesignTokens.componentConnectionTabSelectedRounded,
                       ),

@@ -39,7 +39,7 @@ class FileBreadcrumbs extends HookWidget {
           for (var index = 0; index < crumbs.length; index++) ...[
             if (index > 0)
               Icon(
-                LucideIcons.chevronRight,
+                AppIcons.forward,
                 size: DesignTokens.componentIconSmallSize,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),

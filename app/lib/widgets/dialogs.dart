@@ -9,7 +9,7 @@ void feedback(BuildContext context, String message) =>
 /// 文字反馈使用实体面，前景在接收消息的上下文中跟随明暗主题。
 SnackBar appSnackBar(String message) => SnackBar(
   behavior: SnackBarBehavior.floating,
-  backgroundColor: Colors.transparent,
+  backgroundColor: DesignTokens.colorTransparent,
   elevation: 0,
   padding: EdgeInsets.zero,
   content: Builder(

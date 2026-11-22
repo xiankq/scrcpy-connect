@@ -82,7 +82,7 @@ class TransferExportActions extends ConsumerWidget {
                 }
               },
               icon: const Icon(
-                LucideIcons.share2,
+                AppIcons.share,
                 size: DesignTokens.componentIconActionSize,
               ),
               label: const Text('系统分享'),

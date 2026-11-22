@@ -39,7 +39,7 @@ class BackgroundPage extends HookConsumerWidget {
       actions: [
         GlassActionIcon(
           tooltip: '重新检查',
-          icon: const Icon(LucideIcons.refreshCw),
+          icon: const Icon(AppIcons.refresh),
           onPressed: refresh,
         ),
       ],

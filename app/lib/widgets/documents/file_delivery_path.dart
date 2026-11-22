@@ -47,7 +47,7 @@ class FileDeliveryPath extends StatelessWidget {
               ),
               Expanded(child: _MilestoneConnector(complete: staged)),
               _MilestoneIcon(
-                icon: LucideIcons.download,
+                icon: AppIcons.download,
                 state: staged
                     ? _MilestoneVisual.complete
                     : stageActive

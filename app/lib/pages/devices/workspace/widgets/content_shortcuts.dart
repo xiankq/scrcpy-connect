@@ -1,5 +1,4 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
@@ -35,8 +34,8 @@ class ContentShortcuts extends StatelessWidget {
             for (final item in [
               (
                 '文件',
-                LucideIcons.folder,
-                DesignTokens.colorListIconAmber,
+                AppIcons.files,
+                DesignTokens.colorListIconDocument,
                 () => FilesRoute(
                   deviceId: deviceId,
                   path: '/sdcard',
@@ -44,20 +43,20 @@ class ContentShortcuts extends StatelessWidget {
               ),
               (
                 '相册',
-                LucideIcons.images,
+                AppIcons.gallery,
                 DesignTokens.colorListIconSlate,
                 () => GalleryRoute(deviceId: deviceId).push<void>(context),
               ),
               (
                 '通知',
-                LucideIcons.bell,
+                AppIcons.notifications,
                 DesignTokens.colorListIconCoral,
                 () =>
                     NotificationsRoute(deviceId: deviceId).push<void>(context),
               ),
               (
                 '电话',
-                LucideIcons.phone,
+                AppIcons.calls,
                 DesignTokens.colorListIconMint,
                 () => CallsRoute(deviceId: deviceId).push<void>(context),
               ),

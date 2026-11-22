@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/media/video_screenshots.dart';
@@ -85,7 +84,7 @@ class ScreenshotPage extends HookWidget {
             if (supportsSystemDocumentSave) ...[
               FilledButton.icon(
                 onPressed: () => saving.value = true,
-                icon: const Icon(LucideIcons.download),
+                icon: const Icon(AppIcons.download),
                 label: const Text('保存到系统位置'),
               ),
               const SizedBox(height: DesignTokens.spacingSm),

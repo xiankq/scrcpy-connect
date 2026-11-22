@@ -238,6 +238,7 @@ class IncomingSharePage extends HookConsumerWidget {
               return ActionRow(
                 key: ValueKey(('incoming-file', share.shareId, row)),
                 icon: LucideIcons.file,
+                color: DesignTokens.colorListIconTransfer,
                 title: files[row].name,
               );
             }

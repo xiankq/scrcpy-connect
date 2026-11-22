@@ -57,16 +57,17 @@ class GalleryMediaTile extends StatelessWidget {
                   bottom: DesignTokens.spacingXs,
                   child: Icon(
                     LucideIcons.play,
-                    color: Colors.white,
+                    color: DesignTokens.colorWhite,
                     size: DesignTokens.componentIconActionSize,
                   ),
                 ),
               if (selected)
                 Container(
-                  color: Colors.black38,
+                  color: DesignTokens
+                      .componentMediaThumbnailSelectionBackgroundColor,
                   child: const Icon(
                     LucideIcons.circleCheck,
-                    color: Colors.white,
+                    color: DesignTokens.colorWhite,
                   ),
                 ),
             ],

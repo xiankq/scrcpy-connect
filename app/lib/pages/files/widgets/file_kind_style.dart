@@ -14,8 +14,10 @@ IconData fileKindIcon(FileKind kind) => switch (kind) {
 };
 
 Color fileKindColor(FileKind kind) => switch (kind) {
-  FileKind.documents || FileKind.archives => DesignTokens.colorListIconAmber,
-  FileKind.images || FileKind.videos => DesignTokens.colorListIconPurple,
+  FileKind.documents => DesignTokens.colorListIconDocument,
+  FileKind.archives => DesignTokens.colorListIconPurple,
+  FileKind.images ||
+  FileKind.videos ||
   FileKind.audio => DesignTokens.colorListIconSlate,
-  FileKind.other => DesignTokens.colorListIconSlate,
+  FileKind.other => DesignTokens.colorListIconUtility,
 };

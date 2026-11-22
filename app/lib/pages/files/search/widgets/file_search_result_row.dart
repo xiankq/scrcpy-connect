@@ -84,7 +84,7 @@ class FileSearchResultRow extends StatelessWidget {
                   ],
                   const SizedBox(width: DesignTokens.spacingXs),
                   Icon(
-                    LucideIcons.chevronRight,
+                    AppIcons.forward,
                     size: DesignTokens.componentIconSmallSize,
                     color: theme.colorScheme.onSurfaceVariant,
                   ),

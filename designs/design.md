@@ -16,6 +16,7 @@ colors:
   surface-dark: '#242424'
   device-panel: '#E9EFF1'
   device-panel-dark: '#232A2D'
+  skeleton-graphic-dark: '#39434A'
   text: '#111111'
   text-dark: '#FAFAFA'
   secondary: '#656565'
@@ -26,8 +27,9 @@ colors:
   tint-dark: '#2C2C2E'
   glass: '#FFFFFF80'
   glass-dark: '#1C1C1E99'
-  glass-clear: '#FFFFFF26'
-  glass-clear-dark: '#1C1C1E4D'
+  glass-clear: '#FFFFFF13'
+  glass-toolbar-tint: '#FFFFFF2B'
+  glass-toolbar-tint-dark: '#FFFFFF17'
   glass-edge: '#FFFFFF66'
   glass-edge-dark: '#FFFFFF26'
   glass-low-edge: '#75757A42'
@@ -40,6 +42,9 @@ colors:
   success-dark: '#32E875'
   warning: '#FFB020'
   warning-dark: '#FFC247'
+  diagnostic-warning: '#D47700'
+  diagnostic-checking: '#2674ED'
+  diagnostic-checking-dark: '#82B8FF'
   danger: '#FF3B30'
   danger-dark: '#FF534A'
   danger-text: '#DA2028'
@@ -54,6 +59,7 @@ colors:
   device-screen-rim: '#36414B'
   device-shortcut-disabled: '#72767C'
   media-shade: '#00000099'
+  media-thumbnail-shade: '#00000061'
   remote-wait-warm: '#68504D'
   remote-wait-mid: '#242B37'
   remote-wait-shadow: '#171E29'
@@ -177,6 +183,18 @@ typography:
     fontWeight: 400
     lineHeight: '1.4'
     letterSpacing: 0px
+  action-caption:
+    fontFamily: MiSans
+    fontSize: 13px
+    fontWeight: 500
+    lineHeight: '1.4'
+    letterSpacing: 0px
+  file-option-label:
+    fontFamily: MiSans
+    fontSize: 14px
+    fontWeight: 500
+    lineHeight: '1.4'
+    letterSpacing: 0px
   micro:
     fontFamily: MiSans
     fontSize: 11px
@@ -269,13 +287,6 @@ components:
     height: 54px
   page-header:
     height: 56px
-  desktop-window-button:
-    width: 34px
-    height: 32px
-  desktop-window-symbol:
-    size: 14px
-  desktop-resize-edge:
-    width: 6px
   remote-navigation:
     height: 56px
     padding: 67.5px
@@ -381,11 +392,12 @@ components:
     glowOppositeIntensity: 0.5
   glass-clear:
     backgroundColor: '{colors.glass-clear}'
-    textColor: '{colors.text}'
-    blur: 4px
-  glass-clear-dark:
-    backgroundColor: '{colors.glass-clear-dark}'
-    textColor: '{colors.text-dark}'
+    blur: 0px
+  glass-toolbar-material:
+    backgroundColor: '{colors.glass-toolbar-tint}'
+    rounded: 22px
+  glass-toolbar-material-dark:
+    backgroundColor: '{colors.glass-toolbar-tint-dark}'
   glass-edge-dark:
     backgroundColor: '{colors.glass-edge-dark}'
   glass-low-edge:
@@ -460,6 +472,16 @@ components:
     size: 112px
     height: 112px
     rounded: '{rounded.sm}'
+  media-thumbnail-selection:
+    backgroundColor: '{colors.media-thumbnail-shade}'
+  skeleton-graphic:
+    backgroundColor: '{colors.device-panel}'
+  skeleton-graphic-dark:
+    backgroundColor: '{colors.skeleton-graphic-dark}'
+  skeleton-line:
+    backgroundColor: '{colors.tint}'
+  skeleton-line-dark:
+    backgroundColor: '{colors.muted-dark}'
   file-browser-tile:
     rounded: '{rounded.md}'
     backgroundColor: '{colors.file-tile}'
@@ -485,10 +507,14 @@ components:
     rounded: '{rounded.full}'
     backgroundColor: '{colors.glass}'
     textColor: '{colors.text}'
+    typography: '{typography.action-caption}'
   file-action-bar-dark:
     backgroundColor: '{colors.glass-dark}'
+  file-view-popover:
+    width: 342px
+    typography: '{typography.file-option-label}'
   media-preview-bar:
-    width: 344px
+    width: 342px
     textColor: '{colors.text-dark}'
   remote-screen:
     height: 492px
@@ -818,6 +844,12 @@ components:
     backgroundColor: '{colors.list-icon-transfer}'
   list-icon-utility:
     backgroundColor: '{colors.list-icon-utility}'
+  diagnostic-warning:
+    textColor: '{colors.diagnostic-warning}'
+  diagnostic-checking:
+    textColor: '{colors.diagnostic-checking}'
+  diagnostic-checking-dark:
+    textColor: '{colors.diagnostic-checking-dark}'
   transfer-progress:
     height: 4px
     rounded: '{spacing.micro}'
@@ -870,7 +902,19 @@ components:
 
 页面从当前操作对象展开。工作台由设备名称、连接状态和屏幕入口组成，电话由来电身份和声音位置组成，传输由文件、方向和真实阶段组成。照片、视频和远控让真实内容占据画面。操作层沿用统一的中性实体面和液态玻璃。产品行为见[产品规格](prod/README.md)，当前视觉稿见 [Ardot《邻接 · 近场工作台》](https://ardot.tencent.com/file/749360133997361?node_id=2%3A14)。数值以 frontmatter 为准，由[工具](../scripts/design_tokens/README.md)生成 Flutter token，`px` 对应逻辑像素。
 
-frontmatter 的 maxWidth、gap、verticalPadding、opacity、scale、stretch 及玻璃光学属性属于项目扩展。生成与正式 lint 共用项目 schema，检查扩展类型、单位及取值范围，并保留官方的未知属性、断引用、对比度和未引用颜色检查。校验入口见[工具说明](../scripts/design_tokens/README.md)。颜色引用应对应实际组件或绘制层，透明层与图标的可读性按真实叠加关系核验。
+frontmatter 的 maxWidth、gap、verticalPadding、opacity、scale、stretch 及玻璃光学属性属于项目扩展。生成与正式 lint 共用项目 schema，检查扩展类型、单位及取值范围，并保留官方的未知属性、断引用、对比度和未引用颜色检查。颜色引用对应实际组件或绘制层，透明层与图标的可读性按真实叠加关系核验。
+
+## 设计系统
+
+| 对象 | 修改入口 | 使用方式 |
+| --- | --- | --- |
+| 颜色、尺寸、透明度、字号 | 本文 frontmatter | Flutter 生成 `DesignTokens`，明暗界面通过主题取色。Ardot 绑定日夜变量或明确的固定色变量 |
+| 跨页图标 | [图标角色登记表](icons.json) | Flutter 使用生成的 `AppIcons`。Ardot 从 [G13 图标库](https://ardot.tencent.com/file/749360133997361?node_id=17%3A567) 插入同名角色实例。角色保留操作语义，登记表决定 Lucide 图形 |
+| 布局、状态、材质 | 共享控件及 Ardot 母组件 | 页面提供动作、标签和当前状态。母组件提供尺寸、材质、间距和交互。页头圆键按 regular、clear、实体回退复用同一变体的操作面 |
+
+一个图标可用于多个操作角色。例如，主导航设置与当前设备管理分别维护各自的角色。徽标和状态颜色由功能或状态选择，换图形时颜色继续跟随原角色。原应用图标、远端内容、Android 系统三键和桌面原生控件沿用其来源。
+
+调整颜色或尺寸时，修改 frontmatter，重新生成 Flutter token，并把同一份输出应用到 Ardot 变量。更换共享图标时，更新登记表和 Ardot 同名母组件的矢量层，保留母组件节点及实例关系。主题、媒体亮色图标和选中状态只覆盖相应属性，继续继承共用轮廓。稿件中的文件名、设备名、动作标签和真实数据可以按场景覆盖。命令和读回步骤见[生成与同步](../scripts/design_tokens/README.md)。
 
 ## 设计依据与原则
 
@@ -923,7 +967,7 @@ iOS 与 iPadOS 使用出血方形，由系统施加遮罩，提供默认、深�
 
 选用鲜明的状态色来传达结果，图形、短状态和原因保留各自信息。断开和停止按实际影响确定权重。
 
-连接诊断与 G5 状态组件使用 18 点无底线形图标。左侧功能图标用中性前景，右侧状态图标直接着色，状态文字沿用正文色。可用用绿色对勾，不可用用红色叉，需授权、受限和需设置用琥珀色图标（浅色 `#D47700`，深色 `warning-dark`），检查中用蓝色进度图标（浅色 `#2674ED`，深色 `#82B8FF`）。待检查、已停止和待核验用中性图标。文字和图标共用一行中心线，状态槽在各行右侧对齐。
+连接诊断与 G5 状态组件使用 18 点无底线形图标。左侧功能图标用中性前景，右侧状态图标直接着色，状态文字沿用正文色。可用用主题成功色对勾，不可用用主题危险色叉。需授权、受限和需设置用 `diagnostic-warning` 或夜间的 `warning-dark`，检查中用 `diagnostic-checking` 或夜间的 `diagnostic-checking-dark`。待检查、已停止和待核验用中性图标。文字和图标共用一行中心线，状态槽在各行右侧对齐。
 
 `list-icon` 定义尺寸与白色图形，`list-icon-blue` 等定义独立底色层。这里的 textColor 指图形前景。底栏以 `glass-selection` 为选中镜片着色，浅色叠加 4% 黑，深色叠加 12% 白。选中图标和标签使用当前主题正文前景，未选中项使用次要前景。在合成后的玻璃背景上核对实际对比度。
 

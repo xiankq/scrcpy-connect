@@ -56,7 +56,7 @@ class FolderListTile extends StatelessWidget {
               child: selectionActive
                   ? _FileSelectionMark(selected: selected, enabled: manageable)
                   : Icon(
-                      LucideIcons.chevronRight,
+                      AppIcons.forward,
                       size: DesignTokens.componentIconSmallSize,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -234,7 +234,7 @@ class FileGridTile extends StatelessWidget {
                         bottom: DesignTokens.spacingXs,
                         child: Icon(
                           LucideIcons.play,
-                          color: Colors.white,
+                          color: DesignTokens.colorWhite,
                           size: DesignTokens.componentIconActionSize,
                         ),
                       ),
@@ -429,7 +429,7 @@ class FileListTile extends StatelessWidget {
               child: selectionActive
                   ? _FileSelectionMark(selected: selected, enabled: manageable)
                   : Icon(
-                      LucideIcons.chevronRight,
+                      AppIcons.forward,
                       size: DesignTokens.componentIconSmallSize,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),

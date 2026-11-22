@@ -221,7 +221,7 @@ class ReceiveContentPage extends HookConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Icon(
-                          share ? LucideIcons.share2 : LucideIcons.download,
+                          share ? AppIcons.share : AppIcons.download,
                           color: ConnectTokens.accent(
                             context,
                             ConnectTokens.amber,
@@ -362,7 +362,7 @@ class ReceiveContentPage extends HookConsumerWidget {
                               shareResult.value != null && !shareReviewed.value
                           ? null
                           : deliverShare,
-                      icon: const Icon(LucideIcons.share2),
+                      icon: const Icon(AppIcons.share),
                       label: Text(
                         shareResult.value == null ? '交给系统分享' : '重新打开系统分享',
                       ),

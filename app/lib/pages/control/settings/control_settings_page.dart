@@ -68,11 +68,13 @@ class ControlSettingsPage extends HookConsumerWidget {
     Widget toggle(
       String title,
       IconData icon,
+      Color color,
       bool enabled,
       DevicePreferences Function(bool) change,
     ) => ConnectSwitchRow(
       title: Text(title),
       icon: icon,
+      iconColor: color,
       value: enabled,
       onChanged: (next) async {
         try {
@@ -101,24 +103,28 @@ class ControlSettingsPage extends HookConsumerWidget {
               toggle(
                 '显示导航键',
                 LucideIcons.navigation,
+                DesignTokens.colorListIconBlue,
                 preferences.showNavigationBar ?? true,
                 (next) => DevicePreferences(showNavigationBar: next),
               ),
               toggle(
                 '新画面启动时点亮屏幕',
                 LucideIcons.sun,
+                DesignTokens.colorListIconAmber,
                 preferences.wakeOnConnect ?? true,
                 (next) => DevicePreferences(wakeOnConnect: next),
               ),
               toggle(
                 '关闭最后画面时熄屏',
                 LucideIcons.moon,
+                DesignTokens.colorListIconAmber,
                 preferences.lockOnClose ?? false,
                 (next) => DevicePreferences(lockOnClose: next),
               ),
               toggle(
                 '保持手机唤醒',
                 LucideIcons.alarmClock,
+                DesignTokens.colorListIconUtility,
                 preferences.stayAwake ?? false,
                 (next) => DevicePreferences(stayAwake: next),
               ),
@@ -129,6 +135,7 @@ class ControlSettingsPage extends HookConsumerWidget {
             children: [
               ActionRow(
                 icon: LucideIcons.ratio,
+                color: DesignTokens.colorListIconBlue,
                 title: '屏幕比例',
                 trailing: Text(RemoteDisplaySettings(preferences).label),
                 onTap: () =>
@@ -225,6 +232,7 @@ class ControlSettingsPage extends HookConsumerWidget {
                       for (final stream in data.activeSessions)
                         ActionRow(
                           icon: LucideIcons.monitor,
+                          color: DesignTokens.colorListIconBlue,
                           title: stream.name,
                         ),
                     ],
