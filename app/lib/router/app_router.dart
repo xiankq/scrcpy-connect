@@ -48,6 +48,7 @@ import 'package:scrcpy_connect/router/route_observers.dart';
 import 'package:scrcpy_connect/router/route_resource_resolver_provider.dart';
 import 'package:scrcpy_connect/router/route_resource_view.dart';
 import 'package:scrcpy_connect/widgets/navigation_scaffold.dart';
+import 'package:scrcpy_connect/pages/session_pending/session_content.dart';
 import 'package:scrcpy_connect/widgets/visible_device_focus.dart';
 
 part 'app_router.g.dart';
@@ -111,8 +112,12 @@ abstract class _AppPageRoute extends GoRouteData {
   const _AppPageRoute();
 
   @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      _page(state, build(context, state));
+  Page<void> buildPage(BuildContext context, GoRouterState state) => _page(
+    state,
+    AppSessionContent(
+      child: Builder(builder: (context) => build(context, state)),
+    ),
+  );
 }
 
 Widget _deviceRecord(
@@ -223,8 +228,11 @@ class DevicesRoute extends GoRouteData with $DevicesRoute {
   @override
   Widget build(BuildContext context, GoRouterState state) => DevicesPage();
   @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      _page(state, build(context, state), restorationId: 'devices-page');
+  Page<void> buildPage(BuildContext context, GoRouterState state) => _page(
+    state,
+    AppSessionContent(title: '设备', root: true, child: build(context, state)),
+    restorationId: 'devices-page',
+  );
 }
 
 class TransfersRoute extends GoRouteData with $TransfersRoute {
@@ -233,8 +241,11 @@ class TransfersRoute extends GoRouteData with $TransfersRoute {
   Widget build(BuildContext context, GoRouterState state) =>
       const TransfersPage(embedded: true);
   @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      _page(state, build(context, state), restorationId: 'transfers-page');
+  Page<void> buildPage(BuildContext context, GoRouterState state) => _page(
+    state,
+    AppSessionContent(title: '传输', root: true, child: build(context, state)),
+    restorationId: 'transfers-page',
+  );
 }
 
 class SettingsRoute extends GoRouteData with $SettingsRoute {
@@ -243,8 +254,11 @@ class SettingsRoute extends GoRouteData with $SettingsRoute {
   Widget build(BuildContext context, GoRouterState state) =>
       const SettingsPage(embedded: true);
   @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      _page(state, build(context, state), restorationId: 'settings-page');
+  Page<void> buildPage(BuildContext context, GoRouterState state) => _page(
+    state,
+    AppSessionContent(title: '设置', root: true, child: build(context, state)),
+    restorationId: 'settings-page',
+  );
 }
 
 @TypedGoRoute<RouteErrorRoute>(path: '/unavailable', name: 'route-error')

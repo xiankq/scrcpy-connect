@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:scrcpy_connect/bootstrap/app_composition.dart';
 import 'package:scrcpy_connect/core/devices/models/connection_policy.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
+import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/files/file_local_directories.dart';
 import 'package:scrcpy_connect/core/files/file_share_service.dart';
@@ -23,14 +24,23 @@ Future<AppBootstrap> bootstrapApp({
         await (prepareOutgoingDirectory ?? outgoingMediaDirectory)();
     await session.configureOutgoingDirectory(outgoing.path);
     return session;
-  } catch (error, stack) {
+  } catch (_) {
     try {
       await session.dispose();
-    } catch (_) {
-      // 即使清理失败，也保留最初可操作的启动错误。
+    } catch (cleanup) {
+      _recordCleanupFailure(diagnostics, 'outgoing_directory', cleanup);
     }
-    Error.throwWithStackTrace(error, stack);
+    rethrow;
   }
+}
+
+void _recordCleanupFailure(DiagnosticLog? log, String stage, Object error) {
+  log?.record(
+    DiagnosticArea.app,
+    'bootstrap.cleanup.failed',
+    level: LogLevel.error,
+    fields: {'stage': stage, 'errorType': error.runtimeType.toString()},
+  );
 }
 
 Future<AppBootstrap> _createSession(DiagnosticLog? diagnostics) async {
@@ -143,31 +153,31 @@ class AppBootstrap {
       adbBinaryDirectory: adbBinaryDirectory,
     );
     _startingHost = host;
+    AppBootstrap? session;
     try {
-      final session = await _assemble(host, dataDirectory, policy, diagnostics);
-      // 此后所有资源交由会话关闭；启动活动失败也必须通过同一会话重试清理。
+      session = await _assemble(host, dataDirectory, policy, diagnostics);
+      // 会话接管启动阶段取得的资源。
       _startingHost = null;
       _startingSharing = null;
+      await session._composition.lifecycle.activate();
+      _active = session;
+      return session;
+    } catch (_) {
       try {
-        await session._composition.lifecycle.activate();
-        _active = session;
-        return session;
-      } catch (error, stack) {
-        _active = session;
-        try {
+        if (session == null) {
+          await _closeStartingResources();
+        } else {
+          _active = session;
           await session.dispose();
-        } catch (_) {
-          // 失败所有者留给下一次附着重试，原始启动异常仍是本次失败原因。
         }
-        Error.throwWithStackTrace(error, stack);
+      } catch (cleanup) {
+        _recordCleanupFailure(
+          diagnostics,
+          session == null ? 'assemble' : 'activate',
+          cleanup,
+        );
       }
-    } catch (error, stack) {
-      try {
-        await _closeStartingResources();
-      } catch (_) {
-        // 未确认关闭的原实例仍在静态登记中，后继启动必须先完成收尾。
-      }
-      Error.throwWithStackTrace(error, stack);
+      rethrow;
     }
   }
 
