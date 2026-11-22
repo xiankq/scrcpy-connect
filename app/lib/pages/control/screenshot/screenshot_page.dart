@@ -7,7 +7,7 @@ import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/media/video_screenshots.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/widgets/documents/document_export_form.dart';
+import 'package:scrcpy_connect/pages/transfers/export/document_export_page.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -37,15 +37,13 @@ class ScreenshotPage extends HookWidget {
     final available = useFuture(check);
     final name = '截图-${p.basename(p.dirname(path))}.png';
     if (saving.value && available.data == true) {
-      return PageFrame(
+      return DocumentExportPage(
         title: '保存截图到系统位置',
         onBack: () => saving.value = false,
-        child: DocumentExportForm(
-          localPath: path,
-          name: name,
-          kind: 'file',
-          sourceLabel: deviceName(device),
-        ),
+        localPath: path,
+        name: name,
+        kind: 'file',
+        sourceLabel: deviceName(device),
       );
     }
     return PageFrame(

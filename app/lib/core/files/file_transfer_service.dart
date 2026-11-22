@@ -89,7 +89,8 @@ class FileTransferService implements FileTransfers {
   }) async {
     final journal = FileTransferJournal(dataDirectory);
     final tasks = (await journal.load()).map(
-      (id, record) => MapEntry(id, _TransferTask(record)),
+      (id, record) =>
+          MapEntry(id, _TransferTask(record, persistedStatus: record.status)),
     );
     final owner = FileTransferService._(
       executor,
@@ -221,6 +222,15 @@ class FileTransferService implements FileTransfers {
   }
 
   Future<void> _save(_TransferTask task) {
+    final status = task.record.status;
+    if (status != task.persistedStatus) {
+      task.record = task.record.copyWith(
+        endedAt: _terminal(status)
+            ? DateTime.now().millisecondsSinceEpoch ~/ 1000
+            : null,
+      );
+      task.persistedStatus = status;
+    }
     final snapshot = task.record;
     final result = _writes.then((_) => _journal.upsert(snapshot));
     _writes = result;
@@ -435,6 +445,7 @@ class FileTransferService implements FileTransfers {
       itemCount: record.itemCount,
       transferred: record.transferred,
       total: record.total,
+      endedAt: record.endedAt,
       error: record.error,
       errorCode: record.errorCode,
       saveMode: record.saveMode,
@@ -1834,6 +1845,7 @@ final class _TransferPreparation {
 
 /// worker 和取消持有稳定身份，状态更新替换不可变记录；旧任务不能重新写回任务表。
 final class _TransferTask {
-  _TransferTask(this.record);
+  _TransferTask(this.record, {this.persistedStatus});
+  FileTransferStatus? persistedStatus;
   FileTransferRecord record;
 }

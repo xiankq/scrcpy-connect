@@ -94,6 +94,17 @@ class FileActionsNotifier extends _$FileActionsNotifier {
       if (!_current(generation)) return false;
       if (refreshDirectory) {
         unawaited(ref.read(fileDirectoryProvider(target).notifier).refresh());
+        final path = FilePaths.remote(target.path);
+        final parent = p.posix.dirname(path);
+        if (parent != path) {
+          final parentQuery = fileDirectoryProvider((
+            deviceId: target.deviceId,
+            path: parent,
+          ));
+          if (ref.read(parentQuery.exists)) {
+            unawaited(ref.read(parentQuery.notifier).refresh());
+          }
+        }
       }
       return true;
     } catch (error) {

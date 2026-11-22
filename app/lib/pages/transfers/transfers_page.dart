@@ -2,6 +2,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:scrcpy_connect/widgets/content_arrival.dart';
 import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/files/file_transfers.dart';
@@ -40,6 +41,15 @@ class TransfersPage extends HookConsumerWidget {
     final visible = rows
         .where((row) => transferHistoryFinished(row) == finished.value)
         .toList();
+    if (finished.value) {
+      final positions = {
+        for (final (index, row) in visible.indexed) row.id: index,
+      };
+      visible.sort((a, b) {
+        final time = (b.task.endedAt ?? 0).compareTo(a.task.endedAt ?? 0);
+        return time == 0 ? positions[a.id]!.compareTo(positions[b.id]!) : time;
+      });
+    }
     final selected = rows.where((row) => row.id == selection.value).firstOrNull;
 
     Future<void> clearHistory() async {
@@ -148,7 +158,15 @@ class TransfersPage extends HookConsumerWidget {
                                   finished.value = done;
                                   selection.value = null;
                                 },
-                                child: Text(label, textAlign: TextAlign.center),
+                                child: Text(
+                                  label,
+                                  textAlign: TextAlign.center,
+                                  style: finished.value == done
+                                      ? const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        )
+                                      : null,
+                                ),
                               ),
                             ),
                           ),
@@ -157,67 +175,77 @@ class TransfersPage extends HookConsumerWidget {
                   ),
                 ),
               ),
-              if (loading)
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: DesignTokens.spacingMd,
-                  ),
-                  sliver: SliverToBoxAdapter(
-                    child: SkeletonRows(
-                      height:
-                          DesignTokens.componentRowLargeHeight +
-                          (finished.value
-                              ? DesignTokens.spacingMd
-                              : DesignTokens.spacingLg),
-                      leadingSize: DesignTokens.componentIconButtonSize,
-                      cardRadius: DesignTokens.roundedLg,
-                      gap: DesignTokens.spacingSm,
-                      lines: 3,
-                      trailing: true,
-                      progress: !finished.value,
-                    ),
-                  ),
-                )
-              else if (visible.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: EmptyContent(
-                    icon: LucideIcons.arrowUpDown,
-                    title: finished.value ? '暂无已结束的传输' : '暂无正在传输的任务',
-                    message: finished.value
-                        ? '完成、失败或取消的任务会出现在这里。'
-                        : '发送和接收文件时，可在这里查看进度。',
-                  ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: DesignTokens.spacingMd,
-                  ),
-                  sliver: SliverList.separated(
-                    itemCount: visible.length,
-                    separatorBuilder: (_, _) =>
-                        const SizedBox(height: DesignTokens.spacingSm),
-                    itemBuilder: (context, index) {
-                      final row = visible[index];
-                      return TransferHistoryRow(
-                        key: ValueKey((source, row.id)),
-                        row: row,
-                        selected: split && row.id == current?.id,
-                        refresh: refresh,
-                        onOpen: () {
-                          if (split) {
-                            selection.value = row.id;
-                          } else {
-                            TransferDetailsRoute(
-                              taskId: _representative(row).id,
-                            ).push<void>(context);
-                          }
-                        },
-                      );
-                    },
-                  ),
+              ContentArrival(
+                sliver: true,
+                state: finished.value,
+                waiting: loading,
+                child: SliverMainAxisGroup(
+                  slivers: [
+                    if (loading)
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: DesignTokens.spacingMd,
+                        ),
+                        sliver: SliverToBoxAdapter(
+                          child: SkeletonRows(
+                            height:
+                                DesignTokens.componentRowLargeHeight +
+                                (finished.value
+                                    ? DesignTokens.spacingMd
+                                    : DesignTokens.spacingLg),
+                            leadingSize: DesignTokens
+                                .componentTransferCardThumbnailWidth,
+                            cardRadius: DesignTokens.roundedLg,
+                            gap: DesignTokens.spacingSm,
+                            lines: 3,
+                            trailing: true,
+                            progress: !finished.value,
+                          ),
+                        ),
+                      )
+                    else if (visible.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: EmptyContent(
+                          icon: LucideIcons.arrowUpDown,
+                          title: finished.value ? '暂无已结束的传输' : '暂无正在传输的任务',
+                          message: finished.value
+                              ? '完成、失败或取消的任务会出现在这里。'
+                              : '发送和接收文件时，可在这里查看进度。',
+                        ),
+                      )
+                    else
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: DesignTokens.spacingMd,
+                        ),
+                        sliver: SliverList.separated(
+                          itemCount: visible.length,
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: DesignTokens.spacingSm),
+                          itemBuilder: (context, index) {
+                            final row = visible[index];
+                            return TransferHistoryRow(
+                              key: ValueKey((source, row.id)),
+                              row: row,
+                              selected: split && row.id == current?.id,
+                              refresh: refresh,
+                              onOpen: () {
+                                if (split) {
+                                  selection.value = row.id;
+                                } else {
+                                  TransferDetailsRoute(
+                                    taskId: _representative(row).id,
+                                  ).push<void>(context);
+                                }
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                  ],
                 ),
+              ),
               const PageChromeBottomSliver(),
             ],
           ),
@@ -226,7 +254,7 @@ class TransfersPage extends HookConsumerWidget {
           list: PageFrame(
             root: embedded,
             pane: split,
-            title: '文件传输',
+            title: '传输',
             actions: useSideToolbar ? null : actions,
             child: AsyncContent<List<TransferHistoryEntry>>(
               loading: query.isLoading,

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:path/path.dart' as p;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/devices/device_readiness_provider.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
@@ -39,10 +40,15 @@ class FileDirectoryNotifier extends _$FileDirectoryNotifier {
         return;
       }
       if (event.deviceId != null && event.deviceId != target.deviceId) return;
-      if (event.kind == FileChangeKind.directory &&
-          event.path != null &&
-          event.path != FilePaths.remote(target.path)) {
-        return;
+      if (event case FileChange(
+        kind: FileChangeKind.directory,
+        path: final path?,
+      )) {
+        final currentPath = FilePaths.remote(target.path);
+        // 写入子目录也会改变它在上级列表中的时间戳。
+        if (path != currentPath && p.posix.dirname(path) != currentPath) {
+          return;
+        }
       }
       // 连接事件先撤销目录资格；设备列表的异步刷新尚未完成也不能沿用旧核验。
       unawaited(refresh());

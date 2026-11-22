@@ -55,7 +55,7 @@ bool transferStatusHasIssue(FileTransferStatus status) => switch (status) {
 
 /// 列表只显示远端设备，暂存位置的细节在详情页说明。
 String transferListDirection(FileTransferSnapshot task, String deviceName) =>
-    task.direction == .push ? '发送 · 本机 → $deviceName' : '接收 · $deviceName → 本机';
+    task.direction == .push ? '本机 → $deviceName' : '$deviceName → 本机';
 
 /// 详情保留两端位置，并区分仍需保存到系统位置的私有暂存。
 String transferDetailDirection(FileTransferSnapshot task, String deviceName) {

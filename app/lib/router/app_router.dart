@@ -25,6 +25,7 @@ import 'package:scrcpy_connect/pages/files/directory_picker/file_directory_picke
 import 'package:scrcpy_connect/pages/files/files_page.dart';
 import 'package:scrcpy_connect/pages/files/import/document_import_page.dart';
 import 'package:scrcpy_connect/pages/files/search/file_search_page.dart';
+import 'package:scrcpy_connect/pages/files/send/file_send_page.dart';
 import 'package:scrcpy_connect/pages/gallery/gallery_page.dart';
 import 'package:scrcpy_connect/pages/gallery/preview/media_preview_page.dart';
 import 'package:scrcpy_connect/pages/incoming_share/incoming_share_page.dart';
@@ -941,6 +942,26 @@ class ReceiveContentRoute extends _AppPageRoute with $ReceiveContentRoute {
         openAfterTransfer: $extra == true,
       ),
     );
+  }
+}
+
+@TypedGoRoute<FileSendRoute>(
+  path: '/devices/:deviceId/files/send',
+  name: 'file-send',
+)
+class FileSendRoute extends _AppPageRoute with $FileSendRoute {
+  const FileSendRoute({required this.deviceId, this.path = '/sdcard'});
+  final String deviceId;
+  final String path;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
+    Widget page(
+      BuildContext context,
+      GoRouterState state,
+      DeviceSnapshot device,
+    ) => FileSendPage(device: device, initialPath: path);
+    return _deviceRecord(context, state, deviceId, 'file-send', page);
   }
 }
 

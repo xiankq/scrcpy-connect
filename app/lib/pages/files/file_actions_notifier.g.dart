@@ -64,7 +64,7 @@ final class FileActionsNotifierProvider
 }
 
 String _$fileActionsNotifierHash() =>
-    r'abb9e64300587f72d5bb60e76be885e3e519e5fd';
+    r'43463b22e9ef5def46796516cfc15e7371de9f30';
 
 /// 单个文件页面的操作编排；离页撤销回执交付，不取消已登记的核心操作。
 

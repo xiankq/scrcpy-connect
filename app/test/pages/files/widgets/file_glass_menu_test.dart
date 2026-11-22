@@ -53,7 +53,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('file-search-type-field')));
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsOneWidget);
-    expect(find.text('文件类型'), findsOneWidget);
+    expect(find.text('选择文件类型'), findsOneWidget);
     expect(find.text('图片'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

@@ -14,6 +14,8 @@ import 'package:scrcpy_connect/pages/incoming_share/widgets/share_device_card.da
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/form_controls.dart';
+import 'package:scrcpy_connect/widgets/file_browser.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
@@ -95,7 +97,6 @@ class IncomingSharePage extends HookConsumerWidget {
 
     final hasReadError = share.errors.isNotEmpty;
     final leading = <Widget>[
-      const StateNote('选择设备后确认保存目录；提交时固定来源和目标，切换页面不改目标。'),
       if (latest == null && !submission.busy && !submission.completed)
         const StateNote('这次分享已处理或来源已变化，请重新从系统分享。'),
       if (importing) ...[
@@ -177,16 +178,6 @@ class IncomingSharePage extends HookConsumerWidget {
       if (submission.error != null)
         StateNote(submission.error!, icon: LucideIcons.circleAlert),
       const SizedBox(height: DesignTokens.spacingMd),
-      FilledButton(
-        onPressed: canSubmit ? submit : null,
-        child: Text(
-          submission.busy
-              ? '正在提交…'
-              : locked
-              ? '继续完成'
-              : '确认提交',
-        ),
-      ),
       if (submission.busy)
         const Padding(
           padding: EdgeInsets.all(DesignTokens.spacingMd),
@@ -213,7 +204,30 @@ class IncomingSharePage extends HookConsumerWidget {
         if (!popped) actions.cancel();
       },
       child: PageFrame(
-        title: '发送到设备',
+        titleStyle: Theme.of(context).textTheme.headlineMedium,
+        title: files.isEmpty && text.isNotEmpty
+            ? '发送文字'
+            : files.isNotEmpty && text.isEmpty
+            ? '发送文件'
+            : '发送到设备',
+        bottom: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: DesignTokens.spacingXs,
+          ),
+          child: FilledButton(
+            style: pagePrimaryButtonStyle,
+            onPressed: canSubmit ? submit : null,
+            child: Text(
+              submission.busy
+                  ? '正在提交…'
+                  : locked
+                  ? '继续完成'
+                  : includeFiles.value && files.isNotEmpty
+                  ? '确认发送'
+                  : '写入设备剪贴板',
+            ),
+          ),
+        ),
 
         trailingAction: TextButton(
           onPressed: submission.busy ? null : actions.cancel,
@@ -240,6 +254,7 @@ class IncomingSharePage extends HookConsumerWidget {
                 icon: LucideIcons.file,
                 color: DesignTokens.colorListIconTransfer,
                 title: files[row].name,
+                value: fileSizeLabel(files[row].size),
               );
             }
             if (index < devicesStart) return middle[index - middleStart];

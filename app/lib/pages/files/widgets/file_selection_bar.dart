@@ -9,6 +9,7 @@ class FileSelectionBar extends StatelessWidget {
   const FileSelectionBar({
     super.key,
     required this.menuController,
+    required this.directory,
     required this.onRetrieve,
     required this.retrieveReason,
     required this.onDelete,
@@ -19,80 +20,102 @@ class FileSelectionBar extends StatelessWidget {
   });
 
   final MenuController menuController;
+  final String directory;
   final VoidCallback? onRetrieve, onDelete, onRename;
   final String retrieveReason, deleteReason;
   final FileViewMode viewMode;
   final VoidCallback onToggleView;
 
   @override
-  Widget build(BuildContext context) => GlassActionBar(
-    actions: [
-      GlassActionBarButton(
-        label: '取回原文件',
-        icon: const Icon(AppIcons.download),
-        onPressed: onRetrieve,
-        tooltip: onRetrieve == null ? retrieveReason : null,
-      ),
-      GlassActionBarButton(
-        label: '删除',
-        icon: const Icon(AppIcons.delete),
-        onPressed: onDelete,
-        tooltip: onDelete == null ? deleteReason : null,
-      ),
-      MenuAnchor(
-        controller: menuController,
-        consumeOutsideTap: true,
-        alignmentOffset: const Offset(
-          0,
-          DesignTokens.componentFileActionBarPadding + DesignTokens.spacingXs,
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Padding(
+        padding: const EdgeInsetsDirectional.only(
+          start: DesignTokens.spacingXs,
+          end: DesignTokens.spacingXs,
+          bottom: DesignTokens.spacingTight,
         ),
-        style: const MenuStyle(
-          alignment: Alignment.bottomCenter,
-          backgroundColor: WidgetStatePropertyAll(
-            DesignTokens.colorTransparent,
-          ),
-          surfaceTintColor: WidgetStatePropertyAll(
-            DesignTokens.colorTransparent,
-          ),
-          elevation: WidgetStatePropertyAll(0),
-          padding: WidgetStatePropertyAll(EdgeInsets.zero),
+        child: Text(
+          '当前目录 · $directory',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall,
         ),
-        menuChildren: [
-          GlassSurfaceGroup.isolated(
-            child: Glass(
-              padding: const EdgeInsets.symmetric(
-                vertical: DesignTokens.spacingXs,
+      ),
+      GlassActionBar(
+        actions: [
+          GlassActionBarButton(
+            label: '取回原文件',
+            icon: const Icon(AppIcons.download),
+            onPressed: onRetrieve,
+            tooltip: onRetrieve == null ? retrieveReason : null,
+          ),
+          GlassActionBarButton(
+            label: '删除',
+            icon: const Icon(AppIcons.delete),
+            onPressed: onDelete,
+            tooltip: onDelete == null ? deleteReason : null,
+          ),
+          MenuAnchor(
+            animated: !GlassMaterial.reduceMotion(context),
+            controller: menuController,
+            consumeOutsideTap: true,
+            alignmentOffset: const Offset(
+              0,
+              DesignTokens.componentFileActionBarPadding +
+                  DesignTokens.spacingXs,
+            ),
+            style: const MenuStyle(
+              alignment: Alignment.bottomCenter,
+              backgroundColor: WidgetStatePropertyAll(
+                DesignTokens.colorTransparent,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  MenuItemButton(
-                    leadingIcon: const Icon(LucideIcons.squarePen),
-                    onPressed: onRename,
-                    child: const Text('重命名'),
-                  ),
-                  MenuItemButton(
-                    leadingIcon: Icon(
-                      viewMode == FileViewMode.grid
-                          ? LucideIcons.list
-                          : LucideIcons.layoutGrid,
-                    ),
-                    onPressed: onToggleView,
-                    child: Text(
-                      viewMode == FileViewMode.grid ? '切换为列表' : '切换为宫格',
-                    ),
-                  ),
-                ],
+              surfaceTintColor: WidgetStatePropertyAll(
+                DesignTokens.colorTransparent,
               ),
+              elevation: WidgetStatePropertyAll(0),
+              padding: WidgetStatePropertyAll(EdgeInsets.zero),
+            ),
+            menuChildren: [
+              GlassSurfaceGroup.isolated(
+                child: Glass(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: DesignTokens.spacingXs,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      MenuItemButton(
+                        leadingIcon: const Icon(LucideIcons.squarePen),
+                        onPressed: onRename,
+                        child: const Text('重命名'),
+                      ),
+                      MenuItemButton(
+                        leadingIcon: Icon(
+                          viewMode == FileViewMode.grid
+                              ? LucideIcons.list
+                              : LucideIcons.layoutGrid,
+                        ),
+                        onPressed: onToggleView,
+                        child: Text(
+                          viewMode == FileViewMode.grid ? '切换为列表' : '切换为宫格',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            builder: (context, menu, child) => GlassActionBarButton(
+              label: '更多',
+              icon: const Icon(AppIcons.more),
+              onPressed: () => menu.isOpen ? menu.close() : menu.open(),
             ),
           ),
         ],
-        builder: (context, menu, child) => GlassActionBarButton(
-          label: '更多',
-          icon: const Icon(AppIcons.more),
-          onPressed: () => menu.isOpen ? menu.close() : menu.open(),
-        ),
       ),
     ],
   );

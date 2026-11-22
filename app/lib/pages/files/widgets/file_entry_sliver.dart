@@ -18,9 +18,30 @@ class FileEntrySliver extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (viewMode == FileViewMode.list) {
+      final indices = {
+        for (final (index, entry) in entries.indexed)
+          if (entry.path case final path?) ValueKey(path): index,
+      };
       return SliverList.builder(
         itemCount: entries.length,
-        itemBuilder: (context, index) => builder(entries[index], false),
+        findChildIndexCallback: (key) => indices[key],
+        itemBuilder: (context, index) {
+          final row = builder(entries[index], false);
+          return Material(
+            key: row.key,
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.vertical(
+              top: index == 0
+                  ? const Radius.circular(DesignTokens.roundedLg)
+                  : Radius.zero,
+              bottom: index == entries.length - 1
+                  ? const Radius.circular(DesignTokens.roundedLg)
+                  : Radius.zero,
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: row,
+          );
+        },
       );
     }
     final columns = fileGridColumnCount(context);
@@ -41,7 +62,8 @@ class FileEntrySliver extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               for (var column = 0; column < columns; column++) ...[
-                if (column > 0) const SizedBox(width: DesignTokens.spacingSm),
+                if (column > 0)
+                  const SizedBox(width: DesignTokens.spacingTight),
                 Expanded(
                   child: start + column < end
                       ? builder(entries[start + column], true)
@@ -65,8 +87,8 @@ int fileGridColumnCount(BuildContext context) {
     double.infinity,
   );
   const minimumTile = 80.0;
-  return ((available + DesignTokens.spacingSm) /
-          (minimumTile + DesignTokens.spacingSm))
+  return ((available + DesignTokens.spacingTight) /
+          (minimumTile + DesignTokens.spacingTight))
       .floor()
       .clamp(3, 6);
 }

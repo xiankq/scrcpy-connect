@@ -97,7 +97,9 @@ class _FileTypeTile extends StatelessWidget {
         child: Material(
           color: selected
               ? theme.colorScheme.surface
-              : theme.colorScheme.surfaceContainerLow,
+              : theme.brightness == Brightness.dark
+              ? DesignTokens.componentFileBrowserTileDarkBackgroundColor
+              : DesignTokens.componentFileBrowserTileBackgroundColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
             side: BorderSide(
@@ -123,10 +125,14 @@ class _FileTypeTile extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    ListIconBadge(icon: icon, backgroundColor: color),
+                    ListIconBadge(
+                      icon: icon,
+                      backgroundColor: color,
+                      compact: true,
+                    ),
                     const SizedBox(width: DesignTokens.spacingSm),
                     Expanded(
-                      child: Text(label, style: theme.textTheme.bodyMedium),
+                      child: Text(label, style: theme.textTheme.bodyLarge),
                     ),
                   ],
                 ),

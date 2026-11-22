@@ -33,7 +33,7 @@ void main() {
     );
     await tester.tap(label);
     await tester.pumpAndSettle();
-    expect(find.text('文件类型'), findsOneWidget);
+    expect(find.text('选择文件类型'), findsOneWidget);
     expect(find.byType(Dialog), findsOneWidget);
     await tester.tap(find.text('图片'));
     await tester.pumpAndSettle();

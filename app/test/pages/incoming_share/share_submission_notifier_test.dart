@@ -247,7 +247,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byType(ShareDeviceCard));
     await tester.pump();
-    await tester.tap(find.text('确认提交'));
+    await tester.tap(find.text('确认发送'));
     await tester.pump();
     directories.complete();
     await tester.pump();

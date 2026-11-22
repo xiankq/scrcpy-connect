@@ -14,7 +14,12 @@ import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/file_transfer_labels.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
-import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/utils/formatters.dart';
+import 'package:scrcpy_connect/widgets/file_browser.dart';
+import 'package:scrcpy_connect/pages/files/widgets/file_kind_style.dart';
+
+import 'transfer_progress.dart';
 
 import '../models/transfer_history_entry.dart';
 
@@ -63,9 +68,7 @@ class TransferHistoryRow extends HookConsumerWidget {
     final active = transferHistoryActive(task);
     final total = task.totalBytes ?? task.total ?? 0;
     final completed = task.completedBytes ?? task.transferred;
-    final progress = total > 0
-        ? (completed / total).clamp(0, 1).toDouble()
-        : null;
+    final progress = transferProgressValue(completed, total);
     final devices = ref
         .watch(deviceListProvider)
         .devices
@@ -74,10 +77,6 @@ class TransferHistoryRow extends HookConsumerWidget {
         ? (task.deviceName ?? '设备')
         : deviceName(devices.first);
     final direction = transferListDirection(task, name);
-    final statusDescription = busy.value
-        ? '正在停止…'
-        : transferStatusDescription(task);
-    final issue = transferStatusHasIssue(task.status);
 
     Future<void> remove() async {
       if (busy.value) return;
@@ -137,28 +136,50 @@ class TransferHistoryRow extends HookConsumerWidget {
       }
     }
 
-    final colors = Theme.of(context).colorScheme;
-    final radius = BorderRadius.circular(DesignTokens.roundedLg);
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final path = task.localPath;
-    final extension = task.name.split('.').last.toLowerCase();
-    final image = const {
-      'jpg',
-      'jpeg',
-      'png',
-      'gif',
-      'webp',
-      'bmp',
-    }.contains(extension);
-    final formatIcon = ListIconBadge(
-      icon: switch (extension) {
-        'zip' || 'gz' || 'rar' || '7z' => LucideIcons.archive,
-        'mp4' || 'mov' || 'mkv' => LucideIcons.video,
-        'mp3' || 'wav' || 'flac' => LucideIcons.music,
-        'pdf' || 'txt' || 'docx' => LucideIcons.fileText,
-        _ => image ? LucideIcons.image : LucideIcons.file,
-      },
-      backgroundColor: DesignTokens.colorListIconBlue,
+    final kind = FileKind.classify(name: task.name);
+    final group = task.kind == .directory || row.members.length > 1;
+    final iconColor = ConnectTokens.accent(
+      context,
+      group
+          ? DesignTokens.colorListIconAmber
+          : fileKindColor(kind, name: task.name),
     );
+    final graphic = FeatureIcon(
+      group ? LucideIcons.folder : fileKindIcon(kind),
+      color: iconColor,
+      size: DesignTokens.componentTransferCardThumbnailWidth,
+    );
+    final progressVisible =
+        task.status == .running || task.status == .finalizing;
+    final terminal = transferHistoryFinished(row);
+    final issue = transferStatusHasIssue(task.status);
+    final statusColor = issue
+        ? colors.error
+        : task.status == .completed || task.status == .completedWithSkips
+        ? ConnectTokens.accent(context, ConnectTokens.mint)
+        : colors.onSurfaceVariant;
+    final stage = busy.value
+        ? '正在停止…'
+        : task.errorCode == 'result_unknown' || task.cleanupPending
+        ? '结果待确认'
+        : task.status == .conflict
+        ? '待处理'
+        : statusText(task.status.name);
+    final amount = terminal
+        ? transferResultSize(task)
+        : total > 0
+        ? '${bytes(completed)} / ${bytes(total)}'
+        : completed > 0
+        ? bytes(completed)
+        : '';
+    final ended = terminal && task.endedAt != null
+        ? DateTime.fromMillisecondsSinceEpoch(task.endedAt! * 1000)
+        : null;
+    final localizations = MaterialLocalizations.of(context);
+    final radius = BorderRadius.circular(DesignTokens.roundedLg);
     return Semantics(
       selected: selected,
       child: Material(
@@ -168,42 +189,92 @@ class TransferHistoryRow extends HookConsumerWidget {
         child: InkWell(
           onTap: onOpen,
           child: Padding(
-            padding: const EdgeInsets.only(
-              left: DesignTokens.spacingMd,
-              right: DesignTokens.spacingXs,
-              top: DesignTokens.spacingXs,
-              bottom: DesignTokens.spacingXs,
+            padding: const EdgeInsetsDirectional.fromSTEB(
+              DesignTokens.spacingMd,
+              DesignTokens.spacingSm,
+              DesignTokens.spacingXs,
+              DesignTokens.spacingSm,
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (image && path != null && row.members.length == 1)
+                if (kind == FileKind.images && path != null && !group)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
                     child: Image.file(
                       File(path),
-                      width: DesignTokens.componentIconButtonSize,
-                      height: DesignTokens.componentIconButtonSize,
+                      width: DesignTokens.componentTransferCardThumbnailWidth,
+                      height: DesignTokens.componentTransferCardThumbnailWidth,
                       fit: BoxFit.cover,
-                      cacheWidth: 132,
+                      cacheWidth: 144,
                       excludeFromSemantics: true,
-                      errorBuilder: (_, _, _) => formatIcon,
+                      errorBuilder: (_, _, _) => graphic,
                     ),
                   )
-                else if (task.kind == .directory || row.members.length > 1)
-                  const ListIconBadge(
-                    icon: LucideIcons.folder,
-                    backgroundColor: DesignTokens.colorListIconAmber,
-                  )
                 else
-                  formatIcon,
+                  graphic,
                 const SizedBox(width: DesignTokens.spacingSm),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        task.name,
-                        style: Theme.of(context).textTheme.bodyMedium,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: Text(
+                              task.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: DesignTokens.spacingXs),
+                          Flexible(
+                            flex: 2,
+                            child:
+                                progressVisible &&
+                                    progress != null &&
+                                    !busy.value
+                                ? Text(
+                                    '${(progress * 100).floor()}%',
+                                    textAlign: TextAlign.end,
+                                    style: theme.textTheme.titleMedium,
+                                  )
+                                : DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: task.status == .conflict
+                                          ? (theme.brightness == Brightness.dark
+                                                ? DesignTokens
+                                                      .colorAccentAmberSoftDark
+                                                : DesignTokens
+                                                      .colorAccentAmberSoft)
+                                          : statusColor.withValues(
+                                              alpha: DesignTokens
+                                                  .componentFeatureIconOpacity,
+                                            ),
+                                      borderRadius: BorderRadius.circular(
+                                        DesignTokens.roundedFull,
+                                      ),
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: DesignTokens.spacingXs,
+                                        vertical: DesignTokens.spacingMicro,
+                                      ),
+                                      child: Text(
+                                        stage,
+                                        textAlign: TextAlign.end,
+                                        style: theme.textTheme.labelMedium
+                                            ?.copyWith(color: statusColor),
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: DesignTokens.spacingXxs),
                       Row(
@@ -213,51 +284,65 @@ class TransferHistoryRow extends HookConsumerWidget {
                                 ? LucideIcons.arrowUpFromLine
                                 : LucideIcons.arrowDownToLine,
                             size: DesignTokens.componentIconSmallSize,
-                            color: colors.primary,
+                            color: colors.onSurfaceVariant,
                           ),
                           const SizedBox(width: DesignTokens.spacingXxs),
                           Flexible(
                             child: Text(
                               direction,
-                              style: Theme.of(context).textTheme.bodySmall,
+                              style: theme.textTheme.bodySmall,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: DesignTokens.spacingXxs),
-                      Text(
-                        statusDescription,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: issue
-                              ? Theme.of(context).colorScheme.error
-                              : null,
-                        ),
-                      ),
-                      if (active) ...[
+                      if (progressVisible) ...[
+                        const SizedBox(height: DesignTokens.spacingXs),
+                        TransferProgress(value: progress),
+                      ],
+                      if (amount.isNotEmpty ||
+                          issue ||
+                          ended != null ||
+                          task.status == .conflict) ...[
                         const SizedBox(height: DesignTokens.spacingXxs),
-                        if (progress == null)
-                          const ContentLoadingIndicator()
-                        else
-                          LinearProgressIndicator(
-                            value: progress,
-                            minHeight: DesignTokens.spacingMicro,
-                            borderRadius: BorderRadius.circular(
-                              DesignTokens.roundedFull,
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                task.status == .conflict
+                                    ? (task.direction == .push
+                                          ? '手机中已有同名文件'
+                                          : '本机已有同名文件')
+                                    : issue
+                                    ? transferStatusDescription(task)
+                                    : amount,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: issue ? statusColor : null,
+                                ),
+                              ),
                             ),
-                          ),
+                            if (ended != null) ...[
+                              const SizedBox(width: DesignTokens.spacingXs),
+                              Flexible(
+                                child: Text(
+                                  '${ended.month}/${ended.day} ${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(ended), alwaysUse24HourFormat: true)}',
+                                  textAlign: TextAlign.end,
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ],
                     ],
                   ),
                 ),
                 if (busy.value)
-                  const Padding(
-                    padding: EdgeInsets.all(DesignTokens.spacingSm),
-                    child: SizedBox(
-                      width: DesignTokens.componentIconSmallSize,
-                      height: DesignTokens.componentIconSmallSize,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                  const SizedBox(
+                    width: DesignTokens.componentIconButtonSize,
+                    height: DesignTokens.componentIconButtonSize,
+                    child: ContentLoadingIndicator(
+                      size: DesignTokens.componentIconSmallSize,
                     ),
                   )
                 else

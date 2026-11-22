@@ -45,6 +45,7 @@ List<RouteBase> get $appRoutes => [
   $screenshotRoute,
   $documentExportRoute,
   $receiveContentRoute,
+  $fileSendRoute,
   $documentImportRoute,
   $incomingShareRoute,
   $shareDirectoryRoute,
@@ -1462,6 +1463,42 @@ mixin $ReceiveContentRoute on GoRouteData {
   @override
   void replace(BuildContext context) =>
       context.replace(location, extra: _self.$extra);
+}
+
+RouteBase get $fileSendRoute => GoRouteData.$route(
+  path: '/devices/:deviceId/files/send',
+  name: 'file-send',
+  hasOverriddenOnExit: false,
+  parentNavigatorKey: FileSendRoute.$parentNavigatorKey,
+  factory: $FileSendRoute._fromState,
+);
+
+mixin $FileSendRoute on GoRouteData {
+  static FileSendRoute _fromState(GoRouterState state) => FileSendRoute(
+    deviceId: state.pathParameters['deviceId']!,
+    path: state.uri.queryParameters['path'] ?? '/sdcard',
+  );
+
+  FileSendRoute get _self => this as FileSendRoute;
+
+  @override
+  String get location => GoRouteData.$location(
+    '/devices/${Uri.encodeComponent(_self.deviceId)}/files/send',
+    queryParams: {if (_self.path != '/sdcard') 'path': _self.path},
+  );
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
 }
 
 RouteBase get $documentImportRoute => GoRouteData.$route(

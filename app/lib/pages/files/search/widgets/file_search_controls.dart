@@ -1,10 +1,11 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/files/file_search.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/choice_picker.dart';
 
 const fileSearchFilters = {
-  FileCatalogFilter.all: '全部',
+  FileCatalogFilter.all: '全部类型',
   FileCatalogFilter.images: '图片',
   FileCatalogFilter.videos: '视频',
   FileCatalogFilter.audio: '音频',
@@ -43,21 +44,30 @@ class FileSearchScopeSelector extends StatelessWidget {
                 selected: entireStorage == entire,
                 child: Material(
                   color: entireStorage == entire
-                      ? theme.colorScheme.surface
+                      ? theme.colorScheme.primary
                       : DesignTokens.colorTransparent,
                   borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
                     onTap: () => onChanged(entire),
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: 48),
+                      constraints: const BoxConstraints(
+                        minHeight: DesignTokens.componentIconButtonSize,
+                      ),
                       child: Padding(
-                        padding: const EdgeInsets.all(DesignTokens.spacingSm),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: DesignTokens.spacingXxs,
+                          vertical: DesignTokens.spacingXs,
+                        ),
                         child: Center(
                           child: Text(
                             entire ? '手机内部存储' : '当前目录及其子目录',
                             textAlign: TextAlign.center,
-                            style: theme.textTheme.labelLarge,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: entireStorage == entire
+                                  ? theme.colorScheme.onPrimary
+                                  : theme.colorScheme.onSurface,
+                            ),
                           ),
                         ),
                       ),
@@ -93,17 +103,30 @@ class FileSearchTypeField extends StatelessWidget {
   final ValueChanged<FileCatalogFilter> onChanged;
 
   @override
-  Widget build(BuildContext context) => ChoiceField(
+  Widget build(BuildContext context) => TextButton.icon(
     key: const ValueKey('file-search-type-field'),
-    value: fileSearchFilters[value]!,
-    onPressed: (anchor) async {
+    style: TextButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: DesignTokens.spacingXxs),
+      minimumSize: const Size(0, DesignTokens.componentIconButtonSize),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+      textStyle: Theme.of(context).textTheme.bodySmall,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
+      ),
+    ),
+    iconAlignment: IconAlignment.end,
+    icon: const Icon(
+      LucideIcons.chevronDown,
+      size: DesignTokens.componentIconSmallSize,
+    ),
+    label: Text(fileSearchFilters[value]!, textAlign: TextAlign.center),
+    onPressed: () async {
       final next = await showChoicePicker<FileCatalogFilter>(
         context: context,
-        title: '文件类型',
+        title: '选择文件类型',
         options: fileSearchFilters.keys,
         label: (option) => fileSearchFilters[option]!,
         isSelected: (option) => option == value,
-        anchorPoint: anchor,
       );
       if (next != null && context.mounted) onChanged(next);
     },

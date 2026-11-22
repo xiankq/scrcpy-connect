@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/files/models/file_transfer_snapshot.dart';
 import 'package:scrcpy_connect/widgets/file_transfer_labels.dart';
@@ -54,6 +56,14 @@ List<TransferHistoryEntry> transferHistoryRows(
               ? summary?.transferred ?? 0
               : first.completedBytes,
           totalBytes: multiple ? summary?.total : first.totalBytes,
+          endedAt: members
+              .map((task) => task.endedAt)
+              .nonNulls
+              .fold<int?>(
+                null,
+                (latest, time) =>
+                    latest == null ? time : math.max(latest, time),
+              ),
         );
         return (
           id: group.key,

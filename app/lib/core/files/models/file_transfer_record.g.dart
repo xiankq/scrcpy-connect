@@ -46,6 +46,7 @@ _FileTransferRecord _$FileTransferRecordFromJson(Map<String, dynamic> json) =>
           ) ??
           FileTransferDestination.localPath,
       createdAt: (json['createdAt'] as num?)?.toInt() ?? 0,
+      endedAt: (json['endedAt'] as num?)?.toInt(),
       generation: (json['generation'] as num?)?.toInt() ?? 0,
       itemIndex: (json['itemIndex'] as num?)?.toInt() ?? 0,
       itemCount: (json['itemCount'] as num?)?.toInt() ?? 1,
@@ -83,6 +84,7 @@ Map<String, dynamic> _$FileTransferRecordToJson(_FileTransferRecord instance) =>
       'destinationScope':
           _$FileTransferDestinationEnumMap[instance.destinationScope]!,
       'createdAt': instance.createdAt,
+      'endedAt': ?instance.endedAt,
       'generation': instance.generation,
       'itemIndex': instance.itemIndex,
       'itemCount': instance.itemCount,

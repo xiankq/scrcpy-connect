@@ -7,15 +7,9 @@ import 'package:scrcpy_connect/widgets/file_transfer_labels.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 
 class TransferResultRow extends StatelessWidget {
-  const TransferResultRow({
-    super.key,
-    required this.transfer,
-    required this.deviceName,
-    this.onOpen,
-  });
+  const TransferResultRow({super.key, required this.transfer, this.onOpen});
 
   final FileTransferSnapshot transfer;
-  final String deviceName;
   final VoidCallback? onOpen;
 
   @override
@@ -41,7 +35,9 @@ class TransferResultRow extends StatelessWidget {
                 ),
                 const SizedBox(height: DesignTokens.spacingXxs),
                 Text(
-                  transferDetailDirection(transfer, deviceName),
+                  transfer.direction == .push
+                      ? transfer.destination
+                      : transfer.source,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: DesignTokens.spacingXxs),

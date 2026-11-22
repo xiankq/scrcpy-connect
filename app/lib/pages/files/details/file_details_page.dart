@@ -4,6 +4,7 @@ import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/files/models/file_catalog_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/pages/files/file_actions.dart';
+import 'package:scrcpy_connect/pages/files/widgets/file_kind_style.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
@@ -37,17 +38,25 @@ class FileDetailsPage extends ConsumerWidget {
         LucideIcons.video,
       ),
       _ when mime.startsWith('audio/') => ('音频', LucideIcons.audioLines),
+      _ when mime.startsWith('image/') => ('图片', LucideIcons.image),
       _ => (extension.isEmpty ? '文件' : '$extension 文件', LucideIcons.fileText),
     };
     final theme = Theme.of(context);
-    final accent = ConnectTokens.accent(context, switch (icon) {
-      LucideIcons.archive => ConnectTokens.amber,
-      LucideIcons.audioLines => DesignTokens.colorListIconSlate,
-      LucideIcons.video => DesignTokens.colorListIconPurple,
-      _ => DesignTokens.colorListIconDocument,
-    });
-    final modified = fileModifiedLabel(file);
+    final accent = ConnectTokens.accent(
+      context,
+      fileKindColor(fileKindOf(file), name: file.name, mime: file.mime),
+    );
+    final seconds = file.modified;
+    final modified = seconds == null || seconds <= 0
+        ? ''
+        : MaterialLocalizations.of(context).formatTimeOfDay(
+            TimeOfDay.fromDateTime(
+              DateTime.fromMillisecondsSinceEpoch(seconds * 1000),
+            ),
+            alwaysUse24HourFormat: true,
+          );
     return PageFrame(
+      titleStyle: Theme.of(context).textTheme.headlineMedium,
       title: '文件详情',
       backgroundColor: theme.brightness == Brightness.light
           ? DesignTokens.colorFileTile
@@ -69,7 +78,7 @@ class FileDetailsPage extends ConsumerWidget {
           ),
           if (supportsSystemFileShare)
             GlassActionBarButton(
-              label: '准备并分享',
+              label: '分享',
               icon: const Icon(AppIcons.share),
               onPressed: fileCanOpen(file)
                   ? () => retrieveFile(context, ref, device, file, share: true)
@@ -122,7 +131,7 @@ class FileDetailsPage extends ConsumerWidget {
                   );
                 }
                 return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     symbol,
                     const SizedBox(width: DesignTokens.spacingMd),
@@ -139,7 +148,8 @@ class FileDetailsPage extends ConsumerWidget {
               children: [
                 for (final (label, value) in [
                   if (file.size case final size?) ('大小', fileSizeLabel(size)),
-                  if (modified.isNotEmpty) ('修改时间', modified),
+                  if (modified.isNotEmpty)
+                    ('修改时间', '${fileModifiedLabel(file)} $modified'),
                   ('来源设备', deviceName(device)),
                 ])
                   Padding(
@@ -173,7 +183,6 @@ class FileDetailsPage extends ConsumerWidget {
               fileUnavailableReason(file),
               icon: LucideIcons.circleAlert,
             ),
-          const StateNote('取回后可在本机编辑副本；修改后需要主动重新发送，不会自动回写手机。'),
         ],
       ),
     );

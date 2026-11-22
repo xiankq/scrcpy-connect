@@ -104,6 +104,14 @@ void main() {
     expect(searchMatch.uri.queryParameters['query'], '报告 & 图片');
     for (final location in [
       const FilesRoute(deviceId: 'device').location,
+      const FileSendRoute(
+        deviceId: 'device',
+        path: '/sdcard/Download',
+      ).location,
+      const ShareDirectoryRoute(
+        deviceId: 'device',
+        path: '/sdcard/Download',
+      ).location,
       const GalleryRoute(deviceId: 'device').location,
       const TransferDetailsRoute(taskId: 'transfer').location,
     ]) {

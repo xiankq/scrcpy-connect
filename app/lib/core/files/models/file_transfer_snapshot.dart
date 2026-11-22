@@ -66,6 +66,7 @@ abstract class FileTransferSnapshot with _$FileTransferSnapshot {
     int? total,
     int? completedBytes,
     int? totalBytes,
+    int? endedAt,
     String? deviceName,
     String? sourceLabel,
     String? destinationLabel,

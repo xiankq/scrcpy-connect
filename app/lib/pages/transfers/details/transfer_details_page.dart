@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:path/path.dart' as p;
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/errors/failure_message.dart';
@@ -10,15 +11,20 @@ import 'package:scrcpy_connect/hooks/use_transfer_cache_lease.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/conflict_panel.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/transfer_export_actions.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/transfer_result_row.dart';
+import 'package:scrcpy_connect/pages/transfers/widgets/transfer_progress.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
+import 'package:scrcpy_connect/widgets/action_row.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
+import 'package:scrcpy_connect/utils/formatters.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/file_transfer_labels.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
+import 'package:scrcpy_connect/widgets/section_title.dart';
 
 class TransferDetailsPage extends HookConsumerWidget {
   const TransferDetailsPage({
@@ -39,10 +45,22 @@ class TransferDetailsPage extends HookConsumerWidget {
     Future<void> refresh() => ref
         .refresh(provider.future)
         .then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    final shown = query.value ?? task;
+    final standaloneConflict =
+        shown.status == .conflict &&
+        (shown.itemCount <= 1 || (shown.parentId ?? '').isNotEmpty);
     return PageFrame(
+      titleStyle: Theme.of(context).textTheme.headlineMedium,
       pane: pane,
       onBack: onBack,
-      title: '传输详情',
+      title: standaloneConflict ? '同名文件' : '传输详情',
+      actions: [
+        IconButton(
+          onPressed: refresh,
+          tooltip: '重新检查结果',
+          icon: const Icon(AppIcons.refresh),
+        ),
+      ],
       child: AsyncContent<FileTransferSnapshot>(
         loading: query.isLoading,
         data: query.value,
@@ -89,36 +107,126 @@ class TransferDetailsPage extends HookConsumerWidget {
                     ? current.id
                     : null,
               );
-              final leading = <Widget>[
-                Text(
-                  '${current.name}'
-                  '${batch ? ' · $itemCount 项' : ''}',
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-                const SizedBox(height: DesignTokens.spacingSm),
-                Text(
-                  statusText(status.name),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: DesignTokens.spacingXs),
-                Text(
-                  transferDetailDirection(current, remoteDevice),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: DesignTokens.spacingMd),
-                if (current.kind == .directory && current.status == .finalizing)
-                  const StateNote('已建好文件夹，正在检查里边的文件。'),
-                if ((current.exportReason ?? '').isNotEmpty &&
-                    !current.canExport)
-                  const StateNote('这个文件暂时无法保存。请先查看传输结果。'),
-                if (cacheLease.hasError)
-                  StateNote(
-                    failureMessage(
-                      cacheLease.error,
-                      fallback: '临时文件已不可用。请从手机重新取回后再保存或分享。',
-                    ),
+              final theme = Theme.of(context);
+              final completed = batch
+                  ? summary?.transferred ?? 0
+                  : current.completedBytes ?? current.transferred;
+              final total = batch
+                  ? summary?.total
+                  : current.totalBytes ?? current.total;
+              final progress = transferProgressValue(completed, total);
+              final amount = total != null && total > 0
+                  ? '${bytes(completed)} / ${bytes(total)}'
+                  : completed > 0
+                  ? bytes(completed)
+                  : '';
+              final statusContent = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          status == .running
+                              ? current.direction == .pull
+                                    ? '正在取回原件'
+                                    : '正在发送'
+                              : statusText(status.name),
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ),
+                      if (progress != null && status != .conflict) ...[
+                        const SizedBox(width: DesignTokens.spacingXs),
+                        Flexible(
+                          child: Text(
+                            '${(progress * 100).floor()}%${amount.isEmpty ? '' : ' · $amount'}',
+                            textAlign: TextAlign.end,
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-              ];
+                  if (status != .conflict &&
+                      (status == .running ||
+                          status == .finalizing ||
+                          progress != null)) ...[
+                    const SizedBox(height: DesignTokens.spacingSm),
+                    TransferProgress(value: progress),
+                  ],
+                  if (amount.isNotEmpty && progress == null) ...[
+                    const SizedBox(height: DesignTokens.spacingXs),
+                    Text(amount, style: theme.textTheme.bodySmall),
+                  ],
+                  const SizedBox(height: DesignTokens.spacingXs),
+                  Text(
+                    current.direction == .pull &&
+                            current.destinationScope == .privateCache
+                        ? '$remoteDevice → 本机暂存'
+                        : transferListDirection(current, remoteDevice),
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              );
+              final leading = standaloneConflict
+                  ? const <Widget>[]
+                  : <Widget>[
+                      if (current.direction == .push)
+                        ContentPanel(child: statusContent)
+                      else
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: DesignTokens.spacingXs,
+                          ),
+                          child: statusContent,
+                        ),
+                      if (current.kind == .directory &&
+                          current.status == .finalizing)
+                        const StateNote('已建好文件夹，正在检查里边的文件。'),
+                      if ((current.exportReason ?? '').isNotEmpty &&
+                          !current.canExport)
+                        const StateNote('这个文件暂时无法保存。请先查看传输结果。'),
+                      if (cacheLease.hasError)
+                        StateNote(
+                          failureMessage(
+                            cacheLease.error,
+                            fallback: '临时文件已不可用。请从手机重新取回后再保存或分享。',
+                          ),
+                        ),
+                      const SectionTitle('本次文件'),
+                      if (!batch)
+                        ContentPanel(
+                          padding: EdgeInsets.zero,
+                          child: Column(
+                            children: [
+                              ActionRow(
+                                icon: current.kind == .directory
+                                    ? LucideIcons.folder
+                                    : LucideIcons.file,
+                                color: DesignTokens.colorListIconTransfer,
+                                title: current.name,
+                              ),
+                              if ((current.direction == .push
+                                      ? current.destination
+                                      : current.source)
+                                  case final path when path.isNotEmpty)
+                                ActionRow(
+                                  icon: LucideIcons.folder,
+                                  color: current.direction == .push
+                                      ? DesignTokens.colorListIconDocument
+                                      : DesignTokens.colorListIconTransfer,
+                                  title: current.direction == .push
+                                      ? '手机目录'
+                                      : '来源',
+                                  value: current.kind == .directory
+                                      ? path
+                                      : p.posix.dirname(path),
+                                ),
+                            ],
+                          ),
+                        ),
+                    ];
               final trailing = <Widget>[
                 if (conflictItem != null)
                   ConflictPanel(
@@ -126,6 +234,7 @@ class TransferDetailsPage extends HookConsumerWidget {
                         (!query.isLoading && !query.hasError && query.hasValue),
                     key: ValueKey(('transfer-conflict', conflictItem.id)),
                     transfer: transferView(devices, conflictItem),
+                    showTitle: !standaloneConflict,
                     onResolve: (policy, all) async {
                       await performAction(
                         context,
@@ -138,7 +247,8 @@ class TransferDetailsPage extends HookConsumerWidget {
                       refresh();
                     },
                   ),
-                if (canCancel)
+                if (canCancel) ...[
+                  const SizedBox(height: DesignTokens.spacingMd),
                   OutlinedButton(
                     onPressed: () async {
                       if (await confirm(
@@ -159,8 +269,20 @@ class TransferDetailsPage extends HookConsumerWidget {
                         refresh();
                       }
                     },
-                    child: Text(batch ? '取消剩余未完成项' : '取消传输'),
+                    style: OutlinedButton.styleFrom(
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.all(
+                          Radius.circular(
+                            DesignTokens.componentButtonSecondaryRounded,
+                          ),
+                        ),
+                      ),
+                      backgroundColor: theme.colorScheme.surface,
+                      side: BorderSide(color: theme.colorScheme.outlineVariant),
+                    ),
+                    child: Text(batch ? '停止剩余文件' : '停止传输'),
                   ),
+                ],
                 if (!batch && current.canRestart)
                   FilledButton(
                     onPressed:
@@ -216,7 +338,6 @@ class TransferDetailsPage extends HookConsumerWidget {
                     icon: LucideIcons.circleAlert,
                   ),
                 const SizedBox(height: DesignTokens.spacingMd),
-                TextButton(onPressed: refresh, child: const Text('重新检查结果')),
               ];
               return GroupedListView.builder(
                 padding: const EdgeInsets.all(DesignTokens.spacingMd),
@@ -238,21 +359,30 @@ class TransferDetailsPage extends HookConsumerWidget {
                   }
                   final rawItem = visibleItems[row];
                   final item = transferView(devices, rawItem);
-                  return TransferResultRow(
-                    key: ValueKey((
-                      'transfer-item',
-                      current.id,
-                      item.source,
-                      item.destination,
-                      row,
-                    )),
-                    transfer: item,
-                    deviceName: remoteDevice,
-                    onOpen: rawItem.id == current.id
-                        ? null
-                        : () =>
-                              TransferDetailsRoute(taskId: rawItem.id)
-                                  .push<void>(context),
+                  return Material(
+                    borderRadius: BorderRadius.vertical(
+                      top: row == 0
+                          ? const Radius.circular(
+                              DesignTokens.componentContentPanelRounded,
+                            )
+                          : Radius.zero,
+                      bottom: row == visibleItems.length - 1
+                          ? const Radius.circular(
+                              DesignTokens.componentContentPanelRounded,
+                            )
+                          : Radius.zero,
+                    ),
+                    color: theme.colorScheme.surface,
+                    clipBehavior: Clip.antiAlias,
+                    child: TransferResultRow(
+                      key: ValueKey(('transfer-item', rawItem.id)),
+                      transfer: item,
+                      onOpen: rawItem.id == current.id
+                          ? null
+                          : () =>
+                                TransferDetailsRoute(taskId: rawItem.id)
+                                    .push<void>(context),
+                    ),
                   );
                 },
               );

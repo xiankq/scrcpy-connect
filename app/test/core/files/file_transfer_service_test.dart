@@ -57,6 +57,11 @@ void main() {
     expect(durable.values.single.shareId, 'share');
     expect(durable.values.single.status, FileTransferStatus.completed);
     expect(durable.values.single.transferred, 3);
+    expect(durable.values.single.endedAt, isPositive);
+    expect(
+      (await transfers.readTransfer(durable.values.single.id)).endedAt,
+      durable.values.single.endedAt,
+    );
   });
 
   for (final close in [false, true]) {
