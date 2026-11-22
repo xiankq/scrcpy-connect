@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$GalleryScanState {
 
- GalleryScanSnapshot? get result; GalleryScanSnapshot? get latest; GalleryScanSnapshot? get pendingResult; List<FileCatalogEntry> get items; List<FileCatalogEntry> get pendingItems; bool get showingPrevious; bool get starting; bool get paging; bool get stopping; String? get error;
+ GalleryScanSnapshot? get result; GalleryScanSnapshot? get latest; GalleryScanSnapshot? get pendingResult; List<FileCatalogEntry> get items; bool get showingPrevious; bool get starting; bool get paging; bool get stopping; String? get error;
 /// Create a copy of GalleryScanState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -27,20 +27,20 @@ $GalleryScanStateCopyWith<GalleryScanState> get copyWith => _$GalleryScanStateCo
 @override
 bool operator ==(Object other) {
   final _this = this as GalleryScanState;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is GalleryScanState&&(identical(other.result, _this.result) || other.result == _this.result)&&(identical(other.latest, _this.latest) || other.latest == _this.latest)&&(identical(other.pendingResult, _this.pendingResult) || other.pendingResult == _this.pendingResult)&&const DeepCollectionEquality().equals(other.items, _this.items)&&const DeepCollectionEquality().equals(other.pendingItems, _this.pendingItems)&&(identical(other.showingPrevious, _this.showingPrevious) || other.showingPrevious == _this.showingPrevious)&&(identical(other.starting, _this.starting) || other.starting == _this.starting)&&(identical(other.paging, _this.paging) || other.paging == _this.paging)&&(identical(other.stopping, _this.stopping) || other.stopping == _this.stopping)&&(identical(other.error, _this.error) || other.error == _this.error));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is GalleryScanState&&(identical(other.result, _this.result) || other.result == _this.result)&&(identical(other.latest, _this.latest) || other.latest == _this.latest)&&(identical(other.pendingResult, _this.pendingResult) || other.pendingResult == _this.pendingResult)&&const DeepCollectionEquality().equals(other.items, _this.items)&&(identical(other.showingPrevious, _this.showingPrevious) || other.showingPrevious == _this.showingPrevious)&&(identical(other.starting, _this.starting) || other.starting == _this.starting)&&(identical(other.paging, _this.paging) || other.paging == _this.paging)&&(identical(other.stopping, _this.stopping) || other.stopping == _this.stopping)&&(identical(other.error, _this.error) || other.error == _this.error));
 }
 
 
 @override
 int get hashCode {
   final _this = this as GalleryScanState;
-  return Object.hash(runtimeType,_this.result,_this.latest,_this.pendingResult,const DeepCollectionEquality().hash(_this.items),const DeepCollectionEquality().hash(_this.pendingItems),_this.showingPrevious,_this.starting,_this.paging,_this.stopping,_this.error);
+  return Object.hash(runtimeType,_this.result,_this.latest,_this.pendingResult,const DeepCollectionEquality().hash(_this.items),_this.showingPrevious,_this.starting,_this.paging,_this.stopping,_this.error);
 }
 
 @override
 String toString() {
   final _this = this as GalleryScanState;
-  return 'GalleryScanState(result: ${_this.result}, latest: ${_this.latest}, pendingResult: ${_this.pendingResult}, items: ${_this.items}, pendingItems: ${_this.pendingItems}, showingPrevious: ${_this.showingPrevious}, starting: ${_this.starting}, paging: ${_this.paging}, stopping: ${_this.stopping}, error: ${_this.error})';
+  return 'GalleryScanState(result: ${_this.result}, latest: ${_this.latest}, pendingResult: ${_this.pendingResult}, items: ${_this.items}, showingPrevious: ${_this.showingPrevious}, starting: ${_this.starting}, paging: ${_this.paging}, stopping: ${_this.stopping}, error: ${_this.error})';
 }
 
 
@@ -51,7 +51,7 @@ abstract mixin class $GalleryScanStateCopyWith<$Res>  {
   factory $GalleryScanStateCopyWith(GalleryScanState value, $Res Function(GalleryScanState) _then) = _$GalleryScanStateCopyWithImpl;
 @useResult
 $Res call({
- GalleryScanSnapshot? result, GalleryScanSnapshot? latest, GalleryScanSnapshot? pendingResult, List<FileCatalogEntry> items, List<FileCatalogEntry> pendingItems, bool showingPrevious, bool starting, bool paging, bool stopping, String? error
+ GalleryScanSnapshot? result, GalleryScanSnapshot? latest, GalleryScanSnapshot? pendingResult, List<FileCatalogEntry> items, bool showingPrevious, bool starting, bool paging, bool stopping, String? error
 });
 
 
@@ -68,13 +68,12 @@ class _$GalleryScanStateCopyWithImpl<$Res>
 
 /// Create a copy of GalleryScanState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? result = freezed,Object? latest = freezed,Object? pendingResult = freezed,Object? items = null,Object? pendingItems = null,Object? showingPrevious = null,Object? starting = null,Object? paging = null,Object? stopping = null,Object? error = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? result = freezed,Object? latest = freezed,Object? pendingResult = freezed,Object? items = null,Object? showingPrevious = null,Object? starting = null,Object? paging = null,Object? stopping = null,Object? error = freezed,}) {
   return _then(GalleryScanState(
 result: freezed == result ? _self.result : result // ignore: cast_nullable_to_non_nullable
 as GalleryScanSnapshot?,latest: freezed == latest ? _self.latest : latest // ignore: cast_nullable_to_non_nullable
 as GalleryScanSnapshot?,pendingResult: freezed == pendingResult ? _self.pendingResult : pendingResult // ignore: cast_nullable_to_non_nullable
 as GalleryScanSnapshot?,items: null == items ? _self.items : items // ignore: cast_nullable_to_non_nullable
-as List<FileCatalogEntry>,pendingItems: null == pendingItems ? _self.pendingItems : pendingItems // ignore: cast_nullable_to_non_nullable
 as List<FileCatalogEntry>,showingPrevious: null == showingPrevious ? _self.showingPrevious : showingPrevious // ignore: cast_nullable_to_non_nullable
 as bool,starting: null == starting ? _self.starting : starting // ignore: cast_nullable_to_non_nullable
 as bool,paging: null == paging ? _self.paging : paging // ignore: cast_nullable_to_non_nullable
@@ -201,10 +200,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( GalleryScanSnapshot? result,  GalleryScanSnapshot? latest,  GalleryScanSnapshot? pendingResult,  List<FileCatalogEntry> items,  List<FileCatalogEntry> pendingItems,  bool showingPrevious,  bool starting,  bool paging,  bool stopping,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( GalleryScanSnapshot? result,  GalleryScanSnapshot? latest,  GalleryScanSnapshot? pendingResult,  List<FileCatalogEntry> items,  bool showingPrevious,  bool starting,  bool paging,  bool stopping,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _GalleryScanState() when $default != null:
-return $default(_that.result,_that.latest,_that.pendingResult,_that.items,_that.pendingItems,_that.showingPrevious,_that.starting,_that.paging,_that.stopping,_that.error);case _:
+return $default(_that.result,_that.latest,_that.pendingResult,_that.items,_that.showingPrevious,_that.starting,_that.paging,_that.stopping,_that.error);case _:
   return orElse();
 
 }
@@ -222,10 +221,10 @@ return $default(_that.result,_that.latest,_that.pendingResult,_that.items,_that.
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( GalleryScanSnapshot? result,  GalleryScanSnapshot? latest,  GalleryScanSnapshot? pendingResult,  List<FileCatalogEntry> items,  List<FileCatalogEntry> pendingItems,  bool showingPrevious,  bool starting,  bool paging,  bool stopping,  String? error)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( GalleryScanSnapshot? result,  GalleryScanSnapshot? latest,  GalleryScanSnapshot? pendingResult,  List<FileCatalogEntry> items,  bool showingPrevious,  bool starting,  bool paging,  bool stopping,  String? error)  $default,) {final _that = this;
 switch (_that) {
 case _GalleryScanState():
-return $default(_that.result,_that.latest,_that.pendingResult,_that.items,_that.pendingItems,_that.showingPrevious,_that.starting,_that.paging,_that.stopping,_that.error);case _:
+return $default(_that.result,_that.latest,_that.pendingResult,_that.items,_that.showingPrevious,_that.starting,_that.paging,_that.stopping,_that.error);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -242,10 +241,10 @@ return $default(_that.result,_that.latest,_that.pendingResult,_that.items,_that.
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( GalleryScanSnapshot? result,  GalleryScanSnapshot? latest,  GalleryScanSnapshot? pendingResult,  List<FileCatalogEntry> items,  List<FileCatalogEntry> pendingItems,  bool showingPrevious,  bool starting,  bool paging,  bool stopping,  String? error)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( GalleryScanSnapshot? result,  GalleryScanSnapshot? latest,  GalleryScanSnapshot? pendingResult,  List<FileCatalogEntry> items,  bool showingPrevious,  bool starting,  bool paging,  bool stopping,  String? error)?  $default,) {final _that = this;
 switch (_that) {
 case _GalleryScanState() when $default != null:
-return $default(_that.result,_that.latest,_that.pendingResult,_that.items,_that.pendingItems,_that.showingPrevious,_that.starting,_that.paging,_that.stopping,_that.error);case _:
+return $default(_that.result,_that.latest,_that.pendingResult,_that.items,_that.showingPrevious,_that.starting,_that.paging,_that.stopping,_that.error);case _:
   return null;
 
 }
@@ -257,7 +256,7 @@ return $default(_that.result,_that.latest,_that.pendingResult,_that.items,_that.
 
 
 class _GalleryScanState extends GalleryScanState {
-  const _GalleryScanState({this.result, this.latest, this.pendingResult,  List<FileCatalogEntry> items = const [],  List<FileCatalogEntry> pendingItems = const [], this.showingPrevious = false, this.starting = false, this.paging = false, this.stopping = false, this.error}): _items = items,_pendingItems = pendingItems,super._();
+  const _GalleryScanState({this.result, this.latest, this.pendingResult,  List<FileCatalogEntry> items = const [], this.showingPrevious = false, this.starting = false, this.paging = false, this.stopping = false, this.error}): _items = items,super._();
   
 
 @override final  GalleryScanSnapshot? result;
@@ -268,13 +267,6 @@ class _GalleryScanState extends GalleryScanState {
   if (_items is EqualUnmodifiableListView) return _items;
   // ignore: implicit_dynamic_type
   return EqualUnmodifiableListView(_items);
-}
-
- final  List<FileCatalogEntry> _pendingItems;
-@override@JsonKey() List<FileCatalogEntry> get pendingItems {
-  if (_pendingItems is EqualUnmodifiableListView) return _pendingItems;
-  // ignore: implicit_dynamic_type
-  return EqualUnmodifiableListView(_pendingItems);
 }
 
 @override@JsonKey() final  bool showingPrevious;
@@ -293,18 +285,18 @@ _$GalleryScanStateCopyWith<_GalleryScanState> get copyWith => __$GalleryScanStat
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _GalleryScanState&&(identical(other.result, result) || other.result == result)&&(identical(other.latest, latest) || other.latest == latest)&&(identical(other.pendingResult, pendingResult) || other.pendingResult == pendingResult)&&const DeepCollectionEquality().equals(other.items, _items)&&const DeepCollectionEquality().equals(other.pendingItems, _pendingItems)&&(identical(other.showingPrevious, showingPrevious) || other.showingPrevious == showingPrevious)&&(identical(other.starting, starting) || other.starting == starting)&&(identical(other.paging, paging) || other.paging == paging)&&(identical(other.stopping, stopping) || other.stopping == stopping)&&(identical(other.error, error) || other.error == error));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _GalleryScanState&&(identical(other.result, result) || other.result == result)&&(identical(other.latest, latest) || other.latest == latest)&&(identical(other.pendingResult, pendingResult) || other.pendingResult == pendingResult)&&const DeepCollectionEquality().equals(other.items, _items)&&(identical(other.showingPrevious, showingPrevious) || other.showingPrevious == showingPrevious)&&(identical(other.starting, starting) || other.starting == starting)&&(identical(other.paging, paging) || other.paging == paging)&&(identical(other.stopping, stopping) || other.stopping == stopping)&&(identical(other.error, error) || other.error == error));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,result,latest,pendingResult,const DeepCollectionEquality().hash(_items),const DeepCollectionEquality().hash(_pendingItems),showingPrevious,starting,paging,stopping,error);
+    return Object.hash(runtimeType,result,latest,pendingResult,const DeepCollectionEquality().hash(_items),showingPrevious,starting,paging,stopping,error);
 }
 
 @override
 String toString() {
-    return 'GalleryScanState(result: $result, latest: $latest, pendingResult: $pendingResult, items: $items, pendingItems: $pendingItems, showingPrevious: $showingPrevious, starting: $starting, paging: $paging, stopping: $stopping, error: $error)';
+    return 'GalleryScanState(result: $result, latest: $latest, pendingResult: $pendingResult, items: $items, showingPrevious: $showingPrevious, starting: $starting, paging: $paging, stopping: $stopping, error: $error)';
 }
 
 
@@ -315,7 +307,7 @@ abstract mixin class _$GalleryScanStateCopyWith<$Res> implements $GalleryScanSta
   factory _$GalleryScanStateCopyWith(_GalleryScanState value, $Res Function(_GalleryScanState) _then) = __$GalleryScanStateCopyWithImpl;
 @override @useResult
 $Res call({
- GalleryScanSnapshot? result, GalleryScanSnapshot? latest, GalleryScanSnapshot? pendingResult, List<FileCatalogEntry> items, List<FileCatalogEntry> pendingItems, bool showingPrevious, bool starting, bool paging, bool stopping, String? error
+ GalleryScanSnapshot? result, GalleryScanSnapshot? latest, GalleryScanSnapshot? pendingResult, List<FileCatalogEntry> items, bool showingPrevious, bool starting, bool paging, bool stopping, String? error
 });
 
 
@@ -332,13 +324,12 @@ class __$GalleryScanStateCopyWithImpl<$Res>
 
 /// Create a copy of GalleryScanState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? result = freezed,Object? latest = freezed,Object? pendingResult = freezed,Object? items = null,Object? pendingItems = null,Object? showingPrevious = null,Object? starting = null,Object? paging = null,Object? stopping = null,Object? error = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? result = freezed,Object? latest = freezed,Object? pendingResult = freezed,Object? items = null,Object? showingPrevious = null,Object? starting = null,Object? paging = null,Object? stopping = null,Object? error = freezed,}) {
   return _then(_GalleryScanState(
 result: freezed == result ? _self.result : result // ignore: cast_nullable_to_non_nullable
 as GalleryScanSnapshot?,latest: freezed == latest ? _self.latest : latest // ignore: cast_nullable_to_non_nullable
 as GalleryScanSnapshot?,pendingResult: freezed == pendingResult ? _self.pendingResult : pendingResult // ignore: cast_nullable_to_non_nullable
 as GalleryScanSnapshot?,items: null == items ? _self._items : items // ignore: cast_nullable_to_non_nullable
-as List<FileCatalogEntry>,pendingItems: null == pendingItems ? _self._pendingItems : pendingItems // ignore: cast_nullable_to_non_nullable
 as List<FileCatalogEntry>,showingPrevious: null == showingPrevious ? _self.showingPrevious : showingPrevious // ignore: cast_nullable_to_non_nullable
 as bool,starting: null == starting ? _self.starting : starting // ignore: cast_nullable_to_non_nullable
 as bool,paging: null == paging ? _self.paging : paging // ignore: cast_nullable_to_non_nullable

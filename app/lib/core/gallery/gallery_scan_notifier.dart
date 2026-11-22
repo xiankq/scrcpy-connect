@@ -32,6 +32,7 @@ class GalleryScanNotifier extends _$GalleryScanNotifier {
     });
     return GalleryScanState(
       result: previous?.result,
+      pendingResult: previous?.pendingResult,
       items: previous?.items ?? const [],
       showingPrevious: previous != null,
     );
@@ -56,7 +57,6 @@ class GalleryScanNotifier extends _$GalleryScanNotifier {
       stopping: false,
       latest: null,
       pendingResult: null,
-      pendingItems: const [],
       showingPrevious: state.result != null,
       error: null,
     );
@@ -134,7 +134,7 @@ class GalleryScanNotifier extends _$GalleryScanNotifier {
     var updated = state.copyWith(latest: next, error: null);
     if (state.showingPrevious) {
       if (status != .scanning) {
-        updated = updated.copyWith(pendingResult: next, pendingItems: combined);
+        updated = updated.copyWith(pendingResult: next);
       }
     } else if (status == .scanning) {
       final seen = state.items.map((file) => file.path).toSet();
@@ -152,11 +152,7 @@ class GalleryScanNotifier extends _$GalleryScanNotifier {
               final (index, file) = entry;
               return file.path != combined[index].path;
             }))) {
-      updated = updated.copyWith(
-        showingPrevious: true,
-        pendingResult: next,
-        pendingItems: combined,
-      );
+      updated = updated.copyWith(showingPrevious: true, pendingResult: next);
     } else {
       updated = updated.copyWith(result: next, items: combined);
     }
@@ -260,9 +256,8 @@ class GalleryScanNotifier extends _$GalleryScanNotifier {
     state = state.copyWith(
       paging: false,
       result: next,
-      items: state.pendingItems,
+      items: next.items,
       pendingResult: null,
-      pendingItems: const [],
       showingPrevious: false,
     );
   }

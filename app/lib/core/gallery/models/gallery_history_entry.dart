@@ -13,6 +13,7 @@ abstract class GalleryHistoryEntry with _$GalleryHistoryEntry {
     required GalleryScanSnapshot result,
     required List<FileCatalogEntry> items,
     required double scrollOffset,
+    GalleryScanSnapshot? pendingResult,
   }) = _GalleryHistoryEntry;
 
   bool matches(DeviceSnapshot record) =>

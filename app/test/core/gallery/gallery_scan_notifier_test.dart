@@ -106,7 +106,7 @@ void main() {
     scanner.starts.single.complete(_snapshot('new', ['/new']));
     await start;
     expect(container.read(provider).items.single.path, '/saved');
-    expect(container.read(provider).pendingItems.single.path, '/new');
+    expect(container.read(provider).pendingResult?.items.single.path, '/new');
     actions.applyUpdate();
     expect(container.read(provider).items.single.path, '/new');
     expect(container.read(provider).pendingResult, isNull);

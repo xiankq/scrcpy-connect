@@ -18,6 +18,7 @@ import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/content_arrival.dart';
 import 'package:scrcpy_connect/widgets/content/cached_file_image.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
@@ -106,10 +107,22 @@ class MediaPreviewPage extends HookConsumerWidget {
                         ? NetworkImage(source)
                         : CachedFileImage(File(source), lease: request?.lease),
                     fit: originalSize.value ? BoxFit.none : BoxFit.contain,
-                    errorBuilder: (_, e, _) => Center(
-                      child: Text(
-                        '$e',
-                        style: const TextStyle(color: DesignTokens.colorWhite),
+                    frameBuilder: (context, child, frame, synchronous) =>
+                        synchronous
+                        ? child
+                        : ContentArrival(
+                            state: frame != null,
+                            waiting: frame == null,
+                            child: frame == null
+                                ? const Center(child: ContentLoadingIndicator())
+                                : child,
+                          ),
+                    errorBuilder: (_, _, _) => EmptyContent(
+                      icon: LucideIcons.imageOff,
+                      title: '无法读取这张图片',
+                      action: TextButton(
+                        onPressed: () => retry.value++,
+                        child: const Text('重新预览'),
                       ),
                     ),
                   ),

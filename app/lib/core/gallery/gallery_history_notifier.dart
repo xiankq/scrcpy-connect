@@ -29,6 +29,7 @@ class GalleryHistoryNotifier extends _$GalleryHistoryNotifier {
     List<FileCatalogEntry> items,
     double offset, {
     required GalleryScanner source,
+    GalleryScanSnapshot? pendingResult,
   }) {
     if (!ref.mounted || !identical(ref.read(galleryScannerProvider), source)) {
       return;
@@ -41,9 +42,12 @@ class GalleryHistoryNotifier extends _$GalleryHistoryNotifier {
     }
     next[id] = GalleryHistoryEntry(
       device: device,
-      result: result,
+      result: result.status == .scanning
+          ? result.copyWith(status: .cancelled)
+          : result,
       items: List.unmodifiable(items),
       scrollOffset: offset,
+      pendingResult: pendingResult,
     );
     state = Map.unmodifiable(next);
   }

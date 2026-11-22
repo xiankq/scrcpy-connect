@@ -51,16 +51,31 @@ class GalleryMediaTile extends StatelessWidget {
                   path: file.path!,
                   device: device,
                 ),
-              if (file.mime.startsWith('video'))
-                const Positioned(
-                  left: DesignTokens.spacingXs,
-                  bottom: DesignTokens.spacingXs,
+              if (file.canOpen &&
+                  file.path?.isNotEmpty == true &&
+                  file.mime.startsWith('video/')) ...[
+                const Center(
                   child: Icon(
                     LucideIcons.play,
                     color: DesignTokens.colorWhite,
                     size: DesignTokens.componentIconActionSize,
+                    shadows: [Shadow(blurRadius: DesignTokens.spacingXs)],
                   ),
                 ),
+                Positioned(
+                  left: DesignTokens.spacingXs,
+                  bottom: DesignTokens.spacingXs,
+                  child: Text(
+                    '视频',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: DesignTokens.colorWhite,
+                      shadows: const [
+                        Shadow(blurRadius: DesignTokens.spacingXs),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               if (selected)
                 Container(
                   color: DesignTokens

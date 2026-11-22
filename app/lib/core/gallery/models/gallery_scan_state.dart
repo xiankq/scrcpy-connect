@@ -12,7 +12,6 @@ abstract class GalleryScanState with _$GalleryScanState {
     GalleryScanSnapshot? latest,
     GalleryScanSnapshot? pendingResult,
     @Default([]) List<FileCatalogEntry> items,
-    @Default([]) List<FileCatalogEntry> pendingItems,
     @Default(false) bool showingPrevious,
     @Default(false) bool starting,
     @Default(false) bool paging,
