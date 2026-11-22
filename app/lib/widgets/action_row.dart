@@ -7,6 +7,7 @@ class ActionRow extends StatelessWidget {
     super.key,
     required this.icon,
     required this.title,
+    this.value,
     this.onTap,
     this.enabled = true,
     this.destructive = false,
@@ -18,6 +19,7 @@ class ActionRow extends StatelessWidget {
   });
   final IconData icon;
   final String title;
+  final String? value;
   final VoidCallback? onTap;
   final bool enabled;
   final bool destructive;
@@ -26,37 +28,71 @@ class ActionRow extends StatelessWidget {
   final EdgeInsetsGeometry contentPadding;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    enabled: enabled,
-    contentPadding: contentPadding,
-    minLeadingWidth: DesignTokens.componentListIconSize,
-    leading: ListIconBadge(
-      icon: icon,
-      backgroundColor: enabled
-          ? color ??
-                (destructive
-                    ? DesignTokens.colorListIconCoral
-                    : DesignTokens.colorListIconUtility)
-          : Theme.of(context).disabledColor,
-    ),
-    title: Text(
-      title,
-      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-        color: !enabled
-            ? Theme.of(context).disabledColor
-            : destructive
-            ? Theme.of(context).colorScheme.error
-            : null,
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final arrow = onTap == null
+        ? null
+        : const Icon(
+            AppIcons.forward,
+            size: DesignTokens.componentIconSmallSize,
+          );
+    Widget tile(Widget? end) => ListTile(
+      enabled: enabled,
+      contentPadding: contentPadding,
+      minLeadingWidth: DesignTokens.componentListIconSize,
+      leading: ListIconBadge(
+        icon: icon,
+        backgroundColor: enabled
+            ? color ??
+                  (destructive
+                      ? DesignTokens.colorListIconCoral
+                      : DesignTokens.colorListIconUtility)
+            : theme.disabledColor,
       ),
-    ),
-    trailing:
-        trailing ??
-        (onTap == null
-            ? null
-            : const Icon(
-                AppIcons.forward,
-                size: DesignTokens.componentIconSmallSize,
-              )),
-    onTap: onTap,
-  );
+      title: Text(
+        title,
+        style: theme.textTheme.bodyLarge?.copyWith(
+          color: !enabled
+              ? theme.disabledColor
+              : destructive
+              ? theme.colorScheme.error
+              : null,
+        ),
+      ),
+      trailing: end,
+      onTap: onTap,
+    );
+
+    if (value case final label? when trailing == null) {
+      return LayoutBuilder(
+        builder: (context, constraints) => tile(
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: constraints.maxWidth * .44),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Tooltip(
+                    message: label,
+                    child: Text(
+                      label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                ),
+                if (arrow != null) ...[
+                  const SizedBox(width: DesignTokens.spacingXxs),
+                  arrow,
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    return tile(trailing ?? arrow);
+  }
 }

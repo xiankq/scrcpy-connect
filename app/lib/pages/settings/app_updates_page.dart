@@ -161,28 +161,32 @@ class AppUpdatesPage extends HookConsumerWidget {
                   LucideIcons.circleHelp,
                   size: DesignTokens.componentListIconSize,
                 ),
-                title: const Text('当前版本'),
-                trailing: installed == null
-                    ? _UpdateStatus(text: info.hasError ? '读取失败' : '读取中…')
-                    : Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            installed.version,
-                            style: theme.textTheme.titleMedium,
-                          ),
-                          Text(
-                            '构建 ${installed.buildNumber}',
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-              ),
-              const Divider(
-                height: DesignTokens.spacingHairline,
-                indent: 54,
-                endIndent: DesignTokens.spacingMd,
+                title: Row(
+                  children: [
+                    const Expanded(child: Text('当前版本')),
+                    const SizedBox(width: DesignTokens.spacingSm),
+                    Expanded(
+                      child: installed == null
+                          ? _UpdateStatus(text: info.hasError ? '读取失败' : '读取中…')
+                          : Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  installed.version,
+                                  style: theme.textTheme.titleMedium,
+                                  textAlign: TextAlign.end,
+                                ),
+                                Text(
+                                  '构建 ${installed.buildNumber}',
+                                  style: theme.textTheme.bodySmall,
+                                  textAlign: TextAlign.end,
+                                ),
+                              ],
+                            ),
+                    ),
+                  ],
+                ),
               ),
               ListTile(
                 leading: const FeatureIcon(
@@ -204,11 +208,6 @@ class AppUpdatesPage extends HookConsumerWidget {
                   title: '发现新版本 ${newer.version}',
                   onTap: () => present(newer, installed),
                 ),
-              const Divider(
-                height: DesignTokens.spacingHairline,
-                indent: 54,
-                endIndent: DesignTokens.spacingMd,
-              ),
               ListTile(
                 leading: const FeatureIcon(
                   LucideIcons.layers3,

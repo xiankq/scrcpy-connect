@@ -388,7 +388,6 @@ class FilesPage extends HookConsumerWidget {
                       icon: const Icon(AppIcons.search),
                     ),
                   ],
-            bottomGlass: false,
             bottom: selecting.value
                 ? FileSelectionBar(
                     menuController: selectionMenu,

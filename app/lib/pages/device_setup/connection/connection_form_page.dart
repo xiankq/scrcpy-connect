@@ -224,7 +224,6 @@ class ConnectionFormPage extends HookConsumerWidget {
                   : reauthorizing
                   ? '重新授权'
                   : '添加设备',
-              bottomGlass: false,
               bottom: Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: DesignTokens.spacingXs,

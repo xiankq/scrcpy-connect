@@ -20,7 +20,6 @@ class MetadataImportPreview extends HookWidget {
     return PageFrame(
       title: '导入预览',
       onBack: () => Navigator.pop(context),
-      bottomGlass: false,
       bottom: FilledButton(
         style: FilledButton.styleFrom(
           shape: RoundedRectangleBorder(

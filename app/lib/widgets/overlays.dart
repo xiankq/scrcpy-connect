@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/motion.dart';
 
 /// 承载正文和反馈的实体内容面；玻璃仅用于独立操作控件。
 class ContentSurface extends StatelessWidget {
@@ -89,16 +90,33 @@ Future<T?> showAppDialog<T>({
   Offset? anchorPoint,
 }) {
   assert(builder != null || content != null);
+  final reduced = reduceMotionOf(context);
   return showDialog<T>(
     context: context,
     barrierColor: _scrim(context),
     barrierDismissible: barrierDismissible,
     routeSettings: routeSettings,
     anchorPoint: anchorPoint,
-    builder:
-        builder ??
-        (context) =>
-            AppAlertDialog(title: title, content: content!, actions: actions),
+    animationStyle: reduced
+        ? AnimationStyle.noAnimation
+        : const AnimationStyle(duration: panelOpenDuration, curve: panelCurve),
+    builder: (context) {
+      final dialog =
+          builder?.call(context) ??
+          AppAlertDialog(title: title, content: content!, actions: actions);
+      final animation = ModalRoute.of(context)?.animation;
+      if (reduced || animation == null) return dialog;
+      final progress = animation.drive(CurveTween(curve: panelCurve));
+      return SlideTransition(
+        position: progress.drive(
+          Tween(begin: const Offset(0, .018), end: Offset.zero),
+        ),
+        child: ScaleTransition(
+          scale: progress.drive(Tween(begin: .965, end: 1.0)),
+          child: dialog,
+        ),
+      );
+    },
   );
 }
 
@@ -132,11 +150,12 @@ Future<T?> showAppModalSheet<T>({
     ),
   ),
   clipBehavior: Clip.antiAlias,
-  sheetAnimationStyle:
-      (MediaQuery.disableAnimationsOf(context) ||
-          MediaQuery.reduceMotionOf(context))
+  sheetAnimationStyle: reduceMotionOf(context)
       ? AnimationStyle.noAnimation
-      : null,
+      : const AnimationStyle(
+          duration: panelOpenDuration,
+          reverseDuration: panelCloseDuration,
+        ),
   builder: builder,
 );
 

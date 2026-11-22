@@ -21,6 +21,7 @@ colors:
   text-dark: '#FAFAFA'
   secondary: '#656565'
   secondary-dark: '#AEAEAE'
+  device-detail-value: '#545B61'
   muted: '#DEDEDE'
   muted-dark: '#404040'
   tint: '#E5E5EA'
@@ -60,11 +61,6 @@ colors:
   device-shortcut-disabled: '#72767C'
   media-shade: '#00000099'
   media-thumbnail-shade: '#00000061'
-  remote-wait-warm: '#68504D'
-  remote-wait-mid: '#242B37'
-  remote-wait-shadow: '#171E29'
-  remote-wait-blue: '#365472'
-  remote-wait-secondary: '#CFD8E5'
   connection-nearby: '#0099A7'
   connection-pairing: '#009447'
   connection-qr: '#8057F1'
@@ -123,6 +119,18 @@ colors:
   connection-path-dark: '#181C24'
   connection-signal: '#347EF5'
   connection-signal-dark: '#64A2FF'
+  connection-track-line: '#BBCADB'
+  connection-track-line-dark: '#36516F'
+  connection-track-arc: '#2C6199'
+  connection-track-arc-dark: '#A5CEFB'
+  device-list-open: '#23588A'
+  device-glyph-frame: '#294454'
+  device-glyph-screen: '#A7C8E8'
+  device-glyph-idle-screen: '#DCE6EC'
+  device-glyph-idle-mark: '#64757D'
+  intro-signal-near: '#8FBFFF'
+  intro-signal-middle: '#6099EE'
+  workspace-empty-icon: '#F0F1F2'
   file-tile: '#F2F1F6'
   file-folder: '#FFB443'
   file-current-directory: '#FFF1D8'
@@ -174,6 +182,18 @@ typography:
   label:
     fontFamily: MiSans
     fontSize: 15px
+    fontWeight: 500
+    lineHeight: '1.4'
+    letterSpacing: 0px
+  device-detail-heading:
+    fontFamily: MiSans
+    fontSize: 18px
+    fontWeight: 500
+    lineHeight: '1.4'
+    letterSpacing: 0px
+  device-detail-value:
+    fontFamily: MiSans
+    fontSize: 14px
     fontWeight: 500
     lineHeight: '1.4'
     letterSpacing: 0px
@@ -287,6 +307,8 @@ components:
     height: 54px
   page-header:
     height: 56px
+  device-list-header:
+    height: 76px
   remote-navigation:
     height: 56px
     padding: 67.5px
@@ -352,6 +374,8 @@ components:
     rounded: '{rounded.lg}'
   device-hero:
     height: 258px
+    padding: 18px
+    gap: 18px
     rounded: '{rounded.xl}'
     backgroundColor: '{colors.device-panel}'
     textColor: '{colors.text}'
@@ -427,11 +451,61 @@ components:
     padding: '{spacing.md}'
   settings-row:
     height: 50px
+  device-detail-section:
+    height: 36px
+    gap: 26px
+    typography: '{typography.device-detail-heading}'
+  device-detail-value:
+    textColor: '{colors.device-detail-value}'
+    typography: '{typography.device-detail-value}'
   usb-status-card:
     height: 136px
   empty-device-intro:
-    padding: 54px
+    padding: 17px
     width: 440px
+    height: 270px
+    rounded: '{rounded.xl}'
+  intro-signal-near:
+    backgroundColor: '{colors.intro-signal-near}'
+  intro-signal-middle:
+    backgroundColor: '{colors.intro-signal-middle}'
+  device-list-search:
+    height: 46px
+    rounded: 16px
+  device-list-action:
+    width: 79px
+    height: 44px
+    rounded: '{rounded.full}'
+  device-list-open:
+    textColor: '{colors.device-list-open}'
+  workspace-app-panel:
+    height: 110px
+    rounded: 24px
+  workspace-app-header:
+    height: 44px
+  workspace-section:
+    gap: 14px
+  workspace-primary-action:
+    height: 48px
+  workspace-app-empty:
+    size: 42px
+    rounded: 12px
+    backgroundColor: '{colors.workspace-empty-icon}'
+  workspace-running-empty:
+    size: 20px
+    gap: 11px
+  workspace-shortcut:
+    size: 48px
+    rounded: 16px
+  workspace-shortcuts:
+    rounded: 22px
+  workspace-phone:
+    width: 96px
+    height: 156px
+    rounded: 24px
+    padding: 3px
+  workspace-phone-screen:
+    rounded: 22px
   row-large:
     height: 64px
   notification-card:
@@ -480,6 +554,10 @@ components:
     backgroundColor: '{colors.skeleton-graphic-dark}'
   skeleton-line:
     backgroundColor: '{colors.tint}'
+  skeleton-highlight:
+    backgroundColor: '{colors.surface}'
+  skeleton-highlight-dark:
+    backgroundColor: '{colors.device-detail-value}'
   skeleton-line-dark:
     backgroundColor: '{colors.muted-dark}'
   file-browser-tile:
@@ -727,6 +805,12 @@ components:
     backgroundColor: '{colors.device-panel}'
   device-identity-status:
     size: 17px
+  device-glyph:
+    backgroundColor: '{colors.device-glyph-screen}'
+    borderColor: '{colors.device-glyph-frame}'
+  device-glyph-idle:
+    backgroundColor: '{colors.device-glyph-idle-screen}'
+    borderColor: '{colors.device-glyph-idle-mark}'
   device-identity-showcase:
     width: 84px
     height: 144px
@@ -763,7 +847,7 @@ components:
     textColor: '{colors.connection-ip}'
   connection-field:
     height: 52px
-    rounded: '{rounded.md}'
+    rounded: 16px
     padding: '{spacing.md}'
     backgroundColor: '{colors.surface}'
     textColor: '{colors.text}'
@@ -791,6 +875,14 @@ components:
     backgroundColor: '{colors.connection-path}'
   connection-path-dark:
     backgroundColor: '{colors.connection-path-dark}'
+  connection-track:
+    backgroundColor: '{colors.connection-track-line}'
+  connection-track-dark:
+    backgroundColor: '{colors.connection-track-line-dark}'
+  connection-arc:
+    backgroundColor: '{colors.connection-track-arc}'
+  connection-arc-dark:
+    backgroundColor: '{colors.connection-track-arc-dark}'
   connection-signal:
     width: 23px
     height: 4px
@@ -850,6 +942,8 @@ components:
     textColor: '{colors.diagnostic-checking}'
   diagnostic-checking-dark:
     textColor: '{colors.diagnostic-checking-dark}'
+  transfer-card-thumbnail:
+    width: 48px
   transfer-progress:
     height: 4px
     rounded: '{spacing.micro}'
@@ -868,19 +962,6 @@ components:
     backgroundColor: '{colors.loading-violet}'
   loading-orb:
     opacity: 0.32
-  remote-wait:
-    backgroundColor: '{colors.media-ink}'
-    textColor: '{colors.text-dark}'
-  remote-wait-warm:
-    backgroundColor: '{colors.remote-wait-warm}'
-  remote-wait-mid:
-    backgroundColor: '{colors.remote-wait-mid}'
-  remote-wait-shadow:
-    backgroundColor: '{colors.remote-wait-shadow}'
-  remote-wait-blue:
-    backgroundColor: '{colors.remote-wait-blue}'
-  remote-wait-secondary:
-    textColor: '{colors.remote-wait-secondary}'
   empty-content:
     width: 380px
     padding: '{spacing.md}'
@@ -891,7 +972,7 @@ components:
   empty-content-message-gap:
     height: 10px
   pairing-qr:
-    size: 176px
+    size: 204px
     backgroundColor: '{colors.surface}'
     textColor: '{colors.black}'
 ---
@@ -1025,7 +1106,7 @@ iOS 与 iPadOS 使用出血方形，由系统施加遮罩，提供默认、深�
 
 #### 加载、刷新与反馈
 
-标题、搜索、当前路径、Tab 和导航随页面先出现。设备、通知、文件、相册等已知结构的列表与网格复用 `LoadingSkeleton`，首次读取持续约 150 毫秒后在内容区显示，数据到达后原位替换。尚未取得可用于排版的信息时，使用所属页面的进度指示。
+标题、搜索、当前路径、Tab 和导航随页面先出现。设备、通知、文件、相册等已知结构的列表与网格复用 `LoadingSkeleton`，首次读取持续约 150 毫秒后在内容区显示。占位形状内以低对比渐变往返，内容到达后原位淡入。尚未取得可用于排版的信息时，使用所属页面的进度指示。
 
 骨架沿用卡片、缩略格、分组和文字基线的几何，按当前宽度和字号排版。浅色使用 `device-panel` 与 `tint`，深色使用 `skeleton-graphic-dark` 与 `muted-dark`。占位不接收焦点或点击，每个加载区域提供一个读屏状态。
 
@@ -1113,6 +1194,8 @@ Ardot 入口提供复核导览。左侧依次放设计规范、母组件、组�
 设备、传输、设置在同一个 284×64 点的 regular 玻璃底栏内等宽排列，窄视口允许缩窄轨道。每项图标在上、文字在下，沿同一竖轴居中。图标用 `icon.size`，文字用 `caption`，两者间距用 `spacing.micro`，大字时栏高随内容增长。同一个 `GlassTabBar` 持续管理整条轨道和一枚同心的选中镜片。静止时用轻薄明暗差、边缘光和更强的前景对比标记选中，图标及文字保持原位。点按或横拖时镜片在轨道内移动，释放后落在实际切换成功的目的地。
 
 滚动内容延伸到浮动栏后方，末项预留可滚动的避让空间。内容与栏重叠时用渐退保护标题和底栏文字。媒体 clear 透出清晰的画面细节，由轮廓折射勾勒形状，并以独立的局部暗化保护亮色前景。媒体预览的返回和底部操作同用 clear。Duo 竖栏模式下返回跟随系统外缘，标题和文字操作保留在横向区域。[Duo 照片预览](https://ardot.tencent.com/file/749360133997361?node_id=17%3A200) · [Apple 滚动边缘指南](https://developer.apple.com/design/human-interface-guidelines/scroll-views#Scroll-edge-effects) · [Apple Clear 材质指南](https://developer.apple.com/design/human-interface-guidelines/materials#Liquid-Glass)
+页面底部的单个通栏主按钮直接显示 `primary-action` 实体表面。文件、相册等浮动工具栏由工具栏自身绘制材料面。页框统一底部操作的宽度、边距、安全区和键盘避让。
+
 
 原生控件在平台提供时使用系统材料。SwiftUI 的 `glassEffect` 作用于按键外形，`GlassEffectContainer` 共同渲染相邻形状，`interactive` 提供响应触控和指针的反馈。Flutter 使用项目所选生产玻璃库的光学及后端适配路径，既有 `glass` token 是项目参数。辅助偏好按平台设置处理。降低透明度或需要实体面提高对比时保留原尺寸、动作与焦点。减少动态时保留按压与选中反馈，收敛形变和回弹。
 
@@ -1126,7 +1209,7 @@ Ardot 入口提供复核导览。左侧依次放设计规范、母组件、组�
 
 ### 应用更新弹窗
 
-「关于与更新」把当前版本、构建号和更新入口放在同组列表，更新记录按版本卡片排布。发现新版本后使用有遮罩的居中实体弹窗。版本对照、更新摘要与底部操作在各状态保持同一位置。完整发布说明通过「更新记录」进入，窄窗和大字时正文可滚动，操作始终可达。
+「关于与更新」把当前版本、构建号和更新入口放在同一组，项目通过行内留白区分。更新记录按版本卡片排布。发现新版本后使用有遮罩的居中实体弹窗。版本对照、更新摘要与底部操作在各状态保持同一位置。完整发布说明通过「更新记录」进入，窄窗和大字时正文可滚动，操作始终可达。 [关于与更新画板](https://ardot.tencent.com/file/749360133997361?node_id=2%3A2203)
 
 发现新版本时，弹窗从稍低的位置进入。减少动态时直接呈现稳定布局。宽而矮的窗口可将版本信息与更新说明并排。下载、校验、安装及错误恢复以实际更新状态呈现。[应用版本与更新](prod/app-updates.md)
 

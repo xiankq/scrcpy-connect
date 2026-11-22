@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:foldable/foldable.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
+import 'package:scrcpy_connect/widgets/content_arrival.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
 import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
@@ -105,7 +106,10 @@ final class WorkspacePanes extends StatelessWidget {
               excluding: showDetail && !split,
               child: Offstage(
                 offstage: showDetail && !split,
-                child: inPane(panes.list, detail: false),
+                child: TickerMode(
+                  enabled: !showDetail || split,
+                  child: inPane(panes.list, detail: false),
+                ),
               ),
             ),
           ),
@@ -128,7 +132,13 @@ final class WorkspacePanes extends StatelessWidget {
               excluding: !showDetail && !split,
               child: Offstage(
                 offstage: !showDetail && !split,
-                child: inPane(panes.detail, detail: true),
+                child: TickerMode(
+                  enabled: split || showDetail,
+                  child: ContentArrival(
+                    state: (panes.detail.key, split || showDetail),
+                    child: inPane(panes.detail, detail: true),
+                  ),
+                ),
               ),
             ),
           ),

@@ -84,6 +84,7 @@ void main() {
       );
       expect(body.center.dx, (width + 40) / 2);
       expect(bottom.center.dx, body.center.dx);
+      expect(bottom.width, body.width - 2 * DesignTokens.spacingMd);
     }
   });
 

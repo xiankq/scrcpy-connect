@@ -10,6 +10,8 @@ import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/content/cached_file_image.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/content_arrival.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 
 class MediaThumbnail extends HookConsumerWidget {
@@ -114,12 +116,34 @@ class MediaThumbnail extends HookConsumerWidget {
               ),
       ),
     );
+    Widget frame(
+      BuildContext context,
+      Widget child,
+      int? frame,
+      bool synchronous,
+    ) => synchronous
+        ? child
+        : ContentArrival(
+            state: frame != null,
+            waiting: frame == null,
+            child: frame != null
+                ? child
+                : ColoredBox(
+                    color: Theme.of(context).colorScheme.surfaceContainerLow,
+                    child: const Center(
+                      child: ContentLoadingIndicator(
+                        size: DesignTokens.componentIconSmallSize,
+                      ),
+                    ),
+                  ),
+          );
     if (source.isEmpty) return placeholder();
     return source.startsWith('http')
         ? Image.network(
             source,
             key: ValueKey('$source:${retry.value}'),
             fit: BoxFit.cover,
+            frameBuilder: frame,
             cacheWidth: 320,
             errorBuilder: (_, _, _) => placeholder('缩略图无法显示，请重试。'),
           )
@@ -131,6 +155,7 @@ class MediaThumbnail extends HookConsumerWidget {
             ),
             key: ValueKey('$source:${retry.value}'),
             fit: BoxFit.cover,
+            frameBuilder: frame,
             errorBuilder: (_, _, _) => placeholder('缩略图无法显示，请重试。'),
           );
   }

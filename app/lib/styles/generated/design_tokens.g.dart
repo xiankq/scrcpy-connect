@@ -73,6 +73,10 @@ abstract final class DesignTokens {
   static const colorConnectionQr = Color(0xff8057f1);
   static const colorConnectionSignal = Color(0xff347ef5);
   static const colorConnectionSignalDark = Color(0xff64a2ff);
+  static const colorConnectionTrackArc = Color(0xff2c6199);
+  static const colorConnectionTrackArcDark = Color(0xffa5cefb);
+  static const colorConnectionTrackLine = Color(0xffbbcadb);
+  static const colorConnectionTrackLineDark = Color(0xff36516f);
   static const colorConnectionUsb = Color(0xffcc6700);
   static const colorDanger = Color(0xffff3b30);
   static const colorDangerContainer = Color(0xffffebea);
@@ -80,6 +84,12 @@ abstract final class DesignTokens {
   static const colorDangerDark = Color(0xffff534a);
   static const colorDangerText = Color(0xffda2028);
   static const colorDangerTextDark = Color(0xffff6b63);
+  static const colorDeviceDetailValue = Color(0xff545b61);
+  static const colorDeviceGlyphFrame = Color(0xff294454);
+  static const colorDeviceGlyphIdleMark = Color(0xff64757d);
+  static const colorDeviceGlyphIdleScreen = Color(0xffdce6ec);
+  static const colorDeviceGlyphScreen = Color(0xffa7c8e8);
+  static const colorDeviceListOpen = Color(0xff23588a);
   static const colorDevicePanel = Color(0xffe9eff1);
   static const colorDevicePanelDark = Color(0xff232a2d);
   static const colorDeviceScreen = Color(0xff171f27);
@@ -110,6 +120,8 @@ abstract final class DesignTokens {
   static const colorGlassShineDark = Color(0x1fffffff);
   static const colorGlassToolbarTint = Color(0x2bffffff);
   static const colorGlassToolbarTintDark = Color(0x17ffffff);
+  static const colorIntroSignalMiddle = Color(0xff6099ee);
+  static const colorIntroSignalNear = Color(0xff8fbfff);
   static const colorListIconAmber = Color(0xf5f7b418);
   static const colorListIconBlue = Color(0xf5347ef5);
   static const colorListIconCoral = Color(0xf5f3483f);
@@ -142,11 +154,6 @@ abstract final class DesignTokens {
   static const colorPrimaryAction = Color(0xff000000);
   static const colorPrimaryActionDark = Color(0xffffffff);
   static const colorPrimaryDark = Color(0xffffffff);
-  static const colorRemoteWaitBlue = Color(0xff365472);
-  static const colorRemoteWaitMid = Color(0xff242b37);
-  static const colorRemoteWaitSecondary = Color(0xffcfd8e5);
-  static const colorRemoteWaitShadow = Color(0xff171e29);
-  static const colorRemoteWaitWarm = Color(0xff68504d);
   static const colorScrim = Color(0x4d17171b);
   static const colorScrimDark = Color(0x80000000);
   static const colorSecondary = Color(0xff656565);
@@ -170,6 +177,7 @@ abstract final class DesignTokens {
   static const colorWarning = Color(0xffffb020);
   static const colorWarningDark = Color(0xffffc247);
   static const colorWhite = Color(0xffffffff);
+  static const colorWorkspaceEmptyIcon = Color(0xfff0f1f2);
   static const componentAccentAmberBackgroundColor = Color(0xfffff4e6);
   static const componentAccentAmberDarkBackgroundColor = Color(0xff33291c);
   static const componentAccentAmberDarkTextColor = Color(0xfffafafa);
@@ -255,13 +263,15 @@ abstract final class DesignTokens {
   static const componentChipHeight = 32.0;
   static const componentChipPadding = 12.0;
   static const componentChipRounded = 999.0;
+  static const componentConnectionArcBackgroundColor = Color(0xff2c6199);
+  static const componentConnectionArcDarkBackgroundColor = Color(0xffa5cefb);
   static const componentConnectionFieldBackgroundColor = Color(0xffffffff);
   static const componentConnectionFieldHeight = 52.0;
   static const componentConnectionFieldOutlineDarkBackgroundColor = Color(
     0xff76767e,
   );
   static const componentConnectionFieldPadding = 16.0;
-  static const componentConnectionFieldRounded = 14.0;
+  static const componentConnectionFieldRounded = 16.0;
   static const componentConnectionFieldTextColor = Color(0xff111111);
   static const componentConnectionIconIpTextColor = Color(0xff347ef5);
   static const componentConnectionIconNearbyTextColor = Color(0xff0099a7);
@@ -294,6 +304,8 @@ abstract final class DesignTokens {
   static const componentConnectionTabsPadding = 4.0;
   static const componentConnectionTabsRounded = 18.0;
   static const componentConnectionTabsTextColor = Color(0xff656565);
+  static const componentConnectionTrackBackgroundColor = Color(0xffbbcadb);
+  static const componentConnectionTrackDarkBackgroundColor = Color(0xff36516f);
   static const componentContentPanelBackgroundColor = Color(0xffffffff);
   static const componentContentPanelDarkBackgroundColor = Color(0xff242424);
   static const componentContentPanelDarkTextColor = Color(0xfffafafa);
@@ -311,10 +323,31 @@ abstract final class DesignTokens {
   static const componentDangerPanelTextColor = Color(0xff000000);
   static const componentDesktopHeight = 960.0;
   static const componentDesktopWidth = 1440.0;
+  static const componentDeviceDetailSectionGap = 26.0;
+  static const componentDeviceDetailSectionHeight = 36.0;
+  static const componentDeviceDetailSectionTypography = TextStyle(
+    fontSize: 18.0,
+    fontWeight: FontWeight.w500,
+    height: 1.4,
+    letterSpacing: 0.0,
+  );
+  static const componentDeviceDetailValueTextColor = Color(0xff545b61);
+  static const componentDeviceDetailValueTypography = TextStyle(
+    fontSize: 14.0,
+    fontWeight: FontWeight.w500,
+    height: 1.4,
+    letterSpacing: 0.0,
+  );
+  static const componentDeviceGlyphBackgroundColor = Color(0xffa7c8e8);
+  static const componentDeviceGlyphBorderColor = Color(0xff294454);
+  static const componentDeviceGlyphIdleBackgroundColor = Color(0xffdce6ec);
+  static const componentDeviceGlyphIdleBorderColor = Color(0xff64757d);
   static const componentDeviceHeroBackgroundColor = Color(0xffe9eff1);
   static const componentDeviceHeroDarkBackgroundColor = Color(0xff232a2d);
   static const componentDeviceHeroDarkTextColor = Color(0xfffafafa);
+  static const componentDeviceHeroGap = 18.0;
   static const componentDeviceHeroHeight = 258.0;
+  static const componentDeviceHeroPadding = 18.0;
   static const componentDeviceHeroRounded = 28.0;
   static const componentDeviceHeroTextColor = Color(0xff111111);
   static const componentDeviceIconHeight = 208.0;
@@ -334,12 +367,19 @@ abstract final class DesignTokens {
   static const componentDeviceIdentityShowcaseWidth = 84.0;
   static const componentDeviceIdentityStatusSize = 17.0;
   static const componentDeviceIdentityWidth = 58.0;
+  static const componentDeviceListActionHeight = 44.0;
+  static const componentDeviceListActionRounded = 999.0;
+  static const componentDeviceListActionWidth = 79.0;
+  static const componentDeviceListHeaderHeight = 76.0;
   static const componentDeviceListItemBackgroundColor = Color(0xffffffff);
   static const componentDeviceListItemCompactHeight = 96.0;
   static const componentDeviceListItemHeight = 108.0;
   static const componentDeviceListItemPadding = 16.0;
   static const componentDeviceListItemRounded = 20.0;
   static const componentDeviceListItemTextColor = Color(0xff111111);
+  static const componentDeviceListOpenTextColor = Color(0xff23588a);
+  static const componentDeviceListSearchHeight = 46.0;
+  static const componentDeviceListSearchRounded = 16.0;
   static const componentDeviceShortcutDisabledBackgroundColor = Color(
     0xff72767c,
   );
@@ -353,7 +393,9 @@ abstract final class DesignTokens {
   static const componentEmptyContentPadding = 16.0;
   static const componentEmptyContentVerticalPadding = 40.0;
   static const componentEmptyContentWidth = 380.0;
-  static const componentEmptyDeviceIntroPadding = 54.0;
+  static const componentEmptyDeviceIntroHeight = 270.0;
+  static const componentEmptyDeviceIntroPadding = 17.0;
+  static const componentEmptyDeviceIntroRounded = 28.0;
   static const componentEmptyDeviceIntroWidth = 440.0;
   static const componentFeatureIconOpacity = 0.1;
   static const componentFeatureIconRounded = 14.0;
@@ -466,6 +508,8 @@ abstract final class DesignTokens {
   static const componentIconMintTextColor = Color(0xf520c451);
   static const componentIconSize = 22.0;
   static const componentIconSmallSize = 16.0;
+  static const componentIntroSignalMiddleBackgroundColor = Color(0xff6099ee);
+  static const componentIntroSignalNearBackgroundColor = Color(0xff8fbfff);
   static const componentListIconAmberBackgroundColor = Color(0xf5f7b418);
   static const componentListIconBlueBackgroundColor = Color(0xf5347ef5);
   static const componentListIconCompactRounded = 8.0;
@@ -518,7 +562,7 @@ abstract final class DesignTokens {
   static const componentPageContentMaxWidth = 720.0;
   static const componentPageHeaderHeight = 56.0;
   static const componentPairingQrBackgroundColor = Color(0xffffffff);
-  static const componentPairingQrSize = 176.0;
+  static const componentPairingQrSize = 204.0;
   static const componentPairingQrTextColor = Color(0xff000000);
   static const componentPhoneBackgroundColor = Color(0xfff6f7f8);
   static const componentPhoneDarkBackgroundColor = Color(0xff000000);
@@ -550,13 +594,6 @@ abstract final class DesignTokens {
   static const componentRemoteScreenRounded = 20.0;
   static const componentRemoteToolPanelHeight = 329.0;
   static const componentRemoteToolPanelWidth = 272.0;
-  static const componentRemoteWaitBackgroundColor = Color(0xff111114);
-  static const componentRemoteWaitBlueBackgroundColor = Color(0xff365472);
-  static const componentRemoteWaitMidBackgroundColor = Color(0xff242b37);
-  static const componentRemoteWaitSecondaryTextColor = Color(0xffcfd8e5);
-  static const componentRemoteWaitShadowBackgroundColor = Color(0xff171e29);
-  static const componentRemoteWaitTextColor = Color(0xfffafafa);
-  static const componentRemoteWaitWarmBackgroundColor = Color(0xff68504d);
   static const componentRowGap = 12.0;
   static const componentRowHeight = 56.0;
   static const componentRowLargeHeight = 64.0;
@@ -586,6 +623,10 @@ abstract final class DesignTokens {
   static const componentSidebarWidth = 208.0;
   static const componentSkeletonGraphicBackgroundColor = Color(0xffe9eff1);
   static const componentSkeletonGraphicDarkBackgroundColor = Color(0xff39434a);
+  static const componentSkeletonHighlightBackgroundColor = Color(0xffffffff);
+  static const componentSkeletonHighlightDarkBackgroundColor = Color(
+    0xff545b61,
+  );
   static const componentSkeletonLineBackgroundColor = Color(0xffe5e5ea);
   static const componentSkeletonLineDarkBackgroundColor = Color(0xff404040);
   static const componentSmallButtonSize = 36.0;
@@ -618,6 +659,7 @@ abstract final class DesignTokens {
   static const componentThumbnailHeight = 112.0;
   static const componentThumbnailRounded = 10.0;
   static const componentThumbnailSize = 112.0;
+  static const componentTransferCardThumbnailWidth = 48.0;
   static const componentTransferProgressBackgroundColor = Color(0xffdedede);
   static const componentTransferProgressDarkBackgroundColor = Color(0xff404040);
   static const componentTransferProgressDarkTextColor = Color(0xfffafafa);
@@ -626,8 +668,26 @@ abstract final class DesignTokens {
   static const componentTransferProgressTextColor = Color(0xff111111);
   static const componentTypeCellHeight = 60.0;
   static const componentUsbStatusCardHeight = 136.0;
+  static const componentWorkspaceAppEmptyBackgroundColor = Color(0xfff0f1f2);
+  static const componentWorkspaceAppEmptyRounded = 12.0;
+  static const componentWorkspaceAppEmptySize = 42.0;
+  static const componentWorkspaceAppHeaderHeight = 44.0;
+  static const componentWorkspaceAppPanelHeight = 110.0;
+  static const componentWorkspaceAppPanelRounded = 24.0;
   static const componentWorkspaceDuoPaneWidth = 280.0;
   static const componentWorkspacePaneWidth = 360.0;
+  static const componentWorkspacePhoneHeight = 156.0;
+  static const componentWorkspacePhonePadding = 3.0;
+  static const componentWorkspacePhoneRounded = 24.0;
+  static const componentWorkspacePhoneScreenRounded = 22.0;
+  static const componentWorkspacePhoneWidth = 96.0;
+  static const componentWorkspacePrimaryActionHeight = 48.0;
+  static const componentWorkspaceRunningEmptyGap = 11.0;
+  static const componentWorkspaceRunningEmptySize = 20.0;
+  static const componentWorkspaceSectionGap = 14.0;
+  static const componentWorkspaceShortcutRounded = 16.0;
+  static const componentWorkspaceShortcutSize = 48.0;
+  static const componentWorkspaceShortcutsRounded = 22.0;
   static const componentWorkspaceSidebarBackgroundColor = Color(0xffe9eff1);
   static const componentWorkspaceSplitHeight = 480.0;
   static const componentWorkspaceSplitWidth = 1080.0;
@@ -697,6 +757,16 @@ abstract final class DesignTokens {
   static const typographyConnectionTitleFontWeight = FontWeight.w700;
   static const typographyConnectionTitleLetterSpacing = 0.0;
   static const typographyConnectionTitleLineHeight = 1.2;
+  static const typographyDeviceDetailHeadingFontFamily = "MiSans";
+  static const typographyDeviceDetailHeadingFontSize = 18.0;
+  static const typographyDeviceDetailHeadingFontWeight = FontWeight.w500;
+  static const typographyDeviceDetailHeadingLetterSpacing = 0.0;
+  static const typographyDeviceDetailHeadingLineHeight = 1.4;
+  static const typographyDeviceDetailValueFontFamily = "MiSans";
+  static const typographyDeviceDetailValueFontSize = 14.0;
+  static const typographyDeviceDetailValueFontWeight = FontWeight.w500;
+  static const typographyDeviceDetailValueLetterSpacing = 0.0;
+  static const typographyDeviceDetailValueLineHeight = 1.4;
   static const typographyDisplayFontFamily = "MiSans";
   static const typographyDisplayFontSize = 28.0;
   static const typographyDisplayFontWeight = FontWeight.w700;

@@ -218,7 +218,6 @@ class _PrivateKeyInput extends HookWidget {
     return PageFrame(
       title: '导入身份',
       onBack: () => Navigator.pop(context),
-      bottomGlass: false,
       bottom: FilledButton(
         onPressed: loading.value
             ? null

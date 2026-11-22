@@ -46,7 +46,9 @@ class _AmbientLoadingFieldState extends State<AmbientLoadingField>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _reduceMotion = MediaQuery.disableAnimationsOf(context);
+    _reduceMotion =
+        MediaQuery.disableAnimationsOf(context) ||
+        MediaQuery.reduceMotionOf(context);
     _routeVisible = ModalRoute.isCurrentOf(context) != false;
     _tickerEnabled = TickerMode.valuesOf(context).enabled;
     _syncMotion();

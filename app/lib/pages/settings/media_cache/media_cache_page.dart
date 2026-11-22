@@ -74,7 +74,6 @@ class MediaCachePage extends HookConsumerWidget {
 
     return PageFrame(
       title: '媒体暂存',
-      bottomGlass: false,
       bottom: data == null
           ? null
           : FilledButton(

@@ -52,7 +52,6 @@ class FileDetailsPage extends ConsumerWidget {
       backgroundColor: theme.brightness == Brightness.light
           ? DesignTokens.colorFileTile
           : null,
-      bottomGlass: false,
       bottom: GlassActionBar(
         actions: [
           GlassActionBarButton(

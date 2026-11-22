@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/motion.dart';
 
 /// 紧凑视觉尺寸与独立的无障碍触摸目标。
 class ConnectSwitch extends StatelessWidget {
@@ -15,7 +16,7 @@ class ConnectSwitch extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final toggle = onChanged == null ? null : () => onChanged!(!value);
-    final duration = MediaQuery.disableAnimationsOf(context)
+    final duration = reduceMotionOf(context)
         ? Duration.zero
         : kThemeAnimationDuration;
     return Semantics(
@@ -74,3 +75,14 @@ class ConnectSwitch extends StatelessWidget {
     );
   }
 }
+
+/// Shape for a single solid action anchored to the content column.
+const pagePrimaryButtonStyle = ButtonStyle(
+  shape: WidgetStatePropertyAll(
+    RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(
+        Radius.circular(DesignTokens.componentButtonPrimaryRounded),
+      ),
+    ),
+  ),
+);

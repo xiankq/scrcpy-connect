@@ -6,6 +6,7 @@ import 'package:foldable/foldable.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
+import 'package:scrcpy_connect/widgets/content_arrival.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_press_feedback.dart';
@@ -109,6 +110,11 @@ class NavigationScaffold extends HookConsumerWidget {
           top: false,
           left: verticalBar == null,
           right: verticalBar == null,
+          minimum: EdgeInsets.only(
+            bottom: verticalBar == null
+                ? DesignTokens.spacingMd
+                : DesignTokens.spacingZero,
+          ),
           child: Padding(
             padding: EdgeInsets.fromLTRB(
               verticalBar == null
@@ -118,7 +124,9 @@ class NavigationScaffold extends HookConsumerWidget {
               verticalBar == null
                   ? DesignTokens.spacingMd
                   : DesignTokens.spacingZero,
-              DesignTokens.spacingMd,
+              verticalBar == null
+                  ? DesignTokens.spacingZero
+                  : DesignTokens.spacingMd,
             ),
             child: verticalBar == null
                 ? Center(
@@ -138,7 +146,7 @@ class NavigationScaffold extends HookConsumerWidget {
     return withBack(
       Scaffold(
         extendBody: true,
-        body: navigationShell,
+        body: ContentArrival(state: tab, child: navigationShell),
         // Keep the package-owned tab bar mounted while the keyboard changes
         // viewInsets. Offstage removes its layout footprint without tearing
         // down the package state that owns the moving glass indicator.

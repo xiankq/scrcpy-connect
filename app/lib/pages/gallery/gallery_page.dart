@@ -116,7 +116,6 @@ class GalleryPage extends HookConsumerWidget {
               onPressed: closeSelection,
             )
           : null,
-      bottomGlass: false,
       bottom: GlassActionBar(
         actions: [
           if (selecting)

@@ -61,7 +61,6 @@ class FileSearchPage extends HookConsumerWidget {
 
     return PageFrame(
       title: '文件搜索',
-      bottomGlass: false,
       bottom: running
           ? FilledButton(
               onPressed: searchState.stopping ? null : operation.cancel,

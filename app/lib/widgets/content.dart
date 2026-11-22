@@ -53,15 +53,15 @@ class ContentPanel extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(DesignTokens.spacingMd),
+    this.radius = DesignTokens.componentContentPanelRounded,
   });
   final Widget child;
   final EdgeInsetsGeometry padding;
+  final double radius;
   @override
   Widget build(BuildContext context) => Material(
     color: Theme.of(context).colorScheme.surface,
-    borderRadius: BorderRadius.circular(
-      DesignTokens.componentContentPanelRounded,
-    ),
+    borderRadius: BorderRadius.circular(radius),
     clipBehavior: Clip.antiAlias,
     child: Padding(padding: padding, child: child),
   );

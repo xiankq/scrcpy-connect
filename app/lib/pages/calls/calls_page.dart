@@ -10,6 +10,7 @@ import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/motion.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
@@ -163,15 +164,8 @@ class CallsPage extends HookConsumerWidget {
                             ),
                           ),
                           const SizedBox(height: DesignTokens.spacingLg),
-                          DecoratedBox(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: DesignTokens.colorCallRing.withValues(
-                                  alpha: .45,
-                                ),
-                              ),
-                            ),
+                          _CallOrbit(
+                            ringing: ringing,
                             child: Padding(
                               padding: const EdgeInsets.all(
                                 DesignTokens.spacingXs,
@@ -320,6 +314,52 @@ class CallsPage extends HookConsumerWidget {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+class _CallOrbit extends HookWidget {
+  const _CallOrbit({required this.ringing, required this.child});
+
+  final bool ringing;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final lifecycle = useAppLifecycleState();
+    final active =
+        ringing &&
+        !reduceMotionOf(context) &&
+        (lifecycle == null || lifecycle == AppLifecycleState.resumed) &&
+        ModalRoute.isCurrentOf(context) != false &&
+        TickerMode.valuesOf(context).enabled;
+    final pulse = useAnimationController(
+      duration: const Duration(milliseconds: 1800),
+    );
+    useEffect(() {
+      if (active) {
+        pulse.repeat(reverse: true);
+      } else {
+        pulse.stop();
+      }
+      return null;
+    }, [active, pulse]);
+    return AnimatedBuilder(
+      animation: pulse,
+      child: child,
+      builder: (context, child) => DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: DesignTokens.colorCallRing.withValues(
+              alpha: active
+                  ? .42 + panelCurve.transform(pulse.value) * .5
+                  : .45,
+            ),
+          ),
+        ),
+        child: child,
       ),
     );
   }

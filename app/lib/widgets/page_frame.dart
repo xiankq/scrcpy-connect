@@ -6,7 +6,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart' show Drag;
 import 'package:go_router/go_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
 import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
@@ -20,11 +19,11 @@ class PageFrame extends StatefulWidget {
     this.root = false,
     this.pane = false,
     this.titleContent,
+    this.titleStyle,
+    this.headerHeight = DesignTokens.componentPageHeaderHeight,
     this.actions,
     this.trailingAction,
     this.bottom,
-    this.bottomRadius = DesignTokens.roundedLg,
-    this.bottomGlass = true,
     this.onBack,
     this.leading,
     this.backgroundColor,
@@ -34,11 +33,13 @@ class PageFrame extends StatefulWidget {
   final bool root;
   final bool pane;
   final Widget? titleContent;
+  final TextStyle? titleStyle;
+  final double headerHeight;
   final List<Widget>? actions;
   final Widget? trailingAction;
+
+  /// Material is owned by the footer widget. PageFrame provides its layout.
   final Widget? bottom;
-  final double bottomRadius;
-  final bool bottomGlass;
   final VoidCallback? onBack;
   final Widget? leading;
   final Color? backgroundColor;
@@ -72,6 +73,7 @@ class _PageFrameState extends State<PageFrame> {
       : 2;
 
   TextStyle? _titleStyle(BuildContext context, {bool measuring = false}) {
+    if (widget.titleStyle case final style?) return style;
     final text = Theme.of(context).textTheme;
     final compact =
         MediaQuery.sizeOf(context).height -
@@ -109,7 +111,7 @@ class _PageFrameState extends State<PageFrame> {
     final height = painter.height;
     painter.dispose();
     return (height + DesignTokens.spacingMd).clamp(
-      DesignTokens.componentPageHeaderHeight,
+      widget.headerHeight,
       double.infinity,
     );
   }
@@ -306,6 +308,7 @@ class _PageFrameState extends State<PageFrame> {
                     _WorkspaceToolbar(
                       title: widget.title,
                       titleContent: widget.titleContent,
+                      titleStyle: widget.titleStyle,
                       leading: widget.leading,
                       actions: widget.actions,
                       trailingAction: widget.trailingAction,
@@ -391,18 +394,7 @@ class _PageFrameState extends State<PageFrame> {
                         ),
                         child: SizedBox(
                           width: double.infinity,
-                          child: widget.bottomGlass
-                              ? Glass(
-                                  radius: widget.bottomRadius,
-                                  padding: const EdgeInsets.all(
-                                    DesignTokens.spacingSm,
-                                  ),
-                                  child: SizedBox(
-                                    width: double.infinity,
-                                    child: widget.bottom!,
-                                  ),
-                                )
-                              : widget.bottom!,
+                          child: widget.bottom,
                         ),
                       ),
                     ),
@@ -440,6 +432,7 @@ class _WorkspaceToolbar extends StatelessWidget {
   const _WorkspaceToolbar({
     required this.title,
     required this.titleContent,
+    required this.titleStyle,
     required this.leading,
     required this.actions,
     required this.trailingAction,
@@ -449,6 +442,7 @@ class _WorkspaceToolbar extends StatelessWidget {
 
   final String title;
   final Widget? titleContent;
+  final TextStyle? titleStyle;
   final Widget? leading;
   final List<Widget>? actions;
   final Widget? trailingAction;
@@ -526,7 +520,7 @@ class _WorkspaceToolbar extends StatelessWidget {
                           title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.headlineSmall,
+                          style: titleStyle ?? theme.textTheme.headlineSmall,
                         ),
                   ),
                 ),
