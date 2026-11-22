@@ -188,6 +188,8 @@ class ControlSettingsPage extends HookConsumerWidget {
                   1920: '1920P（超清）',
                   0: '原画',
                 };
+                final frameRates = {...data.frameRates, current.maxFps}.toList()
+                  ..sort();
                 return GroupedListView(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -217,6 +219,28 @@ class ControlSettingsPage extends HookConsumerWidget {
                                   if (next != null && context.mounted) {
                                     await apply(
                                       VideoQualityPatch(maxSize: next),
+                                    );
+                                  }
+                                },
+                        ),
+                        QualityOptionRow(
+                          title: '帧率上限',
+                          icon: LucideIcons.gauge,
+                          currentValue: '${current.maxFps} FPS',
+                          onTap: applying.value || !available
+                              ? null
+                              : () async {
+                                  final next = await showChoicePicker<int>(
+                                    context: context,
+                                    title: '帧率上限',
+                                    options: frameRates,
+                                    label: (option) => '$option FPS',
+                                    isSelected: (option) =>
+                                        option == current.maxFps,
+                                  );
+                                  if (next != null && context.mounted) {
+                                    await apply(
+                                      VideoQualityPatch(maxFps: next),
                                     );
                                   }
                                 },

@@ -33,4 +33,26 @@ void main() {
       (width: 1400, height: 2800),
     );
   });
+
+  test('帧率上限保存后按设备读取，调整清晰度时保留该上限', () {
+    final defaults = Preferences();
+    final selected = VideoQualityPolicy.resolveQuality(
+      defaults,
+      'device',
+      const VideoQualityPatch(maxFps: 30),
+    );
+    final encoded = PreferenceCodec.encodeQuality(selected.preferences);
+    PreferenceSchema(defaults: const {}).validate(encoded);
+    final settings = defaults.copyWith(
+      deviceQuality: {'device': PreferenceCodec.decodeQuality(encoded)},
+    );
+    final resized = VideoQualityPolicy.resolveQuality(
+      settings,
+      'device',
+      const VideoQualityPatch(maxSize: 1080),
+    );
+    expect(selected.maxSize, 720);
+    expect(resized.maxFps, 30);
+    expect(VideoQualityPolicy.resolveQuality(settings, 'other').maxFps, 60);
+  });
 }
