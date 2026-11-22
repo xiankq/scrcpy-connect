@@ -4,7 +4,7 @@
 
 ## 窗口与形态适配目标
 
-窗口用可用宽高、方向、安全区、显示特征和输入方式决定布局。旋转、开合、分屏和缩放保留当前设备、任务、焦点、选择、草稿及滚动位置。具体宽高、导航和窗格见[宽高阈值](../design.md#通用宽高阈值)与[iPhone Duo 专项](../design.md#iphone-duo-专项)。
+窗口重排和会话归属见[窗口交互规则](interaction-rules.md#窗口环境与响应式结构)，各形态的导航和窗格见[适配规范](../design.md#adaptive-windows--form-factors)。
 
 | 平台 | 窗口与姿态来源 |
 | --- | --- |
@@ -13,7 +13,7 @@
 | macOS、Windows、Linux | `desktop_multi_window` 维护独立引擎与窗口身份。窗口操作由宿主提供，应用页头避让原生控件。各端布局见[桌面沉浸式窗口](../design.md#桌面沉浸式窗口)。 |
 | HarmonyOS | 具备 Flutter 布局契约。原生宿主待接入，适配时由 `windowSizeChange` 更新尺寸、`windowStatusChange` 更新模式、`foldStatusChange` 触发姿态重查。API 12+ 可使用 `FoldSplitContainer`。 |
 
-宿主将可用边界、安全区、保留区、姿态和模式投影为 `WindowEnvironment`。每个控制窗口独立拥有设备、应用任务、视频捕获和输入焦点。宿主不支持额外窗口时使用同页分栏，保留会话身份。半折默认选择安全单窗格，用不同窗格分别呈现画面与工具的布局见[交互稿](../interaction-motion.md#响应式窗口与辅助交互)。
+宿主将可用边界、安全区、保留区、姿态和模式投影为 `WindowEnvironment`。半折的安全窗格见[iPhone Duo 专项](../design.md#iphone-duo-专项)。
 
 窗口验收覆盖真实创建、调整大小、折叠、切换、恢复、关闭和迟到的回执。[Android FoldingFeature](https://developer.android.com/reference/androidx/window/layout/FoldingFeature) · [Apple iPhone Duo 准备指南](https://developer.apple.com/iphone-duo/prepare/) · [HarmonyOS Window API](https://developer.huawei.com/consumer/en/doc/harmonyos-references/arkts-apis-window-window/)
 

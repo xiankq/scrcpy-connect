@@ -63,14 +63,12 @@ For `_adb-tls-connect`, explicitly use `TlsPolicy::Required`; default Optional p
 
 Discovery returns raw mDNS events. Trust, endpoint choice, reconnection and network/multicast permissions belong to callers. Official Required TLS needs a matching discovered service; authorization-disabled background connects reuse already authorized transports only.
 
-## Tests and sources
+## Tests and protocol source
 
 ```sh
 cargo test -p interop-adb
-INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=15556 \
-  cargo test -p interop-adb --test reverse_adbd --test sync_adbd -- --ignored
 ```
 
-Device tests need a dedicated authorized endpoint and clean only their temporary resources. BoringSSL interoperability tests require the helper documented in their source; ignored tests are not device evidence.
+The repository check runs the [identity integration test](../../test/README.md) against fixed ADB and OpenSSL vectors.
 
 Fixed AOSP protocol source: [`1cf2f017`](https://android.googlesource.com/platform/packages/modules/adb/+/1cf2f017d312f73b3dc53bda85ef2610e35a80e9/). Package management, incremental install and a 5037-compatible server are outside this crate.

@@ -12,6 +12,4 @@
 | [电话接力](calls.md) | 能力分级、来电、双向通话与手机接续 |
 | [应用版本与更新](app-updates.md) | 当前版本、检测、更新记录、下载与系统安装 |
 
-产品和视觉以[近场工作台设计规范](../design.md)为当前目标。能力交付情况见[平台与能力](compatibility.md)。
-
-术语见[词表](../../GLOSSARY.md)。从 Ardot 的复核路线进入，沿中间画板查看业务流程。左侧 G 系列对照规范与组件，各区右侧查看相关状态、适配与交互分镜，末区查看通用窗口与辅助偏好。[Ardot《邻接 · 近场工作台》](https://ardot.tencent.com/file/749360133997361?node_id=2%3A14)
+术语见[词表](../../GLOSSARY.md)。视觉规则及画板位置见[视觉规范](../design.md)。[Ardot《邻接 · 近场工作台》](https://ardot.tencent.com/file/749360133997361?node_id=2%3A14)
