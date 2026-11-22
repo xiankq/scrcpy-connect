@@ -16,8 +16,8 @@ import 'package:scrcpy_connect/pages/device_setup/pairing/qr_pairing_page.dart';
 import 'package:scrcpy_connect/pages/device_setup/usb/usb_setup_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/content_arrival.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
-import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -224,6 +224,7 @@ class ConnectionFormPage extends HookConsumerWidget {
                   : reauthorizing
                   ? '重新授权'
                   : '添加设备',
+              titleStyle: Theme.of(context).textTheme.headlineMedium,
               bottom: Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: DesignTokens.spacingXs,
@@ -264,7 +265,12 @@ class ConnectionFormPage extends HookConsumerWidget {
                     slivers: [
                       const PageChromeSliver(),
                       SliverPadding(
-                        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                        padding: const EdgeInsets.fromLTRB(
+                          DesignTokens.spacingMd,
+                          DesignTokens.spacingXs,
+                          DesignTokens.spacingMd,
+                          DesignTokens.spacingMd,
+                        ),
                         sliver: SliverMainAxisGroup(
                           slivers: [
                             SliverToBoxAdapter(
@@ -272,8 +278,15 @@ class ConnectionFormPage extends HookConsumerWidget {
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   if (!configuring) ...[
-                                    ContentPanel(
-                                      padding: EdgeInsets.zero,
+                                    Material(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .surface,
+                                      borderRadius: BorderRadius.circular(
+                                        DesignTokens
+                                            .componentConnectionNearbyEntryRounded,
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
                                       child: ListTile(
                                         minTileHeight: DesignTokens
                                             .componentConnectionNearbyEntryHeight,
@@ -367,7 +380,7 @@ class ConnectionFormPage extends HookConsumerWidget {
                                       ),
                                     ),
                                     const SizedBox(
-                                      height: DesignTokens.spacingMd,
+                                      height: DesignTokens.roundedMd,
                                     ),
                                   ],
                                   if (!configuring) ...[
@@ -402,6 +415,9 @@ class ConnectionFormPage extends HookConsumerWidget {
                               ),
                             ),
                             ?supplemental,
+                            const SliverToBoxAdapter(
+                              child: SizedBox(height: DesignTokens.spacingSm),
+                            ),
                             SliverToBoxAdapter(
                               child: Align(
                                 alignment: AlignmentDirectional.centerStart,
@@ -465,7 +481,7 @@ class ConnectionFormPage extends HookConsumerWidget {
                 paired:
                     flow.pairing?.recorded == true ||
                     (pairing && flow.pairing != null),
-                deviceName: host.text.trim(),
+                address: host.text.trim(),
                 onCancel: closeAttempt,
                 onEdit: closeAttempt,
                 onRetry: () {
@@ -483,7 +499,7 @@ class ConnectionFormPage extends HookConsumerWidget {
       ),
     );
 
-    return switch (mode.value) {
+    final formPage = switch (mode.value) {
       .qr => QrPairingPage(
         autoGenerate: !configuring && !reauthorizing,
         prepareConnection: prepareConnection,
@@ -514,6 +530,7 @@ class ConnectionFormPage extends HookConsumerWidget {
       ),
       _ => page(),
     };
+    return ContentArrival(state: mode.value, child: formPage);
   }
 }
 

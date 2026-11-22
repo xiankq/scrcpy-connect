@@ -41,6 +41,7 @@ class DeviceWorkspacePage extends ConsumerWidget {
       pane: pane,
       onBack: onBack,
       title: '设备工作台',
+      titleContent: const SizedBox.shrink(),
       actions: [?manageButton],
       child: CustomScrollView(
         slivers: [
@@ -48,7 +49,7 @@ class DeviceWorkspacePage extends ConsumerWidget {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(
               DesignTokens.spacingMd,
-              DesignTokens.spacingMd,
+              DesignTokens.spacingXxs,
               DesignTokens.spacingMd,
               DesignTokens.spacingZero,
             ),
@@ -59,7 +60,9 @@ class DeviceWorkspacePage extends ConsumerWidget {
                   WorkspaceCallCard(device: current),
                   if (audioError != null)
                     StateNote(audioError, icon: LucideIcons.volumeX),
-                  const SizedBox(height: DesignTokens.spacingMd),
+                  const SizedBox(
+                    height: DesignTokens.componentWorkspaceSectionGap,
+                  ),
                   ContentShortcuts(
                     deviceId: id,
                     enabled: online,
@@ -70,9 +73,13 @@ class DeviceWorkspacePage extends ConsumerWidget {
                           : '无法打开，请先连接设备。',
                     ),
                   ),
-                  const SizedBox(height: DesignTokens.spacingMd),
+                  const SizedBox(
+                    height: DesignTokens.componentWorkspaceSectionGap,
+                  ),
                   FavoriteApps(key: ValueKey(id), device: current),
-                  const SizedBox(height: DesignTokens.spacingMd),
+                  const SizedBox(
+                    height: DesignTokens.componentWorkspaceSectionGap,
+                  ),
                 ],
               ),
             ),

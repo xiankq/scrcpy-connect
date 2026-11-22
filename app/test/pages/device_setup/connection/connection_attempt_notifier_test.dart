@@ -304,7 +304,7 @@ void main() {
           paired: false,
           pairing: true,
           legacyTcp: false,
-          deviceName: '',
+          address: '',
           failure: const SetupIssue('result_unknown', 'transport owner 32'),
           onCancel: () {},
           onEdit: () {},
@@ -461,7 +461,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('connection timeout'), findsNothing);
     expect(find.textContaining('手机没有及时响应'), findsOneWidget);
-    expect(find.text('重试'), findsOneWidget);
+    expect(find.text('重试连接'), findsOneWidget);
     expect(setup.calls, hasLength(1));
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(

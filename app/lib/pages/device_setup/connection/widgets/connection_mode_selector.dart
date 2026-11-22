@@ -47,6 +47,7 @@ class ConnectionModeSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return ContentPanel(
+      radius: DesignTokens.componentConnectionTabsRounded,
       padding: const EdgeInsets.all(
         DesignTokens.componentConnectionTabsPadding,
       ),
@@ -58,11 +59,14 @@ class ConnectionModeSelector extends StatelessWidget {
                   288
               ? 4
               : 2;
+          const gap = DesignTokens.spacingMicro;
           return Wrap(
+            spacing: gap,
+            runSpacing: gap,
             children: [
               for (final (mode, label, icon, color) in _tabs)
                 SizedBox(
-                  width: constraints.maxWidth / columns,
+                  width: (constraints.maxWidth - (columns - 1) * gap) / columns,
                   child: Semantics(
                     button: true,
                     selected: selected == mode,
@@ -78,24 +82,30 @@ class ConnectionModeSelector extends StatelessWidget {
                           DesignTokens.componentConnectionTabSelectedRounded,
                         ),
                         onTap: () => onChanged(mode),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: DesignTokens.spacingSm,
-                            horizontal: DesignTokens.spacingXxs,
+                        child: Container(
+                          alignment: Alignment.center,
+                          constraints: const BoxConstraints(
+                            minHeight:
+                                DesignTokens.componentConnectionTabsHeight -
+                                2 * DesignTokens.componentConnectionTabsPadding,
                           ),
+                          padding: const EdgeInsets.all(DesignTokens.spacingXs),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
                                 icon,
-                                size: DesignTokens.componentIconSize,
+                                size: DesignTokens.componentIconActionSize,
                                 color: color,
                               ),
                               const SizedBox(height: DesignTokens.spacingXxs),
                               Text(
                                 label,
                                 textAlign: TextAlign.center,
-                                style: theme.textTheme.labelMedium?.copyWith(
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: selected == mode
+                                      ? theme.colorScheme.onSurface
+                                      : theme.colorScheme.onSurfaceVariant,
                                   fontWeight: selected == mode
                                       ? FontWeight.w600
                                       : FontWeight.w400,

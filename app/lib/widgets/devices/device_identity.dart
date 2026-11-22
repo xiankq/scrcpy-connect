@@ -21,75 +21,77 @@ class DeviceIdentity extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
     final connecting = deviceConnectionInProgress(device);
-    final (statusIcon, statusColor) = switch (device.status) {
-      .connected => (LucideIcons.check, DesignTokens.colorSuccessDark),
-      .failed => (LucideIcons.circleX, DesignTokens.colorAccentCoral),
-      .unauthorized => (LucideIcons.shieldAlert, DesignTokens.colorAccentAmber),
-      _ => (LucideIcons.circle, DesignTokens.colorWhite.withValues(alpha: .62)),
-    };
-    final iconSize = showcase
-        ? DesignTokens.componentIconLargeSize
-        : DesignTokens.componentIconActionSize;
-    final width = pane
-        ? DesignTokens.componentDeviceIdentityPaneWidth
-        : showcase
-        ? DesignTokens.componentDeviceIdentityShowcaseWidth
-        : DesignTokens.componentDeviceIdentityWidth;
-    final height = pane
-        ? DesignTokens.componentDeviceIdentityPaneHeight
-        : showcase
-        ? DesignTokens.componentDeviceIdentityShowcaseHeight
-        : compact
-        ? DesignTokens.componentDeviceIdentityCompactHeight
-        : DesignTokens.componentDeviceIdentityHeight;
-    if (!showcase) {
-      final color = switch (device.status) {
-        .connected => DesignTokens.colorSuccess,
-        .failed => colors.error,
-        .unauthorized => DesignTokens.componentConnectionIconUsbTextColor,
-        _ => colors.onSurfaceVariant,
+    if (showcase) {
+      final (icon, color) = switch (device.status) {
+        .connected => (LucideIcons.check, DesignTokens.colorSuccessDark),
+        .failed => (LucideIcons.x, DesignTokens.colorDangerDark),
+        .unauthorized => (
+          LucideIcons.shieldAlert,
+          DesignTokens.colorAccentAmber,
+        ),
+        _ => (
+          LucideIcons.circle,
+          DesignTokens.componentDeviceGlyphIdleBackgroundColor,
+        ),
       };
       return ExcludeSemantics(
-        child: SizedBox(
-          width: width,
-          height: height,
+        child: Container(
+          width: pane
+              ? DesignTokens.componentDeviceIdentityPaneWidth
+              : DesignTokens.componentWorkspacePhoneWidth,
+          height: pane
+              ? DesignTokens.componentDeviceIdentityPaneHeight
+              : DesignTokens.componentWorkspacePhoneHeight,
+          padding: const EdgeInsets.all(
+            DesignTokens.componentWorkspacePhonePadding,
+          ),
+          decoration: BoxDecoration(
+            color: DesignTokens.colorDeviceScreenRim,
+            borderRadius: BorderRadius.circular(
+              pane
+                  ? DesignTokens.roundedLg
+                  : DesignTokens.componentWorkspacePhoneRounded,
+            ),
+          ),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? DesignTokens.componentDeviceHeroDarkBackgroundColor
-                  : DesignTokens.componentDeviceIdentityBackgroundColor,
+              color: DesignTokens.colorDeviceScreen,
               borderRadius: BorderRadius.circular(
-                DesignTokens.componentDeviceIdentityRounded,
+                pane
+                    ? DesignTokens.roundedLg -
+                          DesignTokens.componentWorkspacePhonePadding
+                    : DesignTokens.componentWorkspacePhoneScreenRounded,
               ),
             ),
             child: Stack(
+              alignment: Alignment.center,
               children: [
-                const Center(
-                  child: Icon(
-                    LucideIcons.smartphone,
-                    size: DesignTokens.componentIconFeatureSize,
+                if (connecting)
+                  const ContentLoadingIndicator(
+                    size: DesignTokens.componentIconSize,
+                    color: DesignTokens.componentDeviceGlyphIdleBackgroundColor,
+                  )
+                else
+                  Icon(
+                    icon,
+                    color: color,
+                    size: DesignTokens.componentIconSize,
                   ),
-                ),
                 Positioned(
-                  right: DesignTokens.spacingXs,
-                  bottom: DesignTokens.spacingXs,
-                  child: connecting
-                      ? ContentLoadingIndicator(
-                          size: DesignTokens.componentDeviceIdentityStatusSize,
-                          color: colors.primary,
-                        )
-                      : Icon(
-                          switch (device.status) {
-                            .connected => LucideIcons.check,
-                            .failed => LucideIcons.x,
-                            .unauthorized => LucideIcons.circleAlert,
-                            _ => LucideIcons.circle,
-                          },
-                          size: DesignTokens.componentDeviceIdentityStatusSize,
-                          color: color,
-                        ),
+                  top: DesignTokens.spacingXs,
+                  child: Container(
+                    width: DesignTokens.componentIconSmallSize,
+                    height: DesignTokens.spacingXxs,
+                    decoration: BoxDecoration(
+                      color: DesignTokens.componentDeviceGlyphIdleBorderColor,
+                      borderRadius: BorderRadius.circular(
+                        DesignTokens.roundedFull,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -97,66 +99,109 @@ class DeviceIdentity extends StatelessWidget {
         ),
       );
     }
+    // ADB provides model names for saved records. Known tablet families can
+    // use the landscape glyph while unknown models retain the handset glyph.
+    final tablet = _tabletModel.hasMatch(device.model ?? device.name ?? '');
+    final online = device.status == .connected;
+    final background = dark
+        ? DesignTokens.colorDevicePanelDark
+        : DesignTokens.colorDevicePanel;
+    final (mark, filled) = switch (device.status) {
+      .connected => (DesignTokens.colorSuccess, true),
+      .failed => (
+        dark ? DesignTokens.colorDangerDark : DesignTokens.colorDanger,
+        true,
+      ),
+      .unauthorized || .authorizing => (DesignTokens.colorWarning, true),
+      _ => (
+        dark
+            ? DesignTokens.colorSecondaryDark
+            : DesignTokens.componentDeviceGlyphIdleBorderColor,
+        false,
+      ),
+    };
     return ExcludeSemantics(
-      child: SizedBox(
-        width: width,
-        height: height,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: DesignTokens.spacingXxs,
+      child: Container(
+        width: DesignTokens.componentDeviceIdentityWidth,
+        height: compact
+            ? DesignTokens.componentDeviceIdentityCompactHeight
+            : DesignTokens.componentDeviceIdentityHeight,
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(
+            DesignTokens.componentDeviceIdentityRounded,
           ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color:
-                  DesignTokens.componentDeviceIdentityShowcaseBackgroundColor,
-              border: Border.all(
-                color: DesignTokens.componentDeviceIdentityRimBackgroundColor,
-                width: DesignTokens.spacingMicro,
-              ),
-              borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(
-                DesignTokens.spacingMicro + DesignTokens.spacingHairline,
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(DesignTokens.spacingXs),
-                child: ColoredBox(
-                  color: DesignTokens
-                      .componentDeviceIdentityShowcaseBackgroundColor,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      if (connecting)
-                        ContentLoadingIndicator(
-                          size: iconSize,
-                          color: DesignTokens.colorWhite,
-                        )
-                      else
-                        Icon(statusIcon, color: statusColor, size: iconSize),
-                      Positioned(
-                        top: DesignTokens.spacingXxs,
-                        child: Container(
-                          width: DesignTokens.spacingSm,
-                          height: DesignTokens.spacingMicro,
-                          decoration: BoxDecoration(
-                            color: colors.outlineVariant,
-                            borderRadius: BorderRadius.circular(
-                              DesignTokens.roundedFull,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+        ),
+        child: Stack(
+          children: [
+            Center(
+              child: Container(
+                width: tablet ? 38 : 24,
+                height: tablet ? 29 : 38,
+                decoration: BoxDecoration(
+                  color: online
+                      ? DesignTokens.componentDeviceGlyphBackgroundColor
+                      : DesignTokens.componentDeviceGlyphIdleBackgroundColor,
+                  borderRadius: BorderRadius.circular(tablet ? 6 : 7),
+                  border: Border.all(
+                    color: DesignTokens.componentDeviceGlyphBorderColor,
+                    width: DesignTokens.spacingMicro,
+                  ),
+                ),
+                alignment: Alignment.topCenter,
+                padding: const EdgeInsets.only(top: DesignTokens.spacingMicro),
+                child: Container(
+                  width: tablet
+                      ? DesignTokens.spacingMicro
+                      : DesignTokens.spacingXs,
+                  height: DesignTokens.spacingMicro,
+                  decoration: BoxDecoration(
+                    color: DesignTokens.componentDeviceGlyphIdleBorderColor
+                        .withValues(alpha: .46),
+                    borderRadius: BorderRadius.circular(
+                      DesignTokens.roundedFull,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
+            Positioned(
+              right: DesignTokens.spacingXxs,
+              bottom: DesignTokens.spacingXxs,
+              child: Container(
+                padding: const EdgeInsets.all(DesignTokens.spacingMicro),
+                decoration: BoxDecoration(
+                  color: background,
+                  shape: BoxShape.circle,
+                ),
+                child: connecting
+                    ? ContentLoadingIndicator(
+                        size: DesignTokens.componentDeviceIdentityStatusSize,
+                        color: mark,
+                      )
+                    : Container(
+                        width: DesignTokens.componentDeviceIdentityStatusSize,
+                        height: DesignTokens.componentDeviceIdentityStatusSize,
+                        decoration: BoxDecoration(
+                          color: filled ? mark : background,
+                          border: filled
+                              ? null
+                              : Border.all(color: mark, width: 1.5),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
+
+  static final _tabletModel = RegExp(
+    r'\b(tablet|pad|tab)\b|\bSM-[TX]\d',
+    caseSensitive: false,
+  );
 }
 
 String deviceConnectionLabel(DeviceSnapshot device) {

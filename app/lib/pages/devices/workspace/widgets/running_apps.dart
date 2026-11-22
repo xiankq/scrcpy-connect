@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/devices/device_apps.dart';
@@ -66,21 +67,42 @@ class RunningApps extends HookConsumerWidget {
           );
           if (context.mounted) refresh();
         },
-        action: TextButton(
-          onPressed: online
-              ? () => AppsRoute(deviceId: id).push<void>(context)
-              : () => offerDeviceConnection(context, ref, device),
-          child: const Text('全部应用'),
-        ),
-        empty: Padding(
-          padding: const EdgeInsets.symmetric(vertical: DesignTokens.spacingSm),
-          child: result?.hasError == true
-              ? TextButton(onPressed: refresh, child: const Text('读取失败，重试'))
-              : Text(
-                  online ? '当前没有正在运行的应用' : '连接设备后查看正在运行的应用',
-                  style: Theme.of(context).textTheme.bodySmall,
+        actionLabel: '全部应用',
+        onAction: online
+            ? () => AppsRoute(deviceId: id).push<void>(context)
+            : () => offerDeviceConnection(context, ref, device),
+        empty: result?.hasError == true
+            ? Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton(
+                  onPressed: refresh,
+                  child: const Text('读取失败，重试'),
                 ),
-        ),
+              )
+            : ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minHeight: DesignTokens.componentIconButtonSize,
+                ),
+                child: Row(
+                  children: [
+                    if (online) ...[
+                      const Icon(
+                        LucideIcons.layers,
+                        size: DesignTokens.componentWorkspaceRunningEmptySize,
+                      ),
+                      const SizedBox(
+                        width: DesignTokens.componentWorkspaceRunningEmptyGap,
+                      ),
+                    ],
+                    Expanded(
+                      child: Text(
+                        online ? '当前没有正在运行的应用' : '连接后查看正在运行的应用。',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
       ),
     );
   }

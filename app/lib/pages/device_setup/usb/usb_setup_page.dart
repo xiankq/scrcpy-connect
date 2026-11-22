@@ -115,6 +115,7 @@ class UsbSetupPage extends HookConsumerWidget {
       Color? accent,
       bool checking = false,
     }) => ContentPanel(
+      radius: DesignTokens.componentWorkspaceAppPanelRounded,
       child: ConstrainedBox(
         constraints: const BoxConstraints(
           minHeight:
@@ -130,7 +131,7 @@ class UsbSetupPage extends HookConsumerWidget {
                 children: [
                   const Icon(
                     LucideIcons.cable,
-                    size: DesignTokens.componentIconFeatureSize,
+                    size: DesignTokens.componentIconLargeSize,
                     color: DesignTokens.componentConnectionIconUsbTextColor,
                   ),
                   const SizedBox(width: DesignTokens.spacingSm),
@@ -160,8 +161,8 @@ class UsbSetupPage extends HookConsumerWidget {
                   const SizedBox(width: DesignTokens.spacingSm),
                   Icon(
                     LucideIcons.smartphone,
-                    size: DesignTokens.componentIconFeatureSize,
-                    color: theme.colorScheme.onSurfaceVariant,
+                    size: DesignTokens.componentIconLargeSize,
+                    color: theme.colorScheme.onSurface,
                   ),
                 ],
               ),
@@ -178,7 +179,7 @@ class UsbSetupPage extends HookConsumerWidget {
             const SizedBox(height: DesignTokens.spacingXs),
             Text(
               message,
-              style: theme.textTheme.bodyMedium,
+              style: theme.textTheme.bodySmall,
               textAlign: TextAlign.center,
             ),
           ],
@@ -283,6 +284,7 @@ class UsbSetupPage extends HookConsumerWidget {
           if (devices.isNotEmpty) ...[
             const SizedBox(height: DesignTokens.spacingSm),
             ContentPanel(
+              radius: DesignTokens.componentConnectionNearbyEntryRounded,
               padding: EdgeInsets.zero,
               child: Column(
                 children: [

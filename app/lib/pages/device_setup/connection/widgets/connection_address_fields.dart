@@ -81,7 +81,7 @@ class ConnectionAddressFields extends StatelessWidget {
           },
         ),
         if (pairing) ...[
-          const SizedBox(height: DesignTokens.spacingMd),
+          const SizedBox(height: DesignTokens.spacingLg),
           _labelled(
             context,
             '六位配对码',
@@ -103,14 +103,16 @@ class ConnectionAddressFields extends StatelessWidget {
             ),
           ),
         ],
-        const SizedBox(height: DesignTokens.spacingSm),
+        const SizedBox(height: DesignTokens.spacingLg),
         Text(
           pairing
-              ? '在手机的无线调试中选择“使用配对码配对”，查看配对信息。'
+              ? '在手机的无线调试中选择「使用配对码配对」。'
               : legacyTcp
               ? '通过 USB 开启 IP 调试后填写连接地址。请在可信网络使用。'
               : '使用手机无线调试主页面的连接地址和端口。',
-          style: textTheme.bodySmall,
+          style: textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
       ],
     );

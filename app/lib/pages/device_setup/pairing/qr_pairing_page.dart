@@ -94,10 +94,11 @@ class QrPairingPage extends HookConsumerWidget {
         const StateNote('点击重新生成以获取配对二维码。'),
       if (state.message != null) StateNote(state.message!),
       if (hasQr) ...[
-        const SizedBox(height: DesignTokens.spacingSm),
+        const SizedBox(height: DesignTokens.spacingXl),
         Text(
           '在手机的无线调试中选择“使用二维码配对设备”，扫描此二维码。',
-          style: Theme.of(context).textTheme.bodySmall,
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           textAlign: TextAlign.center,
         ),
       ],

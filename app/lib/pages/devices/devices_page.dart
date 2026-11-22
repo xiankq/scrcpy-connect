@@ -5,8 +5,10 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/widgets/content_arrival.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_card.dart';
+import 'package:scrcpy_connect/pages/devices/widgets/first_device_illustration.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
@@ -52,7 +54,25 @@ class DevicesPage extends HookConsumerWidget {
         .toList();
     final searchField = TextField(
       controller: query,
+      style: Theme.of(context).textTheme.bodyMedium,
       decoration: InputDecoration(
+        isDense: true,
+        constraints: const BoxConstraints(
+          minHeight: DesignTokens.componentDeviceListSearchHeight,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(
+            DesignTokens.componentDeviceListSearchRounded,
+          ),
+          borderSide: BorderSide.none,
+        ),
+        prefixIconConstraints: const BoxConstraints(
+          minWidth: DesignTokens.componentIconButtonSize,
+          minHeight: DesignTokens.componentDeviceListSearchHeight,
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: DesignTokens.spacingSm,
+        ),
         hintText: '搜索设备名称或型号',
         prefixIcon: const Icon(
           AppIcons.search,
@@ -83,7 +103,7 @@ class DevicesPage extends HookConsumerWidget {
     ) => LayoutBuilder(
       builder: (context, constraints) {
         const contentPadding = EdgeInsets.symmetric(
-          horizontal: DesignTokens.spacingMd,
+          horizontal: DesignTokens.spacingLg,
         );
         final compactHeader =
             constraints.maxHeight < DesignTokens.componentWorkspaceSplitHeight;
@@ -91,6 +111,9 @@ class DevicesPage extends HookConsumerWidget {
           root: initialDevice == null,
           pane: split,
           title: '设备',
+          headerHeight: compactHeader || split
+              ? DesignTokens.componentPageHeaderHeight
+              : DesignTokens.componentDeviceListHeaderHeight,
           titleContent:
               showSearch &&
                   compactHeader &&
@@ -103,188 +126,208 @@ class DevicesPage extends HookConsumerWidget {
                   ],
                 )
               : null,
-          actions: showWelcome || useSideToolbar ? null : [addButton],
+          actions: showWelcome || useSideToolbar
+              ? null
+              : [
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(
+                      end: DesignTokens.spacingXs,
+                    ),
+                    child: addButton,
+                  ),
+                ],
           child: RefreshIndicator(
             onRefresh: ref.read(deviceListProvider.notifier).refresh,
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 const PageChromeSliver(),
-                if (showWelcome)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        DesignTokens.spacingLg,
-                        compactHeader
-                            ? DesignTokens.spacingLg
-                            : DesignTokens.componentEmptyDeviceIntroPadding,
-                        DesignTokens.spacingLg,
-                        DesignTokens.spacingLg,
-                      ),
-                      child: Align(
-                        alignment: AlignmentDirectional.topStart,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(
-                            maxWidth:
-                                DesignTokens.componentEmptyDeviceIntroWidth,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                width:
-                                    DesignTokens.componentDeviceIdentityWidth,
-                                height:
-                                    DesignTokens.componentDeviceIdentityHeight,
-                                decoration: BoxDecoration(
-                                  color:
-                                      Theme.of(context).brightness ==
-                                          Brightness.dark
-                                      ? DesignTokens.colorDevicePanelDark
-                                      : DesignTokens
-                                            .componentDeviceIdentityBackgroundColor,
-                                  borderRadius: BorderRadius.circular(
-                                    DesignTokens.componentDeviceIdentityRounded,
-                                  ),
+                ContentArrival(
+                  sliver: true,
+                  state: (initialLoad, showWelcome),
+                  waiting: initialLoad,
+                  child: SliverMainAxisGroup(
+                    slivers: [
+                      if (showWelcome)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              DesignTokens.spacingLg,
+                              compactHeader
+                                  ? DesignTokens.spacingLg
+                                  : DesignTokens
+                                        .componentEmptyDeviceIntroPadding,
+                              DesignTokens.spacingLg,
+                              DesignTokens.spacingLg,
+                            ),
+                            child: Align(
+                              alignment: AlignmentDirectional.topStart,
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: DesignTokens
+                                      .componentEmptyDeviceIntroWidth,
                                 ),
-                                child: const Icon(
-                                  LucideIcons.smartphone,
-                                  size: DesignTokens.componentIconFeatureSize,
-                                ),
-                              ),
-                              const SizedBox(height: DesignTokens.spacingMd),
-                              Text(
-                                '添加第一台设备',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineMedium,
-                              ),
-                              const SizedBox(height: DesignTokens.spacingXl),
-                              SizedBox(
-                                width: double.infinity,
-                                child: FilledButton(
-                                  style: FilledButton.styleFrom(
-                                    shape: const RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.all(
-                                        Radius.circular(
-                                          DesignTokens
-                                              .componentButtonPrimaryRounded,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    const FirstDeviceIllustration(),
+                                    const SizedBox(
+                                      height: DesignTokens.spacingXl,
+                                    ),
+                                    ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        minHeight: DesignTokens
+                                            .componentIconButtonSize,
+                                      ),
+                                      child: Align(
+                                        alignment:
+                                            AlignmentDirectional.centerStart,
+                                        child: Text(
+                                          '添加第一台设备',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .displaySmall,
                                         ),
                                       ),
                                     ),
-                                  ),
-                                  onPressed: () => const AddDeviceRoute()
-                                      .push<void>(context),
-                                  child: const Text('添加设备'),
+                                    const SizedBox(
+                                      height: DesignTokens.spacingXl,
+                                    ),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: FilledButton(
+                                        style: FilledButton.styleFrom(
+                                          minimumSize: const Size.fromHeight(
+                                            DesignTokens
+                                                .componentButtonPrimaryHeight,
+                                          ),
+                                          shape: const RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.all(
+                                              Radius.circular(
+                                                DesignTokens
+                                                    .componentButtonPrimaryRounded,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        onPressed: () => const AddDeviceRoute()
+                                            .push<void>(context),
+                                        child: const Text('添加设备'),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ],
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                if (!showWelcome) ...[
-                  SliverPadding(
-                    padding: contentPadding,
-                    sliver: SliverToBoxAdapter(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (showSearch &&
-                              (!compactHeader ||
-                                  liquid.GlassVerticalBar.maybeOf(context) !=
-                                      null)) ...[
-                            const SizedBox(height: DesignTokens.spacingSm),
-                            searchField,
-                          ],
-                          if (appLoading && !initialLoad)
-                            const Padding(
+                      if (!showWelcome) ...[
+                        SliverPadding(
+                          padding: contentPadding,
+                          sliver: SliverToBoxAdapter(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (showSearch &&
+                                    (!compactHeader ||
+                                        liquid.GlassVerticalBar.maybeOf(
+                                              context,
+                                            ) !=
+                                            null)) ...[
+                                  searchField,
+                                ],
+                                if (appLoading && !initialLoad)
+                                  const Padding(
+                                    padding: EdgeInsets.only(
+                                      top: DesignTokens.spacingMd,
+                                    ),
+                                    child: ContentLoadingIndicator(),
+                                  ),
+                                if (appDeviceError != null)
+                                  StateNote(
+                                    appDeviceError,
+                                    icon: LucideIcons.circleAlert,
+                                  ),
+                                const SizedBox(height: DesignTokens.spacingMd),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (devices.isEmpty &&
+                            !appLoading &&
+                            appDeviceError == null)
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Padding(
                               padding: EdgeInsets.only(
-                                top: DesignTokens.spacingMd,
+                                bottom: math.max(
+                                  DesignTokens.spacingXl,
+                                  MediaQuery.paddingOf(context).bottom +
+                                      DesignTokens.spacingMd,
+                                ),
                               ),
-                              child: ContentLoadingIndicator(),
+                              child: EmptyContent(
+                                icon: AppIcons.search,
+                                title: '没有找到设备',
+                                message: '试试其他名称或型号。',
+                                action: TextButton(
+                                  onPressed: query.clear,
+                                  child: const Text('清除搜索'),
+                                ),
+                              ),
                             ),
-                          if (appDeviceError != null)
-                            StateNote(
-                              appDeviceError,
-                              icon: LucideIcons.circleAlert,
+                          ),
+                        if (initialLoad)
+                          SliverPadding(
+                            padding: contentPadding,
+                            sliver: SliverToBoxAdapter(
+                              child: SkeletonRows(
+                                height: compactHeader
+                                    ? DesignTokens
+                                          .componentDeviceListItemCompactHeight
+                                    : DesignTokens
+                                          .componentDeviceListItemHeight,
+                                leadingSize:
+                                    DesignTokens.componentDeviceIdentityWidth,
+                                leadingHeight: compactHeader
+                                    ? DesignTokens
+                                          .componentDeviceIdentityCompactHeight
+                                    : DesignTokens
+                                          .componentDeviceIdentityHeight,
+                                trailing: true,
+                                cardRadius:
+                                    DesignTokens.componentDeviceListItemRounded,
+                                gap: DesignTokens.spacingSm,
+                              ),
                             ),
-                          const SizedBox(height: DesignTokens.spacingMd),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (devices.isEmpty && !appLoading && appDeviceError == null)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: Padding(
-                        padding: EdgeInsets.only(
-                          bottom: math.max(
-                            DesignTokens.spacingXl,
-                            MediaQuery.paddingOf(context).bottom +
-                                DesignTokens.spacingMd,
+                          )
+                        else if (devices.isNotEmpty)
+                          SliverPadding(
+                            padding: contentPadding,
+                            sliver: SliverList.separated(
+                              itemCount: devices.length,
+                              separatorBuilder: (_, _) => const SizedBox(
+                                height: DesignTokens.spacingSm,
+                              ),
+                              itemBuilder: (context, index) => DeviceCard(
+                                device: devices[index],
+                                compact: compactHeader,
+                                selected:
+                                    split && devices[index].id == currentId,
+                                onOpen: split
+                                    ? () => selection.value = devices[index].id
+                                    : null,
+                              ),
+                            ),
                           ),
+                        const SliverToBoxAdapter(
+                          child: SizedBox(height: DesignTokens.spacingLg),
                         ),
-                        child: EmptyContent(
-                          icon: AppIcons.search,
-                          title: '没有找到设备',
-                          message: '试试其他名称或型号。',
-                          action: TextButton(
-                            onPressed: query.clear,
-                            child: const Text('清除搜索'),
-                          ),
-                        ),
-                      ),
-                    ),
-                  if (initialLoad)
-                    SliverPadding(
-                      padding: contentPadding,
-                      sliver: SliverToBoxAdapter(
-                        child: SkeletonRows(
-                          height: compactHeader
-                              ? DesignTokens
-                                    .componentDeviceListItemCompactHeight
-                              : DesignTokens.componentDeviceListItemHeight,
-                          leadingSize:
-                              DesignTokens.componentDeviceIdentityWidth,
-                          leadingHeight: compactHeader
-                              ? DesignTokens
-                                    .componentDeviceIdentityCompactHeight
-                              : DesignTokens.componentDeviceIdentityHeight,
-                          trailing: true,
-                          cardRadius:
-                              DesignTokens.componentDeviceListItemRounded,
-                          gap: DesignTokens.spacingMd,
-                        ),
-                      ),
-                    )
-                  else if (devices.isNotEmpty)
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(
-                        DesignTokens.spacingMd,
-                        DesignTokens.spacingZero,
-                        DesignTokens.spacingMd,
-                        DesignTokens.spacingZero,
-                      ),
-                      sliver: SliverList.separated(
-                        itemCount: devices.length,
-                        separatorBuilder: (_, _) =>
-                            const SizedBox(height: DesignTokens.spacingMd),
-                        itemBuilder: (context, index) => DeviceCard(
-                          device: devices[index],
-                          compact: compactHeader,
-                          selected: split && devices[index].id == currentId,
-                          onOpen: split
-                              ? () => selection.value = devices[index].id
-                              : null,
-                        ),
-                      ),
-                    ),
-                  const SliverToBoxAdapter(
-                    child: SizedBox(height: DesignTokens.spacingLg),
+                      ],
+                    ],
                   ),
-                ],
+                ),
                 const PageChromeBottomSliver(),
               ],
             ),
@@ -329,7 +372,10 @@ class DevicesPage extends HookConsumerWidget {
                   manageButton: useSideToolbar ? null : manageButton,
                 ),
           sideActions: [
-            if (useSideToolbar) ...[if (!showWelcome) addButton, ?manageButton],
+            if (useSideToolbar) ...[
+              if (!showWelcome) addButton,
+              ?manageButton,
+            ],
           ],
         );
       },

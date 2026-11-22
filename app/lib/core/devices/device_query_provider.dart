@@ -8,6 +8,7 @@ import 'package:scrcpy_connect/core/devices/device_assessment.dart';
 import 'package:scrcpy_connect/core/devices/device_calls.dart';
 import 'package:scrcpy_connect/core/devices/device_inspection.dart';
 import 'package:scrcpy_connect/core/devices/device_notifications.dart';
+import 'package:scrcpy_connect/core/devices/models/device_battery.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
@@ -28,6 +29,46 @@ Future<DeviceReading<DeviceDetails>> deviceDetails(
     deviceId,
   );
   return source.readDetails(
+    deviceId,
+    connectionId: connectionId,
+    cancellation: cancellation,
+  );
+}
+
+@Riverpod(retry: _noRetry)
+Future<DeviceReading<DeviceBattery>> deviceBattery(
+  Ref ref,
+  String deviceId, {
+  required String connectionId,
+}) {
+  final source = ref.watch(deviceInspectionProvider);
+  final cancellation = _observeConnection(
+    ref,
+    ref.watch(runtimeEventsProvider),
+    deviceId,
+  );
+  final refresh = Timer(const Duration(seconds: 30), ref.invalidateSelf);
+  ref.onDispose(refresh.cancel);
+  return source.readBattery(
+    deviceId,
+    connectionId: connectionId,
+    cancellation: cancellation,
+  );
+}
+
+@Riverpod(retry: _noRetry)
+Future<DeviceReading<DeviceCapacity>> sharedStorageCapacity(
+  Ref ref,
+  String deviceId, {
+  String? connectionId,
+}) {
+  final source = ref.watch(deviceInspectionProvider);
+  final cancellation = _observeConnection(
+    ref,
+    ref.watch(runtimeEventsProvider),
+    deviceId,
+  );
+  return source.readSharedStorageCapacity(
     deviceId,
     connectionId: connectionId,
     cancellation: cancellation,

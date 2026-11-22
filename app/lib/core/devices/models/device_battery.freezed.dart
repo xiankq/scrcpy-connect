@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$DeviceBattery {
 
- int? get level; bool? get charging; int? get status; int? get health; double? get temperatureC; double? get voltageMv;
+ int? get level; DeviceBatteryStatus get status; int? get health; double? get temperatureC; double? get voltageMv;
 /// Create a copy of DeviceBattery
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -27,20 +27,20 @@ $DeviceBatteryCopyWith<DeviceBattery> get copyWith => _$DeviceBatteryCopyWithImp
 @override
 bool operator ==(Object other) {
   final _this = this as DeviceBattery;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is DeviceBattery&&(identical(other.level, _this.level) || other.level == _this.level)&&(identical(other.charging, _this.charging) || other.charging == _this.charging)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.health, _this.health) || other.health == _this.health)&&(identical(other.temperatureC, _this.temperatureC) || other.temperatureC == _this.temperatureC)&&(identical(other.voltageMv, _this.voltageMv) || other.voltageMv == _this.voltageMv));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is DeviceBattery&&(identical(other.level, _this.level) || other.level == _this.level)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.health, _this.health) || other.health == _this.health)&&(identical(other.temperatureC, _this.temperatureC) || other.temperatureC == _this.temperatureC)&&(identical(other.voltageMv, _this.voltageMv) || other.voltageMv == _this.voltageMv));
 }
 
 
 @override
 int get hashCode {
   final _this = this as DeviceBattery;
-  return Object.hash(runtimeType,_this.level,_this.charging,_this.status,_this.health,_this.temperatureC,_this.voltageMv);
+  return Object.hash(runtimeType,_this.level,_this.status,_this.health,_this.temperatureC,_this.voltageMv);
 }
 
 @override
 String toString() {
   final _this = this as DeviceBattery;
-  return 'DeviceBattery(level: ${_this.level}, charging: ${_this.charging}, status: ${_this.status}, health: ${_this.health}, temperatureC: ${_this.temperatureC}, voltageMv: ${_this.voltageMv})';
+  return 'DeviceBattery(level: ${_this.level}, status: ${_this.status}, health: ${_this.health}, temperatureC: ${_this.temperatureC}, voltageMv: ${_this.voltageMv})';
 }
 
 
@@ -51,7 +51,7 @@ abstract mixin class $DeviceBatteryCopyWith<$Res>  {
   factory $DeviceBatteryCopyWith(DeviceBattery value, $Res Function(DeviceBattery) _then) = _$DeviceBatteryCopyWithImpl;
 @useResult
 $Res call({
- int? level, bool? charging, int? status, int? health, double? temperatureC, double? voltageMv
+ int? level, DeviceBatteryStatus status, int? health, double? temperatureC, double? voltageMv
 });
 
 
@@ -68,12 +68,11 @@ class _$DeviceBatteryCopyWithImpl<$Res>
 
 /// Create a copy of DeviceBattery
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? level = freezed,Object? charging = freezed,Object? status = freezed,Object? health = freezed,Object? temperatureC = freezed,Object? voltageMv = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? level = freezed,Object? status = null,Object? health = freezed,Object? temperatureC = freezed,Object? voltageMv = freezed,}) {
   return _then(DeviceBattery(
 level: freezed == level ? _self.level : level // ignore: cast_nullable_to_non_nullable
-as int?,charging: freezed == charging ? _self.charging : charging // ignore: cast_nullable_to_non_nullable
-as bool?,status: freezed == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
-as int?,health: freezed == health ? _self.health : health // ignore: cast_nullable_to_non_nullable
+as int?,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
+as DeviceBatteryStatus,health: freezed == health ? _self.health : health // ignore: cast_nullable_to_non_nullable
 as int?,temperatureC: freezed == temperatureC ? _self.temperatureC : temperatureC // ignore: cast_nullable_to_non_nullable
 as double?,voltageMv: freezed == voltageMv ? _self.voltageMv : voltageMv // ignore: cast_nullable_to_non_nullable
 as double?,
@@ -161,10 +160,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int? level,  bool? charging,  int? status,  int? health,  double? temperatureC,  double? voltageMv)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int? level,  DeviceBatteryStatus status,  int? health,  double? temperatureC,  double? voltageMv)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _DeviceBattery() when $default != null:
-return $default(_that.level,_that.charging,_that.status,_that.health,_that.temperatureC,_that.voltageMv);case _:
+return $default(_that.level,_that.status,_that.health,_that.temperatureC,_that.voltageMv);case _:
   return orElse();
 
 }
@@ -182,10 +181,10 @@ return $default(_that.level,_that.charging,_that.status,_that.health,_that.tempe
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int? level,  bool? charging,  int? status,  int? health,  double? temperatureC,  double? voltageMv)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int? level,  DeviceBatteryStatus status,  int? health,  double? temperatureC,  double? voltageMv)  $default,) {final _that = this;
 switch (_that) {
 case _DeviceBattery():
-return $default(_that.level,_that.charging,_that.status,_that.health,_that.temperatureC,_that.voltageMv);case _:
+return $default(_that.level,_that.status,_that.health,_that.temperatureC,_that.voltageMv);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -202,10 +201,10 @@ return $default(_that.level,_that.charging,_that.status,_that.health,_that.tempe
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int? level,  bool? charging,  int? status,  int? health,  double? temperatureC,  double? voltageMv)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int? level,  DeviceBatteryStatus status,  int? health,  double? temperatureC,  double? voltageMv)?  $default,) {final _that = this;
 switch (_that) {
 case _DeviceBattery() when $default != null:
-return $default(_that.level,_that.charging,_that.status,_that.health,_that.temperatureC,_that.voltageMv);case _:
+return $default(_that.level,_that.status,_that.health,_that.temperatureC,_that.voltageMv);case _:
   return null;
 
 }
@@ -217,12 +216,11 @@ return $default(_that.level,_that.charging,_that.status,_that.health,_that.tempe
 
 
 class _DeviceBattery implements DeviceBattery {
-  const _DeviceBattery({this.level, this.charging, this.status, this.health, this.temperatureC, this.voltageMv});
+  const _DeviceBattery({this.level, this.status = DeviceBatteryStatus.unknown, this.health, this.temperatureC, this.voltageMv});
   
 
 @override final  int? level;
-@override final  bool? charging;
-@override final  int? status;
+@override@JsonKey() final  DeviceBatteryStatus status;
 @override final  int? health;
 @override final  double? temperatureC;
 @override final  double? voltageMv;
@@ -237,18 +235,18 @@ _$DeviceBatteryCopyWith<_DeviceBattery> get copyWith => __$DeviceBatteryCopyWith
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _DeviceBattery&&(identical(other.level, level) || other.level == level)&&(identical(other.charging, charging) || other.charging == charging)&&(identical(other.status, status) || other.status == status)&&(identical(other.health, health) || other.health == health)&&(identical(other.temperatureC, temperatureC) || other.temperatureC == temperatureC)&&(identical(other.voltageMv, voltageMv) || other.voltageMv == voltageMv));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _DeviceBattery&&(identical(other.level, level) || other.level == level)&&(identical(other.status, status) || other.status == status)&&(identical(other.health, health) || other.health == health)&&(identical(other.temperatureC, temperatureC) || other.temperatureC == temperatureC)&&(identical(other.voltageMv, voltageMv) || other.voltageMv == voltageMv));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,level,charging,status,health,temperatureC,voltageMv);
+    return Object.hash(runtimeType,level,status,health,temperatureC,voltageMv);
 }
 
 @override
 String toString() {
-    return 'DeviceBattery(level: $level, charging: $charging, status: $status, health: $health, temperatureC: $temperatureC, voltageMv: $voltageMv)';
+    return 'DeviceBattery(level: $level, status: $status, health: $health, temperatureC: $temperatureC, voltageMv: $voltageMv)';
 }
 
 
@@ -259,7 +257,7 @@ abstract mixin class _$DeviceBatteryCopyWith<$Res> implements $DeviceBatteryCopy
   factory _$DeviceBatteryCopyWith(_DeviceBattery value, $Res Function(_DeviceBattery) _then) = __$DeviceBatteryCopyWithImpl;
 @override @useResult
 $Res call({
- int? level, bool? charging, int? status, int? health, double? temperatureC, double? voltageMv
+ int? level, DeviceBatteryStatus status, int? health, double? temperatureC, double? voltageMv
 });
 
 
@@ -276,12 +274,11 @@ class __$DeviceBatteryCopyWithImpl<$Res>
 
 /// Create a copy of DeviceBattery
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? level = freezed,Object? charging = freezed,Object? status = freezed,Object? health = freezed,Object? temperatureC = freezed,Object? voltageMv = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? level = freezed,Object? status = null,Object? health = freezed,Object? temperatureC = freezed,Object? voltageMv = freezed,}) {
   return _then(_DeviceBattery(
 level: freezed == level ? _self.level : level // ignore: cast_nullable_to_non_nullable
-as int?,charging: freezed == charging ? _self.charging : charging // ignore: cast_nullable_to_non_nullable
-as bool?,status: freezed == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
-as int?,health: freezed == health ? _self.health : health // ignore: cast_nullable_to_non_nullable
+as int?,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
+as DeviceBatteryStatus,health: freezed == health ? _self.health : health // ignore: cast_nullable_to_non_nullable
 as int?,temperatureC: freezed == temperatureC ? _self.temperatureC : temperatureC // ignore: cast_nullable_to_non_nullable
 as double?,voltageMv: freezed == voltageMv ? _self.voltageMv : voltageMv // ignore: cast_nullable_to_non_nullable
 as double?,

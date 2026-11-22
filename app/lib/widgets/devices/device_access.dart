@@ -31,9 +31,18 @@ Future<void> offerDeviceConnection(
       !identical(connections, ref.read(deviceConnectionsProvider))) {
     return;
   }
+  await startDeviceConnection(context, ref, device);
+}
+
+Future<void> startDeviceConnection(
+  BuildContext context,
+  WidgetRef ref,
+  DeviceSnapshot device,
+) async {
+  final connections = ref.read(deviceConnectionsProvider);
   if (device.transport == DeviceTransport.usb) {
     await UsbGuideRoute(deviceId: device.id).push<void>(context);
-  } else if (unauthorized) {
+  } else if (device.status == .unauthorized) {
     await AddDeviceRoute(deviceId: device.id).push<void>(context);
   } else {
     try {

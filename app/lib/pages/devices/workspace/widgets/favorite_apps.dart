@@ -59,6 +59,7 @@ class FavoriteApps extends ConsumerWidget {
 
     return WorkspaceAppGrid(
       title: '常用应用',
+      muted: !online,
       deviceId: device.id,
       apps: [
         for (final app in favorites)
@@ -75,14 +76,46 @@ class FavoriteApps extends ConsumerWidget {
           feedback(context, '无法打开，请先连接设备。');
         }
       },
-      empty: TextButton.icon(
-        onPressed: edit,
-        icon: const Icon(AppIcons.add),
-        label: const Text('添加常用应用'),
+      empty: InkWell(
+        borderRadius: BorderRadius.circular(
+          DesignTokens.componentWorkspaceAppEmptyRounded,
+        ),
+        onTap: edit,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minHeight: DesignTokens.componentIconButtonSize,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: DesignTokens.componentWorkspaceAppEmptySize,
+                height: DesignTokens.componentWorkspaceAppEmptySize,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? DesignTokens.colorTintDark
+                      : DesignTokens.componentWorkspaceAppEmptyBackgroundColor,
+                  borderRadius: BorderRadius.circular(
+                    DesignTokens.componentWorkspaceAppEmptyRounded,
+                  ),
+                ),
+                child: const Icon(
+                  AppIcons.add,
+                  size: DesignTokens.componentWorkspaceRunningEmptySize,
+                ),
+              ),
+              const SizedBox(width: DesignTokens.spacingSm),
+              Expanded(
+                child: Text(
+                  '添加常用应用',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      action: favorites.isEmpty
-          ? null
-          : TextButton(onPressed: edit, child: const Text('编辑')),
+      actionLabel: favorites.isEmpty ? null : '编辑',
+      onAction: edit,
     );
   }
 }
