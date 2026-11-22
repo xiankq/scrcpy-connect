@@ -74,6 +74,27 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('draws the back key as a closed, stroked outline', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: _Subject()));
+    final glyph = find.descendant(
+      of: find.byTooltip('返回'),
+      matching: find.byType(CustomPaint),
+    );
+    final painter = tester.widget<CustomPaint>(glyph).painter!;
+    final canvas = TestRecordingCanvas();
+    painter.paint(canvas, tester.getSize(glyph));
+    final draw = canvas.invocations
+        .map((entry) => entry.invocation)
+        .singleWhere((call) => call.memberName == #drawPath);
+    final path = draw.positionalArguments[0] as Path;
+    final paint = draw.positionalArguments[1] as Paint;
+    expect(path.computeMetrics().single.isClosed, isTrue);
+    expect(paint.style, PaintingStyle.stroke);
+    expect(paint.strokeJoin, StrokeJoin.round);
+  });
 }
 
 class _Subject extends StatelessWidget {
