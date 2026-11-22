@@ -7,6 +7,7 @@ import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 
 internal enum class FocusSignal(val wire: String) {
     GRANTED("granted"), TRANSIENT_LOSS("transientLoss"), PERMANENT_LOSS("permanentLoss")
@@ -31,12 +32,13 @@ internal class FocusLeases(private val driver: FocusDriver) {
         }
         override fun close() {
             synchronized(lock) {
-                if (owners.remove(owner) == null) return
-                if (owners.isEmpty()) {
-                    generation++ // 使已放弃请求排入的回调失效。
-                    signal = FocusSignal.PERMANENT_LOSS
+                if (!owners.containsKey(owner)) return
+                if (owners.size == 1) {
                     driver.abandon()
+                    generation++
+                    signal = FocusSignal.PERMANENT_LOSS
                 }
+                owners.remove(owner)
             }
         }
     }
@@ -46,12 +48,23 @@ internal class FocusLeases(private val driver: FocusDriver) {
         owners[owner] = changed
         if (owners.size == 1) {
             val epoch = ++generation
-            val granted = runCatching { driver.request { change -> signalChanged(epoch, change) } }.getOrDefault(false)
+            val granted = try {
+                driver.request { change -> signalChanged(epoch, change) }
+            } catch (error: Exception) {
+                owners.remove(owner)
+                generation++
+                try {
+                    driver.abandon()
+                } catch (cleanup: Exception) {
+                    error.addSuppressed(cleanup)
+                }
+                throw error
+            }
             if (!granted) {
                 owners.remove(owner)
                 generation++
                 signal = FocusSignal.PERMANENT_LOSS
-                runCatching { driver.abandon() }
+                driver.abandon()
                 return null
             }
             signal = FocusSignal.GRANTED
@@ -67,11 +80,21 @@ internal class FocusLeases(private val driver: FocusDriver) {
             if (change == FocusSignal.PERMANENT_LOSS) {
                 owners.clear()
                 generation++
-                runCatching { driver.abandon() }
+                try {
+                    driver.abandon()
+                } catch (error: Exception) {
+                    Log.w("Interconnect", "audio.abandon_focus: ${error.javaClass.simpleName}")
+                }
             }
             result
         }
-        callbacks.forEach { callback -> runCatching { callback(change) } }
+        callbacks.forEach { callback ->
+            try {
+                callback(change)
+            } catch (error: Exception) {
+                Log.w("Interconnect", "audio.focus_callback: ${error.javaClass.simpleName}")
+            }
+        }
     }
 }
 

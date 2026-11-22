@@ -17,7 +17,12 @@ final class MediaJobs implements AutoCloseable {
     private final Set<String> seen = new HashSet<>();
     private final AtomicBoolean closed = new AtomicBoolean();
     MediaJobs(Reply reply) { this.reply = reply; }
-    private JSONObject failure(String code, String message) throws Exception { return new JSONObject().put("code", code).put("message", message); }
+    private JSONObject failure(String code, String message) {
+        Map<String, String> fields = new HashMap<>();
+        fields.put("code", code);
+        fields.put("message", message);
+        return new JSONObject(fields);
+    }
     private void respond(JSONObject request, JSONObject result, JSONObject error) throws Exception {
         JSONObject response = new JSONObject().put("requestId", request.getString("requestId"));
         response.put(error == null ? "result" : "error", error == null ? result : error); reply.send(response);
@@ -65,14 +70,19 @@ final class MediaJobs implements AutoCloseable {
             if (!finished.compareAndSet(false, true)) return;
             java.lang.Process child = process;
             if (child == null || !Processes.alive(child)) active.remove(operation, this);
-            try { respond(request, result, error); } catch (Exception ignored) {}
+            try {
+                respond(request, result, error);
+            } catch (Exception failure) {
+                android.util.Log.w("InteropCompanion", "media.reply: " + failure.getClass().getSimpleName());
+            }
         }
         boolean cancel(String code) {
             java.lang.Process child;
             synchronized (this) { cancelled = code; child = process; }
             worker.remove(this);
             boolean reaped = child == null || terminate(child);
-            try { finish(null, failure(reaped ? code : "media_cleanup_unknown", reaped ? "Media operation stopped" : "Decoder termination has not been confirmed; no thumbnail was published")); } catch (Exception ignored) {}
+            finish(null, failure(reaped ? code : "media_cleanup_unknown",
+                reaped ? "Media operation stopped" : "Decoder termination is pending"));
             return reaped;
         }
         @Override public void run() {
@@ -107,16 +117,18 @@ final class MediaJobs implements AutoCloseable {
                 result = response.optJSONObject("result"); error = response.optJSONObject("error");
                 if (result == null && error == null) throw new Thumbnail.Failure("media_decode_failed", "Decoder response is invalid");
             } catch (Exception e) {
-                try { error = failure(e instanceof Thumbnail.Failure ? ((Thumbnail.Failure)e).code : "media_decode_failed", e instanceof Thumbnail.Failure ? e.getMessage() : "Isolated decoder failed"); } catch (Exception ignored) {}
+                error = e instanceof Thumbnail.Failure
+                    ? failure(((Thumbnail.Failure)e).code, e.getMessage())
+                    : failure("media_decode_failed", "Isolated decoder failed");
             } finally {
                 if (deadline != null) deadline.cancel(false);
                 java.lang.Process child = process;
                 boolean reaped = child == null || terminate(child);
                 if (!reaped) {
-                    try { error = failure("media_cleanup_unknown", "Decoder termination has not been confirmed; no thumbnail was published"); } catch (Exception ignored) {}
+                    error = failure("media_cleanup_unknown", "Decoder termination is pending");
                 }
                 if (reaped) active.remove(operation, this);
-                if (cancelled != null && reaped) { try { error = failure(cancelled, "Media operation stopped"); } catch (Exception ignored) {} }
+                if (cancelled != null && reaped) error = failure(cancelled, "Media operation stopped");
                 finish(error == null ? result : null, error);
             }
         }

@@ -24,7 +24,7 @@ final devices = await host.client.devices();
 - 事件缺少真实终态时为 `result_unknown`；旧 shell 的合并输出与未知退出码仍保留。写出、设备执行和重连是不同结果。
 - 取消只发通知；`close()` 才等待本次资源释放。关闭失败保留同一对象重试，不关闭共享客户端代偿。`sync.openPush()` 可先保存 session，再并行读事件、写输入，处理迟到创建结果。
 - Push 可能留下远端部分文件；pull 拒绝覆盖并仅删除自己的片段。字节路径按原样传输，不作 shell 展开。`reverseRemoveAll` 影响设备上所有 reverse listener。
-- `createOpenProbe` 返回单独拥有的探针，最后须关闭；`AdbOpenProbeCleanupFailure.probe` 交回重试权。写出前排队超时不证明对端沉默。
+- `createOpenProbe` 返回需要单独关闭的探针。`AdbOpenProbeCleanupFailure.probe` 保留重试权。写出前超时记为排队超时。
 
 连接错误按 `AdbException.code` 判断。TCP 失败与 `handshake_timeout` 分别报告；`pairing_result_unknown` 不自动重试，取消不撤销对端已建立的信任。`adb_cleanup_unconfirmed` 表示原资源仍须收尾。
 

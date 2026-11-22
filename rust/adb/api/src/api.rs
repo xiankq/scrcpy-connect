@@ -1455,9 +1455,12 @@ pub async fn adb_sync(
         };
         let result = tokio::select! {_=op.stop.cancelled()=>Err("adb_sync_cancelled".into()),
         result=tokio::time::timeout(options.timeout,work)=>result.unwrap_or_else(|_|Err("adb_sync_timeout".into()))};
-        if let Err(error) = result {
-            if created {
-                let _ = tokio::fs::remove_file(&request.local_path).await;
+        if let Err(mut error) = result {
+            if created
+                && let Err(cleanup) = tokio::fs::remove_file(&request.local_path).await
+                && cleanup.kind() != std::io::ErrorKind::NotFound
+            {
+                error = format!("{error}; adb_sync_local_cleanup_failed: {cleanup}");
             }
             send_event(&send, Err(error), &op.stop).await;
         }

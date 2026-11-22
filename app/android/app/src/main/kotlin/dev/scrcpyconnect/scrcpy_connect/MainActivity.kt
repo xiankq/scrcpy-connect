@@ -12,6 +12,7 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbManager
 import android.os.Build
+import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -25,12 +26,20 @@ internal object UsbLeases {
 
 class MainActivity : FlutterActivity() {
     companion object {
+        private inline fun cleanup(stage: String, action: () -> Unit) {
+            try {
+                action()
+            } catch (error: Exception) {
+                Log.w("Interconnect", "$stage: ${error.javaClass.simpleName}")
+            }
+        }
+
         private var current: java.lang.ref.WeakReference<MainActivity>? = null
         fun cancelPendingConnections() { current?.get()?.cancelPendingConnectionsAndMedia() }
         fun sealUsbForRestart() {
             // 封存必须先于旧回调通知；即使旧 Dart 的回复端已消失，原始 FD 仍归进程登记。
             UsbLeases.connections.seal()
-            runCatching { current?.get()?.cancelPendingConnectionsAndMedia() }
+            cancelPendingConnections()
         }
         fun cancelUsbPermission(attempt: String?, candidate: String?): Map<String, Any?> {
             val lease = UsbLeases.connections.validateToken(candidate)
@@ -41,7 +50,7 @@ class MainActivity : FlutterActivity() {
         fun beginUsbRecovery(expected: String?, candidate: String?): Map<String, Any?> {
             val response = UsbLeases.connections.beginRecovery(expected, candidate)
             // 已完成候选的重复 begin 不得撤销其后新建的授权请求。
-            if (response["ownerReady"] != true) runCatching { current?.get()?.cancelPendingConnectionsAndMedia() }
+            if (response["ownerReady"] != true) cancelPendingConnections()
             return response
         }
     }
@@ -78,8 +87,10 @@ class MainActivity : FlutterActivity() {
         current = java.lang.ref.WeakReference(this)
         if (previous !== this) {
             // 新页面只撤旧页面的授权 UI，不封存或关闭已交付的进程资源。
-            runCatching { previous?.cancelPendingConnectionsAndMedia() }
-            if (previous != null) runCatching { UsbLeases.connections.abandon(previous.activityLease) }
+            previous?.cancelPendingConnectionsAndMedia()
+            if (previous != null) cleanup("usb.previous_release") {
+                UsbLeases.connections.abandon(previous.activityLease)
+            }
         }
         ProcessFlutterHost.attach(this)
         IncomingShares.attach(this)
@@ -155,11 +166,15 @@ class MainActivity : FlutterActivity() {
     private fun emit(event: Map<String, Any?>) = ProcessFlutterHost.emit(event)
 
     private fun acceptIncoming(intent: Intent?, renewed: Boolean) {
-        val caller = if (Build.VERSION.SDK_INT >= 35) runCatching { if (renewed) currentCaller else initialCaller }.getOrNull() else null
+        val caller = if (Build.VERSION.SDK_INT >= 35) {
+            if (renewed) currentCaller else initialCaller
+        } else null
         IncomingShares.accept(applicationContext, intent) { uri ->
-            Build.VERSION.SDK_INT < 35 || runCatching {
+            Build.VERSION.SDK_INT < 35 || try {
                 caller?.checkContentUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) == android.content.pm.PackageManager.PERMISSION_GRANTED
-            }.getOrDefault(false)
+            } catch (_: SecurityException) {
+                false
+            }
         }
     }
 
@@ -175,9 +190,8 @@ class MainActivity : FlutterActivity() {
         val result = pendingUsb
         usbChooser = null
         clearPendingUsb()
-        // 先撤销全部本地状态，再调用外部回调；失败不能恢复旧请求准入。
-        runCatching { chooser?.dismiss() }
-        runCatching { result?.error("cancelled", "USB 授权请求已撤销。", null) }
+        cleanup("usb.dismiss_chooser") { chooser?.dismiss() }
+        cleanup("usb.cancel_reply") { result?.error("cancelled", "USB 授权请求已撤销。", null) }
     }
 
     private fun usbRequestCurrent(generation: Long, lease: String): Boolean =
@@ -226,7 +240,7 @@ class MainActivity : FlutterActivity() {
                 val chooser = usbChooser
                 usbChooser = null
                 clearPendingUsb()
-                runCatching { chooser?.dismiss() }
+                cleanup("usb.dismiss_chooser") { chooser?.dismiss() }
             }
             if (call.method.startsWith("usb.")) usbFailure(result, error)
             else result.error("platform_error", error.message ?: "系统操作未完成。", null)
@@ -331,7 +345,7 @@ class MainActivity : FlutterActivity() {
                 }
             }
             // 原回复端消失不影响进程登记；由下一次 SDK 排空后的接管精确回收。
-            runCatching { usbFailure(result, error) }
+            cleanup("usb.failure_reply") { usbFailure(result, error) }
         }
     }
 
@@ -345,8 +359,8 @@ class MainActivity : FlutterActivity() {
         if (current?.get() === this) current = null
         if (documentsDelegate.isInitialized()) documents.onDestroy(this)
         cancelPendingConnectionsAndMedia()
-        runCatching { UsbLeases.connections.abandon(activityLease) }
-        runCatching { unregisterReceiver(usbReceiver) }
+        cleanup("usb.activity_release") { UsbLeases.connections.abandon(activityLease) }
+        cleanup("usb.unregister_receiver") { unregisterReceiver(usbReceiver) }
         audio.detach(this)
         IncomingShares.detach(this)
         ProcessFlutterHost.detach(this)
