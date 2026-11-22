@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -11,40 +10,25 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-  final calls = <MethodCall>[];
 
-  setUp(() {
-    calls.clear();
-    messenger.setMockMethodCallHandler(DesktopWindow.channel, (call) async {
-      calls.add(call);
-      return call.method == 'state' ? 'normal' : null;
-    });
-  });
-  tearDown(
-    () => messenger.setMockMethodCallHandler(DesktopWindow.channel, null),
-  );
-
-  Future<void> stateChanged(DesktopWindowState state) =>
-      messenger.handlePlatformMessage(
-        DesktopWindow.channel.name,
-        const StandardMethodCodec().encodeMethodCall(
-          MethodCall('stateChanged', state.name),
-        ),
-        (_) {},
-      );
-
-  Finder button(String command) =>
-      find.byKey(ValueKey('desktop-window-$command'));
-
-  for (final platform in [
-    TargetPlatform.macOS,
-    TargetPlatform.windows,
-    TargetPlatform.linux,
+  for (final (platform, left, right) in [
+    ('macOS', 78.0, 0.0),
+    ('Windows', 0.0, 138.0),
+    ('Linux with left-side buttons', 96.0, 0.0),
   ]) {
-    testWidgets('$platform integrates controls with the page row', (
+    testWidgets('$platform reserves the native controls in the page toolbar', (
       tester,
     ) async {
-      debugDefaultTargetPlatformOverride = platform;
+      final calls = <String>[];
+      messenger.setMockMethodCallHandler(DesktopWindow.channel, (call) async {
+        calls.add(call.method);
+        return call.method == 'layout'
+            ? {'left': left, 'right': right, 'top': 32.0}
+            : null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(DesktopWindow.channel, null),
+      );
       var back = 0;
       await tester.pumpWidget(
         MaterialApp(
@@ -60,62 +44,49 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      final mac = platform == TargetPlatform.macOS;
-      final expand = mac ? 'toggleFullscreen' : 'toggleMaximized';
-      final minimize = tester.getRect(button('minimize'));
-      final close = tester.getRect(button('close'));
-      final title = tester.getRect(find.text('USB 连接'));
-      expect(close.height, 32);
-      expect(close.center.dy, 28);
-      expect(title.center.dy, close.center.dy);
-      if (mac) {
-        expect(close.left, 12);
-        expect(close.right, minimize.left);
-        expect(title.left, greaterThan(tester.getRect(button(expand)).right));
-      } else {
-        expect(close.right, 788);
-        expect(tester.getRect(button(expand)).right, close.left);
-        expect(
-          tester.getRect(find.byIcon(LucideIcons.info)).right,
-          lessThan(minimize.left),
-        );
-      }
+      final first = find.byIcon(LucideIcons.chevronLeft);
+      final last = find.byIcon(LucideIcons.info);
+      expect(tester.getRect(first).left, greaterThanOrEqualTo(left));
+      expect(tester.getRect(last).right, lessThanOrEqualTo(800 - right));
 
-      await tester.tap(find.byIcon(LucideIcons.chevronLeft));
+      await tester.tap(first);
       expect(back, 1);
       await tester.drag(find.text('USB 连接'), const Offset(60, 0));
       await tester.pump(const Duration(milliseconds: 300));
-      expect(calls.map((call) => call.method), ['state', 'move']);
-      await tester.tap(button(expand));
-      expect(calls.last.method, expand);
-      await stateChanged(
-        mac ? DesktopWindowState.fullscreen : DesktopWindowState.maximized,
+      expect(calls, ['layout', 'move']);
+
+      await messenger.handlePlatformMessage(
+        DesktopWindow.channel.name,
+        const StandardMethodCodec().encodeMethodCall(
+          const MethodCall('layoutChanged', {'left': 0, 'right': 0, 'top': 0}),
+        ),
+        (_) {},
       );
       await tester.pump();
-      expect(
-        find.byWidgetPredicate(
-          (widget) =>
-              widget is Tooltip && widget.message == (mac ? '退出全屏' : '还原窗口'),
-        ),
-        findsOneWidget,
-      );
-      if (mac) {
-        expect(tester.widget<IconButton>(button('minimize')).onPressed, isNull);
-        await stateChanged(DesktopWindowState.normal);
-        await tester.pump();
-      }
-      await tester.tap(button('minimize'));
-      await tester.tap(button('close'));
-      expect(calls.map((call) => call.method), [
-        'state',
-        'move',
-        expand,
-        'minimize',
-        'close',
-      ]);
-      await tester.pumpWidget(const SizedBox.shrink());
-      expect(tester.takeException(), isNull);
-      debugDefaultTargetPlatformOverride = null;
+      expect(tester.getRect(first).left, lessThan(40));
+      expect(tester.getRect(last).right, greaterThan(760));
     });
   }
+
+  testWidgets('desktop stage paints beneath the native controls', (
+    tester,
+  ) async {
+    const content = ValueKey('stage-content');
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: DesktopWindowInsets(
+          left: 78,
+          right: 0,
+          top: 32,
+          child: DesktopStage(
+            child: ColoredBox(key: content, color: Colors.black),
+          ),
+        ),
+      ),
+    );
+    expect(
+      tester.getRect(find.byKey(content)),
+      const Rect.fromLTWH(0, 0, 800, 600),
+    );
+  });
 }

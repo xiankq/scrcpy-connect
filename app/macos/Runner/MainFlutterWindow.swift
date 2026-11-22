@@ -133,7 +133,6 @@ private final class DesktopWindowChrome {
   private var dragOffset: NSPoint?
   private var dragLocation = NSPoint.zero
   private var dragging = false
-  private var restoreFrame: NSRect?
 
   init(window: NSWindow, messenger: FlutterBinaryMessenger) {
     window.styleMask.insert(.fullSizeContentView)
@@ -143,9 +142,6 @@ private final class DesktopWindowChrome {
     window.contentMinSize = NSSize(width: 400, height: 300)
     window.isMovableByWindowBackground = false
     window.collectionBehavior.insert(.fullScreenPrimary)
-    for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
-      window.standardWindowButton(button)?.isHidden = true
-    }
     methods = FlutterMethodChannel(
       name: "dev.scrcpyconnect/desktop_window", binaryMessenger: messenger)
     methods.setMethodCallHandler { [weak self, weak window] call, result in
@@ -154,23 +150,15 @@ private final class DesktopWindowChrome {
         return
       }
       switch call.method {
-      case "state":
-        result(Self.state(of: window))
+      case "layout":
+        result(Self.layout(of: window))
         return
-      case "close":
-        result(nil)
-        window.performClose(nil)
-        return
-      case "minimize":
-        window.miniaturize(nil)
-      case "toggleFullscreen":
-        window.toggleFullScreen(nil)
       case "toggleMaximized":
         guard !window.styleMask.contains(.fullScreen) else { result(nil); return }
         switch UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") {
         case "Minimize": window.miniaturize(nil)
         case "None": break
-        default: self?.toggleFill(window)
+        default: window.performZoom(nil)
         }
       case "move":
         if let self, self.dragOffset != nil, !window.styleMask.contains(.fullScreen) {
@@ -210,7 +198,7 @@ private final class DesktopWindowChrome {
         NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) {
           [weak self, weak window] _ in
           guard let window else { return }
-          self?.methods.invokeMethod("stateChanged", arguments: Self.state(of: window))
+          self?.methods.invokeMethod("layoutChanged", arguments: Self.layout(of: window))
         }
       }
   }
@@ -221,23 +209,16 @@ private final class DesktopWindowChrome {
       NSPoint(x: dragLocation.x - dragOffset.x, y: dragLocation.y - dragOffset.y))
   }
 
-  private func toggleFill(_ window: NSWindow) {
-    guard let workArea = window.screen?.visibleFrame else { return }
-    let target: NSRect
-    if window.frame == workArea {
-      guard let restoreFrame else { return }
-      self.restoreFrame = nil
-      target = restoreFrame
-    } else {
-      restoreFrame = window.frame
-      target = workArea
+  private static func layout(of window: NSWindow) -> [String: CGFloat] {
+    guard !window.styleMask.contains(.fullScreen), let content = window.contentView else {
+      return ["left": 0, "right": 0, "top": 0]
     }
-    window.setFrameOrigin(target.origin)
-    window.setFrame(target, display: true)
-  }
-
-  private static func state(of window: NSWindow) -> String {
-    window.styleMask.contains(.fullScreen) ? "fullscreen" : "normal"
+    let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton]
+      .compactMap { window.standardWindowButton($0) }
+      .filter { !$0.isHidden }
+      .map { content.convert($0.bounds, from: $0) }
+    let top = buttons.map { content.isFlipped ? $0.maxY : content.bounds.maxY - $0.minY }
+    return ["left": buttons.map(\.maxX).max() ?? 0, "right": 0, "top": top.max() ?? 0]
   }
 
   deinit {

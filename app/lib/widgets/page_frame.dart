@@ -510,11 +510,17 @@ class _WorkspaceToolbar extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(
           window == null
               ? DesignTokens.spacingMd
-              : math.max(DesignTokens.spacingMd, window.left),
+              : math.max(
+                  DesignTokens.spacingMd,
+                  window.left + DesignTokens.spacingXs,
+                ),
           MediaQuery.paddingOf(context).top + rowPadding,
           window == null
               ? DesignTokens.spacingMd
-              : math.max(DesignTokens.spacingMd, window.right),
+              : math.max(
+                  DesignTokens.spacingMd,
+                  window.right + DesignTokens.spacingXs,
+                ),
           rowPadding,
         ),
         child: Row(

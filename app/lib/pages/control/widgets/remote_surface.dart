@@ -9,6 +9,7 @@ import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/ambient_loading_field.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/overlays.dart';
@@ -217,7 +218,10 @@ class RemoteStage extends StatelessWidget {
           ),
         if (waiting)
           Positioned(
-            left: MediaQuery.paddingOf(context).left + 20,
+            left:
+                MediaQuery.paddingOf(context).left +
+                (DesktopWindowInsets.of(context)?.left ?? 0) +
+                20,
             top: MediaQuery.paddingOf(context).top + 12,
             child: Tooltip(
               message: '关闭等待',

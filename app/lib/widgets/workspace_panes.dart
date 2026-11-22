@@ -78,6 +78,7 @@ final class WorkspacePanes extends StatelessWidget {
             ? DesktopWindowInsets(
                 left: detail ? 0 : desktop.left,
                 right: detail ? desktop.right : 0,
+                top: desktop.top,
                 child: child,
               )
             : child,

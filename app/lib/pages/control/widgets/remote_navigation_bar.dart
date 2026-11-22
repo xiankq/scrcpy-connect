@@ -27,6 +27,7 @@ class RemoteNavigationBar extends StatelessWidget {
       color: colors.surface,
       child: SafeArea(
         top: false,
+        bottom: false,
         child: DecoratedBox(
           decoration: BoxDecoration(
             border: Border(

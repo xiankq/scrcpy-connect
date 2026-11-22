@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/physics.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_press_feedback.dart';
 
@@ -130,7 +131,15 @@ class _ExitHandleState extends State<ExitHandle>
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final viewport = constraints.biggest;
-      final media = MediaQuery.of(context);
+      final sourceMedia = MediaQuery.of(context);
+      final window = DesktopWindowInsets.of(context);
+      final media = window == null
+          ? sourceMedia
+          : sourceMedia.copyWith(
+              padding: sourceMedia.padding.copyWith(
+                top: math.max(sourceMedia.padding.top, window.top),
+              ),
+            );
       dragBounds = _dragBoundsFor(viewport, media);
       if (!initialized) {
         offset = ExitHandle.initialBoundsFor(viewport, media).topLeft;

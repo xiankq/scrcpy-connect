@@ -258,6 +258,7 @@ class AppNavigationShell extends StatelessWidget {
               ? DesktopWindowInsets(
                   left: math.max(0.0, desktop.left - navigationWidth),
                   right: desktop.right,
+                  top: desktop.top,
                   child: child,
                 )
               : child;
@@ -286,7 +287,7 @@ class AppNavigationShell extends StatelessWidget {
                               right: false,
                               minimum: EdgeInsets.only(
                                 top: compactSidebar && (desktop?.left ?? 0) > 0
-                                    ? DesignTokens.componentPageHeaderHeight
+                                    ? desktop!.top
                                     : 0,
                               ),
                               child: SizedBox(
@@ -314,12 +315,13 @@ class AppNavigationShell extends StatelessWidget {
                                         children: [
                                           if (!compactSidebar &&
                                               (desktop?.left ?? 0) > 0)
-                                            const DesktopWindowDragArea(
+                                            DesktopWindowDragArea(
                                               child: SizedBox(
-                                                height:
-                                                    DesignTokens
-                                                        .componentPageHeaderHeight -
-                                                    DesignTokens.spacingSm,
+                                                height: math.max(
+                                                  0,
+                                                  desktop!.top -
+                                                      DesignTokens.spacingSm,
+                                                ),
                                                 width: double.infinity,
                                               ),
                                             ),

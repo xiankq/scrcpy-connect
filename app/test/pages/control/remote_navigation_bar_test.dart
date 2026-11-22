@@ -4,6 +4,21 @@ import 'package:scrcpy_connect/pages/control/widgets/remote_navigation_bar.dart'
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 
 void main() {
+  testWidgets('sits flush with the bottom edge in fullscreen', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..padding = const FakeViewPadding(bottom: 34);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(bottomNavigationBar: _Subject())),
+    );
+
+    final bar = tester.getRect(find.byType(RemoteNavigationBar));
+    expect(bar.bottom, tester.getRect(find.byType(Scaffold)).bottom);
+    expect(bar.height, DesignTokens.componentRemoteNavigationHeight);
+  });
+
   testWidgets('uses the design spacing at the 402 point reference width', (
     tester,
   ) async {
