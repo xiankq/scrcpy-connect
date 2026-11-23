@@ -47,7 +47,10 @@ int peMachine(File path) {
 Iterable<File> bundleFiles(Directory directory) =>
     directory.listSync(recursive: true, followLinks: true).whereType<File>();
 
-void _rejectApplicationBridge(Iterable<File> files) {
+void _rejectApplicationBridge(
+  Iterable<File> files, {
+  bool allowStandaloneAdb = false,
+}) {
   if (files.any(
     (file) =>
         RegExp(r'^(?:lib)?interop_bridge(?:\.|$)')
@@ -55,11 +58,12 @@ void _rejectApplicationBridge(Iterable<File> files) {
   )) {
     throw StateError('Bundle contains the removed application bridge');
   }
-  if (files.any(
-    (file) =>
-        RegExp(r'^(?:lib)?interop_adb_bridge(?:\.|$)')
-            .hasMatch(p.basename(file.path)),
-  )) {
+  if (!allowStandaloneAdb &&
+      files.any(
+        (file) =>
+            RegExp(r'^(?:lib)?interop_adb_bridge(?:\.|$)')
+                .hasMatch(p.basename(file.path)),
+      )) {
     throw StateError(
       'Release bundle duplicates the composed scrcpy ADB runtime',
     );
@@ -322,7 +326,8 @@ Future<void> verifyApple(
     }
   }
   final files = bundleFiles(contents).toList();
-  _rejectApplicationBridge(files);
+  // The debug simulator build retains the standalone SDK without AOT reachability.
+  _rejectApplicationBridge(files, allowStandaloneAdb: simulator);
   final engine = files
       .where(
         (file) =>
