@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: public-release
   cancel-in-progress: false
@@ -48,7 +52,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   package:
-    needs: [preflight, check]
+    needs: preflight
     uses: ./.github/workflows/package.yml
     with:
       release: ${{ needs.preflight.outputs.preview == 'false' }}
@@ -57,7 +61,7 @@ jobs:
     secrets: inherit
 
   publish:
-    needs: [preflight, package]
+    needs: [preflight, check, package]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
