@@ -2,7 +2,7 @@
 
 ## 先试打包
 
-工作流合入默认分支后，在 GitHub 打开 **Actions → Packages → Run workflow**，选择要验证的分支。推送 `codex/package-preview` 也会启动试打包。完成后，在此次运行的 **Artifacts** 下载结果。
+把构建配置或打包脚本的改动推到 `dev` 会自动启动试打包。工作流合入默认分支后，也可以在 GitHub 打开 **Actions → Packages → Run workflow**，选择要验证的分支。完成后，在此次运行的 **Artifacts** 下载结果。
 
 | 平台 | 架构 | 试打包 | GitHub Release |
 | --- | --- | --- | --- |

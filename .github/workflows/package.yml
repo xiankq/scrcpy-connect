@@ -2,7 +2,14 @@ name: Packages
 
 on:
   push:
-    branches: [codex/package-preview]
+    branches: [dev]
+    paths:
+      - '.github/actions/setup-build/**'
+      - '.github/workflows/package.yml'
+      - 'scripts/android.dart'
+      - 'scripts/build_host.dart'
+      - 'scripts/installer_windows.iss'
+      - 'scripts/package_*'
   workflow_dispatch:
   workflow_call:
     inputs:
