@@ -57,6 +57,16 @@ jobs:
           PACKAGE_PLATFORM: ${{ matrix.platform }}
           PACKAGE_ARCH: ${{ matrix.arch }}
         run: dart scripts/build_host.dart "$PACKAGE_PLATFORM" --arch "$PACKAGE_ARCH" --installers --update-feed "$UPDATE_FEED"
+      - if: matrix.platform == 'linux'
+        name: Verify DEB install and uninstall
+        env:
+          PACKAGE_ARCH: ${{ matrix.arch }}
+        run: |
+          prefix="build/verified/linux-$PACKAGE_ARCH-release"
+          sudo dpkg --install "$prefix.deb"
+          cmp /usr/bin/interconnect "app/build/linux/$PACKAGE_ARCH/release/bundle/interconnect"
+          sudo dpkg --remove interconnect
+          test ! -e /usr/bin/interconnect
       - if: matrix.platform == 'windows'
         name: Verify silent install and uninstall
         shell: pwsh
@@ -142,9 +152,20 @@ jobs:
           distribution: temurin
           java-version: '21'
       - name: Install Android SDK components
-        run: >-
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          'platforms;android-36' 'platforms;android-37.0' 'build-tools;37.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
+        run: |
+          sdkmanager="${ANDROID_HOME:?}/cmdline-tools/latest/bin/sdkmanager"
+          ndk_version=28.2.13676358
+          # Reclaim space on the disposable runner before building the native SDKs.
+          sudo rm -rf /usr/share/dotnet "$ANDROID_HOME/system-images" "$ANDROID_HOME/emulator"
+          for directory in "$ANDROID_HOME"/ndk/*; do
+            if [[ -d "$directory" && "${directory##*/}" != "$ndk_version" ]]; then
+              "$sdkmanager" --uninstall "ndk;${directory##*/}"
+            fi
+          done
+          "$sdkmanager" 'platforms;android-36' 'platforms;android-37.0' 'build-tools;37.0.0' "ndk;$ndk_version" 'cmake;3.22.1'
+          ndk="$ANDROID_HOME/ndk/$ndk_version"
+          printf 'ANDROID_NDK_HOME=%s\nANDROID_NDK_ROOT=%s\nANDROID_NDK=%s\n' "$ndk" "$ndk" "$ndk" >> "$GITHUB_ENV"
+          df -h "$GITHUB_WORKSPACE"
       - name: Install the Android Rust targets
         run: rustup target add armv7-linux-androideabi aarch64-linux-android x86_64-linux-android
       - name: Build and verify the Android package set
@@ -156,6 +177,7 @@ jobs:
           ANDROID_SIGNING_KEY_PASSWORD: ${{ inputs.release && secrets.ANDROID_SIGNING_KEY_PASSWORD || '' }}
           ANDROID_SIGNER_SHA256: ${{ vars.ANDROID_SIGNER_SHA256 }}
           UPDATE_FEED: ${{ inputs.release && format('https://github.com/{0}/releases/latest/download/release-feed.json', github.repository) || '' }}
+          CARGO_TARGET_DIR: ${{ runner.temp }}/interconnect-cargo-target
         run: |
           mode=debug
           flags=()

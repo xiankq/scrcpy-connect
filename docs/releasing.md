@@ -12,7 +12,7 @@
 | macOS | Apple Silicon、Intel | 两个本机试用 DMG | 配好 Developer ID 与公证后发布两个 DMG |
 | iOS 和 iPadOS | arm64 | Apple 芯片 Mac 的模拟器包、未签名 iPhoneOS 编译归档 | 通过 TestFlight 或 App Store 分发 |
 
-CI 在 PR 和 `main`、`dev` 分支上运行，检查生成物、代码格式、静态分析和测试。试打包也会核验安装包中的原生库、运行资源和应用标识。下载到干净系统运行，才能确认真实的安装和启动体验。
+CI 在 PR 和 `main`、`dev` 分支上运行，检查生成物、代码格式、静态分析和测试。试打包会核验原生库、运行资源和应用标识，并在对应运行器上试装、卸载 Windows 安装器和 Linux DEB。下载后仍可在真实设备验证启动和使用体验。
 
 ### 在 iOS 模拟器试用
 
