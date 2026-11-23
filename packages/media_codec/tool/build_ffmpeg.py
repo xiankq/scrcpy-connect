@@ -264,15 +264,15 @@ def build(args, cache, prefix):
     elif args.platform == "windows":
         environment = windows_environment(environment, args.arch, cache)
         msys2_bin = environment.get("MEDIA_CODEC_MSYS2_BIN")
-        if msys2_bin:
-            make = str(Path(msys2_bin) / "make.exe")
-            bash = str(Path(msys2_bin) / "bash.exe")
-        try:
-            make_version = subprocess.check_output([make, "--version"], env=environment, text=True)
-        except (OSError, subprocess.CalledProcessError) as error:
-            raise RuntimeError("Install MSYS2 make and add it, Git Bash, and NASM to PATH") from error
-        if "msys" not in make_version.lower():
-            raise RuntimeError(f"Use MSYS2 make; {make} reports {make_version.strip()}")
+        make = (str(Path(msys2_bin) / "make.exe") if msys2_bin else
+                shutil.which("make.exe", path=environment.get("PATH")))
+        if not make:
+            raise RuntimeError("Install MSYS2 make and add its usr/bin directory to PATH")
+        # MSYS2 GNU Make can report a Cygwin target. Its runtime identifies the tool.
+        msys_bin = Path(make).parent
+        if not (msys_bin / "msys-2.0.dll").is_file():
+            raise RuntimeError(f"Use MSYS2 make; its runtime is missing beside {make}")
+        bash = str(msys_bin / "bash.exe")
         environment["CC"] = "cl"
         options += ["--toolchain=msvc", "--target-os=win32", "--extra-cflags=-MD",
                     "--arch=" + {"x64": "x86_64", "arm64": "aarch64", "arm": "arm"}[args.arch],
