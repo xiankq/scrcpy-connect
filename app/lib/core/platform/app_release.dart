@@ -93,16 +93,27 @@ Uri _httpsUrl(Uri uri) {
 Future<List<AppRelease>> readAppReleases(Uri url) async {
   final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
   try {
-    final request = await client.getUrl(_httpsUrl(url));
-    request.followRedirects = false;
-    final response = await request.close().timeout(const Duration(seconds: 10));
+    // GitHub 下载入口会重定向到实际附件。每一跳仍必须是 HTTPS。
+    var destination = _httpsUrl(url);
+    HttpClientResponse response;
+    var redirects = 0;
+    const timeout = Duration(seconds: 10);
+    while (true) {
+      final request = await client.getUrl(destination);
+      request.followRedirects = false;
+      response = await request.close().timeout(timeout);
+      if (!response.isRedirect) break;
+      final location = response.headers.value(HttpHeaders.locationHeader);
+      if (location == null || redirects++ == 4) {
+        throw const HttpException('更新渠道的跳转地址不可用。');
+      }
+      destination = _httpsUrl(destination.resolve(location));
+      await response.drain<void>().timeout(timeout);
+    }
     if (response.statusCode != HttpStatus.ok) {
       throw const HttpException('发布渠道暂时无法提供更新记录。');
     }
-    final body = await utf8.decoder
-        .bind(response)
-        .join()
-        .timeout(const Duration(seconds: 10));
+    final body = await utf8.decoder.bind(response).join().timeout(timeout);
     final records = jsonDecode(body);
     if (records is! List) throw const FormatException('更新记录应为列表。');
     final releases = <AppRelease>[];
