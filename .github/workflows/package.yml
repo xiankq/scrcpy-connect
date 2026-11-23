@@ -6,7 +6,11 @@ on:
     paths:
       - '.github/actions/setup-build/**'
       - '.github/workflows/package.yml'
+      - 'app/linux/CMakeLists.txt'
+      - 'app/windows/CMakeLists.txt'
+      - 'packages/adb/lib/src/adb_host.dart'
       - 'scripts/android.dart'
+      - 'scripts/apple_bundle_resources.sh'
       - 'scripts/build_host.dart'
       - 'scripts/installer_windows.iss'
       - 'scripts/package_*'
@@ -14,6 +18,10 @@ on:
   workflow_call:
     inputs:
       release:
+        type: boolean
+        default: false
+      preview:
+        description: Use the public Android signing key without enabling stable updates
         type: boolean
         default: false
       macos:
@@ -43,7 +51,7 @@ jobs:
       - uses: ./.github/actions/setup-build
       - if: matrix.platform == 'linux'
         name: Install Linux package tools
-        run: sudo apt-get install -y file rpm desktop-file-utils squashfs-tools ${{ matrix.arch == 'arm64' && 'adb' || '' }}
+        run: sudo apt-get install -y adb file rpm desktop-file-utils squashfs-tools
       - if: matrix.platform == 'windows'
         name: Install the pinned Inno Setup compiler
         shell: pwsh
@@ -148,7 +156,7 @@ jobs:
   android:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    environment: ${{ inputs.release && 'release' || 'package-preview' }}
+    environment: ${{ (inputs.release || inputs.preview) && 'release' || 'package-preview' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -177,11 +185,11 @@ jobs:
         run: rustup target add armv7-linux-androideabi aarch64-linux-android x86_64-linux-android
       - name: Build and verify the Android package set
         env:
-          PUBLIC_ANDROID: ${{ inputs.release }}
-          ANDROID_SIGNING_STORE_BASE64: ${{ inputs.release && secrets.ANDROID_SIGNING_STORE_BASE64 || '' }}
-          ANDROID_SIGNING_STORE_PASSWORD: ${{ inputs.release && secrets.ANDROID_SIGNING_STORE_PASSWORD || '' }}
-          ANDROID_SIGNING_KEY_ALIAS: ${{ inputs.release && secrets.ANDROID_SIGNING_KEY_ALIAS || '' }}
-          ANDROID_SIGNING_KEY_PASSWORD: ${{ inputs.release && secrets.ANDROID_SIGNING_KEY_PASSWORD || '' }}
+          PUBLIC_ANDROID: ${{ inputs.release || inputs.preview }}
+          ANDROID_SIGNING_STORE_BASE64: ${{ secrets.ANDROID_SIGNING_STORE_BASE64 }}
+          ANDROID_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}
+          ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
+          ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
           ANDROID_SIGNER_SHA256: ${{ vars.ANDROID_SIGNER_SHA256 }}
           UPDATE_FEED: ${{ inputs.release && format('https://github.com/{0}/releases/latest/download/release-feed.json', github.repository) || '' }}
           CARGO_TARGET_DIR: ${{ runner.temp }}/interconnect-cargo-target

@@ -22,6 +22,7 @@ def main():
         source_archive(name, lock, cache)
 
     with tarfile.open(args.output, "w:gz") as bundle:
+        bundle.add(ROOT / "docs/releasing.md", arcname="REBUILD.md")
         for name, lock in sources.items():
             archive = f"{name}-{lock['revision']}.tar.gz"
             bundle.add(cache / "source" / archive, arcname=f"upstream/{archive}")

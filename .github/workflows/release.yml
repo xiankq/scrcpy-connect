@@ -13,9 +13,10 @@ concurrency:
 
 jobs:
   preflight:
-    if: vars.PUBLIC_RELEASES_ENABLED == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    outputs:
+      preview: ${{ steps.channel.outputs.preview }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -23,6 +24,19 @@ jobs:
           fetch-depth: 0
       - name: Require a commit on main
         run: git merge-base --is-ancestor HEAD refs/remotes/origin/main
+      - name: Check that publishing is enabled for the tag
+        id: channel
+        env:
+          ENABLE_PREVIEW: ${{ vars.PUBLIC_PREVIEWS_ENABLED }}
+          ENABLE_STABLE: ${{ vars.PUBLIC_RELEASES_ENABLED }}
+        run: |
+          if [[ "$GITHUB_REF_NAME" =~ -preview\.[1-9][0-9]*$ ]]; then
+            [[ "$ENABLE_PREVIEW" == true ]] || { echo 'Public previews are disabled.' >&2; exit 1; }
+            echo 'preview=true' >> "$GITHUB_OUTPUT"
+          else
+            [[ "$ENABLE_STABLE" == true ]] || { echo 'Stable releases are disabled.' >&2; exit 1; }
+            echo 'preview=false' >> "$GITHUB_OUTPUT"
+          fi
       - uses: ./.github/actions/setup-build
         with:
           native: 'false'
@@ -34,15 +48,16 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   package:
-    needs: check
+    needs: [preflight, check]
     uses: ./.github/workflows/package.yml
     with:
-      release: true
+      release: ${{ needs.preflight.outputs.preview == 'false' }}
+      preview: ${{ needs.preflight.outputs.preview == 'true' }}
       macos: ${{ vars.MACOS_RELEASE_ENABLED == 'true' }}
     secrets: inherit
 
   publish:
-    needs: package
+    needs: [preflight, package]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -63,16 +78,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PUBLISH_MACOS: ${{ vars.MACOS_RELEASE_ENABLED }}
+          PREVIEW: ${{ needs.preflight.outputs.preview }}
         run: |
           macos=()
           if [[ "$PUBLISH_MACOS" == true ]]; then macos=(--macos); fi
-          previous_tag="$(gh release list --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName // empty')"
           previous=()
-          if [[ -n "$previous_tag" ]]; then
-            previous_asset="$(gh release view "$previous_tag" --json assets --jq '.assets[].name | select(. == "release-feed.json")')"
-            if [[ -n "$previous_asset" ]]; then
-              gh release download "$previous_tag" --pattern release-feed.json --dir "$RUNNER_TEMP"
-              previous=(--previous-feed "$RUNNER_TEMP/release-feed.json")
+          if [[ "$PREVIEW" == false ]]; then
+            previous_tag="$(gh release list --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName // empty')"
+            if [[ -n "$previous_tag" ]]; then
+              previous_asset="$(gh release view "$previous_tag" --json assets --jq '.assets[].name | select(. == "release-feed.json")')"
+              if [[ -n "$previous_asset" ]]; then
+                gh release download "$previous_tag" --pattern release-feed.json --dir "$RUNNER_TEMP"
+                previous=(--previous-feed "$RUNNER_TEMP/release-feed.json")
+              fi
             fi
           fi
           python3 scripts/release_media_source.py build/downloads/release-media-source.tar.gz
@@ -82,6 +100,7 @@ jobs:
       - name: Publish after uploading the complete draft
         env:
           GH_TOKEN: ${{ github.token }}
+          PREVIEW: ${{ needs.preflight.outputs.preview }}
         run: |
           published_draft="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
             | jq -sr --arg tag "$GITHUB_REF_NAME" 'flatten[] | select(.tag_name == $tag) | .draft')"
@@ -99,4 +118,8 @@ jobs:
               ;;
           esac
           gh release upload "$GITHUB_REF_NAME" --clobber build/release/*
-          gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+          if [[ "$PREVIEW" == true ]]; then
+            gh release edit "$GITHUB_REF_NAME" --draft=false --prerelease --latest=false
+          else
+            gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+          fi

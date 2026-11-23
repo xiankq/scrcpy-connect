@@ -10,9 +10,11 @@
 
 - **Android** 按架构选择 APK。不确定时，下载 `android-universal.apk`。
 - **Windows** 按 x64 或 ARM64 选择安装器 EXE，也可以下载便携 ZIP。使用便携版时完整解压，然后运行 `Interconnect.exe`。
-- **Linux** 按 x64 或 ARM64 选择 AppImage、DEB、RPM 或 tar.gz。ARM64 使用发行版提供的 ADB。安装方法见[下载包说明](docs/releasing.md#怎么选下载包)。
-- **macOS** 签名渠道开启后，按 Apple Silicon 或 Intel 选择 DMG，将邻接拖入「应用程序」。
-- **iOS 和 iPadOS** 通过 Apple 渠道交付，当前可在 Actions 试编译。
+- **Linux** 按 x64 或 ARM64 选择 AppImage、DEB、RPM 或 tar.gz。
+- **macOS** 按 Apple Silicon 或 Intel 选择 DMG，将邻接拖入「应用程序」。预览版 DMG 未经 Apple 公证。
+- **iOS 和 iPadOS** 可在 Apple 芯片 Mac 上用模拟器体验预览版。真机编译归档需要 Apple 签名才能安装。
+
+桌面首次使用前需要安装 ADB。各系统的安装方法见[下载包说明](docs/releasing.md#怎么选下载包)。
 
 首次连接时，在 Android 被控设备上打开开发者选项，按连接方式启用 USB 或无线调试，只授权自己信任的主控。连接、配对和重连的区别见[设备连接](designs/prod/README.md)。
 
@@ -44,3 +46,5 @@ flutter run -d <device>
 | [变更记录](CHANGELOG.md) | 每个公开版本的用户可见变化 |
 
 Flutter 应用在 `app/`，可复用的 Dart 接口在 `packages/`，对应的原生实现位于 `rust/`。被控设备运行的临时组件在 `servers/`。
+
+项目代码采用 [MIT 许可证](LICENSE)。外部组件与设计素材沿用各自的许可，见[第三方组件](THIRD_PARTY_NOTICES.md)。

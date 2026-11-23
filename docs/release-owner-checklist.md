@@ -4,31 +4,21 @@
 
 ## 首次公开前
 
-### 1. 确定项目许可证和著作权人
+### 1. 核对项目和第三方许可
 
 **为什么需要** 公开仓库以后，用户仍需要明确的授权才能复制、修改和再分发项目代码。第三方组件已有的许可证只适用于各自组件。
 
 **怎么做** 确认原创代码和设计的权利归属，以及希望开放的范围。选定许可证和版权署名后，把许可证原文作为仓库根目录的 `LICENSE` 提交。多人或公司参与的部分也请确认授权。遇到混合许可时，保留各组件原有的声明，并标明各自适用范围。发布流水线会检查根目录是否有 `LICENSE`。 [GitHub 许可证说明](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository)
 
-**需要你给出** 许可证名称、著作权人、需要单独授权的代码或设计范围。
+项目代码使用 [MIT 许可证](../LICENSE)，著作权署名 `xiankq`。外部组件及素材见 [第三方组件](../THIRD_PARTY_NOTICES.md)。
 
-### 2. 确认随包转发 ADB 的依据
-
-**为什么需要** Windows、Linux x64 和 macOS 的包包含从 Android SDK 下载的官方 Platform-Tools 文件。能公开下载 SDK 和能把它放进另一个产品分发，需要分别确认。Linux ARM64 使用发行版提供的 ADB。
-
-**怎么做** 对照 `packages/adb/third_party/platform-tools.lock.json` 中各平台的实际组件及其附带条款，确认批量再分发的许可依据，并保存相关许可和署名。如果当前下载包的条款无法支持预期分发，决定改用可再分发的构建来源，或调整桌面安装方式，再重新验证连接和卸载。 [Android SDK 条款](https://developer.android.com/studio/terms)
-
-**需要你给出** 可接受的来源及确认依据，或选择先改桌面 ADB 的交付方式。
-
-### 3. 确认静态链接的媒体库如何交付
+### 2. 确认静态链接的媒体库如何交付
 
 **为什么需要** 应用会把裁剪后的 FFmpeg 和 dav1d 链接进原生模块。正式发布附件已有对应上游源码、补丁和构建脚本。FFmpeg 的 LGPL 义务还涉及用户替换库后重新链接，源码附件是一部分材料。
 
-**怎么做** 逐平台核对构建选项、链接方式和随包许可。保持静态链接时，准备适用许可要求的可重新链接材料、准确构建命令和必要对象文件，并用干净环境实际完成一次替换 FFmpeg 后的重新链接。也可评估改成适用的动态链接交付，再验证旧系统和干净安装。已收集的来源见[第三方组件](../THIRD_PARTY_NOTICES.md)。 [FFmpeg 分发说明](https://ffmpeg.org/legal.html)
+**怎么做** 发布时在同一页面提供对应媒体源码和项目源码。按[替换 FFmpeg 的步骤](releasing.md#替换-ffmpeg-后重新构建)验证修改后的库可重新链接。 [FFmpeg 分发说明](https://ffmpeg.org/legal.html)
 
-**需要你给出** 采用的交付方式、对应材料的公开位置，以及确认已经做过替换验证的发布平台。
-
-### 4. 清点要一并公开的设计素材和 Git 历史
+### 3. 清点要一并公开的设计素材和 Git 历史
 
 **为什么需要** 仓库里有 Android 预置应用图标、示例照片和 MiSans 用字。公开源码也会公开当前分支能够访问的 Git 历史，旧提交可能含有已经删出工作区的私人数据。
 
@@ -38,7 +28,7 @@
 
 **需要你给出** 已确认的素材范围、需要替换的条目、旧设计编号的确认结果，以及是否需要保留既有 Git 历史。
 
-### 5. 确定 Android 正式签名
+### 4. 确定 Android 发布签名
 
 **为什么需要** Android 只允许签名兼容的 APK 覆盖同一个应用。换成新签名后，既有用户可能需要卸载才能安装，应用本地数据也可能随之丢失。
 
@@ -58,7 +48,7 @@
 
 **需要你给出** 是否已有必须兼容的 APK、正式证书指纹，以及 GitHub Secrets 已配置的确认。
 
-### 6. 配置 GitHub 仓库和发布审核
+### 5. 配置 GitHub 仓库和发布审核
 
 **为什么需要** 自动发布依赖可用的 Actions、明确的发布权限和可访问的 GitHub Releases。应用用公开下载地址读取版本，仓库私有时普通安装用户无法访问该地址。
 
@@ -67,11 +57,11 @@
 1. 将工作流合入 `main` 后，在 **Settings → Actions → General** 确认允许仓库使用工作流中的 Actions。保留默认只读权限，发布任务会单独申请写入 Releases 所需的权限。
 2. 在 **Settings → Environments** 建立 `release`。在 **Deployment branches and tags** 里选择只允许 `v*` 标签部署。有权限时配置审核人和禁止自己审批。根据仓库套餐，在 **Settings → Rules → Rulesets** 限制谁可以创建或移动 `v*` 标签。 [GitHub 环境配置](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)
 3. 先在 **Actions → Packages** 试打包，下载每个平台产物。Android 用真机试装，Windows 与 Linux 在 x64、ARM64 的干净系统试装，macOS 试开两种 DMG，iOS 检查编译归档。记录测试版本、架构和结果。
-4. 如果仓库现在是私有的，完成前面的授权、素材和历史核对后，再决定是否公开。到 **Settings → Actions secrets and variables → Actions → Variables** 创建仓库变量 `PUBLIC_RELEASES_ENABLED`，值设为 `true`。从通过 CI 的 `main` 提交创建首发标签，审批后确认外部用户可下载并读取更新清单。 [GitHub 发布管理](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)
+4. 按[发布说明](releasing.md)开启对应渠道，从通过 CI 的 `main` 提交创建标签。发布后确认未登录的用户能下载对应平台附件。 [GitHub 发布管理](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)
 
 **需要你给出** 仓库公开时点、发布审批人、首次发布分支与版本，以及首发包验证结果。
 
-### 7. 确认项目公开后的联系入口
+### 6. 确认项目公开后的联系入口
 
 **为什么需要** 用户需要知道从哪里反馈普通问题，发现涉及设备授权或数据的问题时也要有私下报告入口。
 

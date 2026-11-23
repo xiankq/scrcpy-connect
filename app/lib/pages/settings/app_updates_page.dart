@@ -238,6 +238,7 @@ class AppUpdatesPage extends HookConsumerWidget {
                   context: context,
                   applicationName: '邻接 Interconnect',
                   applicationVersion: installed?.version,
+                  applicationLegalese: '媒体解码使用 LGPL 2.1 或更高版本许可的 FFmpeg。',
                 ),
               ),
             ],

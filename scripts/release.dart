@@ -29,7 +29,10 @@ Future<void> main(List<String> arguments) async {
     final tag = args.option('tag')!;
     final version = RegExp(r'^(\d+\.\d+\.\d+)\+([1-9]\d*)$')
         .firstMatch(pubspec['version'] as String);
-    if (version == null || tag != 'v${version[1]}') {
+    final preview = RegExp(r'-preview\.[1-9]\d*$').hasMatch(tag);
+    if (version == null ||
+        tag.replaceFirst(RegExp(r'-preview\.[1-9]\d*$'), '') !=
+            'v${version[1]}') {
       throw FormatException('Tag $tag must match app/pubspec.yaml version.');
     }
     final license = File(p.join(root, 'LICENSE'));
@@ -64,6 +67,9 @@ Future<void> main(List<String> arguments) async {
       throw ArgumentError('Assembly requires --repository and --packages.');
     }
     final previousPath = args.option('previous-feed');
+    if (preview && previousPath != null) {
+      throw ArgumentError('Previews do not take a stable update feed.');
+    }
     final previous = previousPath == null
         ? <Map<String, Object?>>[]
         : (jsonDecode(File(previousPath).readAsStringSync()) as List)
@@ -99,9 +105,15 @@ Future<void> main(List<String> arguments) async {
             'interconnect-$tag-windows-$arch-portable.zip',
         'package-windows-$arch/windows-$arch-release-setup.exe':
             'interconnect-$tag-windows-$arch-setup.exe',
-        if (args.flag('macos'))
+        if (preview || args.flag('macos'))
           'package-macos-$arch/macos-$arch-release.dmg':
               'interconnect-$tag-macos-$arch.dmg',
+      },
+      if (preview) ...{
+        'package-ios-simulator-arm64/ios-simulator-arm64-debug.tar.gz':
+            'interconnect-$tag-ios-simulator-arm64.tar.gz',
+        'package-ios-arm64/ios-arm64-release.tar.gz':
+            'interconnect-$tag-iphoneos-arm64-unsigned.tar.gz',
       },
       'release-media-source.tar.gz': 'interconnect-$tag-media-source.tar.gz',
     };
@@ -132,7 +144,8 @@ Future<void> main(List<String> arguments) async {
           ),
           ('linux', 'Linux', ['x64', 'arm64']),
           ('windows', 'Windows', ['x64', 'arm64']),
-          if (args.flag('macos')) ('macos', 'macOS', ['arm64', 'x64']),
+          if (preview || args.flag('macos'))
+            ('macos', 'macOS', ['arm64', 'x64']),
         ])
           for (final arch in arches)
             '| $title | $arch | ${artifacts.values.where((name) => name.startsWith('interconnect-$tag-$platform-$arch.') || name.startsWith('interconnect-$tag-$platform-$arch-')).map((name) {
@@ -145,22 +158,33 @@ Future<void> main(List<String> arguments) async {
                   : name.split('.').last;
               return '[$label]($download/$name)';
             }).join(' · ')} |',
+        if (preview) ...[
+          '| iOS / iPadOS | 模拟器 · Apple 芯片 | [模拟器应用]($download/interconnect-$tag-ios-simulator-arm64.tar.gz) |',
+          '| iOS / iPadOS | 真机 · arm64 | [未签名编译归档]($download/interconnect-$tag-iphoneos-arm64-unsigned.tar.gz) |',
+        ],
       ];
       File(notePath).writeAsStringSync(
+        '${preview ? '这是公开预览版。macOS 安装包未经 Apple 公证。'
+                  'iPhoneOS 归档需要 Apple 签名才能安装到真机。\n\n' : ''}'
         '$notes\n\n## 下载\n\n${rows.join("\n")}\n\n'
         '[安装和校验说明](https://github.com/$repository/blob/$tag/docs/releasing.md) · '
-        '[SHA256SUMS]($download/SHA256SUMS)\n',
+        '[SHA256SUMS]($download/SHA256SUMS)\n\n'
+        '邻接使用 LGPL 2.1 许可的 FFmpeg。'
+        '[对应媒体源码]($download/interconnect-$tag-media-source.tar.gz) · '
+        '[重新构建说明](https://github.com/$repository/blob/$tag/docs/releasing.md#替换-ffmpeg-后重新构建)\n',
       );
     }
     const feed = 'release-feed.json';
-    File(p.join(output, feed)).writeAsStringSync(
-      '${const JsonEncoder.withIndent('  ').convert([
-        {'version': version[1]!, 'build': build, 'publishedAt': DateTime.now().toUtc().toIso8601String(), 'notes': summary, 'url': 'https://github.com/$repository/releases/tag/$tag'},
-        ...previous,
-      ])}\n',
-    );
+    if (!preview) {
+      File(p.join(output, feed)).writeAsStringSync(
+        '${const JsonEncoder.withIndent('  ').convert([
+          {'version': version[1]!, 'build': build, 'publishedAt': DateTime.now().toUtc().toIso8601String(), 'notes': summary, 'url': 'https://github.com/$repository/releases/tag/$tag'},
+          ...previous,
+        ])}\n',
+      );
+    }
     final checksums = <String>[];
-    for (final name in [...artifacts.values, feed]) {
+    for (final name in [...artifacts.values, if (!preview) feed]) {
       final digest = await sha256
           .bind(File(p.join(output, name)).openRead())
           .first;
