@@ -192,7 +192,8 @@ jobs:
             : "${ANDROID_SIGNING_STORE_BASE64:?Missing Android keystore}"
             : "${ANDROID_SIGNER_SHA256:?Missing Android certificate fingerprint}"
             umask 077
-            export ANDROID_SIGNING_STORE_FILE="$(mktemp "$RUNNER_TEMP/interconnect-signing.XXXXXX")"
+            ANDROID_SIGNING_STORE_FILE="$(mktemp "$RUNNER_TEMP/interconnect-signing.XXXXXX")"
+            export ANDROID_SIGNING_STORE_FILE
             trap 'rm -f "$ANDROID_SIGNING_STORE_FILE"' EXIT
             printf '%s' "$ANDROID_SIGNING_STORE_BASE64" | base64 --decode > "$ANDROID_SIGNING_STORE_FILE"
             unset ANDROID_SIGNING_STORE_BASE64
