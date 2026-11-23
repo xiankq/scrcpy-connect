@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -11,6 +12,8 @@ import 'package:scrcpy_connect/core/files/models/file_catalog_entry.dart';
 import 'package:scrcpy_connect/pages/gallery/preview/media_preview_page.dart';
 import 'package:scrcpy_connect/pages/gallery/preview/widgets/media_preview_toolbar.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/content/cached_file_image.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 
@@ -60,6 +63,14 @@ void main() {
 
   testWidgets('图片取回和系统分享位于底栏，画面可切换原尺寸', (tester) async {
     final content = _Content();
+    final decoded = Completer<ImageInfo>();
+    final image = CachedFileImage(File('/test.png'));
+    final cache = PaintingBinding.instance.imageCache;
+    cache.putIfAbsent(
+      image,
+      () => OneFrameImageStreamCompleter(decoded.future),
+    );
+    addTearDown(() => cache.evict(image));
     await tester.pumpWidget(
       ProviderScope(
         overrides: [contentReaderProvider.overrideWithValue(content)],
@@ -86,9 +97,21 @@ void main() {
     await tester.pump();
 
     final viewer = find.byType(InteractiveViewer);
-    expect(tester.widget<InteractiveViewer>(viewer).constrained, isTrue);
+    final loader = find.byType(ContentLoadingIndicator);
+    final viewport = find.byType(Scaffold);
+    expect(tester.getCenter(loader), tester.getCenter(viewport));
+    expect(viewer, findsNothing);
     await tester.tap(find.widgetWithText(TextButton, '原尺寸'));
     await tester.pump();
+    expect(tester.getCenter(loader), tester.getCenter(viewport));
+    expect(viewer, findsNothing);
+
+    final frame = await tester.runAsync(
+      () => createTestImage(width: 16, height: 32, cache: false),
+    );
+    decoded.complete(ImageInfo(image: frame!));
+    await tester.pumpAndSettle();
+    expect(loader, findsNothing);
     expect(tester.widget<InteractiveViewer>(viewer).constrained, isFalse);
     await tester.tap(find.widgetWithText(TextButton, '适合屏幕'));
     await tester.pump();

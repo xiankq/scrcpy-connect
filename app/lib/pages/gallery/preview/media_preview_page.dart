@@ -53,7 +53,11 @@ class MediaPreviewPage extends HookConsumerWidget {
     final preview = video
         ? VideoPreview(fallback: retrieve)
         : result.connectionState != ConnectionState.done
-        ? const Center(child: CircularProgressIndicator.adaptive())
+        ? const SafeArea(
+            top: false,
+            bottom: false,
+            child: Center(child: CircularProgressIndicator.adaptive()),
+          )
         : result.hasError
         ? EmptyContent(
             icon: LucideIcons.imageOff,
@@ -97,33 +101,37 @@ class MediaPreviewPage extends HookConsumerWidget {
               }
               return ColoredBox(
                 color: DesignTokens.colorMediaInk,
-                child: InteractiveViewer(
-                  key: ValueKey(originalSize.value),
-                  constrained: !originalSize.value,
-                  minScale: .5,
-                  maxScale: 5,
-                  child: Image(
-                    image: source.startsWith('http')
-                        ? NetworkImage(source)
-                        : CachedFileImage(File(source), lease: request?.lease),
-                    fit: originalSize.value ? BoxFit.none : BoxFit.contain,
-                    frameBuilder: (context, child, frame, synchronous) =>
-                        synchronous
-                        ? child
+                child: Image(
+                  image: source.startsWith('http')
+                      ? NetworkImage(source)
+                      : CachedFileImage(File(source), lease: request?.lease),
+                  fit: originalSize.value ? BoxFit.none : BoxFit.contain,
+                  frameBuilder: (context, child, frame, synchronous) {
+                    final stage = frame == null
+                        ? const SafeArea(
+                            child: Center(child: ContentLoadingIndicator()),
+                          )
+                        : InteractiveViewer(
+                            key: ValueKey(originalSize.value),
+                            constrained: !originalSize.value,
+                            minScale: .5,
+                            maxScale: 5,
+                            child: child,
+                          );
+                    return synchronous
+                        ? stage
                         : ContentArrival(
                             state: frame != null,
                             waiting: frame == null,
-                            child: frame == null
-                                ? const Center(child: ContentLoadingIndicator())
-                                : child,
-                          ),
-                    errorBuilder: (_, _, _) => EmptyContent(
-                      icon: LucideIcons.imageOff,
-                      title: '无法读取这张图片',
-                      action: TextButton(
-                        onPressed: () => retry.value++,
-                        child: const Text('重新预览'),
-                      ),
+                            child: stage,
+                          );
+                  },
+                  errorBuilder: (_, _, _) => EmptyContent(
+                    icon: LucideIcons.imageOff,
+                    title: '无法读取这张图片',
+                    action: TextButton(
+                      onPressed: () => retry.value++,
+                      child: const Text('重新预览'),
                     ),
                   ),
                 ),

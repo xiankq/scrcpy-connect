@@ -10,6 +10,7 @@ import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/pages/transfers/export/document_export_page.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
@@ -46,19 +47,38 @@ class ScreenshotPage extends HookWidget {
         sourceLabel: deviceName(device),
       );
     }
+    final source = Text(
+      '${deviceName(device)} · ${capture.paused ? '最后画面' : '当前视频帧'}',
+      style: Theme.of(context).textTheme.bodySmall,
+    );
+    const padding = EdgeInsets.all(DesignTokens.spacingMd);
+    if (available.connectionState != ConnectionState.done) {
+      return PageFrame(
+        title: '截图',
+        child: PageChromeBody(
+          child: Padding(
+            padding: padding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                source,
+                const Expanded(
+                  child: Center(child: CircularProgressIndicator.adaptive()),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return PageFrame(
       title: '截图',
       child: GroupedListView(
-        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+        padding: padding,
         children: [
-          Text(
-            '${deviceName(device)} · ${capture.paused ? '最后画面' : '当前视频帧'}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          source,
           const SizedBox(height: DesignTokens.spacingMd),
-          if (available.connectionState != ConnectionState.done)
-            const Center(child: CircularProgressIndicator.adaptive())
-          else if (available.data != true)
+          if (available.data != true)
             const StateNote('这张截图已不可用。请返回手机画面重新截图。')
           else ...[
             ClipRRect(
