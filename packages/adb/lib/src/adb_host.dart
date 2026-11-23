@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ffi';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -95,12 +96,13 @@ class AdbHost {
     final inspected = await identities.inspectIdentity(identity.path);
     final servers = api as NativeAdbServerApi;
     final executable = p.join(
-      binaryDirectory?.absolute.path ?? _packagedDirectory(),
+      binaryDirectory?.absolute.path ??
+          (Abi.current() == Abi.linuxArm64 ? '/usr/bin' : _packagedDirectory()),
       Platform.isWindows ? 'adb.exe' : 'adb',
     );
     if (!await File(executable).exists()) {
       throw FileSystemException(
-        'Bundled official ADB executable is missing',
+        'The required ADB executable is missing',
         executable,
       );
     }

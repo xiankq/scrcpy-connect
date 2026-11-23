@@ -48,14 +48,18 @@ def windows_environment(environment, arch, cache):
     vswhere = Path(environment.get("ProgramFiles(x86)", "C:/Program Files (x86)")) / "Microsoft Visual Studio/Installer/vswhere.exe"
     if not vswhere.is_file():
         raise RuntimeError("Install Visual Studio Desktop development with C++ and a Windows SDK")
+    native_arm64 = arch == "arm64" and platform.machine().lower() in {"arm64", "aarch64"}
+    component = ("Microsoft.VisualStudio.Component.VC.Tools.ARM64" if native_arm64
+                 else "Microsoft.VisualStudio.Component.VC.Tools.x86.x64")
     installation = subprocess.check_output(
         [str(vswhere), "-latest", "-products", "*", "-requires",
-         "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath"],
+         component, "-property", "installationPath"],
         text=True).strip()
     vcvars = Path(installation) / "VC/Auxiliary/Build/vcvarsall.bat"
     if not vcvars.is_file():
         raise RuntimeError("Visual Studio C++ build tools are missing")
-    target = {"x64": "x64", "arm64": "x64_arm64", "arm": "x64_arm"}[arch]
+    target = {"x64": "x64", "arm64": "arm64" if native_arm64 else "x64_arm64",
+              "arm": "x64_arm"}[arch]
     cache.mkdir(parents=True, exist_ok=True)
     # 不同 prefix 的并行构建不能覆盖或提前删除彼此的 MSVC 环境脚本。
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n", dir=cache,

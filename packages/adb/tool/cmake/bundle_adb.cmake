@@ -1,4 +1,10 @@
 # 应用安装锁文件指定的精确官方可执行产物。
+# Google 的 Linux Platform-Tools 只有 x64。ARM64 使用发行版的 adb。
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND
+    CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+  return()
+endif()
+
 function(adb_resolve_flutter_root)
   include("${CMAKE_CURRENT_SOURCE_DIR}/flutter/ephemeral/generated_config.cmake")
   set(ADB_FLUTTER_ROOT "${FLUTTER_ROOT}" PARENT_SCOPE)

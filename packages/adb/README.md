@@ -1,6 +1,6 @@
 # adb
 
-统一使用自有官方桌面 server 或移动 Rust ADB；设备记录、重连与持久文件任务由应用负责。
+桌面使用由应用管理的 ADB server，移动端使用 Rust ADB。设备记录、重连与持久文件任务由应用负责。Linux ARM64 使用发行版提供的 `/usr/bin/adb`，其余桌面目标使用打包的固定 Platform-Tools。
 
 ```dart
 final bindings = await createNativeAdbApi();
