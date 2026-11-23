@@ -8,6 +8,7 @@ class ConnectionAddressFields extends StatelessWidget {
     required this.address,
     required this.port,
     required this.pairingCode,
+    required this.focus,
     required this.pairing,
     required this.legacyTcp,
     required this.enabled,
@@ -17,6 +18,7 @@ class ConnectionAddressFields extends StatelessWidget {
   final TextEditingController address;
   final TextEditingController port;
   final TextEditingController pairingCode;
+  final ({FocusNode address, FocusNode port, FocusNode pairingCode}) focus;
   final bool pairing;
   final bool legacyTcp;
   final bool enabled;
@@ -32,6 +34,8 @@ class ConnectionAddressFields extends StatelessWidget {
       context,
       pairing ? '手机地址' : 'IP 地址或主机名',
       TextFormField(
+        key: ValueKey(focus.address),
+        focusNode: focus.address,
         style: textTheme.bodyMedium,
         controller: address,
         onChanged: onAddressChanged,
@@ -48,6 +52,8 @@ class ConnectionAddressFields extends StatelessWidget {
       context,
       pairing ? '配对端口' : '连接端口',
       TextFormField(
+        key: ValueKey(focus.port),
+        focusNode: focus.port,
         style: textTheme.bodyMedium,
         controller: port,
         validator: validatePort,
@@ -86,6 +92,8 @@ class ConnectionAddressFields extends StatelessWidget {
             context,
             '六位配对码',
             TextFormField(
+              key: ValueKey(focus.pairingCode),
+              focusNode: focus.pairingCode,
               style: textTheme.bodyMedium?.copyWith(
                 letterSpacing: DesignTokens.spacingXs,
               ),
@@ -108,7 +116,7 @@ class ConnectionAddressFields extends StatelessWidget {
           pairing
               ? '在手机的无线调试中选择「使用配对码配对」。'
               : legacyTcp
-              ? '通过 USB 开启 IP 调试后填写连接地址。请在可信网络使用。'
+              ? '仅连接已授权的手机。请输入当前连接地址，并在可信网络使用。'
               : '使用手机无线调试主页面的连接地址和端口。',
           style: textTheme.bodyMedium?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,

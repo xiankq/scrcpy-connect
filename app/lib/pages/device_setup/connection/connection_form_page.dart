@@ -74,6 +74,11 @@ class ConnectionFormPage extends HookConsumerWidget {
           : '',
     );
     final code = useTextEditingController();
+    final fieldFocus = (
+      address: useFocusNode(),
+      port: useFocusNode(),
+      pairingCode: useFocusNode(),
+    );
     final attemptPage = useState(false);
     final form = useMemoized(() => GlobalKey<FormState>());
     final scope = useMemoized(Object.new, [
@@ -130,7 +135,12 @@ class ConnectionFormPage extends HookConsumerWidget {
         : deviceId;
 
     Future<bool> prepareConnection() async {
-      if (!(form.currentState?.validate() ?? false)) {
+      final invalid = form.currentState?.validateGranularly();
+      if (invalid == null) return false;
+      if (invalid.isNotEmpty) {
+        if (invalid.first.widget.key case ValueKey<FocusNode>(:final value)) {
+          value.requestFocus();
+        }
         return false;
       }
       if ((configuring || reauthorizing) &&
@@ -398,6 +408,7 @@ class ConnectionFormPage extends HookConsumerWidget {
                                       address: host,
                                       port: activePort,
                                       pairingCode: code,
+                                      focus: fieldFocus,
                                       pairing: pairing,
                                       legacyTcp: legacyTcp,
                                       enabled: !flow.busy,

@@ -388,6 +388,40 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('连接表单将键盘移到第一处错误，且不发起连接', (tester) async {
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: ConnectTokens.theme(Brightness.light),
+          home: const ConnectionFormPage(initialMode: AddDeviceMode.ip),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final inputs = find.byType(EditableText);
+    await tester.showKeyboard(inputs.at(1));
+    await tester.tap(find.text('连接设备'));
+    await tester.pumpAndSettle();
+    expect(find.text('请输入手机上显示的地址'), findsOneWidget);
+    expect(
+      tester.widget<EditableText>(inputs.at(0)).focusNode.hasFocus,
+      isTrue,
+    );
+
+    await tester.enterText(inputs.at(0), 'phone.local');
+    await tester.enterText(inputs.at(1), '65536');
+    await tester.showKeyboard(inputs.at(0));
+    await tester.tap(find.text('连接设备'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<EditableText>(inputs.at(1)).focusNode.hasFocus,
+      isTrue,
+    );
+    expect(management.saves, isEmpty);
+    expect(connections.calls, isEmpty);
+  });
+
   testWidgets('连接失败返回配对码表单，主动切到 IP 才修改连接信息', (tester) async {
     await tester.pumpWidget(
       UncontrolledProviderScope(
