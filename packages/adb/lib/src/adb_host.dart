@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ffi';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -95,17 +94,7 @@ class AdbHost {
     final identities = api as AdbIdentities;
     final inspected = await identities.inspectIdentity(identity.path);
     final servers = api as NativeAdbServerApi;
-    final executable = p.join(
-      binaryDirectory?.absolute.path ??
-          (Abi.current() == Abi.linuxArm64 ? '/usr/bin' : _packagedDirectory()),
-      Platform.isWindows ? 'adb.exe' : 'adb',
-    );
-    if (!await File(executable).exists()) {
-      throw FileSystemException(
-        'The required ADB executable is missing',
-        executable,
-      );
-    }
+    final executable = await _installedAdb(binaryDirectory);
     final serverRoot = Directory(
       p.join(dataDirectory.absolute.path, 'official_adb'),
     );
@@ -284,11 +273,37 @@ class AdbHost {
     throw const AdbException('private_file_permissions_unavailable');
   }
 
-  static String _packagedDirectory() {
-    final directory = p.dirname(Platform.resolvedExecutable);
-    return Platform.isMacOS
-        ? p.normalize(p.join(directory, '..', 'Resources', 'adb'))
-        : p.join(directory, 'adb');
+  static Future<String> _installedAdb(Directory? binaryDirectory) async {
+    final env = Platform.environment;
+    final home = env['HOME'];
+    final localAppData = env['LOCALAPPDATA'];
+    final executable = Platform.isWindows ? 'adb.exe' : 'adb';
+    final directories = binaryDirectory != null
+        ? [binaryDirectory.absolute.path]
+        : [
+            for (final name in ['ANDROID_HOME', 'ANDROID_SDK_ROOT'])
+              if (env[name] case final sdk? when p.isAbsolute(sdk))
+                p.join(sdk, 'platform-tools'),
+            if (Platform.isWindows && localAppData != null)
+              p.join(localAppData, 'Android', 'Sdk', 'platform-tools'),
+            if (Platform.isMacOS) ...[
+              if (home != null)
+                p.join(home, 'Library', 'Android', 'sdk', 'platform-tools'),
+              '/opt/homebrew/bin',
+              '/usr/local/bin',
+            ],
+            if (Platform.isLinux) ...[
+              '/usr/bin',
+              if (home != null)
+                p.join(home, 'Android', 'Sdk', 'platform-tools'),
+            ],
+            ...?env['PATH']?.split(Platform.isWindows ? ';' : ':'),
+          ];
+    for (final directory in directories.where(p.isAbsolute)) {
+      final adb = File(p.join(directory, executable));
+      if (await adb.exists()) return adb.resolveSymbolicLinks();
+    }
+    throw const AdbException('desktop_adb_missing');
   }
 
   static Future<void> _prepareCommand(

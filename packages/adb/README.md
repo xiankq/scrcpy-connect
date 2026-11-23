@@ -1,6 +1,6 @@
 # adb
 
-桌面使用由应用管理的 ADB server，移动端使用 Rust ADB。设备记录、重连与持久文件任务由应用负责。Linux ARM64 使用发行版提供的 `/usr/bin/adb`，其余桌面目标使用打包的固定 Platform-Tools。
+桌面使用已安装的 ADB 并由应用管理自己的 ADB server，移动端使用 Rust ADB。设备记录、重连与持久文件任务由应用负责。
 
 ```dart
 final bindings = await createNativeAdbApi();
@@ -12,7 +12,7 @@ final devices = await host.client.devices();
 // 先关闭设备活动，再 await host.close()。
 ```
 
-桌面只使用随包固定的 `adb/`（macOS 为 `Contents/Resources/adb`），不回退 PATH 或直连。`binaryDirectory` 可用于测试。`initializeNativeAdb()` 只初始化绑定；移动连接首次使用时创建持久身份，损坏的已有身份不会被覆盖。
+桌面先检查 SDK 环境变量和各系统常用安装位置，再检查 `PATH` 中的绝对目录。`binaryDirectory` 可指定测试使用的工具目录。`initializeNativeAdb()` 只初始化绑定；移动连接首次使用时创建持久身份，损坏的已有身份不会被覆盖。
 
 与 scrcpy 组合时注入其配套 ADB bindings。**不同动态库的设备、scope 与操作句柄不能混用**，初始化后不能更换库。`AdbDevice.id` 是操作权限，`connectionFacts.connectionId` 是进程内连接身份；PID、序列号、端点和磁盘配置都不授予关闭权。
 

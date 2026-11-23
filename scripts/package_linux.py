@@ -44,14 +44,13 @@ def main(bundle, prefix, arch, version):
 
         control = root / "DEBIAN/control"
         control.parent.mkdir()
-        adb_dep = ", adb" if arch == "arm64" else ""
         control.write_text(f"""Package: interconnect
 Version: {version}
 Architecture: {deb_arch}
 Maintainer: Interconnect contributors
 Section: utils
 Priority: optional
-Depends: libc6 (>= 2.39), libgtk-3-0t64 | libgtk-3-0, libepoxy0, libdrm2, libva2, libva-drm2, libstdc++6{adb_dep}
+Depends: libc6 (>= 2.39), libgtk-3-0t64 | libgtk-3-0, libepoxy0, libdrm2, libva2, libva-drm2, libstdc++6, adb
 Description: Cross-device Android control and file workspace
 """)
         deb = str(prefix) + ".deb"
@@ -62,14 +61,14 @@ Description: Cross-device Android control and file workspace
         rpm_top = work / "rpm"
         rpm_top.mkdir()
         spec = work / "interconnect.spec"
-        adb_requirement = "Requires: android-tools\n" if arch == "arm64" else ""
         spec.write_text(f"""%global __os_install_post %{{nil}}
 Name: interconnect
 Version: {version}
 Release: 1
 Summary: Cross-device Android control and file workspace
 License: See repository LICENSE
-{adb_requirement}%description
+Requires: android-tools
+%description
 Control Android devices and transfer files.
 %install
 mkdir -p "%{{buildroot}}"
@@ -94,9 +93,7 @@ cp -a "{root}/." "%{{buildroot}}/"
         launch.write_text(
             '#!/bin/sh\nset -eu\n'
             'app_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\n'
-            + ('command -v /usr/bin/adb >/dev/null || { echo "Install your distribution\x27s adb package." >&2; exit 1; }\n'
-               if arch == "arm64" else '')
-            + 'exec "$app_dir/opt/interconnect/interconnect" "$@"\n'
+            'exec "$app_dir/opt/interconnect/interconnect" "$@"\n'
         )
         launch.chmod(0o755)
         tool, runtime = work / "appimagetool", work / "runtime"

@@ -68,6 +68,7 @@ String failureCodeMessage(String? code, {required String fallback}) =>
       'storage_version' => '本机数据来自较新版本。更新应用后再试。',
       'expired' => '这次请求已过期。请重新开始。',
       'usb_unsupported' => '本机无法通过 USB 添加手机。请选择其他连接方式。',
+      'desktop_adb_missing' => '请在电脑安装 Android SDK Platform-Tools（ADB），然后重启邻接。',
       'audio_focus_denied' => '声音目前无法播放。请先暂停本机正在播放的媒体。',
       'clipboard_not_text' => '剪贴板里没有可发送的文字。',
       'clipboard_locked' => '暂时无法读取剪贴板。解锁设备后再试。',

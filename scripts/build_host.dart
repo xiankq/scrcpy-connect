@@ -73,8 +73,6 @@ void _rejectApplicationBridge(
 void verifyWindows(Directory bundle, String arch) {
   final files = bundleFiles(bundle).toList();
   _rejectApplicationBridge(files);
-  const adbFiles = {'adb.exe', 'AdbWinApi.dll', 'AdbWinUsbApi.dll'};
-  int? adbMachine;
   for (final name in [
     windowsExecutable,
     'flutter_windows.dll',
@@ -83,9 +81,6 @@ void verifyWindows(Directory bundle, String arch) {
     if (arch == 'x64') 'vcruntime140_1.dll',
     'interop_scrcpy_bridge.dll',
     'media_codec_plugin.dll',
-    'adb.exe',
-    'AdbWinApi.dll',
-    'AdbWinUsbApi.dll',
   ]) {
     final matches = files
         .where((file) => p.basename(file.path) == name)
@@ -94,17 +89,7 @@ void verifyWindows(Directory bundle, String arch) {
       throw StateError('Final Windows bundle lacks one $name');
     }
     final machine = peMachine(matches.single);
-    if (adbFiles.contains(name)) {
-      // 官方 platform-tools 可能包含 32 位子进程及配套 DLL；它们不会载入 x64 Flutter 进程。
-      //
-      if (!{0x14c, 0x8664}.contains(machine) ||
-          (adbMachine != null && machine != adbMachine)) {
-        throw StateError(
-          'Official ADB executable and DLL architectures differ',
-        );
-      }
-      adbMachine = machine;
-    } else if (machine != (arch == 'arm64' ? 0xaa64 : 0x8664)) {
+    if (machine != (arch == 'arm64' ? 0xaa64 : 0x8664)) {
       throw StateError('Unexpected PE architecture for $name in $arch bundle');
     }
   }
@@ -117,6 +102,18 @@ void verifyWindows(Directory bundle, String arch) {
 
 void verifyMedia(Directory bundle) {
   final files = bundleFiles(bundle).toList();
+  if (files.any(
+    (file) => const {
+      'adb',
+      'adb.exe',
+      'adbwinapi.dll',
+      'adbwinusbapi.dll',
+    }.contains(p.basename(file.path).toLowerCase()),
+  )) {
+    throw StateError(
+      'Remove bundled SDK Platform-Tools and rebuild from a clean bundle.',
+    );
+  }
   if (files.any(
     (file) => RegExp(
       r'(^|lib)(mdk|fvp)|avformat|ffmpeg-\d',
@@ -156,7 +153,6 @@ Future<void> verifyLinux(Directory bundle, String arch) async {
     'libflutter_linux_gtk.so',
     'libinterop_scrcpy_bridge.so',
     'libmedia_codec_plugin.so',
-    if (arch == 'x64') 'adb',
   ]) {
     final matches = files
         .where((file) => p.basename(file.path) == name)
@@ -179,7 +175,6 @@ Future<void> verifyLinux(Directory bundle, String arch) async {
       bytes.closeSync();
     }
   }
-  if (arch == 'arm64') await runTool(['/usr/bin/adb', 'version'], quiet: true);
   final desktopEntry = File(
     p.join(bundle.path, 'share', 'applications', '$linuxApplicationId.desktop'),
   );
@@ -205,9 +200,7 @@ Future<void> verifyLinux(Directory bundle, String arch) async {
     );
   }
   final entries = [
-    ...files.where(
-      (file) => const [linuxExecutable, 'adb'].contains(p.basename(file.path)),
-    ),
+    File(p.join(bundle.path, linuxExecutable)),
     ...files.where((file) => p.basename(file.path).contains('.so')),
   ];
   final resolved = <String>{};
@@ -241,8 +234,7 @@ Future<void> verifyLinux(Directory bundle, String arch) async {
 
 void installMediaNotices(Directory bundle, String platform, String arch) {
   if (platform == 'macos' || platform == 'ios') {
-    // runner 最终资源阶段采用实际 CocoaPods SDK 与架构前缀，并在 macOS 为嵌套的官方 adb 签名。
-    //
+    // Xcode 在签名前从对应 SDK 和架构的 CocoaPods 产物复制声明。
     return;
   }
   final prefix = Directory(
@@ -355,13 +347,6 @@ Future<void> verifyApple(
     }
   }
   if (platform == 'macos') {
-    await runTool([
-      'xcrun',
-      'lipo',
-      p.join(contents.path, 'Resources', 'adb', 'adb'),
-      '-verify_arch',
-      ...slices,
-    ]);
     await _rejectDuplicateObjectiveCClasses(contents, File(binary));
   }
   verifyMedia(bundle);
