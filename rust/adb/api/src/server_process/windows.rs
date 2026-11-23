@@ -120,22 +120,25 @@ async fn pipe(parent_reads: bool) -> io::Result<(NamedPipeServer, OwnedHandle)> 
         .read(!parent_reads)
         .write(parent_reads)
         .open(name)?;
-    let mut inherited = ptr::null_mut();
-    if unsafe {
-        DuplicateHandle(
-            GetCurrentProcess(),
-            child.as_raw_handle(),
-            GetCurrentProcess(),
-            &mut inherited,
-            0,
-            1,
-            DUPLICATE_SAME_ACCESS,
-        )
-    } == 0
-    {
-        return Err(io::Error::last_os_error());
-    }
-    let inherited = unsafe { OwnedHandle::from_raw_handle(inherited) };
+    // Keep the raw HANDLE in synchronous scope so only OwnedHandle crosses await.
+    let inherited = {
+        let mut raw = ptr::null_mut();
+        if unsafe {
+            DuplicateHandle(
+                GetCurrentProcess(),
+                child.as_raw_handle(),
+                GetCurrentProcess(),
+                &mut raw,
+                0,
+                1,
+                DUPLICATE_SAME_ACCESS,
+            )
+        } == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        unsafe { OwnedHandle::from_raw_handle(raw) }
+    };
     drop(child);
     parent.connect().await?;
     Ok((parent, inherited))
