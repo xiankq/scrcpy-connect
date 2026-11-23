@@ -65,11 +65,9 @@ set_target_properties(${BINARY_NAME}
 include(flutter/generated_plugins.cmake)
 
 
-# 安装默认仅在构建目录内生成可迁移包。
+# Flutter 的安装目标只生成可迁移包。系统安装由发行版安装包负责。
 set(BUILD_BUNDLE_DIR "${PROJECT_BINARY_DIR}/bundle")
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-  set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "..." FORCE)
-endif()
+set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}")
 
 # 每次开始时清理构建包目录。
 install(CODE "
