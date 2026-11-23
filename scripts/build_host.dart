@@ -338,7 +338,7 @@ Future<void> verifyApple(
   if (engine == null) {
     throw StateError('Apple bundle lacks its Flutter engine');
   }
-  await runTool(['xcrun', 'lipo', '-verify_arch', ...slices, engine.path]);
+  await runTool(['xcrun', 'lipo', engine.path, '-verify_arch', ...slices]);
   for (final name in ['interop_scrcpy_bridge']) {
     final rust = files
         .where(
@@ -351,16 +351,16 @@ Future<void> verifyApple(
       throw StateError('Apple bundle lacks its Rust capability library: $name');
     }
     for (final library in rust) {
-      await runTool(['xcrun', 'lipo', '-verify_arch', ...slices, library.path]);
+      await runTool(['xcrun', 'lipo', library.path, '-verify_arch', ...slices]);
     }
   }
   if (platform == 'macos') {
     await runTool([
       'xcrun',
       'lipo',
+      p.join(contents.path, 'Resources', 'adb', 'adb'),
       '-verify_arch',
       ...slices,
-      p.join(contents.path, 'Resources', 'adb', 'adb'),
     ]);
     await _rejectDuplicateObjectiveCClasses(contents, File(binary));
   }
