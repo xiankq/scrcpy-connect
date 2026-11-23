@@ -57,14 +57,6 @@ class RemoteInputOwner {
   );
   Future<void> get idle => _inputQueue.idle;
 
-  void _trace(String detail) {
-    if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
-      debugPrint(
-        '[connect.remote ${DateTime.now().millisecondsSinceEpoch}] $detail',
-      );
-    }
-  }
-
   Future<void> releaseInputs({RemoteBinding? binding}) {
     final outgoing = binding ?? presentation.binding;
     resetTextInput();
@@ -152,14 +144,9 @@ class RemoteInputOwner {
     ControlTarget target,
     RemoteBinding binding,
   ) async {
-    _trace('request.begin action=${action.runtimeType}');
     try {
       await _control.sendControl(target, action);
-      _trace('request.complete action=${action.runtimeType}');
     } catch (error) {
-      _trace(
-        'request.failed action=${action.runtimeType} kind=${error.runtimeType}',
-      );
       if (!_disposed &&
           !presentation.exiting &&
           target.sessionId == sessionId) {
