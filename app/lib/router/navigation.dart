@@ -83,6 +83,7 @@ Future<void> openRemoteRoute(
         initialExtra: extra,
         observer: observer,
       ),
+      workbenchLocation: WorkspaceRoute(deviceId: deviceId).location,
       appName: appName,
       action: initialAction,
       keyboard: requestKeyboard,

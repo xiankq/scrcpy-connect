@@ -73,6 +73,7 @@ class RemoteWindowsState extends State<RemoteWindows> {
   void open(
     RemoteWindowTarget target,
     GoRouter Function(RouteObserver<ModalRoute<dynamic>>) createRouter, {
+    required String workbenchLocation,
     String? appName,
     RemoteControlIntent? action,
     bool keyboard = false,
@@ -81,6 +82,7 @@ class RemoteWindowsState extends State<RemoteWindows> {
       final observer = RouteObserver<ModalRoute<dynamic>>();
       return RemoteWindowPane(
         target: target,
+        workbenchLocation: workbenchLocation,
         appName: appName,
         observer: observer,
         router: createRouter(observer),
@@ -168,8 +170,10 @@ class RemoteWindowsState extends State<RemoteWindows> {
       ),
     );
     if (!mounted || selected == null) return;
-    if (identical(selected, this)) {
+    if (identical(selected, this) && origin != null) {
       showWorkbench();
+      final location = origin.workbenchLocation;
+      if (widget.router.state.uri.path != location) widget.router.go(location);
     } else if (selected is RemoteWindowPane &&
         _windows[selected.target] == selected) {
       _activate(selected);
@@ -279,6 +283,7 @@ class RemoteWindowRequest {
 class RemoteWindowPane {
   RemoteWindowPane({
     required this.target,
+    required this.workbenchLocation,
     required this.appName,
     required this.observer,
     required this.router,
@@ -286,6 +291,7 @@ class RemoteWindowPane {
   });
 
   final RemoteWindowTarget target;
+  final String workbenchLocation;
   String? appName;
   final RouteObserver<ModalRoute<dynamic>> observer;
   final GoRouter router;
