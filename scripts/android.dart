@@ -9,10 +9,12 @@ import 'package:args/args.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:xml/xml.dart';
+import 'package:yaml/yaml.dart';
 
-import 'src/repository_tooling.dart';
-import 'src/apk.dart';
 import 'src/android_sdk.dart';
+import 'src/apk.dart';
+import 'src/packaging.dart';
+import 'src/repository_tooling.dart';
 
 final root = repositoryRoot();
 const platforms = {
@@ -186,9 +188,11 @@ void verifyManifest(String contents) {
 }
 
 Future<Map<String, Object>> verifyApk(
-  File input, [
+  File input, {
   List<String>? expectedAbis,
-]) async {
+  String? signerSha256,
+  int? expectedVersionCode,
+}) async {
   final apk = File(input.resolveSymbolicLinksSync());
   final tools = sdkTools();
   final bytes = apk.readAsBytesSync();
@@ -206,6 +210,20 @@ Future<Map<String, Object>> verifyApk(
             apk.path,
           ], quiet: true)).stdout
           as String;
+  final signerCertificates = const LineSplitter()
+      .convert(signature)
+      .where((line) => line.contains('certificate SHA-256 digest:'))
+      .toList();
+  if (signerSha256 != null) {
+    final digests = signerCertificates
+        .map((line) => line.split(': ').last.toLowerCase())
+        .toSet();
+    if (digests.singleOrNull != signerSha256) {
+      throw StateError(
+        'The APK signing certificate does not match the release fingerprint.',
+      );
+    }
+  }
   await runTool([tools.$3, '-c', '-P', '16', '-v', '4', apk.path], quiet: true);
   final badging =
       (await runTool([
@@ -231,6 +249,10 @@ Future<Map<String, Object>> verifyApk(
       !package.startsWith("package: name='dev.scrcpyconnect.scrcpy_connect'")) {
     throw StateError('The final APK has an unexpected application ID.');
   }
+  if (expectedVersionCode != null &&
+      !package.contains(" versionCode='$expectedVersionCode'")) {
+    throw StateError('The APK must use versionCode $expectedVersionCode.');
+  }
   if (!lines.contains("application-label:'邻接'") ||
       !lines.any((line) => line.startsWith('application-icon-'))) {
     throw StateError('The final APK lacks the app label or launcher icon.');
@@ -251,10 +273,7 @@ Future<Map<String, Object>> verifyApk(
     'zipNativePageAlignmentBytes': 16384,
     'sharedServerArtifactsVerified': true,
     'manifestVerified': true,
-    'signerCertificates': const LineSplitter()
-        .convert(signature)
-        .where((line) => line.contains('certificate SHA-256 digest:'))
-        .toList(),
+    'signerCertificates': signerCertificates,
   };
   stdout.writeln(const JsonEncoder.withIndent('  ').convert(receipt));
   return receipt;
@@ -265,16 +284,12 @@ Future<void> buildApk({
   String abi = 'split',
   bool noPub = false,
   bool compressNative = true,
+  String? updateFeed,
+  String? signerSha256,
   Directory? application,
 }) async {
   application ??= applicationRoot(root);
   final android = Directory(p.join(application.path, 'android'));
-  if (mode == 'release' &&
-      !File(p.join(android.path, 'key.properties')).existsSync()) {
-    throw StateError(
-      'No release signing identity. Run: dart scripts/android.dart init-signing',
-    );
-  }
   final registrant = File(
     p.join(
       android.path,
@@ -295,6 +310,11 @@ Future<void> buildApk({
   if (flutter == null) throw StateError('Add Flutter to PATH.');
   final platform = platforms[abi];
   if (platform == null) throw ArgumentError.value(abi, 'abi');
+  final feed = updateFeedDefine(updateFeed);
+  final pubspec = loadYaml(
+    File(p.join(application.path, 'pubspec.yaml')).readAsStringSync(),
+  );
+  final versionCode = int.parse((pubspec['version'] as String).split('+').last);
   final watch = Stopwatch()..start();
   await streamTool([
     flutter,
@@ -305,6 +325,7 @@ Future<void> buildApk({
     platform.$1,
     if (abi == 'split') '--split-per-abi',
     '-Pcompress-native-libs=$compressNative',
+    ?feed,
     if (noPub) '--no-pub',
   ], cwd: application);
   watch.stop();
@@ -314,12 +335,26 @@ Future<void> buildApk({
         : 'app-$architecture-$mode.apk';
     await verifyApk(
       File(p.join(application.path, 'build/app/outputs/flutter-apk', filename)),
-      architecture == null ? platform.$2 : [architecture],
+      expectedAbis: architecture == null ? platform.$2 : [architecture],
+      signerSha256: signerSha256,
+      expectedVersionCode: abi == 'split' ? null : versionCode,
     );
   }
   stdout.writeln(
     'Build wall time: ${(watch.elapsedMicroseconds / 1000000).toStringAsFixed(2)}s. Reuse .dart_tool/hooks_runner and Gradle caches between builds.',
   );
+}
+
+String? _signerFingerprint(ArgResults command) {
+  final value = command.option('signer-sha256');
+  if (value == null) return null;
+  final normalized = value.trim().replaceAll(':', '').toLowerCase();
+  if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(normalized)) {
+    throw const FormatException(
+      '--signer-sha256 requires a SHA-256 fingerprint.',
+    );
+  }
+  return normalized;
 }
 
 Future<void> main(List<String> arguments) async {
@@ -343,6 +378,14 @@ Future<void> main(List<String> arguments) async {
             defaultsTo: 'release',
           )
           ..addFlag('no-pub', negatable: false)
+          ..addOption(
+            'update-feed',
+            help: 'Public HTTPS update feed for this package.',
+          )
+          ..addOption(
+            'signer-sha256',
+            help: 'Require this APK signing certificate fingerprint.',
+          )
           ..addFlag(
             'compress-native',
             defaultsTo: true,
@@ -351,12 +394,13 @@ Future<void> main(List<String> arguments) async {
       )
       ..addCommand(
         'verify',
-        commandParser()..addMultiOption(
-          'abis',
-          allowed: ['armeabi-v7a', 'arm64-v8a', 'x86_64'],
-          help:
-              'Require exactly these ABIs; omitted verifies all packaged ABIs.',
-        ),
+        commandParser()
+          ..addOption('signer-sha256')
+          ..addMultiOption(
+            'abis',
+            allowed: ['armeabi-v7a', 'arm64-v8a', 'x86_64'],
+            help: 'Require exactly these ABIs; omitted verifies all packaged ABIs.',
+          ),
       );
     final args = parser.parse(arguments);
     final command = args.command;
@@ -386,6 +430,8 @@ Future<void> main(List<String> arguments) async {
           abi: command['abi'] as String,
           noPub: command['no-pub'] as bool,
           compressNative: command['compress-native'] as bool,
+          updateFeed: command.option('update-feed'),
+          signerSha256: _signerFingerprint(command),
         );
       case 'verify':
         if (command.rest.length != 1) {
@@ -394,7 +440,8 @@ Future<void> main(List<String> arguments) async {
         final expected = command.multiOption('abis');
         await verifyApk(
           File(command.rest.single),
-          expected.isEmpty ? null : expected,
+          expectedAbis: expected.isEmpty ? null : expected,
+          signerSha256: _signerFingerprint(command),
         );
     }
   } on Object catch (error) {

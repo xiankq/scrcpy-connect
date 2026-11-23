@@ -7,17 +7,31 @@ plugins {
 }
 
 val releaseKeyFile = rootProject.file("key.properties")
+val releaseKeyVariables = mapOf(
+    "storeFile" to "ANDROID_SIGNING_STORE_FILE",
+    "storePassword" to "ANDROID_SIGNING_STORE_PASSWORD",
+    "keyAlias" to "ANDROID_SIGNING_KEY_ALIAS",
+    "keyPassword" to "ANDROID_SIGNING_KEY_PASSWORD",
+).mapValues { (_, variable) -> providers.environmentVariable(variable).orNull }
+val useSigningEnvironment = releaseKeyVariables.values.any { it != null }
 val releaseKey = Properties().apply {
-    if (releaseKeyFile.exists()) releaseKeyFile.inputStream().use { load(it) }
+    if (useSigningEnvironment) {
+        releaseKeyVariables.forEach { (name, value) ->
+            if (value != null) setProperty(name, value)
+        }
+    } else if (releaseKeyFile.isFile) {
+        releaseKeyFile.inputStream().use { load(it) }
+    }
 }
+val releaseSigningConfigured = useSigningEnvironment || releaseKeyFile.isFile
 
 // 在 Flutter AOT 和 Rust 编译前就检查签名，避免成功发布 Android 安装器无法解析的未签名 app-release.apk。
 gradle.taskGraph.whenReady {
     if (allTasks.any { it.project == project && it.name.endsWith("Release") }) {
-        check(releaseKeyFile.isFile) {
+        check(releaseSigningConfigured) {
             "Release signing is not configured. From the repository root run: " +
                 "dart scripts/android.dart init-signing (local sideload key), " +
-                "or provide app/android/key.properties with your release key."
+                "or supply the release credentials described in scripts/README.md."
         }
     }
 }
@@ -61,10 +75,10 @@ android {
     }
 
     signingConfigs {
-        if (releaseKeyFile.exists()) {
+        if (releaseSigningConfigured) {
             create("release") {
                 for (name in listOf("storeFile", "storePassword", "keyAlias", "keyPassword")) {
-                    require(!releaseKey.getProperty(name).isNullOrBlank()) { "key.properties missing $name" }
+                    require(!releaseKey.getProperty(name).isNullOrBlank()) { "Release signing is missing $name" }
                 }
                 storeFile = rootProject.file(releaseKey.getProperty("storeFile"))
                 storePassword = releaseKey.getProperty("storePassword")
