@@ -19,7 +19,7 @@
 | `UsbGuideRoute` | 408 | 待实跑 |
 | `QrPairRoute` | 432 | 待实跑 |
 | `WorkspaceRoute` | 442 | macOS TCP 进入小米 12 工作台，核对了充满状态 |
-| `DeviceManagementRoute` | 458 | 待实跑 |
+| `DeviceManagementRoute` | 458 | macOS 进入页面，打开画面与控制 |
 | `DeviceDetailsRoute` | 476 | macOS 核对骨架到系统与电池数据 |
 | `DeviceDataRoute` | 492 | 待实跑 |
 | `CapabilitiesRoute` | 505 | 待实跑 |
@@ -33,7 +33,7 @@
 | `MediaPreviewRoute` | 654 | 真机样本打开原件，切换原尺寸后返回 |
 | `NotificationsRoute` | 678 | macOS 页面可达，通知产生与接续待验 |
 | `CallsRoute` | 691 | macOS 页面可达，通话发起及接续待验 |
-| `QualityRoute` | 704 | 待实跑 |
+| `QualityRoute` | 704 | 修改帧率、离页确认保存并恢复原值。实测采样帧率待验 |
 | `SessionToolsRoute` | 720 | 待实跑 |
 | `SessionsRoute` | 734 | 待实跑 |
 | `RemoteRoute` | 744 | macOS TCP 真机出现首帧，Escape 发往手机，关闭后连接保留 |
