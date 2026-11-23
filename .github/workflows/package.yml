@@ -1,6 +1,8 @@
 name: Packages
 
 on:
+  push:
+    branches: [codex/package-preview]
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -86,7 +88,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(inputs.release && '[{"platform":"macos","arch":"x64"},{"platform":"macos","arch":"arm64"}]' || '[{"platform":"macos","arch":"x64"},{"platform":"macos","arch":"arm64"},{"platform":"ios","arch":"arm64"}]') }}
+        include: ${{ fromJSON(inputs.release && '[{"platform":"macos","arch":"x64"},{"platform":"macos","arch":"arm64"}]' || '[{"platform":"macos","arch":"x64"},{"platform":"macos","arch":"arm64"},{"platform":"ios","arch":"arm64"},{"platform":"ios","arch":"arm64","simulator":true}]') }}
     runs-on: macos-26
     timeout-minutes: 90
     environment: ${{ inputs.release && 'release' || 'package-preview' }}
@@ -96,12 +98,13 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-build
       - name: Install Apple Rust targets
-        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim
       - name: Build and package Apple clients
         shell: bash
         env:
           PACKAGE_PLATFORM: ${{ matrix.platform }}
           PACKAGE_ARCH: ${{ matrix.arch }}
+          PACKAGE_SIMULATOR: ${{ matrix.simulator && 'true' || 'false' }}
           PUBLIC_MACOS: ${{ inputs.release }}
           UPDATE_FEED: ${{ inputs.release && format('https://github.com/{0}/releases/latest/download/release-feed.json', github.repository) || '' }}
           MACOS_CERTIFICATE_BASE64: ${{ inputs.release && secrets.MACOS_CERTIFICATE_BASE64 || '' }}
@@ -113,14 +116,15 @@ jobs:
         run: |
           flags=()
           if [[ "$PACKAGE_PLATFORM" == macos ]]; then flags=(--installers); fi
+          if [[ "$PACKAGE_SIMULATOR" == true ]]; then flags=(--simulator); fi
           if [[ "$PUBLIC_MACOS" == true ]]; then
             source scripts/macos_ci_signing.sh
           fi
           dart scripts/build_host.dart "$PACKAGE_PLATFORM" --arch "$PACKAGE_ARCH" "${flags[@]}" --update-feed "$UPDATE_FEED"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: package-${{ matrix.platform }}-${{ matrix.arch }}
-          path: build/verified/${{ matrix.platform }}-${{ matrix.arch }}-release.*
+          name: package-${{ matrix.platform }}${{ matrix.simulator && '-simulator' || '' }}-${{ matrix.arch }}
+          path: build/verified/${{ matrix.platform }}${{ matrix.simulator && '-simulator' || '' }}-${{ matrix.arch }}-${{ matrix.simulator && 'debug' || 'release' }}.*
           if-no-files-found: error
           compression-level: 0
 

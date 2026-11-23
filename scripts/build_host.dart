@@ -254,7 +254,12 @@ void installMediaNotices(Directory bundle, String platform, String arch) {
   );
 }
 
-Future<void> verifyApple(Directory bundle, String platform, String arch) async {
+Future<void> verifyApple(
+  Directory bundle,
+  String platform,
+  String arch, {
+  required bool simulator,
+}) async {
   final contents = platform == 'macos'
       ? Directory(p.join(bundle.path, 'Contents'))
       : bundle;
@@ -300,6 +305,21 @@ Future<void> verifyApple(Directory bundle, String platform, String arch) async {
     throw StateError(
       'Expected $arch for $binary, found ${actualSlices.join(", ")}',
     );
+  }
+  if (platform == 'ios') {
+    final loadCommands = await runTool([
+      'xcrun',
+      'vtool',
+      '-show-build',
+      binary,
+    ], quiet: true);
+    final sdk = simulator ? 'IOSSIMULATOR' : 'IOS';
+    if (!RegExp(
+      '^\\s*platform\\s+$sdk\$',
+      multiLine: true,
+    ).hasMatch(loadCommands.stdout as String)) {
+      throw StateError('Expected Mach-O platform $sdk for $binary');
+    }
   }
   final files = bundleFiles(contents).toList();
   _rejectApplicationBridge(files);
@@ -393,8 +413,9 @@ Future<void> _rejectDuplicateObjectiveCClasses(
 Future<void> archiveBundle(
   Directory bundle,
   String target,
-  Directory artifacts,
-) async {
+  Directory artifacts, {
+  String mode = 'release',
+}) async {
   artifacts.createSync(recursive: true);
   if (target.startsWith('windows-')) {
     final formerLauncher = p.join(bundle.path, 'scrcpy_connect.exe');
@@ -412,7 +433,7 @@ Future<void> archiveBundle(
     await streamTool([
       'tar',
       '-czf',
-      p.join(artifacts.absolute.path, '$target-release.tar.gz'),
+      p.join(artifacts.absolute.path, '$target-$mode.tar.gz'),
       '-C',
       bundle.parent.path,
       p.basename(bundle.path),
@@ -425,6 +446,11 @@ Future<void> main(List<String> arguments) async {
     final parser = ArgParser()
       ..addFlag('verify-only', negatable: false)
       ..addFlag('installers', negatable: false)
+      ..addFlag(
+        'simulator',
+        negatable: false,
+        help: 'Build the iOS simulator app.',
+      )
       ..addOption('arch', allowed: ['x64', 'arm64', 'universal'])
       ..addOption(
         'update-feed',
@@ -445,6 +471,10 @@ Future<void> main(List<String> arguments) async {
       );
     }
     final platform = args.rest.single;
+    final simulator = args.flag('simulator');
+    if (simulator && (platform != 'ios' || args.flag('installers'))) {
+      throw ArgumentError('--simulator requires ios without --installers.');
+    }
     final application = applicationRoot(root);
     final feed = updateFeedDefine(args.option('update-feed'));
     final nativeArch =
@@ -470,13 +500,13 @@ Future<void> main(List<String> arguments) async {
     }
     final verifyOnly = args.flag('verify-only');
     if (!verifyOnly) {
-      final macConfig = platform == 'macos'
+      final appleConfig = platform == 'macos' || simulator
           ? Directory.systemTemp.createTempSync('interconnect-arch-')
           : null;
       try {
-        final config = macConfig == null
+        final config = appleConfig == null
             ? null
-            : File(p.join(macConfig.path, 'Release.xcconfig'));
+            : File(p.join(appleConfig.path, 'Architectures.xcconfig'));
         if (config != null) {
           final architectures = switch (arch) {
             'universal' => 'arm64 x86_64',
@@ -492,23 +522,24 @@ Future<void> main(List<String> arguments) async {
             executable('flutter') ?? 'flutter',
             'build',
             platform,
-            '--release',
+            if (simulator) ...['--simulator', '--debug'] else '--release',
             '--no-pub',
             ?feed,
-            if (platform == 'ios') '--no-codesign',
+            if (platform == 'ios' && !simulator) '--no-codesign',
           ],
           cwd: application,
           environment: {if (config != null) 'XCODE_XCCONFIG_FILE': config.path},
         );
       } finally {
-        macConfig?.deleteSync(recursive: true);
+        appleConfig?.deleteSync(recursive: true);
       }
     }
     final bundle = Directory(
       p.join(application.path, switch (platform) {
         'windows' => 'build/windows/$arch/runner/Release',
         'linux' => 'build/linux/$arch/release/bundle',
-        'ios' => 'build/ios/iphoneos/Runner.app',
+        'ios' =>
+          'build/ios/${simulator ? 'iphonesimulator' : 'iphoneos'}/Runner.app',
         _ => 'build/macos/Build/Products/Release/$macApplication',
       }),
     );
@@ -522,12 +553,17 @@ Future<void> main(List<String> arguments) async {
       case 'linux':
         await verifyLinux(bundle, arch);
       default:
-        await verifyApple(bundle, platform, arch);
+        await verifyApple(bundle, platform, arch, simulator: simulator);
     }
     final artifacts = Directory(p.join(root.path, 'build/verified'));
-    final target = '$platform-$arch';
+    final target = '$platform${simulator ? '-simulator' : ''}-$arch';
     if (platform != 'macos' || !args.flag('installers')) {
-      await archiveBundle(bundle, target, artifacts);
+      await archiveBundle(
+        bundle,
+        target,
+        artifacts,
+        mode: simulator ? 'debug' : 'release',
+      );
     }
     if (args.flag('installers')) {
       final pubspec = loadYaml(

@@ -2,7 +2,7 @@
 
 ## 先试打包
 
-在 GitHub 仓库打开 **Actions → Packages → Run workflow**，选择要验证的分支。完成后，在此次运行的 **Artifacts** 下载结果。
+工作流合入默认分支后，在 GitHub 打开 **Actions → Packages → Run workflow**，选择要验证的分支。推送 `codex/package-preview` 也会启动试打包。完成后，在此次运行的 **Artifacts** 下载结果。
 
 | 平台 | 架构 | 试打包 | GitHub Release |
 | --- | --- | --- | --- |
@@ -10,9 +10,15 @@
 | Windows | x64、ARM64 | 安装器 EXE、便携 ZIP | 同左 |
 | Linux | x64、ARM64 | AppImage、DEB、RPM、tar.gz | 同左 |
 | macOS | Apple Silicon、Intel | 两个本机试用 DMG | 配好 Developer ID 与公证后发布两个 DMG |
-| iOS 和 iPadOS | arm64 | iPhoneOS 编译归档 | 通过 TestFlight 或 App Store 分发 |
+| iOS 和 iPadOS | arm64 | Apple 芯片 Mac 的模拟器包、未签名 iPhoneOS 编译归档 | 通过 TestFlight 或 App Store 分发 |
 
 CI 在 PR 和 `main`、`dev` 分支上运行，检查生成物、代码格式、静态分析和测试。试打包也会核验安装包中的原生库、运行资源和应用标识。下载到干净系统运行，才能确认真实的安装和启动体验。
+
+### 在 iOS 模拟器试用
+
+在 Apple 芯片 Mac 上解压 `ios-simulator-arm64-debug.tar.gz`，启动一个 iPhone 或 iPad 模拟器，把解压得到的 `Runner.app` 拖进模拟器。也可在仓库根运行 `dart scripts/build_host.dart ios --simulator` 自行生成包。这个流程无需 Apple 开发者证书。
+
+`ios-arm64-release.tar.gz` 用于检查真机目标是否能编译。要在自有 iPhone 或 iPad 调试，可以用 Apple 账号登录 Xcode，选择 Personal Team，由 Xcode 生成短期开发签名。TestFlight 和 App Store 分发需要 Apple Developer Program。 [Apple 开发者账号说明](https://developer.apple.com/help/account/basics/about-your-developer-account/)
 
 ## 正式发布
 

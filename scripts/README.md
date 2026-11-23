@@ -5,7 +5,7 @@
 | 任务 | 入口 |
 | --- | --- |
 | Android 构建与交付校验 | `android.dart build` / `android.dart verify <APK> [--abis ...]`；通用包显式 `--abi universal` |
-| 桌面/Apple 构建 | `build_host.dart <平台> --arch <架构> --installers`（iOS 编译归档省略 `--installers`） |
+| 桌面/Apple 构建 | `build_host.dart <平台> --arch <架构> --installers`。iOS 真机编译归档用 `build_host.dart ios`，模拟器包用 `build_host.dart ios --simulator` |
 | 生成及漂移检查 | `generate.dart` / `generate.dart --check` |
 | 完整门禁 | `check.sh`；`--android` 默认仅 arm64 调试包 |
 | 设计 token | [design_tokens](design_tokens/README.md) |
