@@ -13,7 +13,7 @@ val releaseKeyVariables = mapOf(
     "keyAlias" to "ANDROID_SIGNING_KEY_ALIAS",
     "keyPassword" to "ANDROID_SIGNING_KEY_PASSWORD",
 ).mapValues { (_, variable) -> providers.environmentVariable(variable).orNull }
-val useSigningEnvironment = releaseKeyVariables.values.any { it != null }
+val useSigningEnvironment = releaseKeyVariables.values.any { !it.isNullOrBlank() }
 val releaseKey = Properties().apply {
     if (useSigningEnvironment) {
         releaseKeyVariables.forEach { (name, value) ->
