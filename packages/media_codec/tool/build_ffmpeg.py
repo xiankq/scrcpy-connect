@@ -34,7 +34,7 @@ def run(command, cwd, environment, log):
         result = subprocess.run([str(x) for x in command], cwd=cwd, env=environment,
                                 stdout=output, stderr=subprocess.STDOUT)
     if result.returncode:
-        print(log.read_text(errors="replace")[-16000:], flush=True)
+        print(log.read_text(errors="replace")[-16000:], file=sys.stderr, flush=True)
         raise RuntimeError(f"Native dependency build failed; see {log}")
 
 
