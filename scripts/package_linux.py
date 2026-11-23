@@ -51,7 +51,7 @@ Architecture: {deb_arch}
 Maintainer: Interconnect contributors
 Section: utils
 Priority: optional
-Depends: libgtk-3-0t64 | libgtk-3-0, libepoxy0, libdrm2, libva2, libva-drm2, libstdc++6{adb_dep}
+Depends: libc6 (>= 2.39), libgtk-3-0t64 | libgtk-3-0, libepoxy0, libdrm2, libva2, libva-drm2, libstdc++6{adb_dep}
 Description: Cross-device Android control and file workspace
 """)
         deb = str(prefix) + ".deb"
