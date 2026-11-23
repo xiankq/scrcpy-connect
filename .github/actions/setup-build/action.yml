@@ -31,7 +31,9 @@ runs:
       env:
         MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
       run: |
-        (Join-Path $env:MSYS2_LOCATION 'usr/bin') >> $env:GITHUB_PATH
+        $msysBin = Join-Path $env:MSYS2_LOCATION 'usr\bin'
+        $msysBin >> $env:GITHUB_PATH
+        "MEDIA_CODEC_MSYS2_BIN=$msysBin" >> $env:GITHUB_ENV
         "LIBCLANG_PATH=$(Join-Path $env:ProgramFiles 'LLVM/bin')" >> $env:GITHUB_ENV
         if (-not (Get-Command nasm -ErrorAction SilentlyContinue)) {
           choco install nasm --yes --no-progress
