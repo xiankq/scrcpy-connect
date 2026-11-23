@@ -42,6 +42,7 @@ class GalleryScanSummary extends StatelessWidget {
             reading
                 ? '正在检查手机中的照片与视频'
                 : switch (status) {
+                    .partial when data?.limited == true => '只检查了部分文件夹',
                     .partial => '部分文件夹无法读取',
                     .cancelled => '已停止检查',
                     .completed => '已检查共享存储中的照片与视频',

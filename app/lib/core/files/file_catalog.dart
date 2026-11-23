@@ -253,6 +253,7 @@ final class FileCatalog implements FileSearch, GalleryScanner, FileDirectories {
       scan.cancellation.cancel();
     });
     final queue = Queue<(String, int)>()..add((scan.root, 0));
+    final mediaDirectories = Queue<(String, int)>();
     var directories = 0, bytes = 0;
     try {
       final root = await executor.stat(
@@ -265,9 +266,11 @@ final class FileCatalog implements FileSearch, GalleryScanner, FileDirectories {
       if (!root.isDirectory) {
         throw const FileFailure('not_directory', '搜索根路径不是目录。');
       }
-      while (queue.isNotEmpty) {
+      while (mediaDirectories.isNotEmpty || queue.isNotEmpty) {
         scan.cancellation.check();
-        final (path, depth) = queue.removeFirst();
+        final inMediaDirectory = mediaDirectories.isNotEmpty;
+        final (path, depth) = (inMediaDirectory ? mediaDirectories : queue)
+            .removeFirst();
         scan.currentDirectory = path;
         scan.visitedDirectories = directories + 1;
         if (++directories > (scan.gallery ? 4096 : 2048)) {
@@ -315,7 +318,12 @@ final class FileCatalog implements FileSearch, GalleryScanner, FileDirectories {
           }
           if (fact.stamp?.isDirectory == true) {
             if (depth < 32) {
-              queue.add((child, depth + 1));
+              final preferred =
+                  inMediaDirectory ||
+                  scan.gallery &&
+                      depth == 0 &&
+                      const {'DCIM', 'Pictures', 'Movies'}.contains(entry.name);
+              (preferred ? mediaDirectories : queue).add((child, depth + 1));
             } else {
               scan.limited = true;
               scan.issue(child, 'depth_limit', '已达到32层目录深度。');
