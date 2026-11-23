@@ -3,7 +3,12 @@ pub mod api;
 mod consumer_activity;
 mod file_helper;
 mod file_metadata;
-#[cfg(any(target_os = "linux", target_os = "android"))]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "macos",
+    target_os = "ios"
+))]
 mod file_publication;
 mod file_system;
 mod identity;

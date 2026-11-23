@@ -20,6 +20,7 @@ pub(crate) fn rename_noreplace(
     target_parent: RawFd,
     target: &CStr,
 ) -> io::Result<()> {
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     // Bionic 的 renameat2 符号要求 API 30；旧 Android 可用 syscall，libc 提供各架构调用号。
     let result = unsafe {
         libc::syscall(
@@ -29,6 +30,16 @@ pub(crate) fn rename_noreplace(
             target_parent,
             target.as_ptr(),
             libc::RENAME_NOREPLACE as libc::c_uint,
+        )
+    };
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    let result = unsafe {
+        libc::renameatx_np(
+            source_parent,
+            source.as_ptr(),
+            target_parent,
+            target.as_ptr(),
+            libc::RENAME_EXCL,
         )
     };
     if result < 0 {
@@ -127,11 +138,13 @@ fn publish_file_mode(source: &File, from: &Path, to: &Path, replace: bool) -> Fi
                 "conflict",
                 "保存时出现同名目标，原文件未被覆盖；临时文件保留。",
             )
-        } else {
+        } else if matches!(error.raw_os_error(), Some(libc::ENOSYS | libc::EOPNOTSUPP)) {
             FileError::new(
                 "atomic_save_unavailable",
-                format!("保存位置不支持原子防覆盖提交；临时文件保留。{error}"),
+                "保存位置不支持原子防覆盖提交；临时文件保留。",
             )
+        } else {
+            FileError::new("atomic_save_failed", error.to_string())
         }
     })?;
     // rename 后失败意味着目标可能已发布；禁止重试、删除目标或降格为普通发布前错误。
@@ -150,5 +163,35 @@ fn publish_file_mode(source: &File, from: &Path, to: &Path, replace: bool) -> Fi
             "result_unknown",
             "提交后暂存身份或目录同步无法确认，请核对目标；不会自动重试。",
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn verified_part_publishes_without_replacing_an_existing_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let part = directory.path().join(".part");
+        let target = directory.path().join("file");
+        fs::write(&part, b"received").unwrap();
+        fs::write(&target, b"existing").unwrap();
+        let source = File::open(&part).unwrap();
+
+        let error = publish_file(&source, &part, &target).unwrap_err();
+        assert_eq!(error.code, "conflict");
+        assert_eq!(fs::read(&target).unwrap(), b"existing");
+        assert_eq!(fs::read(&part).unwrap(), b"received");
+
+        fs::remove_file(&target).unwrap();
+        publish_file(&source, &part, &target).unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"received");
+        assert_eq!(
+            fs::metadata(&target).unwrap().ino(),
+            source.metadata().unwrap().ino()
+        );
+        assert!(!part.exists());
     }
 }

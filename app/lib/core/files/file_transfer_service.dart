@@ -1190,7 +1190,8 @@ class FileTransferService implements FileTransfers {
         final errorCode =
             (status == FileTransferStatus.failed ||
                     status == FileTransferStatus.cancelled) &&
-                task.record.saveMode == 'committing'
+                task.record.saveMode == 'committing' &&
+                e.code != 'atomic_save_unavailable'
             ? 'result_unknown'
             : e.code;
         task.record = task.record.copyWith(
@@ -1264,7 +1265,8 @@ class FileTransferService implements FileTransfers {
         cleanup.outcome = FileTransferOutcome.fromRecord(task.record);
         if (cleanup.executionFailure case final FileFailure original) {
           final unknown =
-              task.record.saveMode == 'committing' ||
+              task.record.saveMode == 'committing' &&
+                  original.code != 'atomic_save_unavailable' ||
               original.code == 'result_unknown';
           cleanup.outcome = FileTransferOutcome(
             status: original.code == 'cancelled'

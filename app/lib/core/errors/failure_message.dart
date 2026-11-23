@@ -63,6 +63,7 @@ String failureCodeMessage(String? code, {required String fallback}) =>
       'document_cache_full' ||
       'share_cache_full' => '临时文件空间不足。请前往设置清理媒体暂存后再试。',
       'cache_evicted' || 'cache_unavailable' => '临时文件已不可用。请从手机重新取回。',
+      'atomic_save_unavailable' => '当前位置无法完成原件的安全保存。请检查本机暂存位置后重试。',
       'permission_denied' => '系统没有允许这项操作。请检查相关权限后再试。',
       'storage_version' => '本机数据来自较新版本。更新应用后再试。',
       'expired' => '这次请求已过期。请重新开始。',
