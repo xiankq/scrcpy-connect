@@ -192,9 +192,15 @@ class _ControlPageState extends ConsumerState<ControlPage>
   }
 
   bool get acceptsInput =>
+      _canPresent &&
+      WidgetsBinding.instance.lifecycleState != AppLifecycleState.inactive;
+
+  bool get _canPresent =>
       _windowActive &&
-      (WidgetsBinding.instance.lifecycleState == null ||
-          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed);
+      switch (WidgetsBinding.instance.lifecycleState) {
+        null || .resumed || .inactive => true,
+        _ => false,
+      };
   bool get canSendInput => displaySizing.canSendInput;
 
   late final RemoteInputOwner inputs;
@@ -505,9 +511,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
 
   void applyReconciledVisibility() {
     if (presentation.stateUnverified || presentation.appLaunchUnknown) return;
-    if (!presentation.covered &&
-        acceptsInput &&
-        !presentation.lifecyclePaused) {
+    if (!presentation.covered && _canPresent && !presentation.lifecyclePaused) {
       unawaited(resumeView());
     } else {
       unawaited(pauseView());
@@ -574,7 +578,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
     notices.flush();
     if (sessionLifecycle.recoveryPending) {
       recoverConnection();
-    } else if (acceptsInput) {
+    } else if (_canPresent) {
       unawaited(resumeView());
     }
   }
@@ -642,7 +646,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
 
   Future<void> resumeView() async {
     final operation = window.resume(
-      foreground: acceptsInput,
+      foreground: _canPresent,
       afterInput: inputQueue,
     );
     focusVisibleDevice();
@@ -668,13 +672,22 @@ class _ControlPageState extends ConsumerState<ControlPage>
       }
       return;
     }
-    if (state != AppLifecycleState.resumed) unawaited(releaseInputs());
+    if (state != AppLifecycleState.resumed) {
+      updateClipboardFocus(sessionId, false);
+      unawaited(releaseInputs());
+    }
     if (state == AppLifecycleState.inactive || sessionId.isEmpty) return;
     if (state == AppLifecycleState.resumed) {
       notices.flush();
-      // 短暂 inactive 保留画面流但可能推迟视口调整，恢复时即使无需切换可见性也要继续调整。
       displaySizing.reconsider();
-      if (!presentation.lifecycleVisibility(true)) return;
+      if (!presentation.lifecycleVisibility(true)) {
+        // 画面可在 inactive 时恢复，输入等窗口重新激活。
+        setState(() {});
+        focusVisibleDevice();
+        if (_keyboardRequested) showKeyboard();
+        unawaited(applyPendingInitialAction());
+        return;
+      }
       if (sessionLifecycle.recoveryPending) {
         recoverConnection();
       } else if (!presentation.covered) {
