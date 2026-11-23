@@ -4,16 +4,47 @@ import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/files/models/file_catalog_entry.dart';
 import 'package:scrcpy_connect/core/gallery/gallery_scanner.dart';
+import 'package:scrcpy_connect/core/gallery/models/gallery_scan_state.dart';
 import 'package:scrcpy_connect/core/gallery/gallery_scanner_provider.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_state.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
 import 'package:scrcpy_connect/pages/gallery/gallery_page.dart';
 import 'package:scrcpy_connect/pages/gallery/widgets/gallery_media_tile.dart';
+import 'package:scrcpy_connect/pages/gallery/widgets/gallery_scan_summary.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 
 const _device = DeviceSnapshot(id: 'phone', guid: 'guid');
 
 void main() {
+  testWidgets('继续浏览已找到的照片时显示本轮检查的终态', (tester) async {
+    const previous = GalleryScanSnapshot(
+      deviceId: 'phone',
+      scanId: 'scan',
+      status: .scanning,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: GalleryScanSummary(
+            scan: GalleryScanState(
+              result: previous,
+              pendingResult: previous.copyWith(status: .partial, limited: true),
+              showingPrevious: true,
+            ),
+            reading: false,
+            onRestart: () {},
+            onCancel: () {},
+            onRefresh: () {},
+            onUpdate: () {},
+          ),
+        ),
+      ),
+    );
+    expect(find.text('只检查了部分文件夹'), findsOneWidget);
+    expect(find.text('更新照片'), findsOneWidget);
+    expect(find.text('暂时无法读取相册'), findsNothing);
+  });
+
   for (final initialStatus in [
     GalleryScanStatus.completed,
     GalleryScanStatus.scanning,
