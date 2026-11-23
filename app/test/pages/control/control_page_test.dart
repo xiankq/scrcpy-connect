@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:scrcpy_connect/core/media/models/video_session_changed.dart';
 import 'package:adb/adb.dart' show AdbCancellation;
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -177,6 +178,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(videos.starts, 3);
     expect(videos.resumes, contains('device'));
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(control.sent.map((call) => call.$1.sessionId), ['device', 'device']);
+    control.sent.clear();
 
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();

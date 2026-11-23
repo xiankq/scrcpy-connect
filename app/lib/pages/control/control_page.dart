@@ -610,6 +610,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
       updateClipboardFocus(sessionId, false);
       return;
     }
+    if (!keyboardFocus.hasFocus) keyboardFocus.requestFocus();
     updateClipboardFocus(
       sessionId,
       keyboardFocus.hasFocus && canSendInput,
