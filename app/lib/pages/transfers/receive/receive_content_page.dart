@@ -59,7 +59,7 @@ class ReceiveContentPage extends HookConsumerWidget {
     bool ownsView() =>
         pageContext.mounted && identical(currentOwner.value, owner);
     final busy = useState(false);
-    final shareResult = useState<String?>(null);
+    final shareResult = useState<PreparedFileShareReceipt?>(null);
     final shareReviewed = useState(false);
     final taskId = task.id;
     final autoDeliveryAttempted = useMemoized(() => <String>{}, [
@@ -111,9 +111,12 @@ class ReceiveContentPage extends HookConsumerWidget {
                 if (ownsView()) shareResult.value = result;
               } catch (error) {
                 if (ownsView()) {
-                  shareResult.value = failureMessage(
-                    error,
-                    fallback: '暂时无法确认分享是否完成。请先查看接收文件的应用。',
+                  shareResult.value = (
+                    message: failureMessage(
+                      error,
+                      fallback: '暂时无法确认分享是否完成。请先查看接收文件的应用。',
+                    ),
+                    needsRecipientCheck: true,
                   );
                 }
               } finally {
@@ -229,7 +232,8 @@ class ReceiveContentPage extends HookConsumerWidget {
                     style: pagePrimaryButtonStyle,
                     onPressed:
                         busy.value ||
-                            shareResult.value != null && !shareReviewed.value
+                            shareResult.value?.needsRecipientCheck == true &&
+                                !shareReviewed.value
                         ? null
                         : deliverShare,
                     icon: const Icon(AppIcons.share),
@@ -368,8 +372,8 @@ class ReceiveContentPage extends HookConsumerWidget {
                     const MediaCacheBlocker(),
                   if (canShare) ...[
                     if (shareResult.value != null)
-                      StateNote(shareResult.value!),
-                    if (shareResult.value != null)
+                      StateNote(shareResult.value!.message),
+                    if (shareResult.value?.needsRecipientCheck == true)
                       CheckboxListTile(
                         value: shareReviewed.value,
                         onChanged: busy.value

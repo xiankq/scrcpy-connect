@@ -12,7 +12,7 @@ import 'package:scrcpy_connect/widgets/documents/original_file_header.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:share_plus/share_plus.dart';
 
-/// 系统分享只有交接回执；再次提交必须先核对接收应用，不能当作保存完成。
+/// 选择过接收应用或交接待确认时，先核对再分享。
 class SystemFileShareForm extends HookConsumerWidget {
   const SystemFileShareForm({
     super.key,
@@ -30,6 +30,7 @@ class SystemFileShareForm extends HookConsumerWidget {
     final lease = useTransferCacheLease(ref, transferId);
     final busy = useState(false);
     final attempted = useState(false);
+    final needsRecipientCheck = useState(false);
     final reviewed = useState(false);
     final outcome = useState<String?>(null);
     final ready = transferId == null || lease.hasData && !lease.hasError;
@@ -41,7 +42,7 @@ class SystemFileShareForm extends HookConsumerWidget {
         const SizedBox(height: DesignTokens.spacingMd),
         Text('$sourceLabel → 本机暂存 → 接收应用'),
         const StateNote(
-          '原文件尚未保存到系统位置。系统分享将副本交给选择的应用；请在接收应用核对实际读取、保存或发送结果。本机原件继续保留。',
+          '原文件尚未保存到系统位置。选择接收应用后，系统会交给它一份副本。',
         ),
         if (defaultTargetPlatform == TargetPlatform.linux)
           const StateNote('此系统不支持文件分享面板，请使用保存到系统位置。')
@@ -54,7 +55,7 @@ class SystemFileShareForm extends HookConsumerWidget {
             ),
           if (!ready && !lease.hasError) const ContentLoadingIndicator(),
           if (outcome.value != null) StateNote(outcome.value!),
-          if (attempted.value && !busy.value)
+          if (needsRecipientCheck.value && !busy.value)
             CheckboxListTile(
               value: reviewed.value,
               onChanged: (value) => reviewed.value = value == true,
@@ -62,7 +63,9 @@ class SystemFileShareForm extends HookConsumerWidget {
             ),
           FilledButton.icon(
             onPressed:
-                !ready || busy.value || attempted.value && !reviewed.value
+                !ready ||
+                    busy.value ||
+                    needsRecipientCheck.value && !reviewed.value
                 ? null
                 : () async {
                     busy.value = true;
@@ -74,9 +77,13 @@ class SystemFileShareForm extends HookConsumerWidget {
                         ref,
                         localPath,
                       );
-                      if (context.mounted) outcome.value = result;
+                      if (context.mounted) {
+                        outcome.value = result.message;
+                        needsRecipientCheck.value = result.needsRecipientCheck;
+                      }
                     } catch (error) {
                       if (context.mounted) {
+                        needsRecipientCheck.value = true;
                         outcome.value = failureMessage(
                           error,
                           fallback: '暂时无法确认分享是否完成。请先查看接收文件的应用。',
@@ -108,8 +115,10 @@ bool get supportsSystemDocumentSave => const {
   TargetPlatform.linux,
 }.contains(defaultTargetPlatform);
 
+typedef PreparedFileShareReceipt = ({String message, bool needsRecipientCheck});
+
 /// 完整原件在系统接收应用读取期间继续受到暂存保护。
-Future<String> sharePreparedFile(
+Future<PreparedFileShareReceipt> sharePreparedFile(
   BuildContext context,
   WidgetRef ref,
   String localPath,
@@ -124,7 +133,7 @@ Future<String> sharePreparedFile(
   await cache.retain(localPath, ifManaged: true);
   if (!context.mounted ||
       !identical(ref.read(contentCacheControlProvider), cache)) {
-    return '原文件已保留，请返回传输详情继续分享。';
+    return (message: '原文件已保留，请返回传输详情继续分享。', needsRecipientCheck: false);
   }
   final render = context.findRenderObject();
   final origin = render is RenderBox && render.hasSize
@@ -134,8 +143,17 @@ Future<String> sharePreparedFile(
     ShareParams(files: [XFile(localPath)], sharePositionOrigin: origin),
   );
   return switch (result.status) {
-    ShareResultStatus.success => '文件已交给所选应用。请打开该应用查看。',
-    ShareResultStatus.dismissed => '已关闭系统分享，原文件暂存仍保留。',
-    ShareResultStatus.unavailable => '暂时无法确认分享是否完成。请先打开接收文件的应用查看。',
+    ShareResultStatus.success => (
+      message: '文件已交给所选应用。请打开该应用查看。',
+      needsRecipientCheck: true,
+    ),
+    ShareResultStatus.dismissed => (
+      message: '已关闭系统分享，原文件暂存仍保留。',
+      needsRecipientCheck: false,
+    ),
+    ShareResultStatus.unavailable => (
+      message: '暂时无法确认分享是否完成。请先打开接收文件的应用查看。',
+      needsRecipientCheck: true,
+    ),
   };
 }

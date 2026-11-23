@@ -207,7 +207,7 @@ class MediaCachePage extends HookConsumerWidget {
                                           item.localPath,
                                         );
                                         if (context.mounted && ownsScope()) {
-                                          feedback(context, result);
+                                          feedback(context, result.message);
                                         }
                                       } catch (error) {
                                         if (context.mounted && ownsScope()) {

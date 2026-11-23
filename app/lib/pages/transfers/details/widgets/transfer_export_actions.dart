@@ -71,7 +71,7 @@ class TransferExportActions extends ConsumerWidget {
                     ref,
                     (current.localPath ?? ''),
                   );
-                  if (context.mounted) feedback(context, result);
+                  if (context.mounted) feedback(context, result.message);
                 } catch (error) {
                   if (context.mounted) {
                     feedback(
