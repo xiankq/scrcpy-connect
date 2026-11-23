@@ -41,9 +41,7 @@ class SystemFileShareForm extends HookConsumerWidget {
         OriginalFileHeader(name: name, kind: kind),
         const SizedBox(height: DesignTokens.spacingMd),
         Text('$sourceLabel → 本机暂存 → 接收应用'),
-        const StateNote(
-          '原文件尚未保存到系统位置。选择接收应用后，系统会交给它一份副本。',
-        ),
+        const StateNote('原文件尚未保存到系统位置。选择接收应用后，系统会交给它一份副本。'),
         if (defaultTargetPlatform == TargetPlatform.linux)
           const StateNote('此系统不支持文件分享面板，请使用保存到系统位置。')
         else if (kind == 'directory')
