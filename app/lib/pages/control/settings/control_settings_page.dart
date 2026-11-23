@@ -188,6 +188,10 @@ class ControlSettingsPage extends HookConsumerWidget {
                   1920: '1920P（超清）',
                   0: '原画',
                 };
+                final sizes = ({
+                  ...clarity.keys,
+                  current.maxSize,
+                }..remove(0)).toList()..sort();
                 final frameRates = {...data.frameRates, current.maxFps}.toList()
                   ..sort();
                 return GroupedListView(
@@ -211,8 +215,9 @@ class ControlSettingsPage extends HookConsumerWidget {
                                   final next = await showChoicePicker<int>(
                                     context: context,
                                     title: '清晰度',
-                                    options: clarity.keys,
-                                    label: (option) => clarity[option]!,
+                                    options: [...sizes, 0],
+                                    label: (option) =>
+                                        clarity[option] ?? '${option}P',
                                     isSelected: (option) =>
                                         option == current.maxSize,
                                   );

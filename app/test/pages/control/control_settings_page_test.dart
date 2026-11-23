@@ -18,7 +18,7 @@ void main() {
     ('浅色', const Size(390, 844), Brightness.light, 1.0),
     ('深色窄屏大字', const Size(320, 800), Brightness.dark, 2.0),
   ]) {
-    testWidgets('$name：帧率弹层保留当前值，单独保存帧率上限', (tester) async {
+    testWidgets('$name：保留已有清晰度和帧率档位，单独保存帧率上限', (tester) async {
       tester.view
         ..physicalSize = size
         ..devicePixelRatio = 1;
@@ -82,7 +82,21 @@ void main() {
       ]);
       expect(find.text('30 FPS'), findsOneWidget);
       expect(find.text('90 FPS'), findsNothing);
-      expect(find.text('1080P（清晰）'), findsOneWidget);
+      expect(find.text('1280P'), findsOneWidget);
+
+      final clarityRow = find.text('清晰度');
+      await Scrollable.ensureVisible(
+        tester.element(clarityRow),
+        alignment: 0.5,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(clarityRow);
+      await tester.pumpAndSettle();
+      final currentSize = find.widgetWithText(ListTile, '1280P').last;
+      expect(tester.widget<ListTile>(currentSize).selected, isTrue);
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+      expect(quality.changes, hasLength(1));
     });
   }
 }
@@ -90,7 +104,7 @@ void main() {
 class _Quality implements VideoQualityControl {
   final changes = <(String, VideoQualityPatch)>[];
   var current = const VideoQuality(
-    maxSize: 1080,
+    maxSize: 1280,
     maxFps: 90,
     bitRate: 4000000,
     codec: VideoCodec.h264,
