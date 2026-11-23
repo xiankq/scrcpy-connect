@@ -14,7 +14,7 @@
 
 ### 2. 确认随包转发 ADB 的依据
 
-**为什么需要** Windows、Linux 和 macOS 的构建会放入从 Android SDK 下载的官方 Platform-Tools 文件。能公开下载 SDK 和能把它放进另一个产品分发，需要分别确认。
+**为什么需要** Windows、Linux x64 和 macOS 的包包含从 Android SDK 下载的官方 Platform-Tools 文件。能公开下载 SDK 和能把它放进另一个产品分发，需要分别确认。Linux ARM64 使用发行版提供的 ADB。
 
 **怎么做** 对照 `packages/adb/third_party/platform-tools.lock.json` 中各平台的实际组件及其附带条款，确认批量再分发的许可依据，并保存相关许可和署名。如果当前下载包的条款无法支持预期分发，决定改用可再分发的构建来源，或调整桌面安装方式，再重新验证连接和卸载。 [Android SDK 条款](https://developer.android.com/studio/terms)
 
