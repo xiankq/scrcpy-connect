@@ -20,6 +20,9 @@ runs:
       shell: bash
       run: |
         command -v nasm || brew install nasm
+    - if: inputs.native == 'true' && runner.os == 'Linux' && runner.arch == 'ARM64'
+      shell: bash
+      run: echo "RUSTUP_HOME=$RUNNER_TEMP/interconnect-rustup" >> "$GITHUB_ENV"
     - if: inputs.native == 'true' && runner.os == 'Windows'
       id: msys2
       uses: msys2/setup-msys2@3c51bf698df1e37b2261f53cb67797b97761185c # v2.34.0
@@ -34,7 +37,9 @@ runs:
         $msysBin = Join-Path $env:MSYS2_LOCATION 'usr\bin'
         $msysBin >> $env:GITHUB_PATH
         "MEDIA_CODEC_MSYS2_BIN=$msysBin" >> $env:GITHUB_ENV
-        "LIBCLANG_PATH=$(Join-Path $env:ProgramFiles 'LLVM/bin')" >> $env:GITHUB_ENV
+        $llvmBin = Join-Path $env:ProgramFiles 'LLVM/bin'
+        $llvmBin >> $env:GITHUB_PATH
+        "LIBCLANG_PATH=$llvmBin" >> $env:GITHUB_ENV
         if (-not (Get-Command nasm -ErrorAction SilentlyContinue)) {
           choco install nasm --yes --no-progress
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -273,7 +273,9 @@ def build(args, cache, prefix):
         if not (msys_bin / "msys-2.0.dll").is_file():
             raise RuntimeError(f"Use MSYS2 make; its runtime is missing beside {make}")
         bash = str(msys_bin / "bash.exe")
-        environment["CC"] = "cl"
+        triple = {"x64": "x86_64", "arm64": "aarch64", "arm": "armv7"}[args.arch]
+        # dav1d needs clang-cl's atomics and integrated Arm assembler.
+        environment["CC"] = f"clang-cl --target={triple}-pc-windows-msvc"
         options += ["--toolchain=msvc", "--target-os=win32", "--extra-cflags=-MD",
                     "--arch=" + {"x64": "x86_64", "arm64": "aarch64", "arm": "arm"}[args.arch],
                     "--enable-d3d11va",
@@ -281,6 +283,8 @@ def build(args, cache, prefix):
                     # Makefile 通过 *va 启用共享 dxva2_*.o，因此保留两种变体。
                     # 上游没有 VP8 D3D11VA 路径。
                     "--enable-hwaccel=h264_d3d11va,h264_d3d11va2,hevc_d3d11va,hevc_d3d11va2,av1_d3d11va,av1_d3d11va2,vp9_d3d11va,vp9_d3d11va2"]
+        if args.arch != "x64":
+            options.append(f"--as=clang --target={triple}-pc-windows-msvc")
     elif args.platform == "android":
         ndk = Path(args.ndk)
         if not args.ndk or not ndk.is_dir():
@@ -332,6 +336,8 @@ def build(args, cache, prefix):
                 "platform": args.platform, "arch": args.arch,
                 "api": args.api if args.platform == "android" else None, "sdk": args.sdk,
                 "options": options.copy()}
+    if args.platform == "windows":
+        identity["dav1dCompiler"] = environment["CC"]
     # 锁以安装目录为边界，工作区也必须遵循同一身份；设备与模拟器可同时构建同一架构。
     prefix_identity = hashlib.sha256(os.fsencode(prefix)).hexdigest()[:16]
     work = cache / "work" / f"{args.platform}-{args.arch}-{prefix_identity}"
