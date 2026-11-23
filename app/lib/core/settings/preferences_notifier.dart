@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/settings/models/settings_changed.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/lifecycle/state_subscription.dart';
@@ -73,7 +74,9 @@ class PreferencesNotifier extends _$PreferencesNotifier {
       }
     } catch (error) {
       if (_current(owner) && requestId == owner.request) {
-        state = state.copyWith(error: '$error');
+        state = state.copyWith(
+          error: failureMessage(error, fallback: '无法读取设置。请重新打开应用。'),
+        );
       }
     }
   }

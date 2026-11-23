@@ -104,17 +104,13 @@ class ShareInboxNotifier extends _$ShareInboxNotifier {
   Future<void> load() async {
     final owner = _owner!;
     final requestId = ++owner.request;
-    try {
-      final result = await owner.source.readIncomingShares();
-      if (!_current(owner) || requestId != owner.request) return;
-      var next = state;
-      for (final share in result) {
-        next = _withShare(owner, next, share);
-      }
-      if (!identical(state, next)) state = next;
-    } catch (_) {
-      // 不支持分享的平台没有队列；内容错误仍保留在对应分享记录上。
+    final result = await owner.source.readIncomingShares();
+    if (!_current(owner) || requestId != owner.request) return;
+    var next = state;
+    for (final share in result) {
+      next = _withShare(owner, next, share);
     }
+    if (!identical(state, next)) state = next;
   }
 
   Future<IncomingShare?> find(String id) async {

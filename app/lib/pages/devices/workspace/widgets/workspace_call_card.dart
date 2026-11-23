@@ -45,7 +45,7 @@ class WorkspaceCallCard extends ConsumerWidget {
           subtitle: Text(
             '${deviceName(device)} · ${statusText(call.state.name)}\n声音仍在手机',
           ),
-          trailing: const Icon(LucideIcons.chevronRight),
+          trailing: const Icon(AppIcons.forward),
           onTap: () => CallsRoute(deviceId: id).push<void>(context),
         ),
       ),

@@ -21,15 +21,15 @@ try {
 }
 ```
 
-需要先启动应用再等待媒体时，依次调用 `startControl()`、`sendControl(...)`、`awaitMedia()`。控制回执区分准入、写出与剪贴板确认，均不等于被控应用已处理。
+需要先打开应用再等待媒体时，依次调用 `startControl()`、`sendControl(...)`、`awaitMedia()`。回执记录准入、写出和剪贴板确认。被控应用的执行结果由对应观测读取。
 
 ## 资源归属
 
-`createSession` 拥有捕获停止权；`attach(captureRef, generation: ...)` 仅观察已有捕获，关闭不会停止原捕获。渲染器独立附着/分离来源。`sourceStatus` 的 streaming 和接纳计数不证明解码、显示或音频播放。
+`createSession` 拥有捕获停止权。`attach(captureRef, generation: ...)` 读已有捕获，关闭时解除自身观察。渲染器独立附着和分离来源。`sourceStatus` 记录流及接纳计数。解码、显示和播放由渲染器记录。
 
 `session.events` 首次监听才创建独立原生观察者。订阅取消失败可通过会话关闭重试；缺少终态的 EOF 为 `result_unknown`。捕获与观察者分别确认释放，关闭失败须保留同一 session 重试；创建取消后的清理失败由 `ScrcpyCreationCleanupFailure.session` 交回唯一关闭权。
 
-拥有停止权的 close 等待本机收尾及受监督主进程退出；主进程退出不证明上游清理子进程结束或屏幕设置恢复。身份与终态丢失时保留清理未知，不删除部署文件冒充回收。
+捕获所有者 close 等待本机收尾及受监督主进程退出。上游清理子进程和屏幕设置恢复分别核验。身份或终态未确认时保留清理责任和部署文件，供后续核验。
 
 isolate 重启可用 `listNativeScrcpyServers` 和当前 lease 调用 `restoreNativeScrcpyHost`；再通过配套 ADB 能力分别认领连接。先用 `drainConnection(device)` 排空旧捕获，再恢复业务。端点/PID 不授予权限，旧句柄不能关闭后继。先关闭捕获及设备活动，再关闭宿主。其余契约见[ADB](../adb/README.md)。
 

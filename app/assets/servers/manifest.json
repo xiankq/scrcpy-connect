@@ -10,8 +10,8 @@
     {
       "id": "companion",
       "file": "companion.zlib",
-      "sha256": "1a9dde2b79657d465b5d1ce162c758822b18c59d3d217178b16b9f9cd00d29fd",
-      "size": 59087
+      "sha256": "c0082c5164355c8abb76005816e6cffdd16edf2012bc02a768b00702d683d6d0",
+      "size": 59119
     },
     {
       "id": "arm64-v8a",

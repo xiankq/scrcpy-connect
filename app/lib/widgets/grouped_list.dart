@@ -4,7 +4,6 @@ import 'package:scrcpy_connect/widgets/form_controls.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
-import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/recovery_status.dart';
 
 /// 开放内容列表由视口分别布局每个子项。
@@ -111,7 +110,8 @@ class ConnectSwitchRow extends StatelessWidget {
               if (icon != null) ...[
                 ListIconBadge(
                   icon: icon!,
-                  backgroundColor: functionalIconColor(icon!, color: iconColor),
+                  backgroundColor:
+                      iconColor ?? DesignTokens.colorListIconUtility,
                 ),
                 const SizedBox(width: DesignTokens.spacingSm),
               ],

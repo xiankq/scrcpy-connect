@@ -56,7 +56,7 @@ class FolderListTile extends StatelessWidget {
               child: selectionActive
                   ? _FileSelectionMark(selected: selected, enabled: manageable)
                   : Icon(
-                      LucideIcons.chevronRight,
+                      AppIcons.forward,
                       size: DesignTokens.componentIconSmallSize,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -112,7 +112,11 @@ class FolderGridTile extends StatelessWidget {
                   fit: StackFit.expand,
                   children: [
                     ColoredBox(
-                      color: theme.colorScheme.surfaceContainerLow,
+                      color: theme.brightness == Brightness.dark
+                          ? DesignTokens
+                                .componentFileBrowserTileDarkBackgroundColor
+                          : DesignTokens
+                                .componentFileBrowserTileBackgroundColor,
                       child: const Center(
                         child: Icon(
                           LucideIcons.folder,
@@ -185,7 +189,7 @@ class FileGridTile extends StatelessWidget {
     final manageable = fileCanManage(file);
     final date = fileRecentModifiedLabel(file);
     final unavailableReason = openable ? null : fileUnavailableReason(file);
-    final color = fileKindColor(kind);
+    final color = fileKindColor(kind, name: file.name, mime: file.mime);
     return Semantics(
       label: '${file.name}\n${(file.path ?? '')}',
       button: openable || manageable,
@@ -219,7 +223,11 @@ class FileGridTile extends StatelessWidget {
                       const _DocumentGridPreview()
                     else
                       ColoredBox(
-                        color: theme.colorScheme.surfaceContainerLow,
+                        color: theme.brightness == Brightness.dark
+                            ? DesignTokens
+                                  .componentFileBrowserTileDarkBackgroundColor
+                            : DesignTokens
+                                  .componentFileBrowserTileBackgroundColor,
                         child: Center(
                           child: Icon(
                             fileKindIcon(kind),
@@ -234,7 +242,7 @@ class FileGridTile extends StatelessWidget {
                         bottom: DesignTokens.spacingXs,
                         child: Icon(
                           LucideIcons.play,
-                          color: Colors.white,
+                          color: DesignTokens.colorWhite,
                           size: DesignTokens.componentIconActionSize,
                         ),
                       ),
@@ -305,7 +313,9 @@ class _DocumentGridPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return ColoredBox(
-      color: theme.colorScheme.surfaceContainerLow,
+      color: theme.brightness == Brightness.dark
+          ? DesignTokens.componentFileBrowserTileDarkBackgroundColor
+          : DesignTokens.componentFileBrowserTileBackgroundColor,
       child: Center(
         child: Container(
           width: DesignTokens.componentFileDocumentPreviewWidth,
@@ -395,7 +405,7 @@ class FileListTile extends StatelessWidget {
       selected: selected,
       leading: ListIconBadge(
         icon: fileKindIcon(kind),
-        backgroundColor: fileKindColor(kind),
+        backgroundColor: fileKindColor(kind, name: file.name, mime: file.mime),
       ),
       title: Tooltip(
         triggerMode: TooltipTriggerMode.manual,
@@ -429,7 +439,7 @@ class FileListTile extends StatelessWidget {
               child: selectionActive
                   ? _FileSelectionMark(selected: selected, enabled: manageable)
                   : Icon(
-                      LucideIcons.chevronRight,
+                      AppIcons.forward,
                       size: DesignTokens.componentIconSmallSize,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),

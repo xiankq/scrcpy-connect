@@ -2,11 +2,14 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/core/devices/device_readiness_provider.dart';
 import 'package:scrcpy_connect/core/media/media_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/media/audio_sources_provider.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
+
+import 'exit_handle.dart';
 
 /// 所有画面读取同一设备音源；静音只改变本机输出，不停止远端采集。
 class RemoteAudioControl extends HookConsumerWidget {
@@ -69,9 +72,10 @@ class RemoteAudioControl extends HookConsumerWidget {
         : unsupported
         ? '设备声音需要 Android 11 或更新版本'
         : uncertain
-        ? failure.value ?? (query.error?.toString() ?? '声音快照未能核验')
+        ? failure.value ??
+              failureMessage(query.error, fallback: '无法读取手机声音状态。请检查连接后重试。')
         : cleanup != null
-        ? '旧音源尚未确认释放，清理完成后可重新播放。'
+        ? '上一次播放还没有完全结束。请先停止手机声音，再重新播放。'
         : query.isLoading || source?.status == DeviceAudioStatus.starting
         ? '正在核对声音状态'
         : muted
@@ -80,13 +84,12 @@ class RemoteAudioControl extends HookConsumerWidget {
         ? '设备声音待恢复'
         : source?.status == DeviceAudioStatus.playing
         ? '正在播放设备声音'
-        : source?.reason ?? '设备声音尚未播放';
-    return ListTile(
-      leading: Icon(muted ? LucideIcons.volumeX : LucideIcons.volume2),
-      title: Text(label, style: Theme.of(context).textTheme.bodyLarge),
-      subtitle: Text(status),
-      enabled: online && !unsupported && !busy.value && !query.isLoading,
-      onTap: !online || unsupported || busy.value || query.isLoading
+        : '手机声音尚未播放。';
+    return RemoteToolAction(
+      icon: muted || source == null ? LucideIcons.volumeX : LucideIcons.volume2,
+      label: '设备声音',
+      description: '$label。$status',
+      onPressed: !online || unsupported || busy.value || query.isLoading
           ? null
           : () async {
               busy.value = true;
@@ -114,7 +117,12 @@ class RemoteAudioControl extends HookConsumerWidget {
                 await ref.refresh(queryProvider.future).then<void>((_) {});
                 if (ownsScope()) failure.value = null;
               } catch (error) {
-                if (ownsScope()) failure.value = '$error';
+                if (ownsScope()) {
+                  failure.value = failureMessage(
+                    error,
+                    fallback: '无法更改手机声音设置。请检查手机连接后重试。',
+                  );
+                }
               } finally {
                 if (ownsScope()) busy.value = false;
               }

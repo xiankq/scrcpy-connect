@@ -20,6 +20,7 @@ void main() {
   late void Function() leave;
   final scope = Object();
   final provider = fileActionsProvider(_target, scope: scope);
+  final parent = fileDirectoryProvider((deviceId: 'device', path: '/sdcard'));
   final mutationsSource = Provider((ref) => mutations);
   final directories = _Directories();
   var readiness = const DeviceReadiness(
@@ -38,6 +39,7 @@ void main() {
         fileTransfersProvider.overrideWithValue(transfers),
         fileDirectoriesProvider.overrideWithValue(directories),
         fileDirectoryProvider(_target).overrideWith(_Directory.new),
+        parent.overrideWith(_Directory.new),
         deviceReadinessProvider('device')
             .overrideWith((ref) => ref.watch(readinessSource)),
       ],
@@ -67,12 +69,22 @@ void main() {
     final pending = actions.createDirectory('first');
     mutations.pending.single.completeError(StateError('failed'));
     expect(await pending, isFalse);
-    expect(container.read(provider).error, contains('failed'));
+    expect(container.read(provider).error, contains('请刷新列表后查看结果'));
     expect(container.read(provider).busy, isFalse);
     final retried = actions.createDirectory('second');
     expect(container.read(provider).error, isNull);
     mutations.pending.last.complete();
     expect(await retried, isTrue);
+  });
+
+  test('子目录操作完成时刷新仍打开的上级目录', () async {
+    final subscription = container.listen(parent, (_, _) {});
+    addTearDown(subscription.close);
+
+    final pending = actions.createDirectory('new');
+    mutations.pending.single.complete();
+    expect(await pending, isTrue);
+    expect((container.read(parent.notifier) as _Directory)._refreshes, 1);
   });
 
   test('发送回执只表示已登记，不在传输仍写入时刷新目录', () async {

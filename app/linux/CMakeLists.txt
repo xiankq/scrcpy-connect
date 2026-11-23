@@ -3,7 +3,8 @@ cmake_minimum_required(VERSION 3.13)
 project(runner LANGUAGES CXX)
 
 # 应用可执行文件名称，同时决定磁盘上的文件名。
-set(BINARY_NAME "scrcpy_connect")
+set(BINARY_NAME "interconnect")
+set(APP_DISPLAY_NAME "邻接")
 # 应用唯一 GTK 标识，参考 https://wiki.gnome.org/HowDoI/ChooseApplicationID。
 set(APPLICATION_ID "dev.scrcpyconnect.scrcpy_connect")
 
@@ -64,11 +65,9 @@ set_target_properties(${BINARY_NAME}
 include(flutter/generated_plugins.cmake)
 
 
-# 安装默认仅在构建目录内生成可迁移包。
+# Flutter 的安装目标只生成可迁移包。系统安装由发行版安装包负责。
 set(BUILD_BUNDLE_DIR "${PROJECT_BINARY_DIR}/bundle")
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-  set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "..." FORCE)
-endif()
+set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}")
 
 # 每次开始时清理构建包目录。
 install(CODE "
@@ -80,6 +79,13 @@ set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib")
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
+
+configure_file(interconnect.desktop.in "${CMAKE_CURRENT_BINARY_DIR}/${APPLICATION_ID}.desktop" @ONLY)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${APPLICATION_ID}.desktop"
+  DESTINATION "share/applications" COMPONENT Runtime)
+install(FILES runner/interconnect.svg
+  DESTINATION "share/icons/hicolor/scalable/apps"
+  RENAME "${APPLICATION_ID}.svg" COMPONENT Runtime)
 
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)
@@ -108,7 +114,6 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime)
 
 # 仅非调试构建安装 AOT 库。
-include("${CMAKE_CURRENT_SOURCE_DIR}/../../packages/adb/tool/cmake/bundle_adb.cmake")
 if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
   install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)

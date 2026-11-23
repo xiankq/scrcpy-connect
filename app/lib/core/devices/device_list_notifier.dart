@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_state.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
@@ -45,7 +46,9 @@ class DeviceListNotifier extends _$DeviceListNotifier {
     });
     final errors = session.connectionErrors.listen((error) {
       if (!_current(owner)) return;
-      state = state.copyWith(error: '连接状态更新中断：$error');
+      state = state.copyWith(
+        error: failureMessage(error, fallback: '设备状态暂时无法更新。请刷新列表。'),
+      );
       unawaited(refresh());
     });
     ref.onDispose(() {
@@ -85,7 +88,10 @@ class DeviceListNotifier extends _$DeviceListNotifier {
       state = state.copyWith(devices: result, loading: false, error: null);
     } catch (error) {
       if (_current(owner) && requestId == owner.request) {
-        state = state.copyWith(loading: false, error: '$error');
+        state = state.copyWith(
+          loading: false,
+          error: failureMessage(error, fallback: '无法读取设备列表。请刷新后重试。'),
+        );
       }
     }
   }

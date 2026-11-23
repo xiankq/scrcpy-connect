@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:scrcpy_connect/core/control/models/app_launch_record.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/pages/control/remote_input_queue.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
 import 'package:scrcpy_connect/pages/control/remote_window.dart';
@@ -55,14 +56,6 @@ class RemoteInputOwner {
     admits: _admitsInput,
   );
   Future<void> get idle => _inputQueue.idle;
-
-  void _trace(String detail) {
-    if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
-      debugPrint(
-        '[connect.remote ${DateTime.now().millisecondsSinceEpoch}] $detail',
-      );
-    }
-  }
 
   Future<void> releaseInputs({RemoteBinding? binding}) {
     final outgoing = binding ?? presentation.binding;
@@ -116,15 +109,21 @@ class RemoteInputOwner {
       captureGeneration: action.isInput ? _bindingCaptures[outgoing] : null,
       deviceId: action is ControlLaunchApplication ? window.deviceId : null,
     );
-    return _inputQueue.enqueue(action, target, outgoing).catchError((
-      Object error,
-    ) {
-      if (!_disposed && outgoing == presentation.binding) {
-        presentation.revokeControl();
-        presentation.failInput('$error', 'control_busy');
-        _onChanged();
-      }
-    });
+    return _inputQueue
+        .enqueue(action, target, outgoing)
+        .then<void>(
+          (_) {},
+          onError: (Object error, StackTrace stack) {
+            if (error is! RequestFailure || error.code != 'control_busy') {
+              Error.throwWithStackTrace(error, stack);
+            }
+            if (!_disposed && outgoing == presentation.binding) {
+              presentation.revokeControl();
+              presentation.failInput(error.message, error.code);
+              _onChanged();
+            }
+          },
+        );
   }
 
   bool _admitsInput(
@@ -145,14 +144,9 @@ class RemoteInputOwner {
     ControlTarget target,
     RemoteBinding binding,
   ) async {
-    _trace('request.begin action=${action.runtimeType}');
     try {
       await _control.sendControl(target, action);
-      _trace('request.complete action=${action.runtimeType}');
     } catch (error) {
-      _trace(
-        'request.failed action=${action.runtimeType} kind=${error.runtimeType}',
-      );
       if (!_disposed &&
           !presentation.exiting &&
           target.sessionId == sessionId) {
@@ -482,11 +476,6 @@ class RemoteInputOwner {
     _disposed = true;
     text.removeListener(_textChanged);
     text.dispose();
-    unawaited(
-      afterInput.then<void>(
-        (_) => _inputQueue.close(),
-        onError: (Object _, StackTrace _) => _inputQueue.close(),
-      ),
-    );
+    unawaited(afterInput.whenComplete(_inputQueue.close));
   }
 }

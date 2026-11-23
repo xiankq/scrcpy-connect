@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
@@ -13,6 +13,7 @@ import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
+import 'package:scrcpy_connect/widgets/documents/document_picker.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
 import 'package:scrcpy_connect/widgets/media_cache_blocker.dart';
@@ -23,6 +24,7 @@ Future<void> retrieveFile(
   DeviceSnapshot device,
   FileCatalogEntry file, {
   bool share = false,
+  bool openAfterTransfer = false,
 }) async {
   final transfers = ref.read(fileTransfersProvider);
   final admission = ref.read(deviceReadinessProvider(device.id));
@@ -33,7 +35,7 @@ Future<void> retrieveFile(
       ref.read(deviceReadinessProvider(device.id)).ready &&
       ref.read(deviceReadinessProvider(device.id)) == admission;
   if (share && !supportsSystemFileShare) {
-    feedback(context, '此系统不支持文件分享，请选择取回原文件并保存。');
+    feedback(context, '本机无法直接分享。你可以先取回并保存原文件。');
     return;
   }
   if (!ready()) {
@@ -45,9 +47,10 @@ Future<void> retrieveFile(
     return;
   }
   String? directory;
-  final privateCache = share || Platform.isAndroid || Platform.isIOS;
+  final privateCache =
+      share || openAfterTransfer || Platform.isAndroid || Platform.isIOS;
   if (!privateCache) {
-    directory = await FilePicker.getDirectoryPath(dialogTitle: '选择保存位置');
+    directory = await DocumentPicker.pickLocalDirectory(dialogTitle: '选择保存位置');
   }
   if (!privateCache && directory == null) return;
   directory ??= (await receivedDirectory()).path;
@@ -72,7 +75,11 @@ Future<void> retrieveFile(
   if (result == null || !context.mounted || !current()) return;
   final transferId = result.transferId;
   if (privateCache && transferId != null && transferId.isNotEmpty) {
-    ReceiveContentRoute(taskId: transferId, share: share).push<void>(context);
+    ReceiveContentRoute(
+      taskId: transferId,
+      share: share,
+      $extra: openAfterTransfer ? true : null,
+    ).push<void>(context);
     return;
   }
   feedback(
@@ -106,13 +113,13 @@ Future<void> retrieveSelection(
       (canSubmit?.call() ?? true);
   if (!ready()) return;
   if (files.any((file) => !file.canOpen || file.path?.isNotEmpty != true)) {
-    feedback(context, '所选内容包含无法解析路径的文件，请重新选择可操作的文件。');
+    feedback(context, '部分选中的文件无法打开。请换个文件再试。');
     return;
   }
   final privateCache = Platform.isAndroid || Platform.isIOS;
   final directory = privateCache
       ? (await receivedDirectory()).path
-      : await FilePicker.getDirectoryPath(
+      : await DocumentPicker.pickLocalDirectory(
           dialogTitle: '保存 ${files.length} 项原文件',
         );
   if (directory == null || !context.mounted) return;
@@ -163,7 +170,10 @@ Future<FileTransferSubmission?> _pull(
           },
         );
       } else {
-        feedback(context, '$error');
+        feedback(
+          context,
+          failureMessage(error, fallback: '无法开始取回文件。请检查手机连接后重试。'),
+        );
       }
     }
     return null;

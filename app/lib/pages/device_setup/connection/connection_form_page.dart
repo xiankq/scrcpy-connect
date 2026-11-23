@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/devices/connection_validation.dart';
 import 'package:scrcpy_connect/core/devices/device_connection_control.dart';
 import 'package:scrcpy_connect/core/devices/device_setup.dart';
@@ -17,13 +16,11 @@ import 'package:scrcpy_connect/pages/device_setup/pairing/qr_pairing_page.dart';
 import 'package:scrcpy_connect/pages/device_setup/usb/usb_setup_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/action_row.dart';
+import 'package:scrcpy_connect/widgets/content_arrival.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
-import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
-import 'package:scrcpy_connect/widgets/overlays.dart';
 
 export 'package:scrcpy_connect/pages/device_setup/connection/widgets/connection_failure_note.dart'
     show ConnectionFailureNote;
@@ -77,6 +74,11 @@ class ConnectionFormPage extends HookConsumerWidget {
           : '',
     );
     final code = useTextEditingController();
+    final fieldFocus = (
+      address: useFocusNode(),
+      port: useFocusNode(),
+      pairingCode: useFocusNode(),
+    );
     final attemptPage = useState(false);
     final form = useMemoized(() => GlobalKey<FormState>());
     final scope = useMemoized(Object.new, [
@@ -133,7 +135,12 @@ class ConnectionFormPage extends HookConsumerWidget {
         : deviceId;
 
     Future<bool> prepareConnection() async {
-      if (!(form.currentState?.validate() ?? false)) {
+      final invalid = form.currentState?.validateGranularly();
+      if (invalid == null) return false;
+      if (invalid.isNotEmpty) {
+        if (invalid.first.widget.key case ValueKey<FocusNode>(:final value)) {
+          value.requestFocus();
+        }
         return false;
       }
       if ((configuring || reauthorizing) &&
@@ -175,6 +182,7 @@ class ConnectionFormPage extends HookConsumerWidget {
               deviceId: targetDeviceId(),
               configure: configuring || reauthorizing,
             );
+      FocusScope.of(context).unfocus();
       if (pairing) code.clear();
       attemptPage.value = true;
       await actions.submit(request);
@@ -201,24 +209,16 @@ class ConnectionFormPage extends HookConsumerWidget {
       completingPairing.value = true;
       selectedTransport.value = ConnectionTransport.tls;
       portField.clear();
-      mode.value = AddDeviceMode.pairing;
+      mode.value = AddDeviceMode.ip;
       attemptPage.value = false;
     }
 
     Future<void> closeAttempt() async {
       if (!await actions.cancel() || !context.mounted || !ownsScope()) return;
-      final receipt = ref.read(provider).pairing;
-      if (pairing && receipt != null) {
-        await completePairing(
-          host.text,
-          receipt.deviceId ?? currentDeviceId.value,
-        );
-      } else {
-        attemptPage.value = false;
-      }
+      attemptPage.value = false;
     }
 
-    return PopScope(
+    Widget page({Widget? supplemental, Widget? primary}) => PopScope(
       canPop: !attemptPage.value,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop || !attemptPage.value) return;
@@ -234,6 +234,40 @@ class ConnectionFormPage extends HookConsumerWidget {
                   : reauthorizing
                   ? '重新授权'
                   : '添加设备',
+              titleStyle: Theme.of(context).textTheme.headlineMedium,
+              bottom: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: DesignTokens.spacingXs,
+                ),
+                child: FilledButtonTheme(
+                  data: FilledButtonThemeData(
+                    style: FilledButtonTheme.of(context).style?.copyWith(
+                      minimumSize: const WidgetStatePropertyAll(
+                        Size.fromHeight(
+                          DesignTokens.componentButtonPrimaryHeight,
+                        ),
+                      ),
+                      shape: const WidgetStatePropertyAll(
+                        RoundedRectangleBorder(
+                          borderRadius: BorderRadius.all(
+                            Radius.circular(
+                              DesignTokens.componentButtonPrimaryRounded,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  child:
+                      primary ??
+                      (mode.value == .pairing || mode.value == .ip
+                          ? FilledButton(
+                              onPressed: flow.busy ? null : submit,
+                              child: Text(pairing ? '配对并连接' : '连接设备'),
+                            )
+                          : const SizedBox.shrink()),
+                ),
+              ),
               child: ConnectionContent(
                 child: Form(
                   key: form,
@@ -241,7 +275,12 @@ class ConnectionFormPage extends HookConsumerWidget {
                     slivers: [
                       const PageChromeSliver(),
                       SliverPadding(
-                        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                        padding: const EdgeInsets.fromLTRB(
+                          DesignTokens.spacingMd,
+                          DesignTokens.spacingXs,
+                          DesignTokens.spacingMd,
+                          DesignTokens.spacingMd,
+                        ),
                         sliver: SliverMainAxisGroup(
                           slivers: [
                             SliverToBoxAdapter(
@@ -249,11 +288,29 @@ class ConnectionFormPage extends HookConsumerWidget {
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   if (!configuring) ...[
-                                    ContentPanel(
-                                      padding: EdgeInsets.zero,
-                                      child: ActionRow(
-                                        icon: LucideIcons.radar,
-                                        title: '发现设备',
+                                    Material(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .surface,
+                                      borderRadius: BorderRadius.circular(
+                                        DesignTokens
+                                            .componentConnectionNearbyEntryRounded,
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: ListTile(
+                                        minTileHeight: DesignTokens
+                                            .componentConnectionNearbyEntryHeight,
+                                        leading: const Icon(
+                                          AppIcons.connectionDiscovery,
+                                          color: DesignTokens
+                                              .componentConnectionIconNearbyTextColor,
+                                        ),
+                                        title: const Text('附近设备'),
+                                        trailing: const Icon(
+                                          AppIcons.forward,
+                                          size: DesignTokens
+                                              .componentIconSmallSize,
+                                        ),
                                         onTap: flow.busy
                                             ? null
                                             : () async {
@@ -333,7 +390,7 @@ class ConnectionFormPage extends HookConsumerWidget {
                                       ),
                                     ),
                                     const SizedBox(
-                                      height: DesignTokens.spacingMd,
+                                      height: DesignTokens.roundedMd,
                                     ),
                                   ],
                                   if (!configuring) ...[
@@ -345,37 +402,14 @@ class ConnectionFormPage extends HookConsumerWidget {
                                       height: DesignTokens.spacingMd,
                                     ),
                                   ],
-                                  if (mode.value == AddDeviceMode.qr)
-                                    QrPairingPage(
-                                      autoGenerate:
-                                          !configuring && !reauthorizing,
-                                      prepareConnection: prepareConnection,
-                                      deviceId: deviceId,
-                                      embedded: true,
-                                      onUsePairingCode: () =>
-                                          selectMode(AddDeviceMode.pairing),
-                                      onConnectionPort: completePairing,
-                                      onPaired: (paired) {
-                                        host.text = paired.address;
-                                        identityAddress.value = host.text
-                                            .trim();
-                                        currentDeviceId.value =
-                                            paired.deviceId ??
-                                            currentDeviceId.value;
-                                        tlsLocked.value = true;
-                                        selectedTransport.value =
-                                            ConnectionTransport.tls;
-                                        portField.clear();
-                                      },
-                                    )
-                                  else if (mode.value != AddDeviceMode.usb) ...[
+                                  if (mode.value == .pairing ||
+                                      mode.value == .ip) ...[
                                     ConnectionAddressFields(
                                       address: host,
                                       port: activePort,
                                       pairingCode: code,
+                                      focus: fieldFocus,
                                       pairing: pairing,
-                                      completingPairing:
-                                          completingPairing.value,
                                       legacyTcp: legacyTcp,
                                       enabled: !flow.busy,
                                       onAddressChanged: (next) {
@@ -387,70 +421,55 @@ class ConnectionFormPage extends HookConsumerWidget {
                                     ),
                                     if (flow.notice != null)
                                       StateNote(flow.notice!),
-                                    const SizedBox(
-                                      height: DesignTokens.spacingSectionTitle,
-                                    ),
-                                    FilledButton(
-                                      onPressed: flow.busy ? null : submit,
-                                      child: flow.busy
-                                          ? const SizedBox(
-                                              width: DesignTokens.spacingMd,
-                                              height: DesignTokens.spacingMd,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          : Text(pairing ? '配对并连接' : '连接设备'),
-                                    ),
                                   ],
                                 ],
                               ),
                             ),
-                            if (mode.value == AddDeviceMode.usb)
-                              UsbSetupPage(
-                                prepareConnection: prepareConnection,
-                                deviceId: targetDeviceId(),
-                                embedded: true,
-                                onUseWireless: () =>
-                                    selectMode(AddDeviceMode.pairing),
-                              ),
-                            if (additionalContent != null)
-                              SliverToBoxAdapter(child: additionalContent!),
+                            ?supplemental,
                             const SliverToBoxAdapter(
-                              child: SizedBox(height: DesignTokens.spacingMd),
+                              child: SizedBox(height: DesignTokens.spacingSm),
                             ),
                             SliverToBoxAdapter(
-                              child: TextButton(
-                                onPressed: () => showAppDialog<void>(
-                                  context: context,
-                                  builder: (dialogContext) => AppAlertDialog(
-                                    title: Text(
-                                      '连接帮助',
-                                      style: Theme.of(dialogContext)
-                                          .textTheme
-                                          .bodyMedium,
-                                    ),
-                                    content: Text(
-                                      _connectionHelp(
-                                        mode.value,
-                                        legacyTcp: legacyTcp,
+                              child: Align(
+                                alignment: AlignmentDirectional.centerStart,
+                                child: TextButton(
+                                  style: TextButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: const Size(44, 44),
+                                  ),
+                                  onPressed: () =>
+                                      Navigator.of(context).push<void>(
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              _ConnectionHelpPage(
+                                                mode: mode.value,
+                                                legacyTcp: legacyTcp,
+                                              ),
+                                        ),
                                       ),
-                                      style: Theme.of(dialogContext)
-                                          .textTheme
-                                          .bodyMedium,
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.of(dialogContext).pop(),
-                                        child: const Text('知道了'),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Flexible(
+                                        child: Text(switch (mode.value) {
+                                          .pairing => '配对码帮助',
+                                          .qr => '扫码帮助',
+                                          .usb => 'USB 连接帮助',
+                                          .ip => 'IP 连接帮助',
+                                        }),
+                                      ),
+                                      const Icon(
+                                        AppIcons.forward,
+                                        size:
+                                            DesignTokens.componentIconSmallSize,
                                       ),
                                     ],
                                   ),
                                 ),
-                                child: const Text('连接帮助'),
                               ),
                             ),
+                            if (additionalContent != null)
+                              SliverToBoxAdapter(child: additionalContent!),
                           ],
                         ),
                       ),
@@ -468,10 +487,12 @@ class ConnectionFormPage extends HookConsumerWidget {
                 checking: flow.checking,
                 cancelling: flow.cancelling,
                 failure: flow.failure,
+                pairing: pairing,
+                legacyTcp: legacyTcp,
                 paired:
                     flow.pairing?.recorded == true ||
                     (pairing && flow.pairing != null),
-                deviceName: host.text.trim(),
+                address: host.text.trim(),
                 onCancel: closeAttempt,
                 onEdit: closeAttempt,
                 onRetry: () {
@@ -483,21 +504,105 @@ class ConnectionFormPage extends HookConsumerWidget {
                   }
                 },
                 onRecheck: actions.recheck,
-                onConnectionPort: () => completePairing(
-                  host.text,
-                  (flow.pairing?.deviceId ?? currentDeviceId.value),
-                ),
               ),
             ),
         ],
       ),
     );
+
+    final formPage = switch (mode.value) {
+      .qr => QrPairingPage(
+        autoGenerate: !configuring && !reauthorizing,
+        prepareConnection: prepareConnection,
+        deviceId: deviceId,
+        embedded: true,
+        onUsePairingCode: () => selectMode(.pairing),
+        onConnectionPort: completePairing,
+        onPaired: (paired) {
+          host.text = paired.address;
+          identityAddress.value = host.text.trim();
+          currentDeviceId.value = paired.deviceId ?? currentDeviceId.value;
+          tlsLocked.value = true;
+          selectedTransport.value = ConnectionTransport.tls;
+          portField.clear();
+        },
+        embeddedBuilder: (body, primary) => page(
+          supplemental: SliverToBoxAdapter(child: body),
+          primary: primary,
+        ),
+      ),
+      .usb => UsbSetupPage(
+        prepareConnection: prepareConnection,
+        deviceId: targetDeviceId(),
+        embedded: true,
+        onUseWireless: () => selectMode(.pairing),
+        embeddedBuilder: (body, primary) =>
+            page(supplemental: body, primary: primary),
+      ),
+      _ => page(),
+    };
+    return ContentArrival(state: mode.value, child: formPage);
   }
 }
 
-String _connectionHelp(AddDeviceMode mode, {required bool legacyTcp}) =>
-    switch (mode) {
-      AddDeviceMode.usb => '使用数据线连接，本机需支持 USB 主机角色。\n\n本机：允许应用访问 USB 设备。手机：开启 USB 调试，在系统弹窗中允许此主控。\n\n“检查连接”只读取实际授权结果。拒绝或超时后，重新插线并检查授权。本机无需开启调试。',
-      AddDeviceMode.ip when legacyTcp => '先通过 USB 完成手机的调试授权，并允许按地址连接。填写手机当前的地址和连接端口。\n\n此方式不使用无线调试加密，仅在可信网络使用。跨网需已有 VPN 等可达路径，不会自动穿透网络。',
-      _ => '手机：在“设置 → 关于手机”连续点击版本号，开启开发者选项，再打开无线调试。\n\n配对码：填写配对窗口的地址、配对端口和当前配对码。扫码：在手机选择“使用二维码配对设备”，扫描本机二维码。\n\n连接端口在无线调试主页面，与配对端口不同。已配对但未连接时，填写连接端口，无需重复配对。\n\n手机没有无线调试时，改用 USB 授权。本机无需开启调试。跨网需已有 VPN 等可达路径，不会自动穿透网络。',
+class _ConnectionHelpPage extends StatelessWidget {
+  const _ConnectionHelpPage({required this.mode, required this.legacyTcp});
+  final AddDeviceMode mode;
+  final bool legacyTcp;
+
+  @override
+  Widget build(BuildContext context) {
+    final (title, instructions) = switch (mode) {
+      .pairing => (
+        '配对码连接帮助',
+        [
+          '在手机上开启开发者选项和无线调试。',
+          '选择“使用配对码配对设备”。在邻接填写配对窗口中的地址、端口和六位配对码。',
+          '保持两台设备在同一可达网络，直到连接完成。',
+        ],
+      ),
+      .qr => (
+        '扫码连接帮助',
+        [
+          '在手机上打开开发者选项里的无线调试。',
+          '选择“使用二维码配对设备”，扫描邻接显示的二维码。',
+          '保持无线调试页面打开，直到设备出现在工作台。',
+        ],
+      ),
+      .usb => (
+        'USB 连接帮助',
+        [
+          '请使用支持数据传输的 USB 数据线连接两台设备。',
+          '打开被控手机的开发者选项和 USB 调试。',
+          '允许本机访问 USB 设备，并在被控手机上确认调试授权。',
+        ],
+      ),
+      .ip => (
+        'IP 连接帮助',
+        [
+          legacyTcp ? '先用 USB 完成调试授权，并在设备设置中开启 IP 连接。' : '在手机开发者选项中打开无线调试。',
+          '填写手机连接地址和当前连接端口。',
+          '保持网络可达。未加密的 IP 调试只适用于可信网络。',
+        ],
+      ),
     };
+    return PageFrame(
+      title: title,
+      onBack: () => Navigator.pop(context),
+      child: Builder(
+        builder: (context) => ListView(
+          padding:
+              const EdgeInsets.all(DesignTokens.spacingMd) +
+              PageChromePadding.of(context),
+          children: [
+            for (final (index, instruction) in instructions.indexed)
+              ListTile(
+                leading: CircleAvatar(child: Text('${index + 1}')),
+                title: Text(instruction),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}

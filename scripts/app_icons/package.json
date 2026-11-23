@@ -1,0 +1,12 @@
+{
+  "name": "interconnect-app-icons",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "node generate.mjs",
+    "check": "node generate.mjs --check"
+  },
+  "dependencies": {
+    "sharp": "0.35.5"
+  }
+}

@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/core/control/models/video_renderer_receipt.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
@@ -63,11 +62,6 @@ class VideoRecovery {
   /// 先撤销本地绑定与监视，再等待播放器释放；失败清理由原播放器持有并重试。
   Future<void> close(String id, {RequestFailure? failure}) async {
     forget(id);
-    if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
-      debugPrint(
-        '[connect.video] close session=$id from=${StackTrace.current}',
-      );
-    }
     _monitors.remove(id)?.cancel();
     outputs.remove(id);
     await closeOutput(id, failure: failure);

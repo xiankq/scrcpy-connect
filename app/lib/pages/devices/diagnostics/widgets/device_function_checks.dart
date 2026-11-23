@@ -7,7 +7,6 @@ import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 class DeviceFunctionChecks extends ConsumerWidget {
@@ -33,22 +32,58 @@ class DeviceFunctionChecks extends ConsumerWidget {
       emptyTitle: '暂时无法检查功能',
       builder: (context, data) {
         final capabilities = data.capabilities;
+        final dark = Theme.of(context).brightness == Brightness.dark;
         return SettingsGroup(
           children: [
-            if (capabilities.isEmpty) const StateNote('尚未检查这台设备的功能，请连接后重新检查。'),
+            if (capabilities.isEmpty) const StateNote('请先连接手机，再检查哪些功能可用。'),
             for (final cap in capabilities)
               ListTile(
-                leading: ListIconBadge(
-                  icon: cap.status == DeviceFeatureStatus.available
-                      ? LucideIcons.circleCheck
-                      : LucideIcons.circleAlert,
-                  backgroundColor: cap.status == DeviceFeatureStatus.available
-                      ? DesignTokens.colorListIconMint
-                      : DesignTokens.colorListIconAmber,
-                ),
+                leading: Icon(switch (cap.feature) {
+                  .shell => LucideIcons.shieldCheck,
+                  .files => LucideIcons.folder,
+                  .wirelessPairing => LucideIcons.wifi,
+                  .screen => LucideIcons.smartphone,
+                  .clipboard => LucideIcons.clipboard,
+                  .apps => LucideIcons.grid2x2,
+                  .audio => LucideIcons.volume2,
+                  .notifications => LucideIcons.bell,
+                  .calls => LucideIcons.phone,
+                  .background => LucideIcons.appWindow,
+                }, size: DesignTokens.componentIconSmallSize),
                 title: Text(
-                  '${_featureName(cap.feature)} · ${_statusText(cap.status)}',
+                  _featureName(cap.feature),
                   style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _statusText(cap.status),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(width: DesignTokens.spacingXs),
+                    Icon(
+                      switch (cap.status) {
+                        .available => LucideIcons.check,
+                        .unavailable => LucideIcons.x,
+                        .limited || .needsSetup => LucideIcons.circleAlert,
+                        _ => LucideIcons.circle,
+                      },
+                      size: DesignTokens.componentIconSmallSize,
+                      color: switch (cap.status) {
+                        .available =>
+                          dark
+                              ? DesignTokens.colorSuccessDark
+                              : DesignTokens.colorSuccess,
+                        .unavailable => Theme.of(context).colorScheme.error,
+                        .limited || .needsSetup =>
+                          dark
+                              ? DesignTokens.colorWarningDark
+                              : DesignTokens.colorDiagnosticWarning,
+                        _ => Theme.of(context).colorScheme.onSurfaceVariant,
+                      },
+                    ),
+                  ],
                 ),
                 subtitle: cap.reason.isEmpty
                     ? null
@@ -71,7 +106,7 @@ String _statusText(DeviceFeatureStatus status) => switch (status) {
   .needsSetup => '需要设置',
   .unknown => '尚未检查',
   .stopped => '已停止',
-  .unverified => '状态待核验',
+  .unverified => '待检查',
 };
 
 String _featureName(DeviceFeature feature) => switch (feature) {

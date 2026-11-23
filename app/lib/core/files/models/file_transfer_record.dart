@@ -33,6 +33,7 @@ abstract class FileTransferRecord with _$FileTransferRecord {
     @Default(FileTransferDestination.localPath)
     FileTransferDestination destinationScope,
     @Default(0) int createdAt,
+    int? endedAt,
     @Default(0) int generation,
     @Default(0) int itemIndex,
     @Default(1) int itemCount,
@@ -46,6 +47,7 @@ abstract class FileTransferRecord with _$FileTransferRecord {
     @Default(false) bool treeComplete,
     @Default(false) bool partialDestinationPossible,
     @Default(false) bool cleanupPending,
+    @Default(false) bool historyHidden,
     String? cleanupScopeId,
     String? cleanupScopeKey,
   }) = _FileTransferRecord;

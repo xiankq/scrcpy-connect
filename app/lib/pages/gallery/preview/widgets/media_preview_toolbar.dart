@@ -1,81 +1,122 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:scrcpy_connect/pages/gallery/preview/widgets/media_controls_protection.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
+import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 
 class MediaPreviewToolbar extends StatelessWidget {
   const MediaPreviewToolbar({
     super.key,
     required this.title,
     required this.onBack,
-    required this.onSave,
-    required this.onShare,
   });
 
   final String title;
   final VoidCallback onBack;
-  final VoidCallback onSave;
-  final VoidCallback onShare;
 
   @override
   Widget build(BuildContext context) {
-    return MediaControlsProtection(
+    final window = DesktopWindowInsets.of(context);
+    final side = liquid.GlassVerticalBar.maybeOf(context);
+    final atLeft = side?.edge == liquid.GlassVerticalBarEdge.leading;
+    final backLabel = MaterialLocalizations.of(context).backButtonTooltip;
+    final back = Tooltip(
+      message: backLabel,
+      excludeFromSemantics: true,
+      child: GlassToolbarIconButton(
+        semanticLabel: backLabel,
+        variant: GlassVariant.clear,
+        onPressed: onBack,
+        icon: const Icon(AppIcons.back),
+      ),
+    );
+    final verticalPadding = window == null
+        ? DesignTokens.spacingMd
+        : (DesignTokens.componentPageHeaderHeight -
+                  DesignTokens.componentIconButtonSize) /
+              2;
+    final header = MediaControlsProtection(
       child: SafeArea(
         bottom: false,
+        minimum: EdgeInsets.only(
+          left: atLeft ? side!.width : 0,
+          right: side != null && !atLeft ? side.width : 0,
+        ),
         child: Padding(
-          padding: const EdgeInsets.all(DesignTokens.spacingMd),
+          padding: EdgeInsets.fromLTRB(
+            window != null && window.left > 0
+                ? window.left + DesignTokens.spacingXs
+                : DesignTokens.spacingMd,
+            verticalPadding,
+            window != null && window.right > 0
+                ? window.right + DesignTokens.spacingXs
+                : DesignTokens.spacingMd,
+            verticalPadding,
+          ),
           child: Row(
             children: [
-              Tooltip(
-                message: MaterialLocalizations.of(context).backButtonTooltip,
-                child: GlassToolbarIconButton(
-                  semanticLabel: MaterialLocalizations.of(context)
-                      .backButtonTooltip,
-                  variant: GlassVariant.clear,
-                  interactionScale: GlassMaterial.reduceMotion(context)
-                      ? 1
-                      : DesignTokens.componentGlassInteractionScale,
-                  anchorStretch: !GlassMaterial.reduceMotion(context),
-                  onPressed: onBack,
-                  icon: const Icon(LucideIcons.chevronLeft),
-                ),
-              ),
-              const SizedBox(width: DesignTokens.spacingXs),
+              if (side == null) ...[
+                back,
+                const SizedBox(width: DesignTokens.spacingXs),
+              ],
               Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              const SizedBox(width: DesignTokens.spacingXs),
-              GlassToolbarGroup(
-                variant: GlassVariant.clear,
-                children: [
-                  GlassActionIcon(
-                    tooltip: '保存原文件',
-                    color: Theme.of(context).colorScheme.onSurface,
-                    onPressed: onSave,
-                    icon: const Icon(LucideIcons.download),
-                  ),
-                  if (supportsSystemFileShare)
-                    GlassActionIcon(
-                      tooltip: '系统分享',
-                      color: Theme.of(context).colorScheme.onSurface,
-                      onPressed: onShare,
-                      icon: const Icon(LucideIcons.share2),
+                child: DesktopWindowDragArea(
+                  child: SizedBox(
+                    height: DesignTokens.componentIconButtonSize,
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                     ),
-                ],
+                  ),
+                ),
               ),
             ],
           ),
         ),
       ),
+    );
+    if (side == null) return header;
+    return Stack(
+      children: [
+        Align(alignment: Alignment.topCenter, child: header),
+        GlassSideToolbar(
+          bar: side,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Positioned(
+                  left: -DesignTokens.spacingSm,
+                  right: -DesignTokens.spacingSm,
+                  top: -DesignTokens.spacingSm,
+                  bottom: -DesignTokens.spacingSm,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(
+                          colors: [
+                            DesignTokens.colorMediaShade,
+                            DesignTokens.colorTransparent,
+                          ],
+                          stops: [0.15, 1],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                back,
+              ],
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

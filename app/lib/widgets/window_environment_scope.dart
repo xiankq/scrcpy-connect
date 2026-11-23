@@ -46,7 +46,11 @@ final class _WindowEnvironmentScopeState extends State<WindowEnvironmentScope>
     WidgetsBinding.instance.addObserver(this);
     _hostEnvironmentSubscription = widget.watchHostEnvironment().listen(
       _applyHostEnvironment,
-      onError: (_, _) {},
+      onError: (Object error, StackTrace stack) {
+        if (error is! MissingPluginException) {
+          _reportHostError(error, stack, 'watching window environment');
+        }
+      },
     );
     unawaited(_loadHostEnvironment());
   }
@@ -79,11 +83,25 @@ final class _WindowEnvironmentScopeState extends State<WindowEnvironmentScope>
 
   Future<void> _loadHostEnvironment() async {
     final requestGeneration = ++_requestGeneration;
-    final environment =
-        await widget.readHostEnvironment() ??
-        await widget.readDesktopWindowIdentity();
-    if (!mounted || requestGeneration != _requestGeneration) return;
-    _applyHostEnvironment(environment, requestGeneration: requestGeneration);
+    try {
+      final environment =
+          await widget.readHostEnvironment() ??
+          await widget.readDesktopWindowIdentity();
+      if (!mounted || requestGeneration != _requestGeneration) return;
+      _applyHostEnvironment(environment, requestGeneration: requestGeneration);
+    } on PlatformException catch (error, stack) {
+      _reportHostError(error, stack, 'reading window environment');
+    }
+  }
+
+  void _reportHostError(Object error, StackTrace stack, String action) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stack,
+        context: ErrorDescription(action),
+      ),
+    );
   }
 
   void _applyHostEnvironment(
@@ -207,33 +225,19 @@ Future<WindowEnvironment?> _readHostEnvironment() async {
     return payload == null ? null : WindowEnvironmentCodec.decode(payload);
   } on MissingPluginException {
     return null;
-  } on PlatformException {
-    return null;
   }
 }
 
 Stream<WindowEnvironment?> _watchHostEnvironment() {
-  // Linux and Windows currently expose window identity through the desktop
-  // engine, while metrics/lifecycle callbacks provide the live geometry.
-  // Do not subscribe to an EventChannel those hosts do not register: an
-  // absent channel fails asynchronously when the stream is listened to and
-  // would otherwise surface as an uncaught MissingPluginException.
+  // Desktop window identity and live Flutter metrics drive Linux and Windows.
   if (defaultTargetPlatform == TargetPlatform.linux ||
       defaultTargetPlatform == TargetPlatform.windows) {
     return const Stream<WindowEnvironment?>.empty();
   }
-  try {
-    return const PlatformChannels().windowEnvironmentEvents
-        .map((payload) {
-          if (payload is! Map) return null;
-          return WindowEnvironmentCodec.decode(
-            Map<String, dynamic>.from(payload),
-          );
-        })
-        .handleError((Object _, StackTrace _) {});
-  } on Exception {
-    return const Stream<WindowEnvironment?>.empty();
-  }
+  return const PlatformChannels().windowEnvironmentEvents.map((payload) {
+    if (payload is! Map) throw const FormatException('Invalid window payload');
+    return WindowEnvironmentCodec.decode(Map<String, dynamic>.from(payload));
+  });
 }
 
 Future<WindowEnvironment?> _readDesktopWindowIdentity() async {
@@ -252,7 +256,7 @@ Future<WindowEnvironment?> _readDesktopWindowIdentity() async {
       windowId: 'desktop:${controller.windowId}',
       mode: WindowMode.freeform,
     );
-  } on Exception {
+  } on MissingPluginException {
     return null;
   }
 }

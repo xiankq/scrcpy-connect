@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
@@ -186,9 +187,10 @@ class DeviceAudioViewCoordinator {
     if (_disposed || _readSnapshot().reconciliationPending) return;
     final failures = {
       ..._audioFailures.values,
-      for (final failure in _audioStopFailures.values) '${failure.error}',
+      for (final failure in _audioStopFailures.values)
+        failureMessage(failure.error, fallback: '暂时无法确认手机声音是否已停止。请先检查声音状态。'),
     };
-    _onError(failures.isEmpty ? null : '设备声音未能播放：${failures.join('；')}');
+    _onError(failures.isEmpty ? null : failures.toSet().join('\n'));
   }
 
   Future<void> _syncDeviceAudio(int generation) async {
@@ -285,7 +287,7 @@ class DeviceAudioViewCoordinator {
       _publishAudioFailures();
     } catch (error) {
       if (_current(generation) && !_readSnapshot().reconciliationPending) {
-        _onError('设备声音未能播放：$error');
+        _onError(failureMessage(error, fallback: '手机声音无法播放。请检查手机连接后重试。'));
       }
     }
   }
@@ -315,7 +317,10 @@ class DeviceAudioViewCoordinator {
       _audioFailures.remove(device);
     } catch (error) {
       if (_wantsDeviceAudio(device, generation, epoch)) {
-        _audioFailures[device] = '$error';
+        _audioFailures[device] = failureMessage(
+          error,
+          fallback: '手机声音无法播放。请检查手机连接后重试。',
+        );
       }
     }
     if (_current(generation)) _publishAudioFailures();

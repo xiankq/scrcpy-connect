@@ -4,6 +4,7 @@ import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/files/models/file_catalog_entry.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content/media_thumbnail.dart';
+import 'package:scrcpy_connect/widgets/file_browser.dart';
 
 class GalleryMediaTile extends StatelessWidget {
   const GalleryMediaTile({
@@ -39,7 +40,7 @@ class GalleryMediaTile extends StatelessWidget {
                   padding: const EdgeInsets.all(DesignTokens.spacingSm),
                   child: Center(
                     child: Text(
-                      file.reason ?? '文件名无法解析为有效路径，暂时无法操作。',
+                      fileUnavailableReason(file),
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),
@@ -50,22 +51,38 @@ class GalleryMediaTile extends StatelessWidget {
                   path: file.path!,
                   device: device,
                 ),
-              if (file.mime.startsWith('video'))
-                const Positioned(
-                  left: DesignTokens.spacingXs,
-                  bottom: DesignTokens.spacingXs,
+              if (file.canOpen &&
+                  file.path?.isNotEmpty == true &&
+                  file.mime.startsWith('video/')) ...[
+                const Center(
                   child: Icon(
                     LucideIcons.play,
-                    color: Colors.white,
+                    color: DesignTokens.colorWhite,
                     size: DesignTokens.componentIconActionSize,
+                    shadows: [Shadow(blurRadius: DesignTokens.spacingXs)],
                   ),
                 ),
+                Positioned(
+                  left: DesignTokens.spacingXs,
+                  bottom: DesignTokens.spacingXs,
+                  child: Text(
+                    '视频',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: DesignTokens.colorWhite,
+                      shadows: const [
+                        Shadow(blurRadius: DesignTokens.spacingXs),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               if (selected)
                 Container(
-                  color: Colors.black38,
+                  color: DesignTokens
+                      .componentMediaThumbnailSelectionBackgroundColor,
                   child: const Icon(
                     LucideIcons.circleCheck,
-                    color: Colors.white,
+                    color: DesignTokens.colorWhite,
                   ),
                 ),
             ],

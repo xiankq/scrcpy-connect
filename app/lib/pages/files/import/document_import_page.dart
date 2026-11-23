@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/files/document_operation_notifier.dart';
 import 'package:scrcpy_connect/core/files/file_transfers.dart';
@@ -9,6 +10,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/utils/formatters.dart';
+import 'package:scrcpy_connect/widgets/form_controls.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
@@ -244,52 +246,60 @@ class DocumentImportPage extends HookConsumerWidget {
           onChanged: sending.value ? null : (v) => reviewed.value = v ?? false,
           title: const Text('我已核对，只发送已取回的内容'),
         ),
-      if (usable)
-        FilledButton(
-          onPressed: sending.value || partial && !reviewed.value
-              ? null
-              : () async {
-                  if (!await confirm(
-                        context,
-                        '发送此文件夹？',
-                        '将“$name”发送到 ${deviceName(device)} 的 $target。同名内容逐项确认，不会自动覆盖。',
-                        action: '确认发送',
-                      ) ||
-                      (!context.mounted || !ownsScope())) {
-                    return;
-                  }
-                  sending.value = true;
-                  final response = await performAction(
-                    context,
-                    () => transfers.startTransfer(
-                      FileTransferPlan(
-                        deviceId: device.id,
-                        direction: .push,
-                        items: [
-                          FileTransferSelection(
-                            source: result!.localPath!,
-                            destination: target,
-                          ),
-                        ],
-                      ),
-                      shareId: result.managedSourceId,
-                    ),
-                  );
-                  if (context.mounted && ownsScope()) {
-                    sending.value = false;
-                    if (response != null) onSubmitted();
-                  }
-                },
-          child: Text(
-            sending.value
-                ? '正在建立传输…'
-                : partial
-                ? '发送已核对的内容'
-                : '发送此文件夹',
-          ),
-        ),
     ];
     return PageFrame(
+      titleStyle: Theme.of(context).textTheme.headlineMedium,
+      bottom: usable
+          ? Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: DesignTokens.spacingXs,
+              ),
+              child: FilledButton(
+                style: pagePrimaryButtonStyle,
+                onPressed: sending.value || partial && !reviewed.value
+                    ? null
+                    : () async {
+                        if (!await confirm(
+                              context,
+                              '发送此文件夹？',
+                              '将“$name”发送到 ${deviceName(device)} 的 $target。同名内容逐项确认，不会自动覆盖。',
+                              action: '确认发送',
+                            ) ||
+                            (!context.mounted || !ownsScope())) {
+                          return;
+                        }
+                        sending.value = true;
+                        final response = await performAction(
+                          context,
+                          () => transfers.startTransfer(
+                            FileTransferPlan(
+                              deviceId: device.id,
+                              direction: .push,
+                              items: [
+                                FileTransferSelection(
+                                  source: result!.localPath!,
+                                  destination: target,
+                                ),
+                              ],
+                            ),
+                            shareId: result.managedSourceId,
+                          ),
+                        );
+                        if (context.mounted && ownsScope()) {
+                          sending.value = false;
+                          if (response != null) onSubmitted();
+                        }
+                      },
+                child: Text(
+                  sending.value
+                      ? '正在建立传输…'
+                      : partial
+                      ? '发送已核对的内容'
+                      : '发送此文件夹',
+                ),
+              ),
+            )
+          : null,
       title: '发送到手机',
       child: GroupedListView.builder(
         padding: const EdgeInsets.all(DesignTokens.spacingMd),
@@ -300,7 +310,7 @@ class DocumentImportPage extends HookConsumerWidget {
           if (errorIndex < errors.length) {
             final error = errors[errorIndex];
             return StateNote(
-              '${error.path}：${error.message.isEmpty ? '系统无法读取此项' : error.message}',
+              '${error.path.isEmpty ? '' : '${error.path}\n'}${failureCodeMessage(error.code, fallback: '系统无法读取此项。请重新选择文件。')}',
               icon: LucideIcons.circleAlert,
             );
           }

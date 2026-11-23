@@ -12,6 +12,7 @@ import android.content.Context
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 
 /** 应用拥有的设备连接前台服务，与媒体独立。 */
 class ConnectionService : Service() {
@@ -29,10 +30,13 @@ class ConnectionService : Service() {
             var stopped = preferences.getString("stopped", null)
             // Android 任务管理器结束整个进程时没有回调；退出记录仅消费一次，使自动进入遵循此决定。
             if (Build.VERSION.SDK_INT >= 30) {
-                val exit = runCatching {
+                val exit = try {
                     (context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager)
                         .getHistoricalProcessExitReasons(context.packageName, 0, 1).firstOrNull()
-                }.getOrNull()
+                } catch (error: SecurityException) {
+                    Log.w("Interconnect", "background.read_exit: ${error.javaClass.simpleName}")
+                    null
+                }
                 if (exit != null && exit.timestamp > preferences.getLong("exit-seen", 0)) {
                     if (exit.reason == ApplicationExitInfo.REASON_USER_REQUESTED) stopped = "system"
                     preferences.edit().putLong("exit-seen", exit.timestamp).putString("stopped", stopped).apply()
@@ -65,14 +69,30 @@ class ConnectionService : Service() {
         fun appEntered(context: Context) {
             val owner = lifetime ?: return // 冷启动时等待 Dart 权威偏好。
             if (owner.enabled && !owner.running) {
-                runCatching { keepConnections(context, true, automatic = true) }
+                resumeConnections(context)
             } else refreshNotification(context)
         }
 
         /** 权限或设置变化后重新发布提醒，不另取生命周期。 */
         fun refreshNotification(context: Context) {
             if (running && connectionRequested) {
-                runCatching { context.startService(Intent(context, ConnectionService::class.java)) }
+                try {
+                    context.startService(Intent(context, ConnectionService::class.java))
+                } catch (error: IllegalStateException) {
+                    Log.w("Interconnect", "background.refresh_notification: ${error.javaClass.simpleName}")
+                } catch (error: SecurityException) {
+                    Log.w("Interconnect", "background.refresh_notification: ${error.javaClass.simpleName}")
+                }
+            }
+        }
+
+        private fun resumeConnections(context: Context) {
+            try {
+                keepConnections(context, true, automatic = true)
+            } catch (error: IllegalStateException) {
+                Log.w("Interconnect", "background.resume: ${error.javaClass.simpleName}")
+            } catch (error: SecurityException) {
+                Log.w("Interconnect", "background.resume: ${error.javaClass.simpleName}")
             }
         }
 
@@ -90,13 +110,13 @@ class ConnectionService : Service() {
                 else -> "后台保持尚未启动"
             }
             val reason = when {
-                owner.stoppedReason == "user" -> "已从通知停止设备活动；需明确重新启用，不会自动恢复连接或声音。"
-                owner.stoppedReason == "system" -> "系统已停止设备活动后台；需明确重新启用，不会重放已结束的画面或声音。"
-                owner.failure != null -> owner.failure!!
-                !allowed -> "尚未允许显示连接通知。系统任务管理器仍可停止活动；允许通知后，可从通知栏返回或停止连接。"
-                owner.running -> "已启动设备连接前台服务。后台活动仍受系统电量与网络策略影响。"
-                owner.requested -> "正在等待系统确认设备连接前台服务。"
-                else -> "后台保持已关闭；设备连接和画面仍遵循各自的生命周期。"
+                owner.stoppedReason == "user" -> "你已停止后台连接。可在设置中重新开启。"
+                owner.stoppedReason == "system" -> "系统已停止后台连接。可在设置中重新开启。"
+                owner.failure != null -> "系统暂时无法让应用在后台保持连接。请让应用留在前台。"
+                !allowed -> "在系统设置中允许连接通知。"
+                owner.running -> "应用在后台时会尝试保持连接，系统省电设置或网络变化可能中断。"
+                owner.requested -> "正在等待系统允许应用在后台保持连接。"
+                else -> "后台保持已关闭。离开应用后，连接可能中断。"
             }
             return mapOf("supported" to true, "running" to owner.running,
                 "connectionRequested" to owner.requested, "audioRequested" to audioRequested,
@@ -155,7 +175,7 @@ class ConnectionService : Service() {
         DiscoveryNetwork.release("background")
         changed(this)
         super.onDestroy()
-        if (replacement) runCatching { keepConnections(applicationContext, true, automatic = true) }
+        if (replacement) resumeConnections(applicationContext)
     }
     override fun onBind(intent: Intent?): IBinder? = null
 }

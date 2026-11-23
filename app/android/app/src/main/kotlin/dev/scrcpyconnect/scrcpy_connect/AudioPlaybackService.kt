@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 
 /** 仅在 Dart 音频输出所有者请求媒体播放期间存在。 */
 class AudioPlaybackService : Service() {
@@ -20,7 +21,7 @@ class AudioPlaybackService : Service() {
             private set
 
         fun keep(context: Context, enabled: Boolean) {
-            if (requested == enabled && (!enabled || ready)) return
+            if (requested == enabled && ready == enabled) return
             requested = enabled
             val intent = Intent(context, AudioPlaybackService::class.java)
             try {
@@ -35,7 +36,13 @@ class AudioPlaybackService : Service() {
 
         fun refreshNotification(context: Context) {
             if (requested && ready) {
-                runCatching { context.startService(Intent(context, AudioPlaybackService::class.java)) }
+                try {
+                    context.startService(Intent(context, AudioPlaybackService::class.java))
+                } catch (error: IllegalStateException) {
+                    Log.w("Interconnect", "audio.refresh_notification: ${error.javaClass.simpleName}")
+                } catch (error: SecurityException) {
+                    Log.w("Interconnect", "audio.refresh_notification: ${error.javaClass.simpleName}")
+                }
             }
         }
     }
@@ -57,7 +64,8 @@ class AudioPlaybackService : Service() {
             if (Build.VERSION.SDK_INT >= 29) startForeground(2103, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
             else startForeground(2103, notification)
             ready = true
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            Log.w("Interconnect", "audio.start_foreground: ${error.javaClass.simpleName}")
             requested = false
             ready = false
             stopSelf()

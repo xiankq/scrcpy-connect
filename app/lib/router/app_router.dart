@@ -19,12 +19,13 @@ import 'package:scrcpy_connect/pages/devices/connection_settings/device_connecti
 import 'package:scrcpy_connect/pages/devices/details/device_details_page.dart';
 import 'package:scrcpy_connect/pages/devices/devices_page.dart';
 import 'package:scrcpy_connect/pages/devices/diagnostics/connection_diagnostics_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/device_workspace_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/device_management_page.dart';
 import 'package:scrcpy_connect/pages/files/details/file_details_page.dart';
 import 'package:scrcpy_connect/pages/files/directory_picker/file_directory_picker_page.dart';
 import 'package:scrcpy_connect/pages/files/files_page.dart';
 import 'package:scrcpy_connect/pages/files/import/document_import_page.dart';
 import 'package:scrcpy_connect/pages/files/search/file_search_page.dart';
+import 'package:scrcpy_connect/pages/files/send/file_send_page.dart';
 import 'package:scrcpy_connect/pages/gallery/gallery_page.dart';
 import 'package:scrcpy_connect/pages/gallery/preview/media_preview_page.dart';
 import 'package:scrcpy_connect/pages/incoming_share/incoming_share_page.dart';
@@ -37,6 +38,7 @@ import 'package:scrcpy_connect/pages/settings/data_preferences/data_preferences_
 import 'package:scrcpy_connect/pages/settings/media_cache/media_cache_page.dart';
 import 'package:scrcpy_connect/pages/settings/runtime_logs/runtime_logs_page.dart';
 import 'package:scrcpy_connect/pages/settings/settings_page.dart';
+import 'package:scrcpy_connect/pages/settings/app_updates_page.dart';
 import 'package:scrcpy_connect/pages/transfers/details/transfer_details_page.dart';
 import 'package:scrcpy_connect/pages/transfers/export/document_export_page.dart';
 import 'package:scrcpy_connect/pages/transfers/receive/receive_content_page.dart';
@@ -47,6 +49,7 @@ import 'package:scrcpy_connect/router/route_observers.dart';
 import 'package:scrcpy_connect/router/route_resource_resolver_provider.dart';
 import 'package:scrcpy_connect/router/route_resource_view.dart';
 import 'package:scrcpy_connect/widgets/navigation_scaffold.dart';
+import 'package:scrcpy_connect/pages/session_pending/session_content.dart';
 import 'package:scrcpy_connect/widgets/visible_device_focus.dart';
 
 part 'app_router.g.dart';
@@ -83,14 +86,19 @@ List<RouteBase> typedRoutes(GlobalKey<NavigatorState> root) {
 GoRouter createAppRouter({
   String initialLocation = '/devices',
   GlobalKey<NavigatorState>? navigatorKey,
+  Object? initialExtra,
+  RouteObserver<ModalRoute<dynamic>>? observer,
 }) {
   GoRouter.optionURLReflectsImperativeAPIs = true;
   final root = navigatorKey ?? GlobalKey<NavigatorState>();
   return GoRouter(
     navigatorKey: root,
-    restorationScopeId: 'connect-router',
-    observers: [sessionRouteObserver],
+    restorationScopeId: observer == null ? 'connect-router' : null,
+    observers: [observer ?? sessionRouteObserver],
     initialLocation: initialLocation,
+    initialExtra: initialExtra,
+    overridePlatformDefaultLocation: observer != null,
+    routerNeglect: observer != null,
     routes: typedRoutes(root),
     errorPageBuilder: (context, state) => MaterialPage<void>(
       key: state.pageKey,
@@ -110,8 +118,12 @@ abstract class _AppPageRoute extends GoRouteData {
   const _AppPageRoute();
 
   @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      _page(state, build(context, state));
+  Page<void> buildPage(BuildContext context, GoRouterState state) => _page(
+    state,
+    AppSessionContent(
+      child: Builder(builder: (context) => build(context, state)),
+    ),
+  );
 }
 
 Widget _deviceRecord(
@@ -149,7 +161,7 @@ Widget _remoteView(
   RemoteControlIntent? action,
 }) {
   if (session == null && intent is! RemoteLaunchIntent) {
-    return const RouteErrorPage(message: '请从设备工作台明确打开画面。恢复这个位置不会自动创建新的控制会话。');
+    return const RouteErrorPage(message: '无法恢复手机画面。请回到设备工作台，点「打开手机屏幕」。');
   }
   return ControlPage(
     key: ValueKey(
@@ -222,8 +234,11 @@ class DevicesRoute extends GoRouteData with $DevicesRoute {
   @override
   Widget build(BuildContext context, GoRouterState state) => DevicesPage();
   @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      _page(state, build(context, state), restorationId: 'devices-page');
+  Page<void> buildPage(BuildContext context, GoRouterState state) => _page(
+    state,
+    AppSessionContent(title: '设备', root: true, child: build(context, state)),
+    restorationId: 'devices-page',
+  );
 }
 
 class TransfersRoute extends GoRouteData with $TransfersRoute {
@@ -232,8 +247,11 @@ class TransfersRoute extends GoRouteData with $TransfersRoute {
   Widget build(BuildContext context, GoRouterState state) =>
       const TransfersPage(embedded: true);
   @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      _page(state, build(context, state), restorationId: 'transfers-page');
+  Page<void> buildPage(BuildContext context, GoRouterState state) => _page(
+    state,
+    AppSessionContent(title: '传输', root: true, child: build(context, state)),
+    restorationId: 'transfers-page',
+  );
 }
 
 class SettingsRoute extends GoRouteData with $SettingsRoute {
@@ -242,8 +260,11 @@ class SettingsRoute extends GoRouteData with $SettingsRoute {
   Widget build(BuildContext context, GoRouterState state) =>
       const SettingsPage(embedded: true);
   @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      _page(state, build(context, state), restorationId: 'settings-page');
+  Page<void> buildPage(BuildContext context, GoRouterState state) => _page(
+    state,
+    AppSessionContent(title: '设置', root: true, child: build(context, state)),
+    restorationId: 'settings-page',
+  );
 }
 
 @TypedGoRoute<RouteErrorRoute>(path: '/unavailable', name: 'route-error')
@@ -255,8 +276,8 @@ class RouteErrorRoute extends _AppPageRoute with $RouteErrorRoute {
   Widget build(BuildContext context, GoRouterState state) {
     return RouteErrorPage(
       message: reason == 'missing-session'
-          ? '无法识别这个控制会话。请从设备工作台重新选择；不会自动创建新画面。'
-          : '页面缺少必要的记录信息，请返回设备列表重新选择。',
+          ? '这次打开的画面已不可用。请回到设备工作台重新打开。'
+          : '找不到这项内容。请返回设备列表重新选择。',
     );
   }
 }
@@ -425,9 +446,27 @@ class WorkspaceRoute extends _AppPageRoute with $WorkspaceRoute {
   @override
   Widget build(BuildContext context, GoRouterState state) {
     Widget page(BuildContext _, GoRouterState state, DeviceSnapshot device) =>
-        DeviceWorkspacePage(device: device);
+        DevicesPage(initialDevice: device);
     return _deviceRecord(context, state, deviceId, 'workspace', page);
   }
+}
+
+@TypedGoRoute<DeviceManagementRoute>(
+  path: '/devices/:deviceId/manage',
+  name: 'device-management',
+)
+class DeviceManagementRoute extends _AppPageRoute with $DeviceManagementRoute {
+  const DeviceManagementRoute({required this.deviceId});
+  final String deviceId;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
+  @override
+  Widget build(BuildContext context, GoRouterState state) => _deviceRecord(
+    context,
+    state,
+    deviceId,
+    'device-management',
+    (_, _, device) => DeviceManagementPage(device: device),
+  );
 }
 
 @TypedGoRoute<DeviceDetailsRoute>(
@@ -542,7 +581,9 @@ class FileDetailsRoute extends _AppPageRoute with $FileDetailsRoute {
       return RouteResourceView(
         identity: 'file:${device.id}:$path',
         load: () => resources.file(device.id, path),
-        builder: (_, file) => FileDetailsPage(device: device, file: file),
+        builder: (_, file) => file.mime.startsWith('image/')
+            ? MediaPreviewPage(device: device, file: file)
+            : FileDetailsPage(device: device, file: file),
       );
     }
 
@@ -865,9 +906,7 @@ class DocumentExportRoute extends _AppPageRoute with $DocumentExportRoute {
             (partial ? task.partialLocalPath : task.localPath) ?? '';
         if ((partial ? task.canExportPartial : task.canExport) != true ||
             localPath.isEmpty) {
-          return RouteErrorPage(
-            message: task.exportReason ?? '当前任务没有可完整保存的本机内容，请在传输中心核对。',
-          );
+          return RouteErrorPage(message: '没有可保存的文件。请先在「传输」中查看结果。');
         }
         return DocumentExportPage(
           transferId: id,
@@ -887,18 +926,47 @@ class DocumentExportRoute extends _AppPageRoute with $DocumentExportRoute {
   name: 'receive-content',
 )
 class ReceiveContentRoute extends _AppPageRoute with $ReceiveContentRoute {
-  const ReceiveContentRoute({required this.taskId, this.share = false});
+  const ReceiveContentRoute({
+    required this.taskId,
+    this.share = false,
+    this.$extra,
+  });
   final String taskId;
   final bool share;
+  final bool? $extra;
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final resources = _resources(context);
     return RouteResourceView(
-      identity: 'receive:$taskId:$share',
+      identity: 'receive:$taskId:$share:${$extra == true}',
       load: () => resources.transfer(taskId),
-      builder: (_, task) => ReceiveContentPage(task: task, share: share),
+      builder: (_, task) => ReceiveContentPage(
+        task: task,
+        share: share,
+        openAfterTransfer: $extra == true,
+      ),
     );
+  }
+}
+
+@TypedGoRoute<FileSendRoute>(
+  path: '/devices/:deviceId/files/send',
+  name: 'file-send',
+)
+class FileSendRoute extends _AppPageRoute with $FileSendRoute {
+  const FileSendRoute({required this.deviceId, this.path = '/sdcard'});
+  final String deviceId;
+  final String path;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
+    Widget page(
+      BuildContext context,
+      GoRouterState state,
+      DeviceSnapshot device,
+    ) => FileSendPage(device: device, initialPath: path);
+    return _deviceRecord(context, state, deviceId, 'file-send', page);
   }
 }
 
@@ -968,6 +1036,15 @@ class ShareDirectoryRoute extends _AppPageRoute with $ShareDirectoryRoute {
         FileDirectoryPickerPage(device: device, initialPath: path);
     return _deviceRecord(context, state, deviceId, 'share-directory', page);
   }
+}
+
+@TypedGoRoute<AppUpdatesRoute>(path: '/settings/updates', name: 'app-updates')
+class AppUpdatesRoute extends _AppPageRoute with $AppUpdatesRoute {
+  const AppUpdatesRoute();
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
+  @override
+  Widget build(BuildContext context, GoRouterState state) =>
+      const AppUpdatesPage();
 }
 
 @TypedGoRoute<AppearanceRoute>(path: '/settings/appearance', name: 'appearance')

@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/clipboard/clipboard_capabilities_provider.dart';
@@ -74,7 +75,9 @@ class ShareSubmissionNotifier extends _$ShareSubmissionNotifier {
       await _finish(owner);
     } catch (error) {
       if (_current(owner)) {
-        state = state.copyWith(error: '暂时无法关闭本次分享：$error');
+        state = state.copyWith(
+          error: failureMessage(error, fallback: '暂时无法关闭这次分享。请稍后重试。'),
+        );
       }
     } finally {
       if (_current(owner)) state = state.copyWith(busy: false);
@@ -90,6 +93,7 @@ class ShareSubmissionNotifier extends _$ShareSubmissionNotifier {
     if (state.busy || state.completed) return;
     final owner = _owner;
     state = state.copyWith(busy: true, error: null);
+    var sendingText = false;
     try {
       final share = _pending();
       if (share == null) {
@@ -117,7 +121,7 @@ class ShareSubmissionNotifier extends _$ShareSubmissionNotifier {
         if (deviceId == null ||
             readiness?.ready != true ||
             ref.read(deviceReadinessProvider(deviceId)) != readiness) {
-          throw const RequestFailure('device_unavailable', '设备连接已变化，请重新核对目标。');
+          throw const RequestFailure('connection_changed', '设备连接已变化，请重新核对目标。');
         }
         return true;
       }
@@ -155,16 +159,27 @@ class ShareSubmissionNotifier extends _$ShareSubmissionNotifier {
       }
       if (copy) {
         if (!admitted()) return;
+        sendingText = true;
         await owner.clipboard.writeClipboard(
           ClipboardTarget.device(deviceId: deviceId!),
           share.text,
         );
         if (!_current(owner)) return;
         state = state.copyWith(copied: true);
+        sendingText = false;
       }
       await _finish(owner, showTransfers: true);
     } catch (error) {
-      if (_current(owner)) state = state.copyWith(error: '$error');
+      if (_current(owner)) {
+        state = state.copyWith(
+          error: failureMessage(
+            error,
+            fallback: sendingText
+                ? '未能把文字复制到手机。请检查手机连接后重试。'
+                : '无法发送这次分享。请检查手机连接后重试。',
+          ),
+        );
+      }
     } finally {
       owner.directoryRead = null;
       if (_current(owner)) state = state.copyWith(busy: false);

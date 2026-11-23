@@ -8,6 +8,30 @@ import 'package:scrcpy_connect/widgets/overlays.dart';
 
 void main() {
   for (final brightness in Brightness.values) {
+    testWidgets('$brightness 实体弹窗从位移和缩放连续进入并沿原路径退出', (tester) async {
+      await tester.pumpWidget(
+        _host(brightness, (context) {
+          showAppDialog<void>(context: context, content: const Text('即将开始'));
+        }),
+      );
+      await tester.tap(find.text('打开'));
+      await tester.pump();
+      final body = find.text('即将开始');
+      final initial = tester.getRect(body);
+      await tester.pump(const Duration(milliseconds: 80));
+      final entering = tester.getRect(body);
+      await tester.pumpAndSettle();
+      final settled = tester.getRect(body);
+      expect(initial.width, lessThan(entering.width));
+      expect(entering.width, lessThan(settled.width));
+      await tester.tapAt(const Offset(8, 8));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(tester.getRect(body).width, lessThan(settled.width));
+      await tester.pumpAndSettle();
+      expect(body, findsNothing);
+    });
+
     testWidgets('$brightness 实体输入弹窗支持大字、键盘提交和取消', (tester) async {
       String? result;
       await tester.pumpWidget(

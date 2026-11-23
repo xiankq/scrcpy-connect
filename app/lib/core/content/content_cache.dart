@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:adb/adb.dart' show LocalFileException;
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/core/content/content_cache_failure.dart';
 import 'package:scrcpy_connect/core/content/content_cache_gate.dart';
@@ -430,7 +431,7 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
     try {
       final free = await _freeBytes(root.path);
       return free != null && free >= 0 ? free : null;
-    } catch (_) {
+    } on LocalFileException {
       return null;
     }
   }
@@ -497,7 +498,7 @@ final class ContentCache implements FileCacheLeases, ContentCacheControl {
             (total, file) => addCacheBytes(total, file.bytes),
           ),
           reason: external
-              ? '系统分享或打开后的读取寿命未知，继续保留原件'
+              ? '接收文件的应用可能还在使用，暂时保留该文件'
               : reasons.isNotEmpty
               ? reasons
               : '预览、传输或准备仍在使用',

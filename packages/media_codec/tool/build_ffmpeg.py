@@ -34,7 +34,7 @@ def run(command, cwd, environment, log):
         result = subprocess.run([str(x) for x in command], cwd=cwd, env=environment,
                                 stdout=output, stderr=subprocess.STDOUT)
     if result.returncode:
-        print(log.read_text(errors="replace")[-16000:], flush=True)
+        print(log.read_text(errors="replace")[-16000:], file=sys.stderr, flush=True)
         raise RuntimeError(f"Native dependency build failed; see {log}")
 
 
@@ -43,19 +43,23 @@ def windows_environment(environment, arch, cache):
     """加载 MSVC 与 Windows SDK，无需从开发者终端启动。"""
     if os.name != "nt":
         raise RuntimeError("Windows FFmpeg must be built on Windows with MSVC")
-    if shutil.which("cl.exe", path=environment.get("PATH")) and environment.get("WindowsSdkDir"):
+    if shutil.which("cl.exe", path=environment.get("PATH")) and environment.get("WINDOWSSDKDIR"):
         return environment
     vswhere = Path(environment.get("ProgramFiles(x86)", "C:/Program Files (x86)")) / "Microsoft Visual Studio/Installer/vswhere.exe"
     if not vswhere.is_file():
         raise RuntimeError("Install Visual Studio Desktop development with C++ and a Windows SDK")
+    native_arm64 = arch == "arm64" and platform.machine().lower() in {"arm64", "aarch64"}
+    component = ("Microsoft.VisualStudio.Component.VC.Tools.ARM64" if native_arm64
+                 else "Microsoft.VisualStudio.Component.VC.Tools.x86.x64")
     installation = subprocess.check_output(
         [str(vswhere), "-latest", "-products", "*", "-requires",
-         "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath"],
+         component, "-property", "installationPath"],
         text=True).strip()
     vcvars = Path(installation) / "VC/Auxiliary/Build/vcvarsall.bat"
     if not vcvars.is_file():
         raise RuntimeError("Visual Studio C++ build tools are missing")
-    target = {"x64": "x64", "arm64": "x64_arm64", "arm": "x64_arm"}[arch]
+    target = {"x64": "x64", "arm64": "arm64" if native_arm64 else "x64_arm64",
+              "arm": "x64_arm"}[arch]
     cache.mkdir(parents=True, exist_ok=True)
     # 不同 prefix 的并行构建不能覆盖或提前删除彼此的 MSVC 环境脚本。
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n", dir=cache,
@@ -74,8 +78,8 @@ def windows_environment(environment, arch, cache):
     for line in output.splitlines():
         key, separator, value = line.partition("=")
         if separator and key:
-            result[key] = value
-    if not result.get("WindowsSdkDir"):
+            result[key.upper()] = value
+    if not result.get("WINDOWSSDKDIR"):
         raise RuntimeError("The Visual Studio installation lacks Windows SDK headers and libraries")
     return result
 
@@ -248,6 +252,7 @@ def build(args, cache, prefix):
                "--enable-bsf=h264_mp4toannexb,hevc_mp4toannexb,extract_extradata",
                "--disable-gpl", "--disable-nonfree", "--disable-version3", "--enable-optimizations"]
     binaries, flags = {}, []
+    make, bash = "make", None
     # 保留 SIMD 和运行时 CPU 分派，包括 dav1d 的 8/10/12 位回退。
     if args.platform == "linux":
         actual_arch = "arm64" if platform.machine().lower() in ["aarch64", "arm64"] else "x64"
@@ -258,13 +263,19 @@ def build(args, cache, prefix):
                     "--enable-hwaccel=h264_nvdec,hevc_nvdec,av1_nvdec,vp8_nvdec,vp9_nvdec"]
     elif args.platform == "windows":
         environment = windows_environment(environment, args.arch, cache)
-        try:
-            make_version = subprocess.check_output(["make", "--version"], env=environment, text=True)
-        except (OSError, subprocess.CalledProcessError) as error:
-            raise RuntimeError("Install MSYS2 make and add it, Git Bash, and NASM to PATH") from error
-        if "msys" not in make_version.lower():
-            raise RuntimeError("Use MSYS2 make; native Win32 GNU make cannot resolve Git Bash source paths")
-        environment["CC"] = "cl"
+        msys2_bin = environment.get("MEDIA_CODEC_MSYS2_BIN")
+        make = (str(Path(msys2_bin) / "make.exe") if msys2_bin else
+                shutil.which("make.exe", path=environment.get("PATH")))
+        if not make:
+            raise RuntimeError("Install MSYS2 make and add its usr/bin directory to PATH")
+        # MSYS2 GNU Make can report a Cygwin target. Its runtime identifies the tool.
+        msys_bin = Path(make).parent
+        if not (msys_bin / "msys-2.0.dll").is_file():
+            raise RuntimeError(f"Use MSYS2 make; its runtime is missing beside {make}")
+        bash = str(msys_bin / "bash.exe")
+        triple = {"x64": "x86_64", "arm64": "aarch64", "arm": "armv7"}[args.arch]
+        # dav1d needs clang-cl's atomics and integrated Arm assembler.
+        environment["CC"] = f"clang-cl --target={triple}-pc-windows-msvc"
         options += ["--toolchain=msvc", "--target-os=win32", "--extra-cflags=-MD",
                     "--arch=" + {"x64": "x86_64", "arm64": "aarch64", "arm": "arm"}[args.arch],
                     "--enable-d3d11va",
@@ -272,6 +283,8 @@ def build(args, cache, prefix):
                     # Makefile 通过 *va 启用共享 dxva2_*.o，因此保留两种变体。
                     # 上游没有 VP8 D3D11VA 路径。
                     "--enable-hwaccel=h264_d3d11va,h264_d3d11va2,hevc_d3d11va,hevc_d3d11va2,av1_d3d11va,av1_d3d11va2,vp9_d3d11va,vp9_d3d11va2"]
+        if args.arch != "x64":
+            options.append(f"--as=clang --target={triple}-pc-windows-msvc")
     elif args.platform == "android":
         ndk = Path(args.ndk)
         if not args.ndk or not ndk.is_dir():
@@ -323,6 +336,8 @@ def build(args, cache, prefix):
                 "platform": args.platform, "arch": args.arch,
                 "api": args.api if args.platform == "android" else None, "sdk": args.sdk,
                 "options": options.copy()}
+    if args.platform == "windows":
+        identity["dav1dCompiler"] = environment["CC"]
     # 锁以安装目录为边界，工作区也必须遵循同一身份；设备与模拟器可同时构建同一架构。
     prefix_identity = hashlib.sha256(os.fsencode(prefix)).hexdigest()[:16]
     work = cache / "work" / f"{args.platform}-{args.arch}-{prefix_identity}"
@@ -381,12 +396,12 @@ def build(args, cache, prefix):
     proxy = PACKAGE / "tool/pkg_config.py"
     options += ["--pkg-config=" + shlex.quote(Path(sys.executable).as_posix()) + " " + shlex.quote(proxy.as_posix()),
                 "--pkg-config-flags=--static"]
-    bash = shutil.which("bash", path=environment.get("PATH")) or ("C:/Program Files/Git/bin/bash.exe" if os.name == "nt" else "sh")
+    bash = bash or shutil.which("bash", path=environment.get("PATH")) or ("C:/Program Files/Git/bin/bash.exe" if os.name == "nt" else "sh")
     ffmpeg_work = work / "ffmpeg"
     ffmpeg_work.mkdir()
     run([bash, source / "configure", f"--prefix={prefix.as_posix()}"] + options, ffmpeg_work, environment, log)
-    run(["make", f"-j{args.jobs}"], ffmpeg_work, environment, log)
-    run(["make", "install"], ffmpeg_work, environment, log)
+    run([make, f"-j{args.jobs}"], ffmpeg_work, environment, log)
+    run([make, "install"], ffmpeg_work, environment, log)
     licenses = prefix / "share/media_codec"
     licenses.mkdir(parents=True, exist_ok=True)
     for name in ["COPYING.LGPLv2.1", "LICENSE.md"]:

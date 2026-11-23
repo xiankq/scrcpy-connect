@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -11,17 +12,19 @@ import 'package:scrcpy_connect/core/files/transfer_query_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/hooks/use_transfer_cache_lease.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/conflict_panel.dart';
+import 'package:scrcpy_connect/pages/transfers/widgets/transfer_progress.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/utils/formatters.dart';
+import 'package:scrcpy_connect/widgets/form_controls.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
-import 'package:scrcpy_connect/widgets/documents/document_export_form.dart';
+import 'package:scrcpy_connect/pages/transfers/export/document_export_page.dart';
 import 'package:scrcpy_connect/widgets/documents/file_delivery_path.dart';
 import 'package:scrcpy_connect/widgets/documents/original_file_header.dart';
+import 'package:scrcpy_connect/widgets/documents/open_prepared_file.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/widgets/file_transfer_labels.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
@@ -31,7 +34,13 @@ import 'package:scrcpy_connect/widgets/state_note.dart';
 
 /// 准备原件时任务身份保持不变，缓存下载完成后才作为明确系统交付的来源。
 class ReceiveContentPage extends HookConsumerWidget {
-  const ReceiveContentPage({super.key, required this.task, this.share = false});
+  const ReceiveContentPage({
+    super.key,
+    required this.task,
+    this.share = false,
+    this.openAfterTransfer = false,
+  });
+  final bool openAfterTransfer;
   final FileTransferSnapshot task;
   final bool share;
 
@@ -50,73 +59,99 @@ class ReceiveContentPage extends HookConsumerWidget {
     bool ownsView() =>
         pageContext.mounted && identical(currentOwner.value, owner);
     final busy = useState(false);
-    final shareResult = useState<String?>(null);
+    final shareResult = useState<PreparedFileShareReceipt?>(null);
     final shareReviewed = useState(false);
     final taskId = task.id;
-    final autoShareAttempted = useMemoized(() => <String>{}, [source, taskId]);
+    final autoDeliveryAttempted = useMemoized(() => <String>{}, [
+      source,
+      taskId,
+    ]);
     useEffect(() {
       busy.value = false;
       shareResult.value = null;
       shareReviewed.value = false;
       return null;
     }, [owner]);
-    return PageFrame(
-      title: share && supportsSystemFileShare ? '分享原文件' : '保存原文件',
-      child: AsyncContent<FileTransferSnapshot>(
-        loading: query.isLoading,
-        data: query.value,
-        error: query.error,
-        onRefresh: refresh,
-        emptyTitle: '暂时无法核验原文件',
-        builder: (context, data) {
-          final current = transferView(devices, data);
-          return HookConsumer(
-            key: ValueKey((source, task.id)),
-            builder: (context, ref, _) {
-              final cacheLease = useTransferCacheLease(
-                ref,
-                current.canExport || current.status.isActive ? taskId : null,
-              );
-              final ready =
-                  (!query.isLoading && !query.hasError && query.hasValue) &&
-                  current.canExport &&
-                  cacheLease.hasData &&
-                  !cacheLease.hasError &&
-                  (current.localPath ?? '').isNotEmpty;
-              final localPath = (current.localPath ?? '');
-              Future<void> deliverShare() async {
-                if (busy.value || !ready || current.kind == .directory) {
-                  return;
-                }
-                busy.value = true;
-                shareReviewed.value = false;
-                try {
-                  final result = await sharePreparedFile(
-                    context,
-                    ref,
-                    localPath,
-                  );
-                  if (ownsView()) shareResult.value = result;
-                } catch (error) {
-                  if (ownsView()) shareResult.value = '系统分享未确认完成：$error';
-                } finally {
-                  if (ownsView()) busy.value = false;
-                }
+    final title = openAfterTransfer
+        ? '取回文件'
+        : share && supportsSystemFileShare
+        ? '分享原文件'
+        : '保存原文件';
+    final content = AsyncContent<FileTransferSnapshot>(
+      loading: query.isLoading,
+      data: query.value,
+      error: query.error,
+      onRefresh: refresh,
+      emptyTitle: '暂时无法读取原文件',
+      failure: '请检查传输记录，确认文件是否已取回。',
+      builder: (context, data) {
+        final current = transferView(devices, data);
+        return HookConsumer(
+          key: ValueKey((source, task.id)),
+          builder: (context, ref, _) {
+            final cacheLease = useTransferCacheLease(
+              ref,
+              current.canExport || current.status.isActive ? taskId : null,
+            );
+            final ready =
+                (!query.isLoading && !query.hasError && query.hasValue) &&
+                current.canExport &&
+                cacheLease.hasData &&
+                !cacheLease.hasError &&
+                (current.localPath ?? '').isNotEmpty;
+            final localPath = (current.localPath ?? '');
+            Future<void> deliverShare() async {
+              if (busy.value || !ready || current.kind == .directory) {
+                return;
               }
+              busy.value = true;
+              shareReviewed.value = false;
+              try {
+                final result = await sharePreparedFile(context, ref, localPath);
+                if (ownsView()) shareResult.value = result;
+              } catch (error) {
+                if (ownsView()) {
+                  shareResult.value = (
+                    message: failureMessage(
+                      error,
+                      fallback: '暂时无法确认分享是否完成。请先查看接收文件的应用。',
+                    ),
+                    needsRecipientCheck: true,
+                  );
+                }
+              } finally {
+                if (ownsView()) busy.value = false;
+              }
+            }
 
-              final route = ModalRoute.of(context);
-              final owned =
-                  data.id == taskId &&
-                  data.deviceId == task.deviceId &&
-                  data.direction == .pull &&
-                  data.destinationScope == .privateCache;
-              useEffect(() {
+            Future<void> openFile() async {
+              if (busy.value || !ready) return;
+              busy.value = true;
+              try {
+                await performAction(
+                  context,
+                  () => openPreparedFile(context, ref, localPath),
+                );
+              } finally {
+                if (ownsView()) busy.value = false;
+              }
+            }
+
+            final route = ModalRoute.of(context);
+            final owned =
+                data.id == taskId &&
+                data.deviceId == task.deviceId &&
+                data.direction == .pull &&
+                data.destinationScope == .privateCache;
+            useEffect(
+              () {
                 if (!owned ||
                     !ready ||
-                    (!share || !supportsSystemFileShare) ||
+                    (!openAfterTransfer &&
+                        (!share || !supportsSystemFileShare)) ||
                     current.kind == .directory ||
                     route?.isCurrent == false ||
-                    autoShareAttempted.contains(taskId)) {
+                    autoDeliveryAttempted.contains(taskId)) {
                   return null;
                 }
                 var active = true;
@@ -124,45 +159,107 @@ class ReceiveContentPage extends HookConsumerWidget {
                   if (!active ||
                       !context.mounted ||
                       route?.isCurrent == false ||
-                      !autoShareAttempted.add(taskId)) {
+                      !autoDeliveryAttempted.add(taskId)) {
                     return;
                   }
-                  unawaited(deliverShare());
+                  unawaited(openAfterTransfer ? openFile() : deliverShare());
                 });
                 return () => active = false;
-              }, [owned, ready, share, taskId, route?.isCurrent]);
-              if (data.id != taskId ||
-                  data.deviceId != task.deviceId ||
-                  data.direction != .pull ||
-                  data.destinationScope != .privateCache) {
-                return const EmptyContent(
+              },
+              [
+                owned,
+                ready,
+                share,
+                openAfterTransfer,
+                taskId,
+                route?.isCurrent,
+              ],
+            );
+            if (data.id != taskId ||
+                data.deviceId != task.deviceId ||
+                data.direction != .pull ||
+                data.destinationScope != .privateCache) {
+              return PageFrame(
+                title: title,
+                child: const EmptyContent(
                   icon: LucideIcons.fileWarning,
                   title: '原文件归属需要核对',
                   message: '当前记录不是这次取回的本机暂存。请返回原设备重新选择。',
-                );
-              }
-              if (ready &&
-                  supportsSystemDocumentSave &&
-                  (!share || !supportsSystemFileShare)) {
-                return DocumentExportForm(
-                  key: ValueKey('$taskId:$localPath'),
-                  localPath: localPath,
-                  transferId: taskId,
-                  name: current.name,
-                  kind: current.kind == .directory ? 'directory' : 'file',
-                  sourceLabel: (current.sourceLabel ?? '被控设备'),
-                );
-              }
-              final status = current.status;
-              final completed = current.completedBytes ?? current.transferred;
-              final total = current.totalBytes ?? current.total ?? 0;
-              final pending = <FileTransferStatus>[
-                .queued,
-                .running,
-                .finalizing,
-                .cancelling,
-              ].contains(status);
-              return GroupedListView(
+                ),
+              );
+            }
+            if (ready &&
+                !openAfterTransfer &&
+                supportsSystemDocumentSave &&
+                (!share || !supportsSystemFileShare)) {
+              return DocumentExportPage(
+                key: ValueKey('$taskId:$localPath'),
+                localPath: localPath,
+                transferId: taskId,
+                name: current.name,
+                kind: current.kind == .directory ? 'directory' : 'file',
+                sourceLabel: (current.sourceLabel ?? '被控设备'),
+              );
+            }
+            final status = current.status;
+            final completed = current.completedBytes ?? current.transferred;
+            final total = current.totalBytes ?? current.total ?? 0;
+            final pending = <FileTransferStatus>[
+              .queued,
+              .running,
+              .finalizing,
+              .cancelling,
+            ].contains(status);
+            final canOpen =
+                ready && openAfterTransfer && current.kind != .directory;
+            final canShare =
+                ready &&
+                !openAfterTransfer &&
+                supportsSystemFileShare &&
+                (share || !supportsSystemDocumentSave) &&
+                current.kind != .directory;
+            void openTransfer() =>
+                TransferDetailsRoute(taskId: taskId).push<void>(context);
+            final action = canOpen
+                ? FilledButton.icon(
+                    style: pagePrimaryButtonStyle,
+                    onPressed: busy.value ? null : openFile,
+                    icon: const Icon(LucideIcons.externalLink),
+                    label: const Text('使用本机应用打开'),
+                  )
+                : canShare
+                ? FilledButton.icon(
+                    style: pagePrimaryButtonStyle,
+                    onPressed:
+                        busy.value ||
+                            shareResult.value?.needsRecipientCheck == true &&
+                                !shareReviewed.value
+                        ? null
+                        : deliverShare,
+                    icon: const Icon(AppIcons.share),
+                    label: Text(
+                      shareResult.value == null ? '交给系统分享' : '重新打开系统分享',
+                    ),
+                  )
+                : pending
+                ? FilledButton(
+                    style: pagePrimaryButtonStyle,
+                    onPressed: openTransfer,
+                    child: const Text('查看本次传输'),
+                  )
+                : null;
+            return PageFrame(
+              title: title,
+              titleStyle: Theme.of(context).textTheme.headlineMedium,
+              bottom: action == null
+                  ? null
+                  : Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: DesignTokens.spacingXs,
+                      ),
+                      child: action,
+                    ),
+              child: GroupedListView(
                 padding: const EdgeInsets.all(DesignTokens.spacingMd),
                 children: [
                   OriginalFileHeader(
@@ -174,14 +271,6 @@ class ReceiveContentPage extends HookConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          share ? LucideIcons.share2 : LucideIcons.download,
-                          color: ConnectTokens.accent(
-                            context,
-                            ConnectTokens.amber,
-                          ),
-                        ),
-                        const SizedBox(height: DesignTokens.spacingSm),
                         Text(
                           pending
                               ? '正在准备原文件'
@@ -209,26 +298,18 @@ class ReceiveContentPage extends HookConsumerWidget {
                           },
                         ),
                         if (pending) ...[
-                          const SizedBox(height: DesignTokens.spacingSm),
-                          const Text('原文件完整取回前，不会保存或分享不完整内容。'),
+                          const SizedBox(height: DesignTokens.spacingMd),
+                          TransferProgress(
+                            value: transferProgressValue(completed, total),
+                          ),
+                          const SizedBox(height: DesignTokens.spacingXs),
+                          Text(
+                            '${bytes(completed)} / ${total > 0 ? bytes(total) : '大小未知'}',
+                          ),
                         ],
                       ],
                     ),
                   ),
-                  if (pending) ...[
-                    const SizedBox(height: DesignTokens.spacingMd),
-                    if (total > 0)
-                      LinearProgressIndicator(
-                        value: (completed / total).clamp(0, 1).toDouble(),
-                      )
-                    else
-                      const ContentLoadingIndicator(),
-                    const SizedBox(height: DesignTokens.spacingXs),
-                    Text(
-                      '${bytes(completed)} / ${total > 0 ? bytes(total) : '大小待核验'}',
-                    ),
-                    const StateNote('离开本页后传输可继续，在传输中心查看。'),
-                  ],
                   if (status == .conflict)
                     ConflictPanel(
                       enabled:
@@ -279,25 +360,20 @@ class ReceiveContentPage extends HookConsumerWidget {
                   if (!pending && !ready && status != .conflict)
                     StateNote(
                       cacheLease.hasError
-                          ? '无法保留这份暂存：${cacheLease.error}'
-                          : current.error ??
-                                current.exportReason ??
-                                '原文件尚未完整取回。请在传输详情核对结果；不会自动重新传输。',
+                          ? failureMessage(
+                              cacheLease.error,
+                              fallback: '临时文件已不可用。请从手机重新取回。',
+                            )
+                          : transferIssueMessage(current),
                     ),
                   if (!pending &&
                       !ready &&
                       isMediaCacheAdmissionFailure((current.errorCode ?? '')))
                     const MediaCacheBlocker(),
-                  if (ready && !share && !supportsSystemDocumentSave)
-                    const StateNote('原文件已取回本机暂存；此主控当前通过系统分享交给其他应用保存。'),
-                  if (ready &&
-                      supportsSystemFileShare &&
-                      (share || !supportsSystemDocumentSave) &&
-                      current.kind != .directory) ...[
-                    const StateNote('将原文件副本交给系统选择的应用。分享面板返回不代表接收应用已经发送或保存。'),
+                  if (canShare) ...[
                     if (shareResult.value != null)
-                      StateNote(shareResult.value!),
-                    if (shareResult.value != null)
+                      StateNote(shareResult.value!.message),
+                    if (shareResult.value?.needsRecipientCheck == true)
                       CheckboxListTile(
                         value: shareReviewed.value,
                         onChanged: busy.value
@@ -305,19 +381,9 @@ class ReceiveContentPage extends HookConsumerWidget {
                             : (value) => shareReviewed.value = value == true,
                         title: const Text('我已在接收应用核对，仍需再次分享'),
                       ),
-                    FilledButton.icon(
-                      onPressed:
-                          busy.value ||
-                              shareResult.value != null && !shareReviewed.value
-                          ? null
-                          : deliverShare,
-                      icon: const Icon(LucideIcons.share2),
-                      label: Text(
-                        shareResult.value == null ? '交给系统分享' : '重新打开系统分享',
-                      ),
-                    ),
                   ],
                   if (ready &&
+                      !openAfterTransfer &&
                       supportsSystemFileShare &&
                       (share || !supportsSystemDocumentSave) &&
                       current.kind == .directory)
@@ -327,19 +393,21 @@ class ReceiveContentPage extends HookConsumerWidget {
                           : '当前主控尚不支持将暂存文件夹保存到系统位置，请在手机上处理或从文件页选择其他传输方式。',
                     ),
                   const SizedBox(height: DesignTokens.spacingMd),
-                  TextButton(
-                    onPressed: () =>
-                        TransferDetailsRoute(taskId: taskId)
-                            .push<void>(context),
-                    child: const Text('查看本次传输详情'),
-                  ),
-                  TextButton(onPressed: refresh, child: const Text('重新核验原文件')),
+                  if (!pending)
+                    TextButton(
+                      onPressed: openTransfer,
+                      child: const Text('查看本次传输详情'),
+                    ),
+                  TextButton(onPressed: refresh, child: const Text('刷新文件状态')),
                 ],
-              );
-            },
-          );
-        },
-      ),
+              ),
+            );
+          },
+        );
+      },
     );
+    return query.hasError || !query.hasValue
+        ? PageFrame(title: title, child: content)
+        : content;
   }
 }

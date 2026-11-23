@@ -1,14 +1,13 @@
 import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_action_bar.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 
-class FileViewMenuButton extends StatelessWidget {
+class FileViewMenuButton extends HookWidget {
   const FileViewMenuButton({
     super.key,
     required this.viewMode,
@@ -28,108 +27,170 @@ class FileViewMenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final reduceMotion = GlassMaterial.reduceMotion(context);
-    final menuWidth = math.min(
-      288.0,
-      math.max(208.0, MediaQuery.sizeOf(context).width - 32),
+    final size = MediaQuery.sizeOf(context);
+    final menu = useMemoized(MenuController.new);
+    final width = math.min(
+      DesignTokens.componentFileViewPopoverWidth,
+      size.width -
+          MediaQuery.paddingOf(context).horizontal -
+          2 * DesignTokens.spacingMd,
     );
-    final sectionStyle = theme.textTheme.bodySmall?.copyWith(
-      color: theme.colorScheme.onSurfaceVariant,
-    );
-    return GlassAccessibilityScope(
-      reduceMotion: reduceMotion,
-      child: GlassMenu(
-        autoAdjustToScreen: true,
-        menuPadding: const EdgeInsets.all(DesignTokens.spacingMd),
-        menuWidth: menuWidth,
-        menuBorderRadius: DesignTokens.roundedLg,
-        itemBorderRadius: DesignTokens.roundedMd,
-        settings: GlassMaterial.settings(context),
-        quality: GlassMaterial.quality(context),
-        stretch: reduceMotion
-            ? 0
-            : DesignTokens.componentGlassInteractionStretch,
-        morphSpeed: reduceMotion ? MorphSpeed.instant : MorphSpeed.fast,
-        triggerBuilder: (context, toggle) => GlassActionIcon(
-          tooltip: '视图与排序',
-          icon: const Icon(LucideIcons.slidersHorizontal),
-          onPressed: toggle,
-        ),
-        items: [
-          GlassMenuLabel(title: '视图', style: sectionStyle),
-          _choice(
-            context,
-            label: '网格',
-            selected: viewMode == FileViewMode.grid,
-            reduceMotion: reduceMotion,
-            onPressed: () => onViewModeChanged(FileViewMode.grid),
-          ),
-          _choice(
-            context,
-            label: '列表',
-            selected: viewMode == FileViewMode.list,
-            reduceMotion: reduceMotion,
-            onPressed: () => onViewModeChanged(FileViewMode.list),
-          ),
-          const GlassMenuDivider(),
-          GlassMenuLabel(title: '排序', style: sectionStyle),
-          for (final entry in const [
-            (FileSortKey.name, '名称'),
-            (FileSortKey.size, '文件大小'),
-            (FileSortKey.modified, '修改时间'),
-            (FileSortKey.type, '文件类型'),
-          ])
-            _choice(
-              context,
-              label: entry.$2,
-              selected: sortKey == entry.$1,
-              reduceMotion: reduceMotion,
-              onPressed: () => onSortKeyChanged(entry.$1),
-            ),
-          const GlassMenuDivider(),
-          GlassMenuLabel(title: '顺序', style: sectionStyle),
-          _choice(
-            context,
-            label: '升序',
-            selected: ascending,
-            reduceMotion: reduceMotion,
-            onPressed: () => onAscendingChanged(true),
-          ),
-          _choice(
-            context,
-            label: '降序',
-            selected: !ascending,
-            reduceMotion: reduceMotion,
-            onPressed: () => onAscendingChanged(false),
-          ),
-        ],
+    final optionsWidth = width - 2 * DesignTokens.spacingMd;
+    return MenuAnchor(
+      controller: menu,
+      animated: !GlassMaterial.reduceMotion(context),
+      consumeOutsideTap: true,
+      clipBehavior: Clip.none,
+      alignmentOffset: Offset(
+        -width / 2,
+        DesignTokens.componentFileActionBarPadding + DesignTokens.spacingXs,
       ),
+      style: const MenuStyle(
+        alignment: AlignmentDirectional.bottomCenter,
+        backgroundColor: WidgetStatePropertyAll(DesignTokens.colorTransparent),
+        surfaceTintColor: WidgetStatePropertyAll(DesignTokens.colorTransparent),
+        elevation: WidgetStatePropertyAll(0),
+        padding: WidgetStatePropertyAll(EdgeInsets.zero),
+      ),
+      builder: (context, controller, child) => GlassActionBarButton(
+        label: '视图与排序',
+        icon: const Icon(AppIcons.viewOptions),
+        onPressed: () =>
+            controller.isOpen ? controller.close() : controller.open(),
+      ),
+      menuChildren: [
+        SizedBox(
+          width: width,
+          child: Glass(
+            radius: DesignTokens.roundedLg,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: size.height * .65),
+              child: SingleChildScrollView(
+                primary: false,
+                padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '视图与排序',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: DesignTokens.spacingMd),
+                    Text('排序', style: Theme.of(context).textTheme.bodyMedium),
+                    const SizedBox(height: DesignTokens.spacingXs),
+                    _choices(
+                      context,
+                      label: '排序',
+                      width: optionsWidth,
+                      selected: sortKey,
+                      entries: const [
+                        (FileSortKey.name, '名称'),
+                        (FileSortKey.size, '大小'),
+                        (FileSortKey.modified, '时间'),
+                        (FileSortKey.type, '类型'),
+                      ],
+                      onSelected: (value) {
+                        onSortKeyChanged(value);
+                        menu.close();
+                      },
+                    ),
+                    const SizedBox(height: DesignTokens.spacingSm),
+                    _choices(
+                      context,
+                      label: '顺序',
+                      width: optionsWidth,
+                      selected: ascending,
+                      entries: const [(true, '升序'), (false, '降序')],
+                      onSelected: (value) {
+                        onAscendingChanged(value);
+                        menu.close();
+                      },
+                    ),
+                    const SizedBox(height: DesignTokens.spacingSm),
+                    _choices(
+                      context,
+                      label: '布局',
+                      width: optionsWidth,
+                      selected: viewMode,
+                      entries: const [
+                        (FileViewMode.list, '列表'),
+                        (FileViewMode.grid, '宫格'),
+                      ],
+                      onSelected: (value) {
+                        onViewModeChanged(value);
+                        menu.close();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _choice(
+  Widget _choices<T>(
     BuildContext context, {
     required String label,
-    required bool selected,
-    required bool reduceMotion,
-    required VoidCallback onPressed,
+    required double width,
+    required T selected,
+    required List<(T, String)> entries,
+    required ValueChanged<T> onSelected,
   }) {
     final theme = Theme.of(context);
-    return GlassMenuItem(
-      title: label,
-      isSelected: selected,
-      height: DesignTokens.componentIconButtonSize,
-      titleStyle: theme.textTheme.bodyLarge,
-      trailing: selected
-          ? Icon(
-              LucideIcons.check,
-              size: DesignTokens.componentIconActionSize,
-              color: theme.colorScheme.onSurface,
-            )
-          : null,
-      enablePressScale: !reduceMotion,
-      onTap: onPressed,
+    final style = theme.textTheme.labelLarge?.merge(
+      DesignTokens.componentFileViewPopoverTypography,
+    );
+    final labelWidth = MediaQuery.textScalerOf(context)
+        .scale(DesignTokens.typographyFileOptionLabelFontSize * 2);
+    final columns = (width / (labelWidth + 2 * DesignTokens.spacingXs))
+        .floor()
+        .clamp(1, entries.length);
+    return Semantics(
+      container: true,
+      label: label,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
+        ),
+        child: Wrap(
+          children: [
+            for (final (value, title) in entries)
+              SizedBox(
+                width: width / columns,
+                child: Semantics(
+                  selected: value == selected,
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: value == selected
+                          ? theme.colorScheme.onPrimary
+                          : theme.colorScheme.onSurface,
+                      textStyle: style,
+                      backgroundColor: value == selected
+                          ? theme.colorScheme.primary
+                          : null,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          DesignTokens.roundedMd,
+                        ),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: DesignTokens.spacingXs,
+                        vertical: DesignTokens.spacingXxs,
+                      ),
+                    ),
+                    onPressed: () => onSelected(value),
+                    child: Text(title, textAlign: TextAlign.center),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

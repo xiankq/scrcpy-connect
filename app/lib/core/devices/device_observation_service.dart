@@ -718,8 +718,8 @@ final class DeviceObservationService
   void _emitEvent(DeviceObservationEvent event) {
     try {
       onChanged(event);
-    } catch (_) {
-      // 观察事实已提交；仅隔离通知消费者，不能让它夺走监听的精确关闭权。
+    } catch (error, stack) {
+      Zone.current.handleUncaughtError(error, stack);
     }
   }
 

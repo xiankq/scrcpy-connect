@@ -229,7 +229,7 @@ final class _Observation {
     final client = _Client(native);
     late _Observation fixture;
     final companion = CompanionService(
-      requireConnection: (_) => fixture.connection,
+      currentConnection: (_) => fixture.connection,
       serverBytes: Uint8List.fromList([1, 2, 3]),
       config: const CompanionConfig(
         startupTimeout: Duration(seconds: 5),

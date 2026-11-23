@@ -1,9 +1,12 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/devices/models/device_setup_receipt.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/content_arrival.dart';
+import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
+
+import 'connection_failure_note.dart';
 
 class ConnectionAttemptStatus extends StatelessWidget {
   const ConnectionAttemptStatus({
@@ -11,163 +14,348 @@ class ConnectionAttemptStatus extends StatelessWidget {
     required this.busy,
     required this.checking,
     required this.cancelling,
-    required this.deviceName,
+    required this.address,
     required this.paired,
+    required this.pairing,
+    required this.legacyTcp,
     required this.onCancel,
     required this.onEdit,
     required this.onRetry,
     required this.onRecheck,
-    required this.onConnectionPort,
     this.failure,
   });
 
-  final bool busy, checking, cancelling, paired;
-  final String deviceName;
+  final bool busy, checking, cancelling, paired, pairing, legacyTcp;
+  final String address;
   final SetupIssue? failure;
-  final VoidCallback onCancel, onEdit, onRetry, onRecheck, onConnectionPort;
+  final VoidCallback onCancel, onEdit, onRetry, onRecheck;
 
   @override
   Widget build(BuildContext context) {
     final code = failure?.code ?? '';
-    final mismatched =
+    final identityMismatch =
         code == 'device_identity_mismatch' || code == 'identity_mismatch';
-    final unknown =
+    final needsCheck =
         code.contains('unknown') ||
         code.contains('unconfirmed') ||
         code == 'configuration_unverified';
-    final authorization =
-        code == 'authorization_required' || code == 'auth_failed';
-    final title = mismatched
-        ? '设备身份不符'
-        : unknown
-        ? '连接结果待确认'
-        : paired
-        ? '已配对，尚未连接'
-        : authorization
-        ? '请在手机上允许调试连接'
-        : '连接未完成';
-    final message = mismatched
-        ? '响应设备与已保存设备不一致，请核对目标并修改连接信息。'
-        : unknown
-        ? '尚未确认本次连接结果。重新核对只检查当前状态，不会重发连接请求。'
-        : paired && failure == null
-        ? '配对授权已保留，请补充手机无线调试主页面的连接端口。'
-        : failure?.message ?? '尚未确认连接可用，请检查地址、端口和手机授权。';
-    final text = Theme.of(context).textTheme;
-    final colors = Theme.of(context).colorScheme;
+    final pending = busy || checking || cancelling;
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final colors = theme.colorScheme;
+    final title = cancelling
+        ? '正在取消连接'
+        : pending
+        ? '正在连接'
+        : needsCheck
+        ? '请检查连接'
+        : '连接失败';
+    final subtitle = switch ((
+      pending,
+      checking,
+      cancelling,
+      pairing,
+      identityMismatch,
+      needsCheck,
+    )) {
+      (true, _, true, _, _, _) => '正在结束本次连接尝试',
+      (true, true, _, _, _, _) => '正在核对手机的连接状态',
+      (true, _, _, true, _, _) => '正在配对并查找手机的连接地址',
+      (true, _, _, _, _, _) => '正在与手机建立连接',
+      (_, _, _, _, true, _) => '设备身份不一致',
+      (_, _, _, _, _, true) => '暂时无法确认手机是否已连接。',
+      _ => connectionFailureMessage(
+        RequestFailure(code, failure?.message ?? ''),
+        pairing: pairing && !paired,
+        legacyTcp: legacyTcp,
+      ),
+    };
+    const buttonSize = Size.fromHeight(
+      DesignTokens.componentButtonPrimaryHeight,
+    );
+    const buttonShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(
+        Radius.circular(DesignTokens.componentButtonPrimaryRounded),
+      ),
+    );
+    final retry = !pending && !identityMismatch && !paired;
     return Scaffold(
-      body: Semantics(
-        label: busy ? '正在连接设备 $deviceName' : '$title，$deviceName',
-        liveRegion: true,
-        child: Stack(
-          children: [
-            if (busy)
-              Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CircularProgressIndicator(),
-                    const SizedBox(height: DesignTokens.spacingMd),
-                    Text('正在连接设备…', style: text.bodyMedium),
-                  ],
-                ),
-              ),
-            if (!busy)
-              Positioned.fill(
-                child: SafeArea(
+      body: DesktopStage(
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: DesignTokens.spacingLg,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
                   child: LayoutBuilder(
-                    builder: (context, constraints) => SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(
-                        DesignTokens.spacingLg,
-                        DesignTokens.componentIconButtonSize +
-                            DesignTokens.spacingLg,
-                        DesignTokens.spacingLg,
-                        DesignTokens.spacingLg,
-                      ),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight:
-                              (constraints.maxHeight -
-                                      DesignTokens.componentIconButtonSize -
-                                      DesignTokens.spacingLg * 2)
-                                  .clamp(0, double.infinity),
+                    builder: (context, constraints) => Align(
+                      alignment: const Alignment(0, -.31),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: DesignTokens.spacingSm,
                         ),
-                        child: Center(
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(
-                              maxWidth:
-                                  DesignTokens.componentPageContentMaxWidth,
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Text(
-                                  title,
-                                  style: text.titleLarge?.copyWith(
-                                    color: colors.onSurface,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            maxWidth:
+                                DesignTokens.componentEmptyDeviceIntroWidth,
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxHeight:
+                                      constraints.maxHeight /
+                                      (2 *
+                                          MediaQuery.textScalerOf(context)
+                                              .scale(1)),
+                                ),
+                                child: _ConnectionDiagram(pending: pending),
+                              ),
+                              const SizedBox(height: DesignTokens.roundedLg),
+                              ContentArrival(
+                                state: title,
+                                child: Semantics(
+                                  liveRegion: true,
+                                  label: address.isEmpty ? null : address,
+                                  child: Text(
+                                    title,
+                                    style: theme.textTheme.displaySmall?.copyWith(
+                                      fontSize: DesignTokens
+                                          .typographyConnectionTitleFontSize,
+                                      fontWeight: DesignTokens
+                                          .typographyConnectionTitleFontWeight,
+                                      height: DesignTokens
+                                          .typographyConnectionTitleLineHeight,
+                                      letterSpacing: DesignTokens
+                                          .typographyConnectionTitleLetterSpacing,
+                                    ),
+                                    textAlign: TextAlign.center,
                                   ),
                                 ),
-                                const SizedBox(height: DesignTokens.spacingSm),
+                              ),
+                              const SizedBox(
+                                height: DesignTokens.spacingSectionTitle,
+                              ),
+                              Semantics(
+                                liveRegion: pending,
+                                child: Text(
+                                  subtitle,
+                                  style: theme.textTheme.bodyLarge?.copyWith(
+                                    color: pending
+                                        ? colors.onSurfaceVariant
+                                        : colors.onSurface,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              if (!pending && identityMismatch) ...[
+                                const SizedBox(height: DesignTokens.spacingLg),
                                 Text(
-                                  message,
-                                  style: text.bodyLarge?.copyWith(
+                                  '这不是已保存的手机。请检查 IP 地址。',
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
                                     color: colors.onSurfaceVariant,
                                   ),
                                 ),
-                                const SizedBox(height: DesignTokens.spacingLg),
-                                if (!mismatched)
-                                  TextButton(
-                                    onPressed: checking
-                                        ? null
-                                        : unknown
-                                        ? onRecheck
-                                        : paired
-                                        ? onConnectionPort
-                                        : onRetry,
-                                    child: Text(
-                                      checking
-                                          ? '正在核对…'
-                                          : unknown
-                                          ? '重新核对'
-                                          : paired
-                                          ? '补充连接端口'
-                                          : authorization
-                                          ? '重新检查'
-                                          : '重试',
-                                    ),
-                                  ),
-                                TextButton(
-                                  onPressed: checking ? null : onEdit,
-                                  child: Text(
-                                    mismatched ||
-                                            (!unknown &&
-                                                !paired &&
-                                                !authorization)
-                                        ? '返回修改'
-                                        : '返回',
-                                  ),
-                                ),
                               ],
-                            ),
+                            ],
                           ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
+                Padding(
+                  padding: const EdgeInsets.only(
+                    bottom: DesignTokens.roundedMd,
+                  ),
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: DesignTokens.componentEmptyDeviceIntroWidth,
+                      ),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: pending
+                            ? OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: buttonSize,
+                                  shape: buttonShape,
+                                  backgroundColor: dark
+                                      ? colors.surface
+                                      : colors.surfaceContainerHigh,
+                                  foregroundColor: colors.onSurface,
+                                  side: dark
+                                      ? BorderSide(
+                                          color: colors.onSurfaceVariant,
+                                        )
+                                      : BorderSide.none,
+                                ),
+                                onPressed: cancelling ? null : onCancel,
+                                child: const Text('取消连接'),
+                              )
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  if (retry) ...[
+                                    TextButton(
+                                      onPressed: onEdit,
+                                      child: const Text('返回修改'),
+                                    ),
+                                    const SizedBox(
+                                      height: DesignTokens.spacingMd,
+                                    ),
+                                  ],
+                                  FilledButton(
+                                    style: FilledButton.styleFrom(
+                                      minimumSize: buttonSize,
+                                      shape: buttonShape,
+                                    ),
+                                    onPressed: retry
+                                        ? needsCheck
+                                              ? onRecheck
+                                              : onRetry
+                                        : onEdit,
+                                    child: Text(
+                                      retry
+                                          ? needsCheck
+                                                ? '重新检查'
+                                                : '重试连接'
+                                          : '返回修改',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ConnectionDiagram extends StatelessWidget {
+  const _ConnectionDiagram({required this.pending});
+
+  final bool pending;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final label = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    final line = dark
+        ? DesignTokens.componentConnectionTrackDarkBackgroundColor
+        : DesignTokens.componentConnectionTrackBackgroundColor;
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: SizedBox(
+        width: 342,
+        height: 206,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
             Positioned(
-              top: MediaQuery.paddingOf(context).top + DesignTokens.spacingMd,
-              left: DesignTokens.spacingMd,
-              child: GlassSurfaceGroup(
-                child: GlassActionIcon(
-                  tooltip: cancelling ? '正在取消…' : '关闭',
-                  icon: const Icon(LucideIcons.x),
-                  onPressed: cancelling ? null : onCancel,
+              left: 94,
+              top: 80,
+              child: Container(
+                width: 156,
+                height: DesignTokens.componentConnectionPathHeight,
+                decoration: BoxDecoration(
+                  color: dark
+                      ? DesignTokens.componentConnectionPathDarkBackgroundColor
+                      : DesignTokens.componentConnectionPathBackgroundColor,
+                  borderRadius: BorderRadius.circular(
+                    DesignTokens.componentConnectionPathRounded,
+                  ),
                 ),
               ),
             ),
+            Positioned(
+              left: 28,
+              top: 59,
+              child: Image.asset(
+                dark
+                    ? 'assets/device/connection-host-dark.png'
+                    : 'assets/device/connection-host.png',
+                width: 86,
+                height: 86,
+              ),
+            ),
+            Positioned(
+              left: 232,
+              top: 30,
+              child: Image.asset(
+                'assets/device/connection-phone.png',
+                width: 84,
+                height: 144,
+              ),
+            ),
+            for (final x in [pending ? 113.0 : 105.0, pending ? 189.0 : 191.0])
+              Positioned(
+                left: x,
+                top: 101,
+                child: Container(
+                  width: pending ? 40 : 46,
+                  height: DesignTokens.spacingMicro,
+                  decoration: BoxDecoration(
+                    color: line,
+                    borderRadius: BorderRadius.circular(
+                      DesignTokens.roundedFull,
+                    ),
+                  ),
+                ),
+              ),
+            if (pending)
+              Positioned(
+                left: 159,
+                top: 90,
+                child: ExcludeSemantics(
+                  child: ContentLoadingIndicator(
+                    size: DesignTokens.componentIconSize,
+                    color: dark
+                        ? DesignTokens.componentConnectionArcDarkBackgroundColor
+                        : DesignTokens.componentConnectionArcBackgroundColor,
+                  ),
+                ),
+              )
+            else
+              Positioned(
+                left: 155,
+                top: 86,
+                child: Container(
+                  width: DesignTokens.componentIconLargeSize,
+                  height: DesignTokens.componentIconLargeSize,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.errorContainer,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    AppIcons.close,
+                    size: DesignTokens.componentIconSmallSize,
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ),
+            for (final (left, text) in const [(18.0, '本机'), (220.0, '手机')])
+              Positioned(
+                left: left,
+                top: 177,
+                width: 109,
+                child: Text(text, style: label, textAlign: TextAlign.center),
+              ),
           ],
         ),
       ),

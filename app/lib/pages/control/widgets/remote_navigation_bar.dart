@@ -27,6 +27,7 @@ class RemoteNavigationBar extends StatelessWidget {
       color: colors.surface,
       child: SafeArea(
         top: false,
+        bottom: false,
         child: DecoratedBox(
           decoration: BoxDecoration(
             border: Border(
@@ -117,27 +118,26 @@ class _RemoteNavigationGlyphPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = color
+      ..style = PaintingStyle.stroke
       ..strokeWidth = 2
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
     canvas.save();
     if (glyph == _RemoteNavigationGlyph.back) {
-      canvas.scale(size.width / 28, size.height / 28);
+      canvas.scale(size.width / 20, size.height / 20);
       final triangle = Path()
-        ..moveTo(6.49, 14.86)
-        ..cubicTo(5.83, 14.47, 5.83, 13.52, 6.49, 13.13)
-        ..lineTo(12.51, 9.60)
-        ..lineTo(18.40, 6.14)
-        ..cubicTo(19.11, 5.73, 20, 6.26, 20, 7.10)
-        ..lineTo(20, 20.90)
-        ..cubicTo(20, 21.74, 19.11, 22.27, 18.40, 21.85)
-        ..lineTo(12.51, 18.39)
+        ..moveTo(5, 8.6)
+        ..lineTo(14.6, 3.2)
+        ..cubicTo(16.13, 2.33, 16.9, 2.77, 16.9, 4.5)
+        ..lineTo(16.9, 15.5)
+        ..cubicTo(16.9, 17.23, 16.13, 17.67, 14.6, 16.8)
+        ..lineTo(5, 11.4)
+        ..cubicTo(3.33, 10.47, 3.33, 9.53, 5, 8.6)
         ..close();
-      canvas.drawPath(triangle, paint..style = PaintingStyle.fill);
+      canvas.drawPath(triangle, paint..strokeWidth = 1.8);
     } else {
       canvas.scale(size.width / 22, size.height / 22);
-      paint.style = PaintingStyle.stroke;
       if (glyph == _RemoteNavigationGlyph.home) {
         canvas.drawOval(Rect.fromLTWH(1.833, 1.833, 18.334, 18.334), paint);
       } else {

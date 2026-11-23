@@ -89,7 +89,8 @@ class FileTransferService implements FileTransfers {
   }) async {
     final journal = FileTransferJournal(dataDirectory);
     final tasks = (await journal.load()).map(
-      (id, record) => MapEntry(id, _TransferTask(record)),
+      (id, record) =>
+          MapEntry(id, _TransferTask(record, persistedStatus: record.status)),
     );
     final owner = FileTransferService._(
       executor,
@@ -221,6 +222,15 @@ class FileTransferService implements FileTransfers {
   }
 
   Future<void> _save(_TransferTask task) {
+    final status = task.record.status;
+    if (status != task.persistedStatus) {
+      task.record = task.record.copyWith(
+        endedAt: _terminal(status)
+            ? DateTime.now().millisecondsSinceEpoch ~/ 1000
+            : null,
+      );
+      task.persistedStatus = status;
+    }
     final snapshot = task.record;
     final result = _writes.then((_) => _journal.upsert(snapshot));
     _writes = result;
@@ -435,10 +445,12 @@ class FileTransferService implements FileTransfers {
       itemCount: record.itemCount,
       transferred: record.transferred,
       total: record.total,
+      endedAt: record.endedAt,
       error: record.error,
       errorCode: record.errorCode,
       saveMode: record.saveMode,
       cleanupPending: record.cleanupPending,
+      historyHidden: record.historyHidden,
       partialDestinationPossible: record.partialDestinationPossible,
       treeVerified: record.treeVerified,
       treeComplete: record.treeComplete,
@@ -1178,7 +1190,8 @@ class FileTransferService implements FileTransfers {
         final errorCode =
             (status == FileTransferStatus.failed ||
                     status == FileTransferStatus.cancelled) &&
-                task.record.saveMode == 'committing'
+                task.record.saveMode == 'committing' &&
+                e.code != 'atomic_save_unavailable'
             ? 'result_unknown'
             : e.code;
         task.record = task.record.copyWith(
@@ -1252,7 +1265,8 @@ class FileTransferService implements FileTransfers {
         cleanup.outcome = FileTransferOutcome.fromRecord(task.record);
         if (cleanup.executionFailure case final FileFailure original) {
           final unknown =
-              task.record.saveMode == 'committing' ||
+              task.record.saveMode == 'committing' &&
+                  original.code != 'atomic_save_unavailable' ||
               original.code == 'result_unknown';
           cleanup.outcome = FileTransferOutcome(
             status: original.code == 'cancelled'
@@ -1600,6 +1614,7 @@ class FileTransferService implements FileTransfers {
       task.record = task.record.copyWith(
         policy: selectedPolicy,
         generation: task.record.generation + 1,
+        historyHidden: false,
         status: FileTransferStatus.queued,
         error: null,
         errorCode: null,
@@ -1696,6 +1711,62 @@ class FileTransferService implements FileTransfers {
     }
   }
 
+  @override
+  Future<void> clearTransferHistory(List<FileTransferTarget> targets) async {
+    _check();
+    final ids = <String>{};
+    final batches = <String>{};
+    for (final target in targets) {
+      switch (target) {
+        case FileTransferBatchTarget(:final id):
+          batches.add(id);
+        case FileTransferTaskTarget(:final id):
+          ids.add(id);
+      }
+    }
+    final candidates = _tasks.values.where(
+      (task) =>
+          batches.contains(task.record.batchId) || ids.contains(task.record.id),
+    );
+    final unsettled = {
+      for (final task in _tasks.values)
+        if (!_terminal(task.record.status) ||
+            task.record.errorCode == 'result_unknown' ||
+            task.record.cleanupPending ||
+            _transferCleanups.containsKey(task.record.id))
+          task.record.batchId,
+    };
+    final settled = candidates
+        .where(
+          (task) =>
+              !task.record.historyHidden &&
+              !unsettled.contains(task.record.batchId),
+        )
+        .toList();
+    if (settled.isEmpty) return;
+    final edits = _beginBatchEdits(
+      settled.map((task) => task.record.batchId).toSet(),
+      _BatchEditKind.hideHistory,
+    );
+    try {
+      final committed = _writes.then(
+        (_) => _journal.hideHistory(
+          settled.map((task) => task.record.id).toList(),
+        ),
+      );
+      _writes = committed;
+      await committed;
+      for (final task in settled) {
+        task.record = task.record.copyWith(historyHidden: true);
+        if (!_events.isClosed) _events.add(FileTransferChanged(task.record.id));
+      }
+    } finally {
+      for (final entry in edits.entries) {
+        await _endBatchEdit(entry.key, entry.value);
+      }
+    }
+  }
+
   /// 保护受管取回内容及未发布片段；租约由实际消费者显式释放。
   Future<String> acquireCacheLease(String transferId) async {
     _check();
@@ -1751,7 +1822,7 @@ final class _TransferBatch {
       stopping == 0;
 }
 
-enum _BatchEditKind { restart, remove }
+enum _BatchEditKind { restart, remove, hideHistory }
 
 /// reserve 的迟到租约在交给批次前由本对象持有，清理失败后不能撤销登记。
 final class _BatchEdit {
@@ -1776,6 +1847,7 @@ final class _TransferPreparation {
 
 /// worker 和取消持有稳定身份，状态更新替换不可变记录；旧任务不能重新写回任务表。
 final class _TransferTask {
-  _TransferTask(this.record);
+  _TransferTask(this.record, {this.persistedStatus});
+  FileTransferStatus? persistedStatus;
   FileTransferRecord record;
 }

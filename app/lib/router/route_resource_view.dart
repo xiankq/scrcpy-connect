@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/widgets/content_arrival.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/pages/route_error/route_error_page.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -36,22 +38,34 @@ class _RouteResourceViewState<T extends Object>
     key: ValueKey(widget.identity),
     future: resource,
     builder: (context, snapshot) {
+      final waiting = !snapshot.hasData && !snapshot.hasError;
+      final Widget child;
+
       if (snapshot.hasError) {
-        return RouteErrorPage(
-          message: '${snapshot.error}',
+        child = RouteErrorPage(
+          message: failureMessage(
+            snapshot.error,
+            fallback: '无法打开此页面。请返回上一页后重试。',
+          ),
           onRetry: () => setState(() => resource = widget.load()),
         );
-      }
-      if (!snapshot.hasData) {
-        return const Scaffold(
-          body: Center(child: CircularProgressIndicator.adaptive()),
+      } else if (waiting) {
+        child = const Scaffold(
+          body: SafeArea(
+            child: Center(child: CircularProgressIndicator.adaptive()),
+          ),
         );
-      }
-      if (widget.preserveContent) {
+      } else if (widget.preserveContent) {
         // 路由刷新可能重新解析 extra；已附着画面保留原打开决定，并继续拥有会话。
-        return content ??= widget.builder(context, snapshot.data!);
+        child = content ??= widget.builder(context, snapshot.data!);
+      } else {
+        child = widget.builder(context, snapshot.data!);
       }
-      return widget.builder(context, snapshot.data!);
+      return ContentArrival(
+        state: snapshot.connectionState,
+        waiting: waiting,
+        child: child,
+      );
     },
   );
 }

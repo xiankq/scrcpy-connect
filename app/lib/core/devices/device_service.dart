@@ -9,6 +9,7 @@ import 'package:scrcpy_connect/core/devices/device_discovery.dart';
 import 'package:scrcpy_connect/core/devices/device_inspection.dart';
 import 'package:scrcpy_connect/core/devices/device_management.dart';
 import 'package:scrcpy_connect/core/devices/device_probe.dart';
+import 'package:scrcpy_connect/core/devices/models/device_battery.dart';
 import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/device_reconnection_candidates.dart';
 import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
@@ -534,6 +535,38 @@ final class DeviceService
     _checkOpen();
     return _track(
       _details.readDetails(
+        deviceId,
+        connectionId: connectionId,
+        cancellation: cancellation,
+      ),
+    );
+  }
+
+  @override
+  Future<DeviceReading<DeviceBattery>> readBattery(
+    String deviceId, {
+    String? connectionId,
+    AdbCancellation? cancellation,
+  }) {
+    _checkOpen();
+    return _track(
+      _details.readBattery(
+        deviceId,
+        connectionId: connectionId,
+        cancellation: cancellation,
+      ),
+    );
+  }
+
+  @override
+  Future<DeviceReading<DeviceCapacity>> readSharedStorageCapacity(
+    String deviceId, {
+    String? connectionId,
+    AdbCancellation? cancellation,
+  }) {
+    _checkOpen();
+    return _track(
+      _details.readSharedStorageCapacity(
         deviceId,
         connectionId: connectionId,
         cancellation: cancellation,

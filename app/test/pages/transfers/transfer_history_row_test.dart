@@ -46,7 +46,7 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.byTooltip('传输操作'));
+    await tester.tap(find.bySemanticsLabel('传输操作'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.text('停止并移除…'));

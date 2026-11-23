@@ -1,18 +1,14 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/gallery/gallery_scan_notifier.dart';
-import 'package:scrcpy_connect/pages/gallery/widgets/gallery_scope_sheet.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
-import 'package:scrcpy_connect/widgets/overlays.dart';
 
 class GalleryScanSummary extends StatelessWidget {
   const GalleryScanSummary({
     super.key,
     required this.scan,
-    required this.device,
+    required this.reading,
     required this.onRestart,
     required this.onCancel,
     required this.onRefresh,
@@ -20,7 +16,7 @@ class GalleryScanSummary extends StatelessWidget {
   });
 
   final GalleryScanState scan;
-  final DeviceSnapshot device;
+  final bool reading;
   final VoidCallback onRestart;
   final VoidCallback onCancel;
   final VoidCallback onRefresh;
@@ -29,7 +25,10 @@ class GalleryScanSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final data = scan.result;
-    final status = data?.status;
+    final checked = data?.status == .scanning && scan.hasUpdate
+        ? scan.pendingResult
+        : data;
+    final status = checked?.status;
     final progress = scan.progress;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -41,84 +40,28 @@ class GalleryScanSummary extends StatelessWidget {
           ),
         if (scan.hasUpdate)
           TextButton(onPressed: onUpdate, child: const Text('更新照片')),
-        Text(
-          scan.scanning
-              ? '正在检查手机中的照片与视频'
-              : switch (status) {
-                  .partial => '部分目录未能检查',
-                  .cancelled => '已停止检查',
-                  .completed => '已检查共享存储中的照片与视频',
-                  .unknown || .scanning || null => '暂时无法读取相册',
-                },
-          style: status == .completed && !scan.scanning
-              ? Theme.of(context).textTheme.bodySmall
-              : Theme.of(context).textTheme.bodyLarge,
-        ),
-        const SizedBox(height: DesignTokens.spacingXs),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final details = Text(
-              scan.scanning
-                  ? '已检查 ${progress?.visitedDirectories ?? 0} 个文件夹、${progress?.visitedEntries ?? 0} 项'
-                  : '已显示 ${scan.items.length} / ${data?.total ?? 0} 项 · 按文件修改时间排列',
-              style: Theme.of(context).textTheme.bodySmall,
-            );
-            if (data == null) return details;
-            final scopeAction = TextButton(
-              style: TextButton.styleFrom(
-                minimumSize: const Size(
-                  DesignTokens.componentIconButtonSize,
-                  DesignTokens.componentIconButtonSize,
-                ),
-              ),
-              onPressed: () => showAppModalSheet<void>(
-                context: context,
-                isScrollControlled: true,
-                builder: (_) =>
-                    GalleryScopeSheet(device: device, snapshot: data),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(child: Text('相册范围与未读项目')),
-                  SizedBox(width: DesignTokens.spacingXs),
-                  Icon(
-                    LucideIcons.chevronUp,
-                    size: DesignTokens.componentIconSmallSize,
-                  ),
-                ],
-              ),
-            );
-            final scopeLabelWidth = MediaQuery.textScalerOf(
-              context,
-            ).scale(DesignTokens.typographyLabelFontSize * '相册范围与未读项目'.length);
-            if (scopeLabelWidth +
-                    DesignTokens.componentIconSmallSize +
-                    DesignTokens.spacingLg * 2 >
-                constraints.maxWidth) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  details,
-                  Align(
-                    alignment: AlignmentDirectional.centerEnd,
-                    child: scopeAction,
-                  ),
-                ],
-              );
-            }
-            return Row(
-              children: [
-                Expanded(child: details),
-                const SizedBox(width: DesignTokens.spacingSm),
-                Flexible(child: scopeAction),
-              ],
-            );
-          },
-        ),
-        if (scan.scanning) ...[
+        if (status != .completed || reading || scan.showingPrevious)
+          Text(
+            reading
+                ? '正在检查手机中的照片与视频'
+                : switch (status) {
+                    .partial when checked?.limited == true => '只检查了部分文件夹',
+                    .partial => '部分文件夹无法读取',
+                    .cancelled => '已停止检查',
+                    .completed => '已检查共享存储中的照片与视频',
+                    _ => '暂时无法读取相册',
+                  },
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+        if (reading)
+          Text(
+            '已检查 ${progress?.visitedDirectories ?? 0} 个文件夹、${progress?.visitedEntries ?? 0} 项',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        if (reading && scan.scanning) ...[
           const SizedBox(height: DesignTokens.spacingSm),
-          const ContentLoadingIndicator(),
+          if (scan.showingPrevious || scan.items.isNotEmpty)
+            const ContentLoadingIndicator(),
           TextButton(
             onPressed: scan.scanId == null || scan.stopping ? null : onCancel,
             child: Text(scan.stopping ? '正在停止检查' : '停止检查'),
@@ -128,7 +71,7 @@ class GalleryScanSummary extends StatelessWidget {
           StateNote(scan.error!),
           TextButton(
             onPressed: scan.scanId == null ? onRestart : onRefresh,
-            child: const Text('重新核验本次检查'),
+            child: const Text('刷新结果'),
           ),
         ],
       ],

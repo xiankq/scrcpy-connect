@@ -152,7 +152,7 @@ void main() {
       const RequestFailure('cancelled', 'late'),
     );
     await submitting;
-    expect(fixture.state.error, contains('still owned'));
+    expect(fixture.state.error, contains('重试取消'));
     expect(
       await fixture.actions.prepare(address: plan.address, port: plan.port),
       isNull,

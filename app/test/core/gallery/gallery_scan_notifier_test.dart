@@ -86,7 +86,7 @@ void main() {
     );
     await more;
     expect(container.read(provider).items.single.path, '/first');
-    expect(container.read(provider).error, contains('重复'));
+    expect(container.read(provider).error, contains('请下拉刷新'));
     expect(container.read(provider).paging, isFalse);
   });
 
@@ -106,7 +106,7 @@ void main() {
     scanner.starts.single.complete(_snapshot('new', ['/new']));
     await start;
     expect(container.read(provider).items.single.path, '/saved');
-    expect(container.read(provider).pendingItems.single.path, '/new');
+    expect(container.read(provider).pendingResult?.items.single.path, '/new');
     actions.applyUpdate();
     expect(container.read(provider).items.single.path, '/new');
     expect(container.read(provider).pendingResult, isNull);

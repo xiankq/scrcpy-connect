@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
@@ -31,6 +32,7 @@ class GalleryScanNotifier extends _$GalleryScanNotifier {
     });
     return GalleryScanState(
       result: previous?.result,
+      pendingResult: previous?.pendingResult,
       items: previous?.items ?? const [],
       showingPrevious: previous != null,
     );
@@ -55,7 +57,6 @@ class GalleryScanNotifier extends _$GalleryScanNotifier {
       stopping: false,
       latest: null,
       pendingResult: null,
-      pendingItems: const [],
       showingPrevious: state.result != null,
       error: null,
     );
@@ -87,7 +88,7 @@ class GalleryScanNotifier extends _$GalleryScanNotifier {
         state = state.copyWith(
           starting: false,
           paging: false,
-          error: '相册检查未能开始：$failure',
+          error: failureMessage(failure, fallback: '无法读取手机相册。请检查手机连接后重试。'),
         );
       }
     }
@@ -133,7 +134,7 @@ class GalleryScanNotifier extends _$GalleryScanNotifier {
     var updated = state.copyWith(latest: next, error: null);
     if (state.showingPrevious) {
       if (status != .scanning) {
-        updated = updated.copyWith(pendingResult: next, pendingItems: combined);
+        updated = updated.copyWith(pendingResult: next);
       }
     } else if (status == .scanning) {
       final seen = state.items.map((file) => file.path).toSet();
@@ -151,11 +152,7 @@ class GalleryScanNotifier extends _$GalleryScanNotifier {
               final (index, file) = entry;
               return file.path != combined[index].path;
             }))) {
-      updated = updated.copyWith(
-        showingPrevious: true,
-        pendingResult: next,
-        pendingItems: combined,
-      );
+      updated = updated.copyWith(showingPrevious: true, pendingResult: next);
     } else {
       updated = updated.copyWith(result: next, items: combined);
     }
@@ -219,7 +216,7 @@ class GalleryScanNotifier extends _$GalleryScanNotifier {
           read == (append ? owner.pagingRead : owner.read)) {
         state = state.copyWith(
           paging: append ? false : state.paging,
-          error: '相册检查未完成：$failure',
+          error: failureMessage(failure, fallback: '无法继续读取相册。请下拉刷新。'),
         );
       }
     }
@@ -242,7 +239,10 @@ class GalleryScanNotifier extends _$GalleryScanNotifier {
       state = state.copyWith(stopping: false);
     } catch (failure) {
       if (_current(owner, generation)) {
-        state = state.copyWith(stopping: false, error: '停止检查尚未确认：$failure');
+        state = state.copyWith(
+          stopping: false,
+          error: failureMessage(failure, fallback: '暂时无法确认是否停止读取。请先查看相册状态。'),
+        );
       }
     }
   }
@@ -256,9 +256,8 @@ class GalleryScanNotifier extends _$GalleryScanNotifier {
     state = state.copyWith(
       paging: false,
       result: next,
-      items: state.pendingItems,
+      items: next.items,
       pendingResult: null,
-      pendingItems: const [],
       showingPrevious: false,
     );
   }

@@ -1,9 +1,9 @@
 # 项目级配置。
 cmake_minimum_required(VERSION 3.14)
-project(scrcpy_connect LANGUAGES CXX)
+project(interconnect LANGUAGES CXX)
 
 # 应用可执行文件名称，同时决定磁盘上的文件名。
-set(BINARY_NAME "scrcpy_connect")
+set(BINARY_NAME "Interconnect")
 
 # 明确启用现代 CMake 行为，避免新版 CMake 警告。
 cmake_policy(VERSION 3.14...3.25)
@@ -65,6 +65,11 @@ set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
 
+# 安装器和便携包都在程序旁携带目标架构的 Visual C++ 运行库。
+set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION "${INSTALL_BUNDLE_LIB_DIR}")
+set(CMAKE_INSTALL_SYSTEM_RUNTIME_COMPONENT Runtime)
+include(InstallRequiredSystemLibraries)
+
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)
 
@@ -92,7 +97,6 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime)
 
 # 仅非调试构建安装 AOT 库。
-include("${CMAKE_CURRENT_SOURCE_DIR}/../../packages/adb/tool/cmake/bundle_adb.cmake")
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)

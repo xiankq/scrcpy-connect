@@ -1,9 +1,8 @@
 #include "my_application.h"
 
 #include <flutter_linux/flutter_linux.h>
-#ifdef GDK_WINDOWING_X11
-#include <gdk/gdkx.h>
-#endif
+#include <algorithm>
+#include <string>
 
 #include "flutter/generated_plugin_registrant.h"
 #include <desktop_multi_window/desktop_multi_window_plugin.h>
@@ -126,6 +125,151 @@ void register_system_typography(FlView* view) {
       nullptr);
 }
 
+struct DesktopWindow {
+  GtkWindow* window;
+  GtkWidget* start;
+  GtkWidget* end;
+};
+
+FlValue* desktop_window_layout(const DesktopWindow* chrome) {
+  GtkRequisition start = {}, end = {};
+  if (chrome->start != nullptr && gtk_widget_get_visible(chrome->start)) {
+    gtk_widget_get_preferred_size(chrome->start, nullptr, &start);
+    gtk_widget_get_preferred_size(chrome->end, nullptr, &end);
+  }
+  const bool rtl = gtk_widget_get_direction(GTK_WIDGET(chrome->window)) ==
+                   GTK_TEXT_DIR_RTL;
+  auto* layout = fl_value_new_map();
+  fl_value_set_string_take(layout, "left",
+                           fl_value_new_int(rtl ? end.width : start.width));
+  fl_value_set_string_take(layout, "right",
+                           fl_value_new_int(rtl ? start.width : end.width));
+  fl_value_set_string_take(layout, "top",
+                           fl_value_new_int(std::max(start.height, end.height)));
+  return layout;
+}
+
+void handle_desktop_window(FlMethodChannel*, FlMethodCall* call, gpointer data) {
+  auto* chrome = static_cast<DesktopWindow*>(data);
+  auto* window = chrome->window;
+  const gchar* method = fl_method_call_get_name(call);
+  if (g_str_equal(method, "layout")) {
+    g_autoptr(FlValue) layout = desktop_window_layout(chrome);
+    fl_method_call_respond_success(call, layout, nullptr);
+    return;
+  }
+  if (g_str_equal(method, "toggleMaximized")) {
+    if (gtk_window_is_maximized(window)) {
+      gtk_window_unmaximize(window);
+    } else {
+      gtk_window_maximize(window);
+    }
+  } else if (g_str_equal(method, "move")) {
+    auto* display = gtk_widget_get_display(GTK_WIDGET(window));
+    auto* pointer = gdk_seat_get_pointer(gdk_display_get_default_seat(display));
+    gint x, y;
+    gdk_device_get_position(pointer, nullptr, &x, &y);
+    gdk_window_begin_move_drag_for_device(
+        gtk_widget_get_window(GTK_WIDGET(window)), pointer, 1, x, y,
+        GDK_CURRENT_TIME);
+  } else {
+    fl_method_call_respond_not_implemented(call, nullptr);
+    return;
+  }
+  fl_method_call_respond_success(call, nullptr, nullptr);
+}
+
+void publish_desktop_window_layout(FlMethodChannel* channel) {
+  auto* chrome = static_cast<DesktopWindow*>(
+      g_object_get_data(G_OBJECT(channel), "desktop-window"));
+  g_autoptr(FlValue) layout = desktop_window_layout(chrome);
+  fl_method_channel_invoke_method(channel, "layoutChanged", layout, nullptr,
+                                   nullptr, nullptr);
+}
+
+void register_desktop_window(FlView* view, GtkWidget* start = nullptr,
+                             GtkWidget* end = nullptr) {
+  auto* window = GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(view)));
+  gtk_window_set_title(window, APP_DISPLAY_NAME);
+  gtk_widget_set_size_request(GTK_WIDGET(view), 400, 300);
+
+  auto* messenger = fl_engine_get_binary_messenger(fl_view_get_engine(view));
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  auto* channel = fl_method_channel_new(
+      messenger, "dev.scrcpyconnect/desktop_window", FL_METHOD_CODEC(codec));
+  auto* chrome = new DesktopWindow{window, start, end};
+  g_object_set_data_full(G_OBJECT(channel), "desktop-window", chrome,
+                         +[](gpointer data) {
+                           delete static_cast<DesktopWindow*>(data);
+                         });
+  fl_method_channel_set_method_call_handler(channel, handle_desktop_window,
+                                            chrome, nullptr);
+  if (start != nullptr) {
+    for (auto* header : {start, end}) {
+      g_signal_connect_object(
+          header, "size-allocate",
+          G_CALLBACK(+[](GtkWidget*, GtkAllocation*, FlMethodChannel* channel) {
+            publish_desktop_window_layout(channel);
+          }),
+          channel, static_cast<GConnectFlags>(0));
+    }
+    g_signal_connect_object(
+        window, "window-state-event",
+        G_CALLBACK(+[](GtkWidget*, GdkEventWindowState* event,
+                       FlMethodChannel* channel) -> gboolean {
+          auto* chrome = static_cast<DesktopWindow*>(
+              g_object_get_data(G_OBJECT(channel), "desktop-window"));
+          const bool visible = !(event->new_window_state & GDK_WINDOW_STATE_FULLSCREEN);
+          gtk_widget_set_visible(chrome->start, visible);
+          gtk_widget_set_visible(chrome->end, visible);
+          publish_desktop_window_layout(channel);
+          return FALSE;
+        }),
+        channel, static_cast<GConnectFlags>(0));
+  }
+  g_signal_connect(
+      view, "destroy", G_CALLBACK(+[](GtkWidget*, FlMethodChannel* channel) {
+        fl_method_channel_set_method_call_handler(channel, nullptr, nullptr,
+                                                  nullptr);
+        g_object_unref(channel);
+      }),
+      channel);
+}
+
+void update_button_layout(GtkSettings* settings, GParamSpec*, GtkWidget* overlay) {
+  auto* start = GTK_HEADER_BAR(g_object_get_data(G_OBJECT(overlay), "start"));
+  auto* end = GTK_HEADER_BAR(g_object_get_data(G_OBJECT(overlay), "end"));
+  g_autofree gchar* layout = nullptr;
+  g_object_get(settings, "gtk-decoration-layout", &layout, nullptr);
+  const std::string order(layout);
+  const auto split = order.find(':');
+  const auto left = order.substr(0, split) + ":";
+  const auto right = split == std::string::npos ? ":" : order.substr(split);
+  gtk_header_bar_set_decoration_layout(start, left.c_str());
+  gtk_header_bar_set_decoration_layout(end, right.c_str());
+}
+
+GtkWidget* add_window_buttons(GtkOverlay* overlay, GtkAlign edge) {
+  auto* header = gtk_header_bar_new();
+  gtk_header_bar_set_custom_title(GTK_HEADER_BAR(header),
+                                  gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0));
+  gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(header), TRUE);
+  gtk_widget_set_halign(header, edge);
+  gtk_widget_set_valign(header, GTK_ALIGN_START);
+
+  g_autoptr(GtkCssProvider) style = gtk_css_provider_new();
+  gtk_css_provider_load_from_data(
+      style,
+      "headerbar { background: transparent; border: 0; box-shadow: none; "
+      "min-height: 0; padding: 0; }", -1, nullptr);
+  gtk_style_context_add_provider(gtk_widget_get_style_context(header),
+                                 GTK_STYLE_PROVIDER(style),
+                                 GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  gtk_overlay_add_overlay(overlay, header);
+  gtk_widget_show(header);
+  return header;
+}
+
 }  // namespace
 
 // 收到 Flutter 首帧时调用。
@@ -139,28 +283,14 @@ static void my_application_activate(GApplication* application) {
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
-  // GNOME 使用常见的标题栏；X 上非 GNOME 环境使用传统标题栏以适配平铺等窗口管理器。Wayland 默认支持标题栏，未来出现不兼容情况时再调整。
-  gboolean use_header_bar = TRUE;
-#ifdef GDK_WINDOWING_X11
-  GdkScreen* screen = gtk_window_get_screen(window);
-  if (GDK_IS_X11_SCREEN(screen)) {
-    const gchar* wm_name = gdk_x11_screen_get_window_manager_name(screen);
-    if (g_strcmp0(wm_name, "GNOME Shell") != 0) {
-      use_header_bar = FALSE;
-    }
-  }
-#endif
-  if (use_header_bar) {
-    GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
-    gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "邻接");
-    gtk_header_bar_set_show_close_button(header_bar, TRUE);
-    gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
-  } else {
-    gtk_window_set_title(window, "邻接");
-  }
-
   gtk_window_set_default_size(window, 1280, 720);
+  g_autofree gchar* executable = g_file_read_link("/proc/self/exe", nullptr);
+  if (executable != nullptr) {
+    g_autofree gchar* directory = g_path_get_dirname(executable);
+    g_autofree gchar* icons = g_build_filename(directory, "share", "icons", nullptr);
+    gtk_icon_theme_append_search_path(gtk_icon_theme_get_default(), icons);
+  }
+  gtk_window_set_default_icon_name(APPLICATION_ID);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
@@ -172,8 +302,24 @@ static void my_application_activate(GApplication* application) {
   // 背景默认为黑色；需要透明背景时可改为 #00000000。
   gdk_rgba_parse(&background_color, "#000000");
   fl_view_set_background_color(view, &background_color);
+  // Let GTK keep client decorations and resize borders while Flutter paints
+  // beneath the themed controls in the two top corners.
+  gtk_window_set_titlebar(window, gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0));
+  auto* overlay = GTK_OVERLAY(gtk_overlay_new());
+  gtk_container_add(GTK_CONTAINER(overlay), GTK_WIDGET(view));
+  auto* start = add_window_buttons(overlay, GTK_ALIGN_START);
+  auto* end = add_window_buttons(overlay, GTK_ALIGN_END);
+  g_object_set_data(G_OBJECT(overlay), "start", start);
+  g_object_set_data(G_OBJECT(overlay), "end", end);
+  auto* settings = gtk_widget_get_settings(GTK_WIDGET(window));
+  g_signal_connect_object(settings, "notify::gtk-decoration-layout",
+                           G_CALLBACK(update_button_layout), overlay,
+                           static_cast<GConnectFlags>(0));
+  update_button_layout(settings, nullptr, GTK_WIDGET(overlay));
+  gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(overlay));
   gtk_widget_show(GTK_WIDGET(view));
-  gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
+  gtk_widget_show(GTK_WIDGET(overlay));
+  register_desktop_window(view, start, end);
 
   // Flutter 开始绘制后显示窗口；视图必须先实现，才能开始渲染。
   g_signal_connect_swapped(view, "first-frame", G_CALLBACK(first_frame_cb),
@@ -182,7 +328,11 @@ static void my_application_activate(GApplication* application) {
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
   desktop_multi_window_plugin_set_window_created_callback(
-      [](FlPluginRegistry* registry) { fl_register_plugins(registry); });
+      [](FlPluginRegistry* registry) {
+        // The plugin has already realized the child view with its own titlebar.
+        register_desktop_window(FL_VIEW(registry));
+        fl_register_plugins(registry);
+      });
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
@@ -227,6 +377,7 @@ static void my_application_init(MyApplication* self) {}
 MyApplication* my_application_new() {
   // 使用应用 ID 作为进程名，帮助 GTK 与桌面环境关联对应的 .desktop 文件，使系统能以应用身份识别运行进程。
   g_set_prgname(APPLICATION_ID);
+  g_set_application_name(APP_DISPLAY_NAME);
 
   return MY_APPLICATION(g_object_new(my_application_get_type(),
                                      "application-id", APPLICATION_ID, "flags",

@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
@@ -104,7 +105,10 @@ class NativeAudioRuntime private constructor(private val app: Context) {
     private fun releaseLease() {
         lease?.close(); lease = null
         owners.epoch?.let { owners.clearEpoch(it) }
-        if (noisyRegistered) { runCatching { app.unregisterReceiver(noisy) }; noisyRegistered = false }
+        if (noisyRegistered) {
+            app.unregisterReceiver(noisy)
+            noisyRegistered = false
+        }
         releaseUnusedOwner()
     }
     private fun releaseUnusedOwner() { owners.releaseIfUnused() }
@@ -120,7 +124,7 @@ class NativeAudioRuntime private constructor(private val app: Context) {
         owners.background = enabled
         try { ConnectionService.keepAudio(app, enabled) } catch (error: Exception) {
             owners.background = false
-            runCatching { ConnectionService.keepAudio(app, false) }
+            stopBackgroundAudio()
             releaseUnusedOwner()
             result.error("audio_background_unavailable", error.message, null)
             return
@@ -140,7 +144,7 @@ class NativeAudioRuntime private constructor(private val app: Context) {
             } else if (SystemClock.uptimeMillis() >= deadline) {
                 pendingBackground = null
                 owners.background = false
-                runCatching { ConnectionService.keepAudio(app, false) }
+                stopBackgroundAudio()
                 releaseUnusedOwner()
                 result.error("audio_background_unavailable", "系统尚未确认媒体前台服务。", null)
             } else main.postDelayed({ confirm() }, 25)
@@ -151,6 +155,13 @@ class NativeAudioRuntime private constructor(private val app: Context) {
         emit("audio.platform.background", mapOf("ready" to ConnectionService.mediaPlaybackReady,
             "enabled" to owners.background, "ownerId" to owners.owner))
     }
+    private fun stopBackgroundAudio() {
+        try {
+            ConnectionService.keepAudio(app, false)
+        } catch (error: Exception) {
+            Log.w("Interconnect", "audio.stop_background: ${error.javaClass.simpleName}")
+        }
+    }
     /** 仅用于明确停止或 Dart 引擎重启，Activity 分离时不得调用。 */
     fun stopAll() {
         backgroundGeneration++
@@ -158,6 +169,6 @@ class NativeAudioRuntime private constructor(private val app: Context) {
         pendingBackground = null
         owners.background = false
         releaseLease()
-        runCatching { ConnectionService.keepAudio(app, false) }
+        stopBackgroundAudio()
     }
 }

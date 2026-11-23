@@ -2,6 +2,7 @@ import 'package:scrcpy_connect/core/files/file_publication_leases.dart';
 import 'package:scrcpy_connect/core/files/models/file_transfer_plan.dart';
 import 'package:scrcpy_connect/core/files/models/shared_source_file.dart';
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -37,14 +38,24 @@ void main() {
     );
     await store.reserve(shareId, text: '内容');
     expect(events, isEmpty);
-    await store.complete(shareId, []);
+    final observerFailures = <Object>[];
+    final observe = ZoneSpecification(
+      handleUncaughtError: (self, parent, zone, error, stack) {
+        observerFailures.add(error);
+      },
+    );
+    await runZoned(
+      () => store.complete(shareId, []),
+      zoneSpecification: observe,
+    );
     expect(committed, ['ready']);
     final received = events.single as ShareReceived;
     expect(received.share.status, IncomingShareStatus.ready);
     expect(received.share.text, '内容');
     expect((await store.pending()).single, received.share);
 
-    await store.consume(shareId);
+    await runZoned(() => store.consume(shareId), zoneSpecification: observe);
+    expect(observerFailures, [isA<StateError>(), isA<StateError>()]);
     expect(
       events.last,
       isA<ShareConsumed>().having((e) => e.shareId, '来源', shareId),

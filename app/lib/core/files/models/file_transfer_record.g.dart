@@ -46,6 +46,7 @@ _FileTransferRecord _$FileTransferRecordFromJson(Map<String, dynamic> json) =>
           ) ??
           FileTransferDestination.localPath,
       createdAt: (json['createdAt'] as num?)?.toInt() ?? 0,
+      endedAt: (json['endedAt'] as num?)?.toInt(),
       generation: (json['generation'] as num?)?.toInt() ?? 0,
       itemIndex: (json['itemIndex'] as num?)?.toInt() ?? 0,
       itemCount: (json['itemCount'] as num?)?.toInt() ?? 1,
@@ -60,6 +61,7 @@ _FileTransferRecord _$FileTransferRecordFromJson(Map<String, dynamic> json) =>
       partialDestinationPossible:
           json['partialDestinationPossible'] as bool? ?? false,
       cleanupPending: json['cleanupPending'] as bool? ?? false,
+      historyHidden: json['historyHidden'] as bool? ?? false,
       cleanupScopeId: json['cleanupScopeId'] as String?,
       cleanupScopeKey: json['cleanupScopeKey'] as String?,
     );
@@ -82,6 +84,7 @@ Map<String, dynamic> _$FileTransferRecordToJson(_FileTransferRecord instance) =>
       'destinationScope':
           _$FileTransferDestinationEnumMap[instance.destinationScope]!,
       'createdAt': instance.createdAt,
+      'endedAt': ?instance.endedAt,
       'generation': instance.generation,
       'itemIndex': instance.itemIndex,
       'itemCount': instance.itemCount,
@@ -95,6 +98,7 @@ Map<String, dynamic> _$FileTransferRecordToJson(_FileTransferRecord instance) =>
       'treeComplete': instance.treeComplete,
       'partialDestinationPossible': instance.partialDestinationPossible,
       'cleanupPending': instance.cleanupPending,
+      'historyHidden': instance.historyHidden,
       'cleanupScopeId': ?instance.cleanupScopeId,
       'cleanupScopeKey': ?instance.cleanupScopeKey,
     };

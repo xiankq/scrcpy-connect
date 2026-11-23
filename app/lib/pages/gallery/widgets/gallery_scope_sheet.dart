@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/gallery/gallery_scanner.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
@@ -43,9 +44,7 @@ class GalleryScopeSheet extends StatelessWidget {
                           StateNote(
                             '范围：${snapshot.scope.roots.join('、')}\n不包含：${snapshot.scope.excluded.join('、')}',
                           ),
-                          const StateNote(
-                            '结果是本次检查的快照，手机内容可能随后变化。下拉重新检查会生成新结果；打开和保存时再次核验原件。',
-                          ),
+                          const StateNote('这里显示上次读取的照片和视频。想查看手机上的最新内容，可以下拉刷新。'),
                           if (issues.isNotEmpty)
                             Text(
                               '未完整检查 · ${issues.length} 处',
@@ -61,7 +60,10 @@ class GalleryScopeSheet extends StatelessWidget {
                         final code = issue.code;
                         final reason = code.endsWith('_limit')
                             ? '本次检查达到可处理范围，部分内容尚未列出；可在手机原应用继续查看。'
-                            : issue.reason;
+                            : failureCodeMessage(
+                                issue.code,
+                                fallback: '无法读取这个位置。请检查手机上的文件访问权限。',
+                              );
                         return StateNote(
                           '${issue.path}\n$reason',
                           icon: LucideIcons.folderLock,

@@ -65,7 +65,7 @@ final class ShareSubmissionNotifierProvider
 }
 
 String _$shareSubmissionNotifierHash() =>
-    r'326eb34b399a9e2434f4c4caca833b4fb955c19d';
+    r'3920f372f8a745dd03b85349ce4e97190b852de7';
 
 /// 一次页面确认的执行所有者；离页只撤销后续步骤，不停止已经登记的传输。
 

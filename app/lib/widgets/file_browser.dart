@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/files/models/file_kind.dart';
 
 import 'models/file_browser.dart';
@@ -162,4 +163,4 @@ bool fileCanOpen(FileCatalogEntry file) =>
 bool fileCanManage(FileCatalogEntry file) =>
     file.path?.isNotEmpty == true && file.canManage;
 String fileUnavailableReason(FileCatalogEntry file) =>
-    file.reason ?? '文件名无法解析为有效路径，暂时无法操作。';
+    failureCodeMessage(file.errorCode, fallback: '无法打开这个文件。请在手机上确认文件是否仍可访问。');

@@ -8,6 +8,7 @@
     "lint": "node lint.mjs"
   },
   "dependencies": {
-    "@google/design.md": "0.4.0"
+    "@google/design.md": "0.4.0",
+    "lucide-static": "0.468.0"
   }
 }

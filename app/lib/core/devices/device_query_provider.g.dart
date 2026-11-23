@@ -103,6 +103,179 @@ final class DeviceDetailsFamily extends $Family
   String toString() => r'deviceDetailsProvider';
 }
 
+@ProviderFor(deviceBattery)
+final deviceBatteryProvider = DeviceBatteryFamily._();
+
+final class DeviceBatteryProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<DeviceReading<DeviceBattery>>,
+          DeviceReading<DeviceBattery>,
+          FutureOr<DeviceReading<DeviceBattery>>
+        >
+    with
+        $FutureModifier<DeviceReading<DeviceBattery>>,
+        $FutureProvider<DeviceReading<DeviceBattery>> {
+  DeviceBatteryProvider._({
+    required DeviceBatteryFamily super.from,
+    required (String, {String connectionId}) super.argument,
+  }) : super(
+         retry: _noRetry,
+         name: r'deviceBatteryProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$deviceBatteryHash();
+
+  @override
+  String toString() {
+    return r'deviceBatteryProvider'
+        ''
+        '$argument';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<DeviceReading<DeviceBattery>> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<DeviceReading<DeviceBattery>> create(Ref ref) {
+    final argument = this.argument as (String, {String connectionId});
+    return deviceBattery(ref, argument.$1, connectionId: argument.connectionId);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is DeviceBatteryProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$deviceBatteryHash() => r'6629c1d5b56e8e30057c6196ebdc47ea47ab43b4';
+
+final class DeviceBatteryFamily extends $Family
+    with
+        $FunctionalFamilyOverride<
+          FutureOr<DeviceReading<DeviceBattery>>,
+          (String, {String connectionId})
+        > {
+  DeviceBatteryFamily._()
+    : super(
+        retry: _noRetry,
+        name: r'deviceBatteryProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  DeviceBatteryProvider call(String deviceId, {required String connectionId}) =>
+      DeviceBatteryProvider._(
+        argument: (deviceId, connectionId: connectionId),
+        from: this,
+      );
+
+  @override
+  String toString() => r'deviceBatteryProvider';
+}
+
+@ProviderFor(sharedStorageCapacity)
+final sharedStorageCapacityProvider = SharedStorageCapacityFamily._();
+
+final class SharedStorageCapacityProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<DeviceReading<DeviceCapacity>>,
+          DeviceReading<DeviceCapacity>,
+          FutureOr<DeviceReading<DeviceCapacity>>
+        >
+    with
+        $FutureModifier<DeviceReading<DeviceCapacity>>,
+        $FutureProvider<DeviceReading<DeviceCapacity>> {
+  SharedStorageCapacityProvider._({
+    required SharedStorageCapacityFamily super.from,
+    required (String, {String? connectionId}) super.argument,
+  }) : super(
+         retry: _noRetry,
+         name: r'sharedStorageCapacityProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$sharedStorageCapacityHash();
+
+  @override
+  String toString() {
+    return r'sharedStorageCapacityProvider'
+        ''
+        '$argument';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<DeviceReading<DeviceCapacity>> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<DeviceReading<DeviceCapacity>> create(Ref ref) {
+    final argument = this.argument as (String, {String? connectionId});
+    return sharedStorageCapacity(
+      ref,
+      argument.$1,
+      connectionId: argument.connectionId,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is SharedStorageCapacityProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$sharedStorageCapacityHash() =>
+    r'310e19a4a3b0b765f527c9a48b89160a7b684aa1';
+
+final class SharedStorageCapacityFamily extends $Family
+    with
+        $FunctionalFamilyOverride<
+          FutureOr<DeviceReading<DeviceCapacity>>,
+          (String, {String? connectionId})
+        > {
+  SharedStorageCapacityFamily._()
+    : super(
+        retry: _noRetry,
+        name: r'sharedStorageCapacityProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  SharedStorageCapacityProvider call(String deviceId, {String? connectionId}) =>
+      SharedStorageCapacityProvider._(
+        argument: (deviceId, connectionId: connectionId),
+        from: this,
+      );
+
+  @override
+  String toString() => r'sharedStorageCapacityProvider';
+}
+
 @ProviderFor(deviceCapabilities)
 final deviceCapabilitiesProvider = DeviceCapabilitiesFamily._();
 

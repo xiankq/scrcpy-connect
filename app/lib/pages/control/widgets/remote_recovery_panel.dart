@@ -1,9 +1,6 @@
-import 'dart:math' as math;
-
 import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
-import 'package:scrcpy_connect/pages/control/widgets/exit_handle.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/overlays.dart';
 
@@ -29,144 +26,133 @@ class RemoteRecoveryPanel extends StatelessWidget {
   final bool waitingForFirstFrame;
   final VoidCallback? onReturn;
 
-  String get _title => presentation.sessionEnded
+  String get _title => waitingForFirstFrame
+      ? '无法打开'
+      : presentation.sessionEnded
       ? '控制会话已结束'
       : presentation.qualityRetryable
       ? '画面调整未完成'
-      : presentation.appLaunchUnknown || presentation.stateUnverified
-      ? waitingForFirstFrame
-            ? '屏幕启动结果待确认'
-            : presentation.appLaunchUnknown
-            ? '应用打开结果待核对'
-            : '正在核验会话状态'
-      : waitingForFirstFrame
-      ? independent
-            ? '无法打开独立窗口'
-            : '无法打开手机屏幕'
       : presentation.paused
-      ? '画面已暂停'
-      : '暂时无法打开实时画面';
-
-  Widget _action(
-    BuildContext context,
-    String label,
-    VoidCallback callback, {
-    bool primary = false,
-  }) {
-    final onPressed = presentation.connecting ? null : callback;
-    if (waitingForFirstFrame) {
-      return TextButton(onPressed: onPressed, child: Text(label));
-    }
-    return primary
-        ? FilledButton(onPressed: onPressed, child: Text(label))
-        : OutlinedButton(onPressed: onPressed, child: Text(label));
-  }
-
-  Widget _content(BuildContext context) => ConstrainedBox(
-    constraints: const BoxConstraints(maxWidth: 360),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (!waitingForFirstFrame) ...[
-          Icon(
-            presentation.paused ? LucideIcons.pause : LucideIcons.monitorOff,
-            size: DesignTokens.componentIconLargeSize,
-          ),
-          const SizedBox(height: DesignTokens.spacingMd),
-        ],
-        Text(
-          _title,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: DesignTokens.spacingXs),
-        Text(
-          presentation.error ?? '等待连接恢复后的首帧。',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyLarge
-              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: DesignTokens.spacingMd),
-        if (presentation.errorCode == 'resource_busy')
-          _action(context, '管理当前活动', onManageActivities, primary: true),
-        if (independent &&
-            presentation.error != null &&
-            !presentation.qualityRetryable &&
-            !presentation.appLaunchUnknown &&
-            !presentation.stateUnverified)
-          _action(context, '在手机屏幕继续', onContinueOnPhoneScreen, primary: true),
-        if (presentation.appLaunchUnknown)
-          _action(context, '关闭本次打开记录', onCloseUnknownAppLaunch, primary: true),
-        if (onRetry != null)
-          _action(
-            context,
-            presentation.qualityRetryable
-                ? '画面与控制'
-                : waitingForFirstFrame &&
-                      (presentation.appLaunchUnknown ||
-                          presentation.stateUnverified)
-                ? '重新核对'
-                : presentation.appLaunchUnknown
-                ? '只读检查'
-                : presentation.appLaunchClosed
-                ? '重新打开'
-                : waitingForFirstFrame
-                ? '重试'
-                : '重新检查',
-            onRetry!,
-          ),
-        if (waitingForFirstFrame && onReturn != null)
-          TextButton(onPressed: onReturn, child: const Text('返回')),
-      ],
-    ),
-  );
+      ? '已暂停'
+      : '无法打开画面';
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final media = MediaQuery.of(context);
-      final exit = waitingForFirstFrame
-          ? Rect.fromLTWH(
-              media.padding.left + 20,
-              media.padding.top + 12,
-              44,
-              44,
-            )
-          : ExitHandle.initialBoundsFor(constraints.biggest, media);
-      final exitOnRight = exit.center.dx > constraints.maxWidth / 2;
-      final belowExit = exit.bottom + DesignTokens.spacingSm;
-      final bottom = math.max(DesignTokens.spacingXl, media.padding.bottom);
-      final roomBelow = constraints.maxHeight - belowExit - bottom;
-      final below = roomBelow >= DesignTokens.componentRowHeight * 2;
-      return Padding(
-        padding: EdgeInsets.fromLTRB(
-          below
-              ? math.max(DesignTokens.spacingXl, media.padding.left)
-              : exitOnRight
-              ? math.max(DesignTokens.spacingXl, media.padding.left)
-              : exit.right + DesignTokens.spacingSm,
-          below
-              ? belowExit
-              : math.max(DesignTokens.spacingXl, media.padding.top),
-          below || !exitOnRight
-              ? math.max(DesignTokens.spacingXl, media.padding.right)
-              : exit.width + DesignTokens.spacingSm,
-          bottom,
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    Widget action(String label, VoidCallback callback) => TextButton(
+      onPressed: presentation.connecting ? null : callback,
+      child: Text(label),
+    );
+    final actions = [
+      if (presentation.errorCode == 'resource_busy')
+        action('管理当前活动', onManageActivities),
+      if (independent &&
+          presentation.error != null &&
+          !presentation.qualityRetryable &&
+          !presentation.appLaunchUnknown &&
+          !presentation.stateUnverified)
+        action('在手机屏幕继续', onContinueOnPhoneScreen),
+      if (presentation.appLaunchUnknown)
+        action('关闭本次打开记录', onCloseUnknownAppLaunch),
+      if (onRetry != null)
+        action(
+          presentation.qualityRetryable
+              ? '画面与控制'
+              : waitingForFirstFrame &&
+                    (presentation.appLaunchUnknown ||
+                        presentation.stateUnverified)
+              ? '重新核对'
+              : presentation.appLaunchUnknown
+              ? '只读检查'
+              : presentation.appLaunchClosed
+              ? '重新打开'
+              : waitingForFirstFrame
+              ? '重试'
+              : '检查连接',
+          onRetry!,
         ),
+      if (waitingForFirstFrame && onReturn != null)
+        TextButton(onPressed: onReturn, child: const Text('返回')),
+    ];
+    final message = presentation.error ?? '连接恢复后，手机画面会继续显示。';
+
+    if (waitingForFirstFrame) {
+      return SafeArea(
         child: Center(
           child: SingleChildScrollView(
             key: const ValueKey('remote-recovery-content'),
-            child: waitingForFirstFrame
-                ? _content(context)
-                : ContentSurface(
-                    radius: DesignTokens.roundedLg,
-                    padding: const EdgeInsets.all(DesignTokens.spacingLg),
-                    child: _content(context),
-                  ),
+            padding: const EdgeInsets.fromLTRB(24, 56, 24, 16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 320),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(_title, style: theme.textTheme.titleLarge),
+                  const SizedBox(height: DesignTokens.spacingXs),
+                  Text(message, textAlign: TextAlign.center),
+                  const SizedBox(height: DesignTokens.spacingSm),
+                  Wrap(alignment: WrapAlignment.center, children: actions),
+                ],
+              ),
+            ),
           ),
         ),
       );
-    },
-  );
+    }
+
+    return Align(
+      alignment: Alignment.topCenter,
+      child: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 340),
+          child: ContentSurface(
+            key: const ValueKey('remote-recovery-content'),
+            radius: DesignTokens.roundedLg,
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Semantics(
+                  liveRegion: true,
+                  child: Row(
+                    children: [
+                      Icon(
+                        presentation.paused
+                            ? LucideIcons.pause
+                            : LucideIcons.monitorOff,
+                        size: DesignTokens.componentIconSmallSize,
+                      ),
+                      const SizedBox(width: DesignTokens.spacingXs),
+                      Expanded(
+                        child: Text(_title, style: theme.textTheme.titleMedium),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: DesignTokens.spacingXxs),
+                Text(
+                  message,
+                  style: theme.textTheme.bodySmall,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (actions.isNotEmpty)
+                  Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: Wrap(
+                      alignment: WrapAlignment.end,
+                      children: actions,
+                    ),
+                  )
+                else
+                  const SizedBox(height: DesignTokens.spacingXs),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

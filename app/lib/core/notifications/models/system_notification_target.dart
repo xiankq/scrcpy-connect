@@ -50,7 +50,7 @@ class SystemNotificationTarget {
         revision: data['revision'] as String,
         observationGeneration: generation,
       );
-    } catch (_) {
+    } on FormatException {
       return null;
     }
   }

@@ -1,6 +1,6 @@
 # adb
 
-统一使用自有官方桌面 server 或移动 Rust ADB；设备记录、重连与持久文件任务由应用负责。
+桌面使用已安装的 ADB 并由应用管理自己的 ADB server，移动端使用 Rust ADB。设备记录、重连与持久文件任务由应用负责。
 
 ```dart
 final bindings = await createNativeAdbApi();
@@ -12,7 +12,7 @@ final devices = await host.client.devices();
 // 先关闭设备活动，再 await host.close()。
 ```
 
-桌面只使用随包固定的 `adb/`（macOS 为 `Contents/Resources/adb`），不回退 PATH 或直连。`binaryDirectory` 可用于测试。`initializeNativeAdb()` 只初始化绑定；移动连接首次使用时创建持久身份，损坏的已有身份不会被覆盖。
+桌面先检查 SDK 环境变量和各系统常用安装位置，再检查 `PATH` 中的绝对目录。`binaryDirectory` 可指定测试使用的工具目录。`initializeNativeAdb()` 只初始化绑定；移动连接首次使用时创建持久身份，损坏的已有身份不会被覆盖。
 
 与 scrcpy 组合时注入其配套 ADB bindings。**不同动态库的设备、scope 与操作句柄不能混用**，初始化后不能更换库。`AdbDevice.id` 是操作权限，`connectionFacts.connectionId` 是进程内连接身份；PID、序列号、端点和磁盘配置都不授予关闭权。
 
@@ -24,7 +24,7 @@ final devices = await host.client.devices();
 - 事件缺少真实终态时为 `result_unknown`；旧 shell 的合并输出与未知退出码仍保留。写出、设备执行和重连是不同结果。
 - 取消只发通知；`close()` 才等待本次资源释放。关闭失败保留同一对象重试，不关闭共享客户端代偿。`sync.openPush()` 可先保存 session，再并行读事件、写输入，处理迟到创建结果。
 - Push 可能留下远端部分文件；pull 拒绝覆盖并仅删除自己的片段。字节路径按原样传输，不作 shell 展开。`reverseRemoveAll` 影响设备上所有 reverse listener。
-- `createOpenProbe` 返回单独拥有的探针，最后须关闭；`AdbOpenProbeCleanupFailure.probe` 交回重试权。写出前排队超时不证明对端沉默。
+- `createOpenProbe` 返回需要单独关闭的探针。`AdbOpenProbeCleanupFailure.probe` 保留重试权。写出前超时记为排队超时。
 
 连接错误按 `AdbException.code` 判断。TCP 失败与 `handshake_timeout` 分别报告；`pairing_result_unknown` 不自动重试，取消不撤销对端已建立的信任。`adb_cleanup_unconfirmed` 表示原资源仍须收尾。
 

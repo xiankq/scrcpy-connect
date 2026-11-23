@@ -9,15 +9,52 @@ import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_state.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
 import 'package:scrcpy_connect/core/platform/platform_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/platform/background_control.dart';
+import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
+import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
+import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/settings/settings_management.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences_state.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/pages/control/control_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/route_resource_resolver_provider.dart';
+import 'package:scrcpy_connect/router/route_resource_view.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('页面资源等待时在非对称安全区内居中', (tester) async {
+    const insets = EdgeInsets.fromLTRB(64, 24, 12, 48);
+    final resource = Completer<String>();
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            padding: insets,
+            viewPadding: insets,
+            disableAnimations: true,
+          ),
+          child: child!,
+        ),
+        home: RouteResourceView(
+          identity: 'pending',
+          load: () => resource.future,
+          builder: (_, value) => Text(value),
+        ),
+      ),
+    );
+    final loader = find.byType(CircularProgressIndicator);
+    final viewport = tester.getRect(find.byType(Scaffold));
+    expect(tester.getCenter(loader), insets.deflateRect(viewport).center);
+
+    resource.complete('目标页面');
+    await tester.pumpAndSettle();
+    expect(loader, findsNothing);
+    expect(find.text('目标页面'), findsOneWidget);
+  });
 
   testWidgets('系统恢复保留页面位置与返回链，切换主页保留运行中的状态', (tester) async {
     final router = createAppRouter();
@@ -28,6 +65,10 @@ void main() {
           deviceListProvider.overrideWith(_Devices.new),
           recoveryStateProvider.overrideWith(_Recovery.new),
           preferencesProvider.overrideWith(_Preferences.new),
+          runtimeEventsProvider.overrideWithValue(const Stream.empty()),
+          appSnapshotProvider.overrideWithValue(AppState(loading: false)),
+          settingsManagementProvider.overrideWithValue(_Settings()),
+          backgroundControlProvider.overrideWithValue(_Background()),
           appInfoReaderProvider.overrideWithValue(
             () async => throw StateError('unused'),
           ),
@@ -44,8 +85,8 @@ void main() {
     await tester.restoreFrom(data);
     await _settle(tester);
     expect(tester.takeException(), isNull);
-    expect(find.text('添加你的第一台设备'), findsOneWidget);
-    tester.widget<TextField>(find.byType(TextField)).controller!.text = 'AVD';
+    expect(find.text('AVD'), findsOneWidget);
+    tester.widget<TextField>(find.byType(TextField)).controller!.text = '测试';
     await tester.pump();
     router.go(const SettingsRoute().location);
     await _settle(tester);
@@ -53,18 +94,21 @@ void main() {
     await _settle(tester);
     expect(
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
-      'AVD',
+      '测试',
     );
     router.go(const SettingsRoute().location);
     await _settle(tester);
     await tester.restartAndRestore();
     await _settle(tester);
     expect(find.text('外观'), findsOneWidget);
+    expect(find.text('使用偏好'), findsOneWidget);
+    expect(find.text('本机数据'), findsOneWidget);
+    expect(find.text('后台运行'), findsOneWidget);
     unawaited(router.push<void>(const RouteErrorRoute().location));
     await _settle(tester);
     await tester.restartAndRestore();
     await _settle(tester);
-    expect(find.text('页面缺少必要的记录信息，请返回设备列表重新选择。'), findsOneWidget);
+    expect(find.text('找不到这项内容。请返回设备列表重新选择。'), findsOneWidget);
     expect(router.canPop(), isTrue);
     router.pop();
     await _settle(tester);
@@ -91,6 +135,14 @@ void main() {
     expect(searchMatch.uri.queryParameters['query'], '报告 & 图片');
     for (final location in [
       const FilesRoute(deviceId: 'device').location,
+      const FileSendRoute(
+        deviceId: 'device',
+        path: '/sdcard/Download',
+      ).location,
+      const ShareDirectoryRoute(
+        deviceId: 'device',
+        path: '/sdcard/Download',
+      ).location,
       const GalleryRoute(deviceId: 'device').location,
       const TransferDetailsRoute(taskId: 'transfer').location,
     ]) {
@@ -138,7 +190,7 @@ void main() {
       const RemoteRoute(deviceId: 'device').location,
     );
     await _settle(tester);
-    const message = '请从设备工作台明确打开画面。恢复这个位置不会自动创建新的控制会话。';
+    const message = '无法恢复手机画面。请回到设备工作台，点「打开手机屏幕」。';
     expect(find.text(message), findsOneWidget);
     expect(find.byType(ControlPage), findsNothing);
     expect(resources.reads, 1);
@@ -164,7 +216,7 @@ void main() {
       router.routeInformationProvider.value.uri.toString(),
       initial.location,
     );
-    expect(find.text('无法识别这个控制会话。请从设备工作台重新选择；不会自动创建新画面。'), findsOneWidget);
+    expect(find.text('这次打开的画面已不可用。请回到设备工作台重新打开。'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }
@@ -194,10 +246,27 @@ class _Recovery extends RecoveryStateNotifier {
 
 class _Devices extends DeviceListNotifier {
   @override
-  DeviceListState build() => DeviceListState(loading: false);
+  DeviceListState build() => DeviceListState(
+    loading: false,
+    devices: const [DeviceSnapshot(id: 'avd', name: 'AVD')],
+  );
 }
 
 class _Preferences extends PreferencesNotifier {
   @override
   PreferencesState build() => PreferencesState();
+}
+
+class _Settings implements SettingsManagement {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _Background implements BackgroundControl {
+  @override
+  Future<BackgroundStatus> readBackgroundStatus() async =>
+      const BackgroundStatus();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

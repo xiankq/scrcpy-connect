@@ -217,7 +217,7 @@ class AppPresentationHost extends HookConsumerWidget {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               behavior: SnackBarBehavior.floating,
-              backgroundColor: Colors.transparent,
+              backgroundColor: DesignTokens.colorTransparent,
               elevation: 0,
               padding: EdgeInsets.zero,
               duration: const Duration(seconds: 8),

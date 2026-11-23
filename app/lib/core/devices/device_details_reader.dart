@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:adb/adb.dart';
 import 'package:scrcpy_connect/core/devices/device_connection.dart';
 import 'package:scrcpy_connect/core/devices/device_inspection.dart';
+import 'package:scrcpy_connect/core/devices/device_probe.dart';
 import 'package:scrcpy_connect/core/devices/device_query.dart';
 import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
 import 'package:scrcpy_connect/core/devices/models/device_battery.dart';
@@ -40,6 +41,33 @@ final class DeviceDetailsReader implements DeviceInspection {
         apiLevel: record.apiLevel,
       ),
     ),
+  );
+
+  @override
+  Future<DeviceReading<DeviceBattery>> readBattery(
+    String deviceId, {
+    String? connectionId,
+    AdbCancellation? cancellation,
+  }) => _query(
+    deviceId,
+    connectionId,
+    cancellation,
+    (scope, _, stop) =>
+        const DeviceProbe().readBattery(scope.connection, cancellation: stop),
+  );
+
+  @override
+  Future<DeviceReading<DeviceCapacity>> readSharedStorageCapacity(
+    String deviceId, {
+    String? connectionId,
+    AdbCancellation? cancellation,
+  }) => _query(
+    deviceId,
+    connectionId,
+    cancellation,
+    (scope, _, stop) async =>
+        _storage(await _read(scope, 'df -k /sdcard', stop)) ??
+        (totalBytes: null, availableBytes: null),
   );
 
   @override

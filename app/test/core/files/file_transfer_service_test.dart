@@ -57,6 +57,11 @@ void main() {
     expect(durable.values.single.shareId, 'share');
     expect(durable.values.single.status, FileTransferStatus.completed);
     expect(durable.values.single.transferred, 3);
+    expect(durable.values.single.endedAt, isPositive);
+    expect(
+      (await transfers.readTransfer(durable.values.single.id)).endedAt,
+      durable.values.single.endedAt,
+    );
   });
 
   for (final close in [false, true]) {
@@ -152,6 +157,10 @@ void main() {
         isA<FileFailure>().having((e) => e.code, 'code', 'restart_unavailable'),
       ),
     );
+    await transfers.clearTransferHistory([
+      const FileTransferTarget.task('old'),
+    ]);
+    expect((await transfers.readTransfer('old')).historyHidden, isFalse);
     expect(executor.copyCalls, 0);
     final records = await FileTransferJournal(directory).load();
     expect(records['old']!.sourceStamp, _Executor.stamp);
@@ -241,48 +250,56 @@ void main() {
     expect(resource.closes, 2);
   });
 
-  test('提交回执未知不能变成完成或重试，持久记录保留实际进度', () async {
-    final directory = await Directory.systemTemp.createTemp(
-      'transfer-unknown-',
+  for (final knownFailure in [false, true]) {
+    test(
+      knownFailure ? '明确无法发布时允许重试，目标没有部分结果' : '提交回执未知不能变成完成或重试，持久记录保留实际进度',
+      () async {
+        final failureCode = knownFailure
+            ? 'atomic_save_unavailable'
+            : 'result_unknown';
+        final directory = await Directory.systemTemp.createTemp(
+          'transfer-unknown-',
+        );
+        final executor = _Executor(
+          commitFailure: FileFailure(failureCode, '验收提交故障'),
+        );
+        final transfers = await FileTransferService.open(
+          executor: executor,
+          dataDirectory: directory,
+        );
+        addTearDown(() async {
+          if (!executor.copied.isCompleted) executor.copied.complete(3);
+          await transfers.close();
+          await directory.delete(recursive: true);
+        });
+        final submitted = await transfers.startTransfer(_plan());
+        await executor.copyStarted.future;
+        final settled = transfers.events
+            .asyncMap((_) => transfers.readTransfer(submitted.transferId!))
+            .firstWhere((snapshot) => snapshot.errorCode == failureCode);
+        final directoryChanged = transfers.events
+            .where((event) => event is FileTransferDirectoryChanged)
+            .cast<FileTransferDirectoryChanged>()
+            .first;
+        executor.copied.complete(3);
+        final unknown = await settled;
+        expect(unknown.status, FileTransferStatus.failed);
+        expect(unknown.transferred, 3);
+        expect(unknown.partialDestinationPossible, !knownFailure);
+        expect(unknown.canRestart, knownFailure);
+        expect(unknown.canExport, isFalse);
+        expect((await directoryChanged).path, '/sdcard');
+        await transfers.close();
+        final durable = (await FileTransferJournal(directory)
+            .load())[submitted.transferId]!;
+        expect(durable.status, FileTransferStatus.failed);
+        expect(durable.saveMode, 'committing');
+        expect(durable.transferred, 3);
+        expect(durable.errorCode, failureCode);
+        expect(executor.copyCalls, 1);
+      },
     );
-    final executor = _Executor(
-      commitFailure: const FileFailure('result_unknown', '提交回执丢失'),
-    );
-    final transfers = await FileTransferService.open(
-      executor: executor,
-      dataDirectory: directory,
-    );
-    addTearDown(() async {
-      if (!executor.copied.isCompleted) executor.copied.complete(3);
-      await transfers.close();
-      await directory.delete(recursive: true);
-    });
-    final submitted = await transfers.startTransfer(_plan());
-    await executor.copyStarted.future;
-    final settled = transfers.events
-        .asyncMap((_) => transfers.readTransfer(submitted.transferId!))
-        .firstWhere((snapshot) => snapshot.errorCode == 'result_unknown');
-    final directoryChanged = transfers.events
-        .where((event) => event is FileTransferDirectoryChanged)
-        .cast<FileTransferDirectoryChanged>()
-        .first;
-    executor.copied.complete(3);
-    final unknown = await settled;
-    expect(unknown.status, FileTransferStatus.failed);
-    expect(unknown.transferred, 3);
-    expect(unknown.partialDestinationPossible, isTrue);
-    expect(unknown.canRestart, isFalse);
-    expect(unknown.canExport, isFalse);
-    expect((await directoryChanged).path, '/sdcard');
-    await transfers.close();
-    final durable = (await FileTransferJournal(directory)
-        .load())[submitted.transferId]!;
-    expect(durable.status, FileTransferStatus.failed);
-    expect(durable.saveMode, 'committing');
-    expect(durable.transferred, 3);
-    expect(durable.errorCode, 'result_unknown');
-    expect(executor.copyCalls, 1);
-  });
+  }
 
   test('同目录并发批次等最后一个执行者退出才通知，取消也结算目录变化', () async {
     final directory = await Directory.systemTemp.createTemp('transfer-list-');

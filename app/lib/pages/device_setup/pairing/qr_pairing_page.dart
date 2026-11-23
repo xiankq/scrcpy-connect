@@ -22,6 +22,7 @@ class QrPairingPage extends HookConsumerWidget {
     super.key,
     this.deviceId,
     this.embedded = false,
+    this.embeddedBuilder,
     this.onUsePairingCode,
     this.onConnectionPort,
     this.onPaired,
@@ -30,6 +31,7 @@ class QrPairingPage extends HookConsumerWidget {
   });
   final String? deviceId;
   final bool embedded;
+  final Widget Function(Widget body, Widget? primary)? embeddedBuilder;
   final bool autoGenerate;
   final Future<bool> Function()? prepareConnection;
   final VoidCallback? onUsePairingCode;
@@ -50,7 +52,11 @@ class QrPairingPage extends HookConsumerWidget {
         identical(setup, ref.read(deviceSetupProvider)) &&
         identical(deviceManagement, ref.read(deviceManagementProvider));
     ref.listen(provider.select((state) => state.receipt), (_, paired) {
-      if (paired != null) onPaired?.call(paired);
+      if (paired == null) return;
+      onPaired?.call(paired);
+      if (paired.connected && paired.deviceId != null) {
+        WorkspaceRoute(deviceId: paired.deviceId!).pushReplacement(context);
+      }
     });
 
     Future<void> generate() async {
@@ -72,18 +78,11 @@ class QrPairingPage extends HookConsumerWidget {
     final paired = state.receipt;
     final hasQr = state.hasQr;
     final children = <Widget>[
-      if (hasQr) ...[
-        Text(
-          '在手机的无线调试中选择“使用二维码配对设备”，扫描此二维码。',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: DesignTokens.spacingLg),
-      ],
       if (state.busy) const Center(child: CircularProgressIndicator()),
       if (hasQr)
         Center(
           child: Container(
-            color: Colors.white,
+            color: DesignTokens.colorWhite,
             padding: const EdgeInsets.all(DesignTokens.spacingMd),
             child: QrImageView(
               data: state.payload!,
@@ -94,13 +93,19 @@ class QrPairingPage extends HookConsumerWidget {
       else if (!state.busy && state.message == null)
         const StateNote('点击重新生成以获取配对二维码。'),
       if (state.message != null) StateNote(state.message!),
-      if (paired != null && paired.deviceId != null)
-        FilledButton(
+      if (hasQr) ...[
+        const SizedBox(height: DesignTokens.spacingXl),
+        Text(
+          '在手机的无线调试中选择“使用二维码配对设备”，扫描此二维码。',
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          textAlign: TextAlign.center,
+        ),
+      ],
+      if (paired != null && paired.deviceId != null && !paired.connected)
+        TextButton(
           onPressed: () {
-            if (paired.connected) {
-              WorkspaceRoute(deviceId: paired.deviceId!)
-                  .pushReplacement(context);
-            } else if (onConnectionPort != null) {
+            if (onConnectionPort != null) {
               onConnectionPort!(paired.address, paired.deviceId);
             } else {
               ConnectionFormRoute(
@@ -110,7 +115,7 @@ class QrPairingPage extends HookConsumerWidget {
               ).pushReplacement(context);
             }
           },
-          child: Text(paired.connected ? '打开设备工作台' : '填写连接端口'),
+          child: const Text('修改连接信息'),
         ),
       if (!embedded)
         FilledButton(
@@ -133,23 +138,25 @@ class QrPairingPage extends HookConsumerWidget {
                 },
           child: const Text('使用配对码'),
         ),
-      const SizedBox(height: DesignTokens.spacingSectionTitle),
-      SizedBox(
-        width: double.infinity,
-        child: FilledButton(
-          onPressed: state.busy ? null : generate,
-          child: const Text('重新生成'),
-        ),
-      ),
     ];
+    final primary = FilledButton(
+      onPressed: state.busy ? null : generate,
+      child: const Text('重新生成'),
+    );
     if (embedded) {
-      return Column(
+      final content = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: children,
       );
+      return embeddedBuilder?.call(content, primary) ??
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [content, primary],
+          );
     }
     return PageFrame(
       title: '添加设备',
+      bottom: primary,
       child: ConnectionContent(
         child: GroupedListView(
           padding: const EdgeInsets.all(DesignTokens.spacingMd),

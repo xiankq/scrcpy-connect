@@ -2,39 +2,55 @@
 library;
 
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart';
 import 'package:args/args.dart';
 import 'package:path/path.dart' as p;
-import 'package:xml/xml.dart';
+import 'package:yaml/yaml.dart';
 
+import 'src/packaging.dart';
 import 'src/repository_tooling.dart';
 
 final root = repositoryRoot();
+const macApplication = 'Interconnect.app';
+const windowsExecutable = 'Interconnect.exe';
+const linuxExecutable = 'interconnect';
+const linuxApplicationId = 'dev.scrcpyconnect.scrcpy_connect';
 
 int peMachine(File path) {
-  final bytes = path.readAsBytesSync();
-  if (bytes.length < 64 || bytes[0] != 0x4d || bytes[1] != 0x5a) {
-    throw FormatException('Invalid PE file: ${path.path}');
+  final file = path.openSync();
+  try {
+    final dosHeader = file.readSync(64);
+    if (dosHeader.length < 64 || dosHeader[0] != 0x4d || dosHeader[1] != 0x5a) {
+      throw FormatException('Invalid PE file: ${path.path}');
+    }
+    final offset = ByteData.sublistView(dosHeader)
+        .getUint32(0x3c, Endian.little);
+    file.setPositionSync(offset);
+    final header = file.readSync(6);
+    if (header.length < 6 ||
+        header[0] != 0x50 ||
+        header[1] != 0x45 ||
+        header[2] != 0 ||
+        header[3] != 0) {
+      throw FormatException('Invalid PE signature: ${path.path}');
+    }
+    return ByteData.sublistView(header).getUint16(4, Endian.little);
+  } finally {
+    file.closeSync();
   }
-  final data = ByteData.sublistView(bytes);
-  final offset = data.getUint32(0x3c, Endian.little);
-  if (offset + 6 > bytes.length ||
-      bytes[offset] != 0x50 ||
-      bytes[offset + 1] != 0x45 ||
-      bytes[offset + 2] != 0 ||
-      bytes[offset + 3] != 0) {
-    throw FormatException('Invalid PE signature: ${path.path}');
-  }
-  return data.getUint16(offset + 4, Endian.little);
 }
 
 Iterable<File> bundleFiles(Directory directory) =>
     directory.listSync(recursive: true, followLinks: true).whereType<File>();
 
-void _rejectApplicationBridge(Iterable<File> files) {
+void _rejectApplicationBridge(
+  Iterable<File> files, {
+  bool allowStandaloneAdb = false,
+}) {
   if (files.any(
     (file) =>
         RegExp(r'^(?:lib)?interop_bridge(?:\.|$)')
@@ -42,50 +58,39 @@ void _rejectApplicationBridge(Iterable<File> files) {
   )) {
     throw StateError('Bundle contains the removed application bridge');
   }
-  if (files.any(
-    (file) =>
-        RegExp(r'^(?:lib)?interop_adb_bridge(?:\.|$)')
-            .hasMatch(p.basename(file.path)),
-  )) {
+  if (!allowStandaloneAdb &&
+      files.any(
+        (file) =>
+            RegExp(r'^(?:lib)?interop_adb_bridge(?:\.|$)')
+                .hasMatch(p.basename(file.path)),
+      )) {
     throw StateError(
       'Release bundle duplicates the composed scrcpy ADB runtime',
     );
   }
 }
 
-void verifyWindows(Directory bundle) {
+void verifyWindows(Directory bundle, String arch) {
   final files = bundleFiles(bundle).toList();
   _rejectApplicationBridge(files);
-  const adbFiles = {'adb.exe', 'AdbWinApi.dll', 'AdbWinUsbApi.dll'};
-  int? adbMachine;
   for (final name in [
-    'scrcpy_connect.exe',
+    windowsExecutable,
     'flutter_windows.dll',
+    'msvcp140.dll',
+    'vcruntime140.dll',
+    if (arch == 'x64') 'vcruntime140_1.dll',
     'interop_scrcpy_bridge.dll',
     'media_codec_plugin.dll',
-    'adb.exe',
-    'AdbWinApi.dll',
-    'AdbWinUsbApi.dll',
   ]) {
     final matches = files
         .where((file) => p.basename(file.path) == name)
         .toList();
     if (matches.length != 1) {
-      throw StateError('Final Windows bundle lacks one x64 $name');
+      throw StateError('Final Windows bundle lacks one $name');
     }
     final machine = peMachine(matches.single);
-    if (adbFiles.contains(name)) {
-      // 官方 platform-tools 可能包含 32 位子进程及配套 DLL；它们不会载入 x64 Flutter 进程。
-      //
-      if (!{0x14c, 0x8664}.contains(machine) ||
-          (adbMachine != null && machine != adbMachine)) {
-        throw StateError(
-          'Official ADB executable and DLL architectures differ',
-        );
-      }
-      adbMachine = machine;
-    } else if (machine != 0x8664) {
-      throw StateError('Final Windows bundle lacks one x64 $name');
+    if (machine != (arch == 'arm64' ? 0xaa64 : 0x8664)) {
+      throw StateError('Unexpected PE architecture for $name in $arch bundle');
     }
   }
   if (!File(p.join(bundle.path, 'data/flutter_assets/AssetManifest.bin'))
@@ -97,6 +102,18 @@ void verifyWindows(Directory bundle) {
 
 void verifyMedia(Directory bundle) {
   final files = bundleFiles(bundle).toList();
+  if (files.any(
+    (file) => const {
+      'adb',
+      'adb.exe',
+      'adbwinapi.dll',
+      'adbwinusbapi.dll',
+    }.contains(p.basename(file.path).toLowerCase()),
+  )) {
+    throw StateError(
+      'Remove bundled SDK Platform-Tools and rebuild from a clean bundle.',
+    );
+  }
   if (files.any(
     (file) => RegExp(
       r'(^|lib)(mdk|fvp)|avformat|ffmpeg-\d',
@@ -128,15 +145,14 @@ void verifyMedia(Directory bundle) {
   }
 }
 
-Future<void> verifyLinux(Directory bundle) async {
+Future<void> verifyLinux(Directory bundle, String arch) async {
   final files = bundleFiles(bundle).toList();
   _rejectApplicationBridge(files);
   for (final name in [
-    'scrcpy_connect',
+    linuxExecutable,
     'libflutter_linux_gtk.so',
     'libinterop_scrcpy_bridge.so',
     'libmedia_codec_plugin.so',
-    'adb',
   ]) {
     final matches = files
         .where((file) => p.basename(file.path) == name)
@@ -151,17 +167,40 @@ Future<void> verifyLinux(Directory bundle) async {
           header[2] != 0x4c ||
           header[3] != 0x46 ||
           header[4] != 2 ||
-          ByteData.sublistView(header).getUint16(18, Endian.little) != 62) {
-        throw StateError('Linux bundle has a non-x64 ELF: $name');
+          ByteData.sublistView(header).getUint16(18, Endian.little) !=
+              (arch == 'arm64' ? 183 : 62)) {
+        throw StateError('Linux bundle has an unexpected ELF for $arch: $name');
       }
     } finally {
       bytes.closeSync();
     }
   }
-  final entries = [
-    ...files.where(
-      (file) => const ['scrcpy_connect', 'adb'].contains(p.basename(file.path)),
+  final desktopEntry = File(
+    p.join(bundle.path, 'share', 'applications', '$linuxApplicationId.desktop'),
+  );
+  final icon = File(
+    p.join(
+      bundle.path,
+      'share',
+      'icons',
+      'hicolor',
+      'scalable',
+      'apps',
+      '$linuxApplicationId.svg',
     ),
+  );
+  if (!desktopEntry.existsSync() || !icon.existsSync()) {
+    throw StateError('Linux bundle lacks its desktop entry or app icon');
+  }
+  final desktopFields = desktopEntry.readAsLinesSync();
+  if (!desktopFields.contains('Exec=$linuxExecutable') ||
+      !desktopFields.contains('Icon=$linuxApplicationId')) {
+    throw StateError(
+      'Linux desktop entry does not match its executable and icon',
+    );
+  }
+  final entries = [
+    File(p.join(bundle.path, linuxExecutable)),
     ...files.where((file) => p.basename(file.path).contains('.so')),
   ];
   final resolved = <String>{};
@@ -193,14 +232,13 @@ Future<void> verifyLinux(Directory bundle) async {
   verifyMedia(bundle);
 }
 
-void installMediaNotices(Directory bundle, String platform) {
+void installMediaNotices(Directory bundle, String platform, String arch) {
   if (platform == 'macos' || platform == 'ios') {
-    // runner 最终资源阶段采用实际 CocoaPods SDK 与架构前缀，并在 macOS 为嵌套的官方 adb 签名。
-    //
+    // Xcode 在签名前从对应 SDK 和架构的 CocoaPods 产物复制声明。
     return;
   }
   final prefix = Directory(
-    p.join(root.path, '.dart_tool/media_codec/ffmpeg/$platform-x64'),
+    p.join(root.path, '.dart_tool/media_codec/ffmpeg/$platform-$arch'),
   );
   final source = Directory(p.join(prefix.path, 'share/media_codec'));
   if (!source.existsSync()) {
@@ -212,54 +250,87 @@ void installMediaNotices(Directory bundle, String platform) {
   );
 }
 
-Future<String> bundleExecutable(File plist) async {
-  final bytes = plist.readAsBytesSync();
-  if (bytes.length >= 6 &&
-      ascii.decode(bytes.take(6).toList(), allowInvalid: true) == 'bplist') {
-    // 二进制 plist 属于 Apple 原生构建输出，plutil 同时支持两种编码。
-    final result = await runTool([
-      'plutil',
-      '-convert',
-      'json',
-      '-o',
-      '-',
-      plist.path,
-    ], quiet: true);
-    return (jsonDecode(result.stdout as String)
-            as Map<String, dynamic>)['CFBundleExecutable']
-        as String;
-  }
-  final document = XmlDocument.parse(utf8.decode(bytes));
-  final values = document.findAllElements('dict').first.childElements.toList();
-  for (var i = 0; i + 1 < values.length; i++) {
-    if (values[i].name.local == 'key' &&
-        values[i].innerText == 'CFBundleExecutable') {
-      return values[i + 1].innerText;
-    }
-  }
-  throw const FormatException('Info.plist lacks CFBundleExecutable');
-}
-
-Future<void> verifyApple(Directory bundle, String platform) async {
+Future<void> verifyApple(
+  Directory bundle,
+  String platform,
+  String arch, {
+  required bool simulator,
+}) async {
   final contents = platform == 'macos'
       ? Directory(p.join(bundle.path, 'Contents'))
       : bundle;
-  final name = await bundleExecutable(
-    File(p.join(contents.path, 'Info.plist')),
-  );
+  final result = await runTool([
+    'plutil',
+    '-convert',
+    'json',
+    '-o',
+    '-',
+    p.join(contents.path, 'Info.plist'),
+  ], quiet: true);
+  final info = jsonDecode(result.stdout as String) as Map<String, dynamic>;
+  final name = info['CFBundleExecutable'] as String;
+  if (info['CFBundleIdentifier'] != 'dev.scrcpyconnect.scrcpyConnect' ||
+      info['CFBundleDisplayName'] != '邻接') {
+    throw StateError('Unexpected $platform application identity');
+  }
+  if (platform == 'macos') {
+    final icon = File(p.join(contents.path, 'Resources', 'AppIcon.icns'));
+    if (!icon.existsSync()) throw StateError('macOS bundle lacks AppIcon.icns');
+  } else {
+    for (final key in ['CFBundleIcons', 'CFBundleIcons~ipad']) {
+      if (info[key]?['CFBundlePrimaryIcon']?['CFBundleIconName'] != 'AppIcon') {
+        throw StateError('iOS bundle lacks AppIcon for $key');
+      }
+    }
+  }
   final binary = platform == 'macos'
       ? p.join(contents.path, 'MacOS', name)
       : p.join(contents.path, name);
-  await runTool(['xcrun', 'lipo', '-verify_arch', 'arm64', binary]);
+  final slices = arch == 'universal'
+      ? ['arm64', 'x86_64']
+      : [arch == 'x64' ? 'x86_64' : arch];
+  final actual = await runTool([
+    'xcrun',
+    'lipo',
+    '-archs',
+    binary,
+  ], quiet: true);
+  final actualSlices = (actual.stdout as String).trim().split(RegExp(r'\s+'));
+  if (actualSlices.length != slices.length ||
+      !slices.every(actualSlices.contains)) {
+    throw StateError(
+      'Expected $arch for $binary, found ${actualSlices.join(", ")}',
+    );
+  }
+  if (platform == 'ios') {
+    final loadCommands = await runTool([
+      'xcrun',
+      'vtool',
+      '-show-build',
+      binary,
+    ], quiet: true);
+    final sdk = simulator ? 'IOSSIMULATOR' : 'IOS';
+    if (!RegExp(
+      '^\\s*platform\\s+$sdk\$',
+      multiLine: true,
+    ).hasMatch(loadCommands.stdout as String)) {
+      throw StateError('Expected Mach-O platform $sdk for $binary');
+    }
+  }
   final files = bundleFiles(contents).toList();
-  _rejectApplicationBridge(files);
-  if (!files.any(
-    (file) =>
-        p.basename(file.path) ==
-        (platform == 'macos' ? 'FlutterMacOS' : 'Flutter'),
-  )) {
+  // The debug simulator build retains the standalone SDK without AOT reachability.
+  _rejectApplicationBridge(files, allowStandaloneAdb: simulator);
+  final engine = files
+      .where(
+        (file) =>
+            p.basename(file.path) ==
+            (platform == 'macos' ? 'FlutterMacOS' : 'Flutter'),
+      )
+      .firstOrNull;
+  if (engine == null) {
     throw StateError('Apple bundle lacks its Flutter engine');
   }
+  await runTool(['xcrun', 'lipo', engine.path, '-verify_arch', ...slices]);
   for (final name in ['interop_scrcpy_bridge']) {
     final rust = files
         .where(
@@ -272,7 +343,7 @@ Future<void> verifyApple(Directory bundle, String platform) async {
       throw StateError('Apple bundle lacks its Rust capability library: $name');
     }
     for (final library in rust) {
-      await runTool(['xcrun', 'lipo', '-verify_arch', 'arm64', library.path]);
+      await runTool(['xcrun', 'lipo', library.path, '-verify_arch', ...slices]);
     }
   }
   if (platform == 'macos') {
@@ -331,33 +402,28 @@ Future<void> _rejectDuplicateObjectiveCClasses(
 
 Future<void> archiveBundle(
   Directory bundle,
-  String platform,
-  Directory artifacts,
-) async {
+  String target,
+  Directory artifacts, {
+  String mode = 'release',
+}) async {
   artifacts.createSync(recursive: true);
-  if (platform == 'windows') {
-    final archive = Archive();
-    for (final entity in bundle.listSync(recursive: true)) {
-      final name = p
-          .relative(entity.path, from: bundle.path)
-          .split(p.separator)
-          .join('/');
-      if (entity is File) {
-        final bytes = entity.readAsBytesSync();
-        archive.addFile(ArchiveFile(name, bytes.length, bytes));
-      } else if (entity is Directory) {
-        archive.addFile(ArchiveFile('$name/', 0, <int>[])..isFile = false);
-      }
-    }
-    File(p.join(artifacts.path, 'windows-release.zip'))
-        .writeAsBytesSync(ZipEncoder().encode(archive));
+  if (target.startsWith('windows-')) {
+    final formerLauncher = p.join(bundle.path, 'scrcpy_connect.exe');
+    await ZipFileEncoder().zipDirectory(
+      bundle,
+      filename: p.join(artifacts.path, '$target-release.zip'),
+      // A previous incremental build can leave the former launcher behind.
+      filter: (entry, _) => entry.path == formerLauncher
+          ? ZipFileOperation.skip
+          : ZipFileOperation.include,
+    );
   } else {
     // 原生 tar 保留执行权限与 framework 符号链接；不遍历 framework 链接，也不用普通文件字节重建归档。
     //
     await streamTool([
       'tar',
       '-czf',
-      p.join(artifacts.absolute.path, '$platform-release.tar.gz'),
+      p.join(artifacts.absolute.path, '$target-$mode.tar.gz'),
       '-C',
       bundle.parent.path,
       p.basename(bundle.path),
@@ -369,6 +435,17 @@ Future<void> main(List<String> arguments) async {
   try {
     final parser = ArgParser()
       ..addFlag('verify-only', negatable: false)
+      ..addFlag('installers', negatable: false)
+      ..addFlag(
+        'simulator',
+        negatable: false,
+        help: 'Build the iOS simulator app.',
+      )
+      ..addOption('arch', allowed: ['x64', 'arm64', 'universal'])
+      ..addOption(
+        'update-feed',
+        help: 'Public HTTPS update feed for this package.',
+      )
       ..addFlag('help', abbr: 'h', negatable: false);
     final args = parser.parse(arguments);
     if (args['help'] as bool) {
@@ -384,59 +461,142 @@ Future<void> main(List<String> arguments) async {
       );
     }
     final platform = args.rest.single;
+    final simulator = args.flag('simulator');
+    if (simulator && (platform != 'ios' || args.flag('installers'))) {
+      throw ArgumentError('--simulator requires ios without --installers.');
+    }
     final application = applicationRoot(root);
-    if (!(args['verify-only'] as bool)) {
-      await streamTool([
-        executable('flutter') ?? 'flutter',
-        'build',
-        platform,
-        '--release',
-        '--no-pub',
-        if (platform == 'ios') '--no-codesign',
-      ], cwd: application);
+    final feed = updateFeedDefine(args.option('update-feed'));
+    final nativeArch =
+        const {
+          Abi.linuxArm64,
+          Abi.windowsArm64,
+          Abi.macosArm64,
+        }.contains(Abi.current())
+        ? 'arm64'
+        : 'x64';
+    final arch =
+        args.option('arch') ??
+        switch (platform) {
+          'macos' => 'universal',
+          'ios' => 'arm64',
+          _ => nativeArch,
+        };
+    if ((platform == 'ios' && arch != 'arm64') ||
+        (const {'linux', 'windows'}.contains(platform) && arch != nativeArch)) {
+      throw ArgumentError(
+        '$platform $arch requires its matching native build host.',
+      );
     }
-    late Directory bundle;
-    if (platform == 'windows') {
-      bundle = Directory(
-        p.join(application.path, 'build/windows/x64/runner/Release'),
-      );
-    } else if (platform == 'linux') {
-      bundle = Directory(
-        p.join(application.path, 'build/linux/x64/release/bundle'),
-      );
-    } else {
-      final directory = Directory(
-        p.join(
-          application.path,
-          platform == 'ios'
-              ? 'build/ios/iphoneos'
-              : 'build/macos/Build/Products/Release',
-        ),
-      );
-      final bundles = directory
-          .listSync()
-          .whereType<Directory>()
-          .where((directory) => directory.path.endsWith('.app'))
-          .toList();
-      if (bundles.length != 1) {
-        throw StateError('Expected one final application in ${directory.path}');
+    final verifyOnly = args.flag('verify-only');
+    if (!verifyOnly) {
+      final appleConfig = platform == 'macos' || simulator
+          ? Directory.systemTemp.createTempSync('interconnect-arch-')
+          : null;
+      try {
+        final config = appleConfig == null
+            ? null
+            : File(p.join(appleConfig.path, 'Architectures.xcconfig'));
+        if (config != null) {
+          final architectures = switch (arch) {
+            'universal' => 'arm64 x86_64',
+            'x64' => 'x86_64',
+            _ => 'arm64',
+          };
+          config.writeAsStringSync(
+            'ARCHS = $architectures\nONLY_ACTIVE_ARCH = NO\n',
+          );
+        }
+        await streamTool(
+          [
+            executable('flutter') ?? 'flutter',
+            'build',
+            platform,
+            if (simulator) ...['--simulator', '--debug'] else '--release',
+            '--no-pub',
+            ?feed,
+            if (platform == 'ios' && !simulator) '--no-codesign',
+          ],
+          cwd: application,
+          environment: {if (config != null) 'XCODE_XCCONFIG_FILE': config.path},
+        );
+      } finally {
+        appleConfig?.deleteSync(recursive: true);
       }
-      bundle = bundles.single;
     }
-    if (!(args['verify-only'] as bool)) installMediaNotices(bundle, platform);
+    final bundle = Directory(
+      p.join(application.path, switch (platform) {
+        'windows' => 'build/windows/$arch/runner/Release',
+        'linux' => 'build/linux/$arch/release/bundle',
+        'ios' =>
+          'build/ios/${simulator ? 'iphonesimulator' : 'iphoneos'}/Runner.app',
+        _ => 'build/macos/Build/Products/Release/$macApplication',
+      }),
+    );
+    if (!bundle.existsSync()) {
+      throw StateError('Missing final application at ${bundle.path}');
+    }
+    if (!verifyOnly) installMediaNotices(bundle, platform, arch);
     switch (platform) {
       case 'windows':
-        verifyWindows(bundle);
+        verifyWindows(bundle, arch);
       case 'linux':
-        await verifyLinux(bundle);
+        await verifyLinux(bundle, arch);
       default:
-        await verifyApple(bundle, platform);
+        await verifyApple(bundle, platform, arch, simulator: simulator);
     }
-    await archiveBundle(
-      bundle,
-      platform,
-      Directory(p.join(root.path, 'build/verified')),
-    );
+    final artifacts = Directory(p.join(root.path, 'build/verified'));
+    final target = '$platform${simulator ? '-simulator' : ''}-$arch';
+    if (platform != 'macos' || !args.flag('installers')) {
+      await archiveBundle(
+        bundle,
+        target,
+        artifacts,
+        mode: simulator ? 'debug' : 'release',
+      );
+    }
+    if (args.flag('installers')) {
+      final pubspec = loadYaml(
+        File(p.join(application.path, 'pubspec.yaml')).readAsStringSync(),
+      );
+      final version = (pubspec['version'] as String).split('+').first;
+      final prefix = p.join(artifacts.absolute.path, '$target-release');
+      switch (platform) {
+        case 'linux':
+          await streamTool([
+            'python3',
+            p.join(root.path, 'scripts/package_linux.py'),
+            bundle.absolute.path,
+            prefix,
+            arch,
+            version,
+          ]);
+        case 'windows':
+          final iscc = executable('ISCC');
+          if (iscc == null) {
+            throw StateError('Install Inno Setup and add ISCC.exe to PATH.');
+          }
+          await streamTool([
+            iscc,
+            '/O${artifacts.absolute.path}',
+            '/F$target-release-setup',
+            '/DBundle=${bundle.absolute.path}',
+            '/DAppVersion=$version',
+            '/DTargetArch=${arch == 'x64' ? 'x64os' : 'arm64'}',
+            p.join(root.path, 'scripts/installer_windows.iss'),
+          ]);
+        case 'macos':
+          artifacts.createSync(recursive: true);
+          await streamTool([
+            'bash',
+            p.join(root.path, 'scripts/package_macos.sh'),
+            bundle.absolute.path,
+            '$prefix.dmg',
+          ]);
+        default:
+          throw ArgumentError('Use Apple distribution tooling for iOS.');
+      }
+    }
     stdout.writeln(
       'PASS: final $platform application, Flutter engine, Rust and trimmed media codec',
     );

@@ -693,16 +693,16 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
   void _changed(_LogicalSession slot, [VideoSessionChange change = .updated]) {
     try {
       onSessionChanged(change, slot.state);
-    } catch (_) {
-      // 观察者不能撤销已提交的捕获事实或中断原生控制。
+    } catch (error, stack) {
+      Zone.current.handleUncaughtError(error, stack);
     }
   }
 
   void _publishClipboard(RemoteClipboardChanged event) {
     try {
       onClipboardChanged(event);
-    } catch (_) {
-      // 观察者失败不能中断捕获启动或回收；真实执行错误仍由命令 Future 报告。
+    } catch (error, stack) {
+      Zone.current.handleUncaughtError(error, stack);
     }
   }
 

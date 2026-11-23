@@ -75,6 +75,7 @@ class DiagnosticLog {
   int _lost = 0;
   bool _closed = false;
   String? storageError;
+  bool historyIncomplete = false;
 
   Stream<void> get changes => _changes.stream;
   List<DiagnosticRecord> get recent => List.unmodifiable(_recent);
@@ -92,7 +93,7 @@ class DiagnosticLog {
       await directory.create(recursive: true);
       log._recent.addAll((await log._read()).takeLast(recentLimit));
       await log._repairTail();
-    } catch (error) {
+    } on FileSystemException catch (error) {
       log.storageError = error.runtimeType.toString();
     }
     return log;
@@ -164,6 +165,7 @@ class DiagnosticLog {
       );
       _lost = 0;
     }
+    if (batch.isEmpty) return;
     try {
       await _directory.create(recursive: true);
       for (final record in batch) {
@@ -174,9 +176,8 @@ class DiagnosticLog {
         await file.writeAsBytes(bytes, mode: FileMode.append, flush: true);
       }
       storageError = null;
-    } catch (error) {
+    } on FileSystemException catch (error) {
       storageError = error.runtimeType.toString();
-      // 日志失败不能中断媒体操作，也不能递归触发媒体操作。
     }
     if (storageError != previousError && !_closed) _changes.add(null);
   }
@@ -204,7 +205,8 @@ class DiagnosticLog {
 
   Future<void> _repairTail() async {
     final file = _file(0);
-    if (await _length(file) == 0) return;
+    final length = await _length(file);
+    if (length == 0 || length > maxFileBytes) return;
     final bytes = await file.readAsBytes();
     if (bytes.last == 10) return;
     final handle = await file.open(mode: FileMode.append);
@@ -223,32 +225,51 @@ class DiagnosticLog {
       final length = await _length(file);
       if (length == 0) continue;
       if (length > maxFileBytes) {
-        // 读取损坏或外来文件前始终核验大小上限。
-        await file.delete();
+        historyIncomplete = true;
         continue;
       }
       final lines = const LineSplitter().convert(
         utf8.decode(await file.readAsBytes(), allowMalformed: true),
       );
       for (final line in lines) {
+        final Object? value;
         try {
-          final json = jsonDecode(line) as Map<String, dynamic>;
-          final event = json['event'] as String;
-          if (!_identifier.hasMatch(event)) continue;
-          records.add(
-            DiagnosticRecord(
-              time: DateTime.parse(json['time'] as String),
-              level: LogLevel.values.byName(json['level'] as String),
-              area: DiagnosticArea.values.byName(json['area'] as String),
-              event: event,
-              fields: Map.unmodifiable(
-                _safeFields(Map<String, Object?>.from(json['fields'] as Map)),
-              ),
-            ),
-          );
-        } catch (_) {
-          // 崩溃留下的不完整尾行不影响此前的完整记录。
+          value = jsonDecode(line);
+        } on FormatException {
+          historyIncomplete = true;
+          continue;
         }
+        if (value case {
+          'time': String time,
+          'level': String level,
+          'area': String area,
+          'event': String event,
+          'fields': Map<String, Object?> fields,
+        }) {
+          final parsedTime = DateTime.tryParse(time);
+          final parsedLevel = LogLevel.values
+              .where((item) => item.name == level)
+              .firstOrNull;
+          final parsedArea = DiagnosticArea.values
+              .where((item) => item.name == area)
+              .firstOrNull;
+          if (parsedTime != null &&
+              parsedLevel != null &&
+              parsedArea != null &&
+              _identifier.hasMatch(event)) {
+            records.add(
+              DiagnosticRecord(
+                time: parsedTime,
+                level: parsedLevel,
+                area: parsedArea,
+                event: event,
+                fields: Map.unmodifiable(_safeFields(fields)),
+              ),
+            );
+            continue;
+          }
+        }
+        historyIncomplete = true;
       }
     }
     return records;
@@ -274,6 +295,7 @@ class DiagnosticLog {
       }
       _pending.clear();
       _recent.clear();
+      historyIncomplete = false;
       _lost = 0;
       storageError = null;
       if (!_closed) _changes.add(null);

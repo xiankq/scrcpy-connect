@@ -10,7 +10,6 @@ import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
@@ -68,7 +67,7 @@ class ConnectionDiagnosticsPage extends HookConsumerWidget {
                   ok: connected,
                   message: data.usbBackendAvailable == false
                       ? '改用无线连接，并在手机上完成配对。'
-                      : '检查主机角色与数据线；本机允许 USB 访问，手机允许调试。',
+                      : '请换一根可传输数据的 USB 线，解锁手机并允许 USB 调试。',
                 )
               else
                 (
@@ -81,19 +80,19 @@ class ConnectionDiagnosticsPage extends HookConsumerWidget {
                   message: reachable == true
                       ? '地址可达，仍需确认授权与连接。'
                       : reachable == false
-                      ? '核对手机地址、连接端口和网络；跨网需已有 VPN 等可达路径。'
+                      ? '请确认两台设备连着同一 Wi-Fi，再核对手机上的地址和端口。'
                       : '核对地址和连接端口后重新检查。',
                 ),
               (
                 name: identity == true
                     ? '本机授权身份已就绪'
                     : identity == false
-                    ? '本机授权身份不可用'
-                    : '本机授权身份尚未确认',
+                    ? '暂时无法读取本机的调试授权'
+                    : '暂时无法确认本机的调试授权',
                 ok: identity == true,
                 message: identity == true
                     ? '以手机实际授权结果为准。'
-                    : '检查本机授权身份，并在手机上确认授权。',
+                    : '请检查本机的调试设置，并在手机上允许调试。',
               ),
             ];
             final details = <Widget>[
@@ -105,13 +104,14 @@ class ConnectionDiagnosticsPage extends HookConsumerWidget {
                 children: [
                   for (final check in checks)
                     ListTile(
-                      leading: ListIconBadge(
-                        icon: check.ok == true
+                      leading: Icon(
+                        check.ok == true
                             ? LucideIcons.circleCheck
                             : LucideIcons.circleAlert,
-                        backgroundColor: check.ok == true
-                            ? DesignTokens.colorListIconMint
-                            : DesignTokens.colorListIconAmber,
+                        size: DesignTokens.componentListIconGlyphSize,
+                        color: check.ok == true
+                            ? DesignTokens.colorSuccess
+                            : DesignTokens.componentConnectionIconUsbTextColor,
                       ),
                       title: Text(
                         check.name,
@@ -127,7 +127,7 @@ class ConnectionDiagnosticsPage extends HookConsumerWidget {
                 ],
               ),
               if ((current.reason ?? '').isNotEmpty)
-                StateNote((current.reason ?? '')),
+                const StateNote('设备连接出现问题。请检查手机是否开着，再按下方提示重新连接。'),
             ];
             final actions = <Widget>[
               const SizedBox(height: DesignTokens.spacingMd),

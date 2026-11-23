@@ -1,6 +1,5 @@
 import 'dart:io' show Platform;
 
-import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -12,7 +11,6 @@ import 'package:scrcpy_connect/core/platform/platform_channels.dart';
 import 'package:scrcpy_connect/pages/device_setup/usb/usb_setup_notifier.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
@@ -23,11 +21,13 @@ class UsbSetupPage extends HookConsumerWidget {
   const UsbSetupPage({
     super.key,
     this.embedded = false,
+    this.embeddedBuilder,
     this.deviceId,
     this.onUseWireless,
     this.prepareConnection,
   });
   final bool embedded;
+  final Widget Function(Widget sliver, Widget? primary)? embeddedBuilder;
   final Future<bool> Function()? prepareConnection;
   final String? deviceId;
   final VoidCallback? onUseWireless;
@@ -66,65 +66,183 @@ class UsbSetupPage extends HookConsumerWidget {
       await actions.check(serial: serial, usbDeviceId: usbDeviceId);
     }
 
-    if (usbSupported == null) {
-      const loading = Text('正在检查本机 USB 能力…');
-      return embedded
-          ? SliverToBoxAdapter(child: loading)
-          : PageFrame(
-              title: '添加设备',
-              child: ConnectionContent(child: loading),
+    ref.listen(provider.select((value) => value.result), (_, result) {
+      if (result case UsbConnected(:final receipt)) {
+        WorkspaceRoute(deviceId: receipt.deviceId).pushReplacement(context);
+      }
+    });
+    Widget frame(Widget sliver, Widget? primary) {
+      if (embedded) {
+        return embeddedBuilder?.call(sliver, primary) ??
+            SliverMainAxisGroup(
+              slivers: [
+                sliver,
+                if (primary != null) SliverToBoxAdapter(child: primary),
+              ],
             );
-    }
-    if (!usbSupported) {
-      final limited = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text('当前主控不支持 USB 设备连接。请使用无线调试配对。'),
-          const SizedBox(height: DesignTokens.spacingMd),
-          FilledButton(
-            onPressed:
-                onUseWireless ??
-                () => const WirelessGuideRoute().pushReplacement(context),
-            child: const Text('使用配对码'),
+      }
+      return PageFrame(
+        title: '添加设备',
+        bottom: primary,
+        child: ConnectionContent(
+          child: CustomScrollView(
+            slivers: [
+              const PageChromeSliver(),
+              SliverPadding(
+                padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                sliver: sliver,
+              ),
+              const PageChromeBottomSliver(),
+            ],
           ),
-        ],
+        ),
       );
-      return embedded
-          ? SliverToBoxAdapter(child: limited)
-          : PageFrame(
-              title: '添加设备',
-              child: ConnectionContent(child: limited),
-            );
     }
-    final children = <Widget>[
-      Text('使用支持数据传输的数据线连接手机。', style: Theme.of(context).textTheme.bodyMedium),
-      const SizedBox(height: DesignTokens.spacingMd),
-      Text('本机：允许访问 USB 设备。', style: Theme.of(context).textTheme.bodyMedium),
-      const SizedBox(height: DesignTokens.spacingSm),
-      Text(
-        '被控手机：开启 USB 调试，并在系统弹窗中允许调试。',
-        style: Theme.of(context).textTheme.bodyMedium,
-      ),
-      const SizedBox(height: DesignTokens.spacingSectionTitle),
-      FilledButton(
-        onPressed: state.hasPendingAttempt ? null : () => check(),
-        child: state.phase == .checking
-            ? Row(
+
+    if (usbSupported == null) {
+      return frame(
+        const SliverToBoxAdapter(
+          child: Text('正在检查本机 USB 能力…', textAlign: TextAlign.center),
+        ),
+        null,
+      );
+    }
+    final theme = Theme.of(context);
+    Widget statusCard(
+      String title,
+      String message, {
+      IconData status = LucideIcons.circle,
+      Color? accent,
+      bool checking = false,
+    }) => ContentPanel(
+      radius: DesignTokens.componentWorkspaceAppPanelRounded,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minHeight:
+              DesignTokens.componentUsbStatusCardHeight -
+              DesignTokens.spacingMd * 2,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ExcludeSemantics(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  CupertinoActivityIndicator(
-                    radius: DesignTokens.spacingXs,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  const Icon(
+                    LucideIcons.cable,
+                    size: DesignTokens.componentIconLargeSize,
+                    color: DesignTokens.componentConnectionIconUsbTextColor,
+                  ),
+                  const SizedBox(width: DesignTokens.spacingSm),
+                  SizedBox(
+                    width: DesignTokens.spacingLg,
+                    child: Divider(color: accent),
                   ),
                   const SizedBox(width: DesignTokens.spacingXs),
-                  const Text('正在检查…'),
+                  SizedBox.square(
+                    dimension: DesignTokens.componentIconSmallSize,
+                    child: checking
+                        ? ContentLoadingIndicator(
+                            size: DesignTokens.componentIconSmallSize,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          )
+                        : Icon(
+                            status,
+                            color: accent ?? theme.colorScheme.onSurfaceVariant,
+                            size: DesignTokens.componentIconSmallSize,
+                          ),
+                  ),
+                  const SizedBox(width: DesignTokens.spacingXs),
+                  SizedBox(
+                    width: DesignTokens.spacingLg,
+                    child: Divider(color: accent),
+                  ),
+                  const SizedBox(width: DesignTokens.spacingSm),
+                  Icon(
+                    LucideIcons.smartphone,
+                    size: DesignTokens.componentIconLargeSize,
+                    color: theme.colorScheme.onSurface,
+                  ),
                 ],
-              )
-            : Text(switch (state.phase) {
-                .cancelling => '正在取消…',
-                .cleanupRequired => '等待清理完成',
-                _ => '检查连接',
-              }),
+              ),
+            ),
+            const SizedBox(height: DesignTokens.spacingMd),
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                title,
+                style: theme.textTheme.titleMedium,
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: DesignTokens.spacingXs),
+            Text(
+              message,
+              style: theme.textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!usbSupported) {
+      return frame(
+        SliverToBoxAdapter(
+          child: statusCard(
+            '本机不支持 USB 连接',
+            '可以通过无线调试连接手机。',
+            status: LucideIcons.circleAlert,
+            accent: DesignTokens.colorWarning,
+          ),
+        ),
+        FilledButton(
+          onPressed:
+              onUseWireless ??
+              () => const WirelessGuideRoute().pushReplacement(context),
+          child: const Text('切到配对码'),
+        ),
+      );
+    }
+    final devices = switch (state.result) {
+      UsbSelectionRequired(:final devices) => devices,
+      _ => const <UsbDeviceChoice>[],
+    };
+    final detected = devices.isNotEmpty || state.result is UsbConnected;
+    final checking = state.phase == .checking;
+    final inspected = state.result is UsbSelectionRequired;
+    final primary = FilledButton(
+      onPressed: state.hasPendingAttempt ? null : () => check(),
+      child: Text(switch (state.phase) {
+        .checking => '正在检查…',
+        .cancelling => '正在取消…',
+        .cleanupRequired => '等待清理完成',
+        _ => inspected ? '重新检查' : '检查连接',
+      }),
+    );
+    final children = <Widget>[
+      statusCard(
+        checking
+            ? '正在检查 USB'
+            : detected
+            ? '已检测到 USB 设备'
+            : inspected
+            ? '未检测到 USB 设备'
+            : '连接手机',
+        checking
+            ? '如果本机或手机弹出授权提示，请点按允许。'
+            : detected
+            ? '选择下方设备，继续 USB 授权。'
+            : inspected
+            ? '检查数据线和手机的 USB 调试，再重新检查。'
+            : '用支持数据传输的 USB 线连接手机。',
+        checking: checking,
+        status: checking
+            ? LucideIcons.loaderCircle
+            : detected
+            ? LucideIcons.circleCheck
+            : LucideIcons.circle,
+        accent: detected && !checking ? DesignTokens.colorSuccess : null,
       ),
       if (state.hasPendingAttempt)
         TextButton(
@@ -136,43 +254,9 @@ class UsbSetupPage extends HookConsumerWidget {
           }),
         ),
       if (state.message != null) StateNote(state.message!),
-      if (state.result != null)
-        ContentPanel(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              StateNote(
-                switch (state.result!) {
-                  UsbSelectionRequired(:final message) =>
-                    message ?? '选择 USB 设备，并在手机上允许调试。',
-                  UsbConnected() => 'USB 连接已建立',
-                },
-                icon: switch (state.result!) {
-                  UsbConnected() => LucideIcons.check,
-                  UsbSelectionRequired() => LucideIcons.info,
-                },
-                color: switch (state.result!) {
-                  UsbConnected() => DesignTokens.colorAccentMint,
-                  UsbSelectionRequired() => null,
-                },
-              ),
-              if (state.result case UsbConnected(:final receipt)) ...[
-                const SizedBox(height: DesignTokens.spacingSm),
-                FilledButton(
-                  onPressed: () =>
-                      WorkspaceRoute(deviceId: receipt.deviceId)
-                          .pushReplacement(context),
-                  child: const Text('打开设备工作台'),
-                ),
-              ],
-            ],
-          ),
-        ),
+      if (state.result case UsbSelectionRequired(:final message?))
+        if (message != state.message) StateNote(message),
     ];
-    final devices = switch (state.result) {
-      UsbSelectionRequired(:final devices) => devices,
-      _ => const <UsbDeviceChoice>[],
-    };
     final trailing = <Widget>[
       if (!embedded)
         TextButton(
@@ -192,56 +276,62 @@ class UsbSetupPage extends HookConsumerWidget {
           child: const Text('改用无线连接'),
         ),
     ];
-    final rows = SliverList.builder(
-      itemCount: children.length + devices.length + trailing.length,
-      itemBuilder: (context, index) {
-        if (index < children.length) return children[index];
-        final deviceIndex = index - children.length;
-        if (deviceIndex >= devices.length) {
-          return trailing[deviceIndex - devices.length];
-        }
-        final d = devices[deviceIndex];
-        final usbDeviceId = d.usbDeviceId ?? '';
-        final serial = d.serial;
-        final name = d.name ?? '';
-        final label = serial.isNotEmpty
-            ? serial
-            : name.isNotEmpty
-            ? name
-            : 'USB 设备 ${deviceIndex + 1}';
-        return ActionRow(
-          key: ValueKey('usb-${usbDeviceId.isNotEmpty ? usbDeviceId : label}'),
-          icon: LucideIcons.smartphone,
-          title: label,
-          onTap: d.device?.status == .connected
-              ? () =>
-                    WorkspaceRoute(deviceId: d.device!.id)
-                        .pushReplacement(context)
-              : (usbDeviceId.isNotEmpty || serial.isNotEmpty) &&
-                    !state.hasPendingAttempt
-              ? () => check(
-                  usbDeviceId: usbDeviceId.isNotEmpty ? usbDeviceId : null,
-                  serial: serial.isNotEmpty ? serial : null,
-                )
-              : null,
-        );
-      },
-    );
-    if (embedded) return rows;
-    return PageFrame(
-      title: '添加设备',
-      child: ConnectionContent(
-        child: CustomScrollView(
-          slivers: [
-            const PageChromeSliver(),
-            SliverPadding(
-              padding: const EdgeInsets.all(DesignTokens.spacingMd),
-              sliver: rows,
+    final rows = SliverToBoxAdapter(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ...children,
+          if (devices.isNotEmpty) ...[
+            const SizedBox(height: DesignTokens.spacingSm),
+            ContentPanel(
+              radius: DesignTokens.componentConnectionNearbyEntryRounded,
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  for (final (index, device) in devices.indexed)
+                    ListTile(
+                      leading: const Icon(
+                        LucideIcons.smartphone,
+                        size: DesignTokens.componentIconActionSize,
+                        color: DesignTokens.componentConnectionIconIpTextColor,
+                      ),
+                      title: Text(
+                        device.name?.isNotEmpty == true
+                            ? device.name!
+                            : device.serial.isNotEmpty
+                            ? device.serial
+                            : 'USB 设备 ${index + 1}',
+                      ),
+                      trailing: const Icon(
+                        AppIcons.forward,
+                        size: DesignTokens.componentIconSmallSize,
+                      ),
+                      onTap: device.device?.status == .connected
+                          ? () =>
+                                WorkspaceRoute(deviceId: device.device!.id)
+                                    .pushReplacement(context)
+                          : !state.hasPendingAttempt &&
+                                (device.usbDeviceId?.isNotEmpty == true ||
+                                    device.serial.isNotEmpty)
+                          ? () => check(
+                              usbDeviceId:
+                                  device.usbDeviceId?.isNotEmpty == true
+                                  ? device.usbDeviceId
+                                  : null,
+                              serial: device.serial.isNotEmpty
+                                  ? device.serial
+                                  : null,
+                            )
+                          : null,
+                    ),
+                ],
+              ),
             ),
-            const PageChromeBottomSliver(),
           ],
-        ),
+          ...trailing,
+        ],
       ),
     );
+    return frame(rows, primary);
   }
 }

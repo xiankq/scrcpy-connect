@@ -4,6 +4,21 @@ import 'package:scrcpy_connect/pages/control/widgets/remote_navigation_bar.dart'
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 
 void main() {
+  testWidgets('sits flush with the bottom edge in fullscreen', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..padding = const FakeViewPadding(bottom: 34);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(bottomNavigationBar: _Subject())),
+    );
+
+    final bar = tester.getRect(find.byType(RemoteNavigationBar));
+    expect(bar.bottom, tester.getRect(find.byType(Scaffold)).bottom);
+    expect(bar.height, DesignTokens.componentRemoteNavigationHeight);
+  });
+
   testWidgets('uses the design spacing at the 402 point reference width', (
     tester,
   ) async {
@@ -73,6 +88,27 @@ void main() {
       ]),
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('draws the back key as a closed, stroked outline', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: _Subject()));
+    final glyph = find.descendant(
+      of: find.byTooltip('返回'),
+      matching: find.byType(CustomPaint),
+    );
+    final painter = tester.widget<CustomPaint>(glyph).painter!;
+    final canvas = TestRecordingCanvas();
+    painter.paint(canvas, tester.getSize(glyph));
+    final draw = canvas.invocations
+        .map((entry) => entry.invocation)
+        .singleWhere((call) => call.memberName == #drawPath);
+    final path = draw.positionalArguments[0] as Path;
+    final paint = draw.positionalArguments[1] as Paint;
+    expect(path.computeMetrics().single.isClosed, isTrue);
+    expect(paint.style, PaintingStyle.stroke);
+    expect(paint.strokeJoin, StrokeJoin.round);
   });
 }
 

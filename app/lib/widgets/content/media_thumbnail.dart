@@ -1,15 +1,17 @@
 import 'dart:io';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/content/models/cached_content.dart';
 import 'package:scrcpy_connect/core/content/thumbnail_queue_provider.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/content/cached_file_image.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/content_arrival.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 
 class MediaThumbnail extends HookConsumerWidget {
@@ -58,7 +60,7 @@ class MediaThumbnail extends HookConsumerWidget {
                 tooltip: '重试缩略图',
                 onPressed: () => retry.value++,
                 icon: const Icon(
-                  LucideIcons.refreshCw,
+                  AppIcons.refresh,
                   size: DesignTokens.componentIconActionSize,
                   color: ConnectTokens.coral,
                 ),
@@ -82,7 +84,11 @@ class MediaThumbnail extends HookConsumerWidget {
                     ),
                     Flexible(
                       child: Text(
-                        imageFailure ?? '缩略图未能显示：${result.error ?? '未收到可用缩略图'}',
+                        imageFailure ??
+                            failureMessage(
+                              result.error,
+                              fallback: '无法显示缩略图。可以打开文件查看。',
+                            ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -95,7 +101,7 @@ class MediaThumbnail extends HookConsumerWidget {
                       tooltip: '重试缩略图',
                       onPressed: () => retry.value++,
                       icon: const Icon(
-                        LucideIcons.refreshCw,
+                        AppIcons.refresh,
                         size: DesignTokens.componentIconActionSize,
                         color: ConnectTokens.coral,
                       ),
@@ -110,12 +116,34 @@ class MediaThumbnail extends HookConsumerWidget {
               ),
       ),
     );
+    Widget frame(
+      BuildContext context,
+      Widget child,
+      int? frame,
+      bool synchronous,
+    ) => synchronous
+        ? child
+        : ContentArrival(
+            state: frame != null,
+            waiting: frame == null,
+            child: frame != null
+                ? child
+                : ColoredBox(
+                    color: Theme.of(context).colorScheme.surfaceContainerLow,
+                    child: const Center(
+                      child: ContentLoadingIndicator(
+                        size: DesignTokens.componentIconSmallSize,
+                      ),
+                    ),
+                  ),
+          );
     if (source.isEmpty) return placeholder();
     return source.startsWith('http')
         ? Image.network(
             source,
             key: ValueKey('$source:${retry.value}'),
             fit: BoxFit.cover,
+            frameBuilder: frame,
             cacheWidth: 320,
             errorBuilder: (_, _, _) => placeholder('缩略图无法显示，请重试。'),
           )
@@ -127,6 +155,7 @@ class MediaThumbnail extends HookConsumerWidget {
             ),
             key: ValueKey('$source:${retry.value}'),
             fit: BoxFit.cover,
+            frameBuilder: frame,
             errorBuilder: (_, _, _) => placeholder('缩略图无法显示，请重试。'),
           );
   }

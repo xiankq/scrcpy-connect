@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/core/devices/models/device_battery.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 
 String deviceName(DeviceSnapshot device) =>
@@ -66,3 +67,12 @@ String statusText(String status) => switch (status) {
   'completedWithSkips' => '部分内容已跳过',
   _ => '状态待核验',
 };
+
+String? deviceBatteryStatusLabel(DeviceBatteryStatus status) =>
+    switch (status) {
+      .charging => '正在充电',
+      .discharging => '正在放电',
+      .notCharging => '已接电源，未充电',
+      .full => '已充满',
+      .unknown => null,
+    };

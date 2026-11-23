@@ -66,7 +66,10 @@ Future<void> main(List<String> arguments) async {
     await source.create(recursive: true);
     final suffix = platform == 'macos' ? 'darwin' : platform;
     final archive = File(
-      p.join(source.path, 'platform-tools_r${lock['version']}-$suffix.zip'),
+      p.join(
+        source.path,
+        'platform-tools_r${lock['version']}-$suffix-${config['sha256']}.zip',
+      ),
     );
     if (!await archive.exists()) {
       final pending = File('${archive.path}.download.$pid');

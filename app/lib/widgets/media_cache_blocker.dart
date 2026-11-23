@@ -1,10 +1,12 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/content/cache_status_provider.dart';
 import 'package:scrcpy_connect/core/content/content_cache_failure.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/content/content_capabilities_provider.dart';
+import 'package:scrcpy_connect/utils/formatters.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -45,10 +47,9 @@ class MediaCacheBlocker extends HookConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (status.isLoading) const ContentLoadingIndicator(),
-        if (status.hasError)
-          const StateNote('暂时无法核验可回收项，未执行清理。可检查存储后重试，或在原手机处理。'),
+        if (status.hasError) const StateNote('暂时无法查看哪些文件可以清理。请检查本机存储空间后再试。'),
         if (status.hasValue && reclaimable == 0)
-          const StateNote('当前没有可清理项目。使用中和外部读取结果未知的原件继续保留。'),
+          const StateNote('目前没有可清理的临时文件。正在使用的文件会保留。'),
         if (reclaimable > 0)
           OutlinedButton(
             onPressed: busy.value
@@ -57,7 +58,7 @@ class MediaCacheBlocker extends HookConsumerWidget {
                     if (!await confirm(
                           context,
                           '清理可回收暂存？',
-                          '仅清理已不再使用的暂存；受保护原件继续保留。清理后仍需重新核验本次空间。',
+                          '会清理本机已用完的临时文件。正在使用的文件和手机上的原文件会保留。',
                           action: '清理暂存',
                         ) ||
                         (!context.mounted || !ownsScope())) {
@@ -67,11 +68,15 @@ class MediaCacheBlocker extends HookConsumerWidget {
                     try {
                       final deleted = await cache.clear();
                       if ((!context.mounted || !ownsScope())) return;
-                      outcome.value =
-                          '实际回收 $deleted 字节，受保护原件已保留。请重新尝试准备；仍不足时减少选择或在手机处理。';
+                      outcome.value = '已释放 ${bytes(deleted)}。你可以重试，或减少选择的文件数。';
                       ref.invalidate(cacheStatusProvider);
                     } catch (error) {
-                      if (ownsScope()) outcome.value = '清理未完成：$error';
+                      if (ownsScope()) {
+                        outcome.value = failureMessage(
+                          error,
+                          fallback: '无法清理临时文件。请关闭正在使用的文件后再试。',
+                        );
+                      }
                     } finally {
                       if (ownsScope()) busy.value = false;
                     }
@@ -102,7 +107,7 @@ Future<void> showMediaCacheAdmissionFailure(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('$error'),
+          Text(failureMessage(error, fallback: '无法准备临时文件。请检查本机存储空间。')),
           MediaCacheBlocker(
             onReduceSelection: canReduceSelection
                 ? () => Navigator.pop(context)

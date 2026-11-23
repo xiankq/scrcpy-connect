@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
+import androidx.core.content.FileProvider
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.lang.ref.WeakReference
@@ -72,6 +73,23 @@ class PlatformDocuments private constructor(private val context: Context) {
         if (!method.startsWith("documents.platform.")) return false
         if (owner.activity() !== activity) {result.error("cancelled", "文档页面已由新 Activity 接管。", null); return true}
         val action = method.removePrefix("documents.platform.")
+        if (action == "openPreparedFile") {
+            val path = params["path"] as? String
+            if (path.isNullOrBlank()) {
+                result.error("invalid_argument", "缺少已取回文件的路径。", null)
+                return true
+            }
+            val uri = FileProvider.getUriForFile(
+                context, "${context.packageName}.fileProvider.com.crazecoder.openfile", File(path),
+            )
+            val view = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, resolver.getType(uri) ?: "application/octet-stream")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            activity.startActivity(Intent.createChooser(view, "使用其他应用打开"))
+            result.success(emptyMap<String, Any>())
+            return true
+        }
         if (action == "environment") {
             // 与 path_provider 和 IncomingShares 共用逻辑根；Dart 固定实际根并映射其内路径，避免 /data/user/0 与 /data/data 的别名破坏词法授权。
             result.success(mapOf("cacheDirectory" to context.cacheDir.absolutePath,

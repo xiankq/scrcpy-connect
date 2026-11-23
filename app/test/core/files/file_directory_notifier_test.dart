@@ -75,7 +75,7 @@ void main() {
     expect(container.read(fileDirectoryProvider(_target)).verified, isTrue);
   });
 
-  test('目录变化只刷新匹配范围，刷新期间旧快照保留但不可操作', () async {
+  test('子目录变化刷新上级的目录项，刷新期间旧快照保留但不可操作', () async {
     container.listen(fileDirectoryProvider(_target), (_, _) {});
     await _flush(container);
     directories.complete(0);
@@ -100,7 +100,7 @@ void main() {
       const FileChange(
         FileChangeKind.directory,
         deviceId: 'device',
-        path: '/sdcard',
+        path: '/sdcard/Download',
       ),
     );
     final pending = container.read(fileDirectoryProvider(_target));

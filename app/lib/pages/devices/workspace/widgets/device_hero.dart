@@ -1,21 +1,21 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
+import 'package:scrcpy_connect/core/devices/device_query_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
-import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/device_summary.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
+import 'package:scrcpy_connect/router/remote_windows.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/devices/device_access.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/widgets/dialogs.dart';
 
 class DeviceHero extends HookConsumerWidget {
-  const DeviceHero({super.key, required this.device});
+  const DeviceHero({super.key, required this.device, this.pane = false});
   final DeviceSnapshot device;
+  final bool pane;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -29,73 +29,122 @@ class DeviceHero extends HookConsumerWidget {
         identical(currentBusy.value, busy) &&
         identical(connections, ref.read(deviceConnectionsProvider));
     final online = device.status == DeviceConnectionStatus.connected;
+    final lifecycle = useAppLifecycleState();
+    final visible =
+        RemoteWindows.isVisible(context) &&
+        ModalRoute.isCurrentOf(context) != false &&
+        (lifecycle == null || lifecycle == AppLifecycleState.resumed);
+    final connectionId = device.connectionId;
+    final battery = online && visible && connectionId != null
+        ? ref.watch(
+            deviceBatteryProvider(device.id, connectionId: connectionId),
+          )
+        : null;
     final unauthorized = device.status == DeviceConnectionStatus.unauthorized;
     final connecting = busy.value || deviceConnectionInProgress(device);
     final id = device.id;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ContentPanel(
-          child: InkWell(
-            onTap: () => DeviceDetailsRoute(deviceId: id).push<void>(context),
-            borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
-            child: Row(
-              children: [
-                Expanded(
-                  child: DeviceSummary(device: device, connecting: busy.value),
-                ),
-                const Icon(
-                  LucideIcons.chevronRight,
-                  size: DesignTokens.componentIconSmallSize,
-                ),
-              ],
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final mainAction = FilledButton(
+      style: FilledButton.styleFrom(
+        minimumSize: const Size.fromHeight(
+          DesignTokens.componentWorkspacePrimaryActionHeight,
+        ),
+        backgroundColor: connecting
+            ? dark
+                  ? DesignTokens.colorMutedDark
+                  : DesignTokens.colorMuted
+            : null,
+        foregroundColor: connecting ? theme.colorScheme.onSurface : null,
+      ),
+      onPressed: connecting
+          ? busy.value && !deviceConnectionInProgress(device)
+                ? null
+                : () => stopDeviceConnection(context, ref, device)
+          : () async {
+              if (online) {
+                await openRemoteRoute(context, deviceId: id);
+              } else {
+                busy.value = true;
+                try {
+                  await startDeviceConnection(context, ref, device);
+                } finally {
+                  if (isCurrent()) busy.value = false;
+                }
+              }
+            },
+      child: Text(
+        connecting
+            ? '取消连接'
+            : online
+            ? '打开手机屏幕'
+            : unauthorized
+            ? '重新授权'
+            : device.status == .failed
+            ? '重试'
+            : '连接',
+      ),
+    );
+    final details = FilledButton(
+      style: FilledButton.styleFrom(
+        minimumSize: const Size.fromHeight(
+          DesignTokens.componentWorkspacePrimaryActionHeight,
+        ),
+        backgroundColor: theme.colorScheme.surface,
+        foregroundColor: theme.colorScheme.onSurface,
+      ),
+      onPressed: () => DeviceDetailsRoute(deviceId: id).push<void>(context),
+      child: const Text('设备详情'),
+    );
+    return Material(
+      color: dark
+          ? DesignTokens.componentDeviceHeroDarkBackgroundColor
+          : DesignTokens.componentDeviceHeroBackgroundColor,
+      borderRadius: BorderRadius.circular(
+        DesignTokens.componentDeviceHeroRounded,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(DesignTokens.componentDeviceHeroPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            DeviceSummary(
+              device: device,
+              battery: battery?.hasError == false
+                  ? battery?.value?.value
+                  : null,
+              connecting: busy.value,
+              pane: pane,
             ),
-          ),
+            const SizedBox(height: DesignTokens.componentDeviceHeroGap),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final scale = MediaQuery.textScalerOf(context).scale(1);
+                return constraints.maxWidth / scale < 240
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          mainAction,
+                          const SizedBox(height: DesignTokens.spacingXs),
+                          details,
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          Expanded(flex: 3, child: mainAction),
+                          const SizedBox(
+                            width:
+                                DesignTokens.spacingSm -
+                                DesignTokens.spacingMicro,
+                          ),
+                          Expanded(flex: 2, child: details),
+                        ],
+                      );
+              },
+            ),
+          ],
         ),
-        const SizedBox(height: DesignTokens.spacingMd),
-        FilledButton.icon(
-          onPressed: connecting
-              ? null
-              : () async {
-                  if (online) {
-                    await openRemoteRoute(context, deviceId: id);
-                  } else if (device.transport == DeviceTransport.usb) {
-                    await UsbGuideRoute(deviceId: id).push<void>(context);
-                  } else if (unauthorized) {
-                    await AddDeviceRoute(deviceId: id).push<void>(context);
-                  } else {
-                    busy.value = true;
-                    try {
-                      await connections.connectDevice(id);
-                    } catch (error) {
-                      if (context.mounted && isCurrent()) {
-                        feedback(context, '$error');
-                      }
-                    }
-                    if (!isCurrent()) return;
-                    await ref.read(deviceListProvider.notifier).refresh();
-                    if (isCurrent()) busy.value = false;
-                  }
-                },
-          icon: Icon(
-            online
-                ? LucideIcons.smartphone
-                : unauthorized
-                ? LucideIcons.shieldCheck
-                : LucideIcons.link,
-            size: DesignTokens.componentIconActionSize,
-          ),
-          label: Text(
-            connecting
-                ? '正在连接'
-                : online
-                ? '打开手机屏幕'
-                : unauthorized
-                ? '重新授权'
-                : '连接手机',
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:scrcpy_connect/core/media/models/video_output.dart';
 import 'package:scrcpy_connect/core/media/models/video_playback_resumed.dart';
@@ -127,9 +128,14 @@ class RemoteWindow {
           if (!noticeIsCurrent) return null;
           presentation.updateSession(sessionView);
           presentation.disconnect(
-            session.reason ??
-                presentation.error ??
-                '连接已中断，当前画面已暂停。恢复首帧后才能继续操作。',
+            failureCodeMessage(
+              session.failureCode,
+              fallback:
+                  presentation.error ??
+                  (session.status == .stopped
+                      ? '手机画面已关闭。需要时可重新打开。'
+                      : '手机画面已断开。请检查手机连接后重试。'),
+            ),
           );
           releaseInputs = true;
           previousBinding = outgoing;
@@ -193,6 +199,7 @@ class RemoteWindow {
           final session = view.session;
           return session.deviceId == deviceId &&
               session.packageName == packageName &&
+              !session.recordOnly &&
               (session.launchOutcome == .unknown || session.live);
         }).firstOrNull;
       }
@@ -356,17 +363,14 @@ class RemoteWindow {
     _view = null;
     presentation.detachBinding();
     if (owned != null) {
-      unawaited(
-        owned.release(afterInput: releases).catchError((Object _) => null),
-      );
+      unawaited(owned.release(afterInput: releases));
     }
     // 操作记录的检查不依赖旧输入或捕获暂停的回执。
     presentation.showUnknownAppLaunch(_unverifiedView(record.snapshot));
   }
 
-  Future<String?> convertToIndependent({
+  Future<String?> verifiedForegroundApp({
     required bool Function() canSendInput,
-    required Future<void> Function() releaseInputs,
   }) async {
     if (!isCurrent) return null;
     final binding = presentation.binding;
@@ -411,14 +415,6 @@ class RemoteWindow {
         verified.deviceId != id) {
       throw const RequestFailure('foreground_unavailable', '手机前台应用已变化，请重试。');
     }
-    await owned!.close(afterInput: releaseInputs());
-    if (!isCurrent ||
-        presentation.exiting ||
-        presentation.binding != binding ||
-        connectionId() != connection) {
-      return null;
-    }
-    presentation.detachBinding();
     return package;
   }
 
@@ -548,7 +544,7 @@ class RemoteWindow {
     final release = releaseInputs();
     final owned = _view;
     if (!presentation.exiting && owned != null) {
-      await owned.close(afterInput: release).catchError((Object _) => null);
+      await owned.close(afterInput: release);
     }
     await release;
   }

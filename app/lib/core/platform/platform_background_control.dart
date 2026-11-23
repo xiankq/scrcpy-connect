@@ -43,13 +43,13 @@ final class PlatformBackgroundControl implements BackgroundControl {
         title: Platform.isIOS
             ? 'iOS 后台限制'
             : Platform.isMacOS || Platform.isWindows || Platform.isLinux
-            ? '桌面进程中的活动'
-            : '后台能力尚未确认',
+            ? '应用运行时保持连接'
+            : '后台运行状态未知',
         reason: Platform.isIOS
-            ? 'iOS 当前不支持通用持续后台保持。离开 App 后，连接、传输及提醒可能暂停；请返回前台后核对活动。'
+            ? '离开应用后，连接、传输和提醒可能暂停。请回到应用查看进度。'
             : Platform.isMacOS || Platform.isWindows || Platform.isLinux
-            ? '连接与传输依赖应用进程继续运行。系统休眠、退出或结束进程后不保证活动继续；再次打开会核对实际状态。'
-            : '当前平台未确认持续后台能力。请保持 App 在前台，并核对活动的实际状态。',
+            ? '退出应用或电脑休眠时，连接和传输可能暂停。再次打开应用可查看进度。'
+            : '暂时无法确认后台能否保持连接。请让应用留在前台。',
       );
     }
     try {

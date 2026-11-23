@@ -72,7 +72,7 @@ void main() {
     fixture.reconciliation = () => Future.error(StateError('current failure'));
     await lifecycle.reconcileState();
     expect(fixture.window.presentation.stateUnverified, isTrue);
-    expect(fixture.window.presentation.error, contains('current failure'));
+    expect(fixture.window.presentation.error, contains('手机屏幕操作未完成'));
   });
 
   test('遮挡保留一次恢复意图，明确停止作废准备中的恢复且不再启动', () async {
@@ -216,7 +216,7 @@ void main() {
     expect(update.previousBinding, binding);
     expect(update.wake, stopped.wake);
     expect(fixture.window.presentation.session!.session.live, isFalse);
-    expect(fixture.window.presentation.error, 'ended');
+    expect(fixture.window.presentation.error, '手机画面已关闭。需要时可重新打开。');
   });
 
   test('待核验或窗口已销毁时迟到媒体事件不能产生输入和提示工作', () async {

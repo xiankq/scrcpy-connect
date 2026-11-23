@@ -80,6 +80,8 @@ abstract final class GlassMaterial {
     return quality(context) == liquid.GlassQuality.minimal
         ? settings.copyWith(
             blur: 0,
+            frost: 0,
+            bodyShade: 0,
             glassColor: theme.colorScheme.surface,
             bodyMode: liquid.GlassBodyMode.clear,
           )
@@ -87,7 +89,7 @@ abstract final class GlassMaterial {
   }
 
   static double navigationHeight(BuildContext context) {
-    final label = Theme.of(context).textTheme.labelLarge!;
+    final label = Theme.of(context).textTheme.bodySmall!;
     return math.max(
       DesignTokens.componentNavigationHeight,
       DesignTokens.componentIconSize +
@@ -203,6 +205,7 @@ class Glass extends StatefulWidget {
     this.solid = false,
     this.showShadow = true,
     this.variant = GlassVariant.regular,
+    this.circular = false,
     this.clipExpansion = const EdgeInsets.all(
       DesignTokens.componentGlassRefractionWidth,
     ),
@@ -212,6 +215,7 @@ class Glass extends StatefulWidget {
   final double radius;
   final EdgeInsetsGeometry padding;
   final bool solid;
+  final bool circular;
 
   /// Toolbars turn this off when their parent has a sampling edge, so the
   /// edge never crops a button shadow.
@@ -254,12 +258,11 @@ class Glass extends StatefulWidget {
     };
     final resolved = base.copyWith(
       blur: clear ? DesignTokens.componentGlassClearBlur : null,
+      frost: clear ? 0 : null,
+      bodyShade: clear ? 0 : null,
+      saturation: clear ? 1 : null,
       bodyMode: clear ? liquid.GlassBodyMode.clear : null,
-      glassColor: clear
-          ? (dark
-                ? DesignTokens.colorGlassClearDark
-                : DesignTokens.colorGlassClear)
-          : null,
+      glassColor: clear ? DesignTokens.colorGlassClear : null,
     );
     return includeShadow ? resolved : resolved.copyWith(shadow: const []);
   }
@@ -274,7 +277,8 @@ class Glass extends StatefulWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: opaque ? theme.colorScheme.surface : null,
-          borderRadius: BorderRadius.circular(radius),
+          shape: circular ? BoxShape.circle : BoxShape.rectangle,
+          borderRadius: circular ? null : BorderRadius.circular(radius),
           border: opaque ? Border.all(color: theme.colorScheme.outline) : null,
         ),
         child: Material(
@@ -285,17 +289,21 @@ class Glass extends StatefulWidget {
     );
     Widget surface;
     if (opaque) {
-      surface = ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: content,
-      );
+      surface = circular
+          ? ClipOval(child: content)
+          : ClipRRect(
+              borderRadius: BorderRadius.circular(radius),
+              child: content,
+            );
     } else {
       if (ImageFilter.isShaderFilterSupported && !GlassMaterial.isInitialized) {
         throw StateError(
           'Await GlassMaterial.initialize() before mounting glass controls.',
         );
       }
-      final shape = liquid.LiquidRoundedSuperellipse(borderRadius: radius);
+      final shape = circular
+          ? const liquid.LiquidOval()
+          : liquid.LiquidRoundedSuperellipse(borderRadius: radius);
       final group = context.dependOnInheritedWidgetOfExactType<_GlassGroup>();
       surface = group?.variant == variant
           ? liquid.AdaptiveGlass.grouped(
@@ -315,7 +323,8 @@ class Glass extends StatefulWidget {
     }
     return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(radius),
+        shape: circular ? BoxShape.circle : BoxShape.rectangle,
+        borderRadius: circular ? null : BorderRadius.circular(radius),
         boxShadow: showShadow
             ? [
                 BoxShadow(

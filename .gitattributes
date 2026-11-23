@@ -1,2 +1,5 @@
 # A unified patch's empty context line contains a required leading space.
 servers/scrcpy/patches/*.patch whitespace=-blank-at-eol
+
+# The media build verifies these patches against hashes of the LF bytes.
+packages/media_codec/third_party/patches/*.patch text eol=lf

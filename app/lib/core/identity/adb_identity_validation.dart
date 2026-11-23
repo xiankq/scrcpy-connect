@@ -57,6 +57,6 @@ String decodeAdbPrivateKeyFile(List<int> bytes) {
     }
     return normalizeAdbPrivateKeyPem(text);
   } on FormatException {
-    throw const AdbPrivateKeyFileFailure('文件不是 UTF-8 文本，请选择 PEM 私钥文件。');
+    throw const AdbPrivateKeyFileFailure('无法读取这个密钥文件。请选择 PEM 格式的私钥文件。');
   }
 }

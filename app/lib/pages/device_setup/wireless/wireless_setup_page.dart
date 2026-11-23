@@ -7,6 +7,7 @@ import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/pages/device_setup/wireless/models/wireless_setup_state.dart';
 import 'package:scrcpy_connect/pages/device_setup/wireless/wireless_setup_notifier.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/choice_picker.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/devices/device_access.dart';
@@ -101,32 +102,42 @@ class WirelessSetupPage extends HookConsumerWidget {
                     ),
                     const SizedBox(height: DesignTokens.spacingMd),
                     if (state.loading) const ContentLoadingIndicator(),
-                    DropdownButtonFormField<String>(
-                      key: ValueKey(
-                        '${state.addresses.map((a) => a.address).join(',')}:$choice',
-                      ),
+                    FormField<String>(
+                      key: ValueKey(choice),
                       initialValue: choice,
-                      isExpanded: true,
-                      decoration: const InputDecoration(labelText: '目标设备网络地址'),
-                      hint: Text(
-                        state.addresses.isEmpty ? '暂无可用地址' : '选择目标设备的网络地址',
-                      ),
-                      items: [
-                        for (final candidate in state.addresses)
-                          DropdownMenuItem(
-                            value: candidate.address,
-                            child: Text(
-                              '${candidate.address}${candidate.interface.isEmpty ? '' : ' · ${candidate.interface}'}',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                      ],
-                      onChanged:
-                          state.busy || state.loading || state.addresses.isEmpty
-                          ? null
-                          : (next) => selected.value = next,
                       validator: (next) =>
                           next == null ? '请选择此设备当前的网络地址' : null,
+                      builder: (field) {
+                        final options = {
+                          for (final candidate in state.addresses)
+                            candidate.address: candidate.interface.isEmpty
+                                ? candidate.address
+                                : '${candidate.address} · ${candidate.interface}',
+                        };
+                        return ChoiceField(
+                          label: '目标设备网络地址',
+                          value:
+                              options[choice] ??
+                              (options.isEmpty ? '暂无可用地址' : '选择网络地址'),
+                          errorText: field.errorText,
+                          onPressed:
+                              state.busy || state.loading || options.isEmpty
+                              ? null
+                              : (anchor) async {
+                                  final next = await showChoicePicker<String>(
+                                    context: field.context,
+                                    title: '目标设备网络地址',
+                                    options: options.keys,
+                                    label: (option) => options[option]!,
+                                    isSelected: (option) => option == choice,
+                                    anchorPoint: anchor,
+                                  );
+                                  if (next != null && current()) {
+                                    selected.value = next;
+                                  }
+                                },
+                        );
+                      },
                     ),
                     if (!state.loading &&
                         state.error == null &&

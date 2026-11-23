@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/devices/device_notifications.dart';
 import 'package:scrcpy_connect/core/devices/device_query_provider.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
@@ -12,9 +13,8 @@ import 'package:scrcpy_connect/pages/notifications/widgets/notification_card.dar
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
+import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
-import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/widgets/devices/device_source_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
@@ -57,25 +57,22 @@ class NotificationsPage extends HookConsumerWidget {
         if (status.supported &&
             status.permissionGranted == true &&
             status.notificationChannelEnabled != false) {
-          feedback(context, '系统通知提醒已开启；当前通知页可见时仅更新列表。');
+          feedback(context, '系统通知提醒已开启');
         } else if (!requested && status.canOpenSettings) {
           final opened = await alerts.openSettings();
           if (context.mounted) {
-            feedback(
-              context,
-              opened
-                  ? '请在系统设置中允许通知提醒；仍可在这里查看当前通知。'
-                  : '暂时无法打开系统通知设置；仍可在这里查看当前通知。',
-            );
+            feedback(context, opened ? '请在系统设置中允许通知提醒' : '无法打开系统通知设置');
           }
         } else {
-          feedback(
-            context,
-            '${status.reason.isEmpty ? '系统提醒尚未获准' : status.reason}；仍可在这里查看当前通知。',
-          );
+          feedback(context, status.reason.isEmpty ? '系统提醒尚未获准' : status.reason);
         }
       } catch (error) {
-        if (context.mounted) feedback(context, '系统提醒未能确认开启：$error');
+        if (context.mounted) {
+          feedback(
+            context,
+            failureMessage(error, fallback: '无法开启通知提醒。请在系统设置中检查通知权限。'),
+          );
+        }
       } finally {
         if (context.mounted) enablingAlerts.value = false;
       }
@@ -84,16 +81,12 @@ class NotificationsPage extends HookConsumerWidget {
     final notificationHeader = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        DeviceSourceRow(
-          device: device,
-          padding: const EdgeInsets.only(bottom: DesignTokens.spacingSm),
-        ),
         if (showEnableAlerts)
           Padding(
             padding: const EdgeInsets.only(bottom: DesignTokens.spacingSm),
             child: OutlinedButton(
               onPressed: enablingAlerts.value ? null : enableAlerts,
-              child: Text(enablingAlerts.value ? '正在核验系统提醒…' : '开启系统提醒'),
+              child: Text(enablingAlerts.value ? '正在检查通知权限…' : '开启系统提醒'),
             ),
           ),
       ],
@@ -121,6 +114,13 @@ class NotificationsPage extends HookConsumerWidget {
     final notificationsAccess = ref.watch(deviceNotificationsProvider);
     final queryProvider = deviceNotificationsSnapshotProvider(device.id);
     final query = ref.watch(queryProvider);
+    final snapshot = query.value;
+    final clearable = {
+      if (snapshot?.live == true)
+        for (final notification in snapshot!.notifications)
+          if (!notification.groupSummary && notification.canDismiss == true)
+            notification.id,
+    };
     void refresh() => ref.invalidate(queryProvider);
     final clearing = useValueNotifier(false, [notificationsAccess, device.id]);
     useListenable(clearing);
@@ -131,32 +131,24 @@ class NotificationsPage extends HookConsumerWidget {
         identical(currentClearing.value, clearing) &&
         identical(notificationsAccess, ref.read(deviceNotificationsProvider));
 
-    Future<void> clearAll() async {
+    Future<void> clearAll(Set<String> selected) async {
       if (clearing.value || !notificationsCurrent()) return;
       clearing.value = true;
       try {
         final current = await notificationsAccess.readNotifications(device.id);
         if (!context.mounted || !notificationsCurrent()) return;
         if (!current.live) {
-          feedback(context, '请先核验手机当前通知，再清除。');
+          feedback(context, '请先刷新通知列表，再清除通知。');
           return;
         }
         var cleared = 0;
         var pending = 0;
         var failed = 0;
         final candidates = current.notifications
-            .where((item) => item.canDismiss == true)
+            .where(
+              (item) => selected.contains(item.id) && item.canDismiss == true,
+            )
             .toList();
-        if (candidates.isNotEmpty &&
-            (!await confirm(
-                  context,
-                  '清除全部通知？',
-                  '将清除 ${deviceName(device)} 当前可清除的 ${candidates.length} 条通知。常驻通知和无法核验的通知会保留；清除不代表原应用已读。',
-                  action: '清除通知',
-                ) ||
-                !notificationsCurrent())) {
-          return;
-        }
         for (final item in candidates) {
           // 每个不透明引用都在手机再次核验，不本机隐藏项目，也不重试结果未知的动作。
           if (!context.mounted || !notificationsCurrent()) return;
@@ -184,12 +176,15 @@ class NotificationsPage extends HookConsumerWidget {
                 ? '没有可清除的通知；常驻通知由手机应用管理。'
                 : '已清除 $cleared 条通知'
                       '${pending > 0 ? '，$pending 条等待手机确认' : ''}'
-                      '${failed > 0 ? '，$failed 条未能确认，请刷新核对' : ''}。',
+                      '${failed > 0 ? '，$failed 条暂时无法确认，请刷新列表' : ''}。',
           );
         }
       } catch (error) {
         if (context.mounted && notificationsCurrent()) {
-          feedback(context, '$error');
+          feedback(
+            context,
+            failureMessage(error, fallback: '暂时无法确认哪些通知已清除。请先刷新列表。'),
+          );
         }
       } finally {
         if (notificationsCurrent()) clearing.value = false;
@@ -211,7 +206,10 @@ class NotificationsPage extends HookConsumerWidget {
       } catch (error) {
         if (context.mounted && notificationsCurrent()) {
           refresh();
-          feedback(context, '$error');
+          feedback(
+            context,
+            failureMessage(error, fallback: '暂时无法确认这条通知是否已清除。请先刷新列表。'),
+          );
         }
       } finally {
         if (notificationsCurrent()) clearing.value = false;
@@ -228,24 +226,40 @@ class NotificationsPage extends HookConsumerWidget {
         identical(currentStarting.value, starting) &&
         identical(observation, ref.read(deviceObservationProvider));
     return PageFrame(
-      title: '实时通知',
+      title: '通知',
       actions: [
         Semantics(
           liveRegion: true,
           value: clearing.value ? '正在清除通知' : '',
           child: GlassActionIcon(
             tooltip: '清除全部通知',
-            onPressed: clearing.value ? null : clearAll,
-            icon: const Icon(LucideIcons.checkCheck),
+            onPressed: clearing.value || clearable.isEmpty
+                ? null
+                : () => clearAll(clearable),
+            icon: const Icon(AppIcons.clearNotifications),
           ),
         ),
       ],
       child: AsyncContent(
+        loadingPlaceholder: GroupedListView(
+          padding: const EdgeInsets.all(DesignTokens.spacingMd),
+          children: [
+            notificationHeader,
+            const SkeletonRows(
+              height: DesignTokens.componentNotificationListItemHeight,
+              leadingSize: DesignTokens.componentNotificationAppIconSize,
+              lines: 3,
+              cardRadius: DesignTokens.componentNotificationListItemRounded,
+              gap: DesignTokens.componentNotificationListItemGap,
+            ),
+          ],
+        ),
         loading: query.isLoading,
         data: query.value,
         error: query.error,
         onRefresh: refresh,
         emptyTitle: '当前无法同步通知',
+        failure: '请确认手机已连接，也可以直接在手机上查看。',
         alternative: TextButton(
           onPressed: () => openRemoteRoute(context, deviceId: device.id),
           child: const Text('在手机上继续处理'),
@@ -259,21 +273,19 @@ class NotificationsPage extends HookConsumerWidget {
               if (observationCurrent()) refresh();
             } catch (error) {
               if (context.mounted && observationCurrent()) {
-                feedback(context, '$error');
+                feedback(
+                  context,
+                  failureMessage(error, fallback: '无法在手机上打开通知。请解锁手机后再试。'),
+                );
               }
             } finally {
               if (observationCurrent()) starting.value = false;
             }
           }
 
-          final notifications = data.notifications
-              .where(
-                (n) =>
-                    !n.groupSummary ||
-                    n.title.trim().isNotEmpty ||
-                    n.body.trim().isNotEmpty,
-              )
-              .toList();
+          final notifications =
+              data.notifications.where((n) => !n.groupSummary).toList()
+                ..sort((a, b) => (b.postedAt ?? 0).compareTo(a.postedAt ?? 0));
           final state = data.status;
           if (notifications.isEmpty && state != .available) {
             return emptyWithHeader(
@@ -282,10 +294,10 @@ class NotificationsPage extends HookConsumerWidget {
                 title: switch (state) {
                   .needsSetup => '通知访问需要设置',
                   .stopped => '通知观察已停止',
-                  .unknown || .checking || .starting => '通知状态尚未核验',
+                  .unknown || .checking || .starting => '暂时无法读取手机通知',
                   .available || .limited => '通知同步受限',
                 },
-                message: data.reason ?? '这台设备尚未提供可靠的通知访问。你可以在手机原应用中处理。',
+                message: '无法读取手机通知。请解锁手机后刷新，也可以直接在手机上查看。',
                 action: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -296,7 +308,7 @@ class NotificationsPage extends HookConsumerWidget {
                     ),
                     TextButton(
                       onPressed: starting.value ? null : verify,
-                      child: Text(state == .stopped ? '启用通知与来电观察' : '重新核验通知'),
+                      child: Text(state == .stopped ? '开启通知与来电' : '刷新通知'),
                     ),
                   ],
                 ),
@@ -319,6 +331,8 @@ class NotificationsPage extends HookConsumerWidget {
           final hasStatus =
               data.status == .limited && (data.reason?.isNotEmpty ?? false);
           final offset = hasStatus ? 2 : 1;
+          final now = DateTime.now();
+          final yesterday = DateTime(now.year, now.month, now.day - 1);
           Key notificationKey(DeviceNotification item) =>
               ValueKey('${device.id}:${item.id}');
           final indices = <Key, int>{
@@ -337,19 +351,52 @@ class NotificationsPage extends HookConsumerWidget {
                   return notificationHeader;
                 }
                 if (hasStatus && index == 1) {
-                  return StateNote(data.reason!, icon: LucideIcons.circleAlert);
+                  return const StateNote(
+                    '这里只能显示部分手机通知。其余通知请在手机上查看。',
+                    icon: LucideIcons.circleAlert,
+                  );
                 }
                 final notification = notifications[index - offset];
+                final position = index - offset;
+                final posted = notification.postedTime;
+                final firstOfDay =
+                    posted != null &&
+                    (position == 0 ||
+                        !DateUtils.isSameDay(
+                          posted,
+                          notifications[position - 1].postedTime,
+                        ));
                 return Padding(
                   key: notificationKey(notification),
                   padding: const EdgeInsets.only(
-                    bottom: DesignTokens.spacingSm,
+                    bottom: DesignTokens.componentNotificationListItemGap,
                   ),
-                  child: NotificationCard(
-                    device: device,
-                    notification: notification,
-                    clearing: clearing.value,
-                    onClear: () => clearNotification(notification),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (firstOfDay)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            top: DesignTokens.spacingXs,
+                            bottom: DesignTokens.spacingSm,
+                          ),
+                          child: Text(
+                            DateUtils.isSameDay(posted, now)
+                                ? '今天'
+                                : DateUtils.isSameDay(posted, yesterday)
+                                ? '昨天'
+                                : MaterialLocalizations.of(context)
+                                      .formatShortMonthDay(posted),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      NotificationCard(
+                        device: device,
+                        notification: notification,
+                        clearing: clearing.value,
+                        onClear: () => clearNotification(notification),
+                      ),
+                    ],
                   ),
                 );
               },

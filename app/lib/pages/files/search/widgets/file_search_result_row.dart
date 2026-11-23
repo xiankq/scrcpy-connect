@@ -27,68 +27,78 @@ class FileSearchResultRow extends StatelessWidget {
     final path = file.path ?? '';
     final size = folder ? '' : fileSizeLabel(file.size);
     final reason = unavailableReason;
-    final location = reason ?? (folder ? '' : fileParentDirectoryLabel(path));
+    final location = reason ?? fileParentDirectoryLabel(path);
     final kind = FileKind.classify(name: file.name, mime: file.mime);
     return Semantics(
       button: onTap != null,
       child: Tooltip(
         message: path,
-        child: InkWell(
-          onTap: onTap,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minHeight: DesignTokens.componentRowLargeHeight,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                vertical: DesignTokens.spacingSm,
+        child: Material(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minHeight: DesignTokens.componentRowLargeHeight,
               ),
-              child: Row(
-                children: [
-                  ListIconBadge(
-                    icon: folder ? LucideIcons.folder : fileKindIcon(kind),
-                    backgroundColor: folder
-                        ? DesignTokens.colorListIconAmber
-                        : fileKindColor(kind),
-                  ),
-                  const SizedBox(width: DesignTokens.spacingSm),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                        if (location.isNotEmpty) ...[
-                          const SizedBox(height: DesignTokens.spacingXxs),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: DesignTokens.spacingMd,
+                  vertical: DesignTokens.spacingSm,
+                ),
+                child: Row(
+                  children: [
+                    ListIconBadge(
+                      icon: folder ? LucideIcons.folder : fileKindIcon(kind),
+                      backgroundColor: folder
+                          ? DesignTokens.colorListIconAmber
+                          : fileKindColor(
+                              kind,
+                              name: file.name,
+                              mime: file.mime,
+                            ),
+                    ),
+                    const SizedBox(width: DesignTokens.spacingSm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            location,
+                            name,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: reason == null
-                                  ? null
-                                  : theme.colorScheme.error,
-                            ),
+                            style: theme.textTheme.bodyMedium,
                           ),
+                          if (location.isNotEmpty) ...[
+                            const SizedBox(height: DesignTokens.spacingXxs),
+                            Text(
+                              location,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: reason == null
+                                    ? null
+                                    : theme.colorScheme.error,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                  if (size.isNotEmpty) ...[
+                    if (size.isNotEmpty) ...[
+                      const SizedBox(width: DesignTokens.spacingXs),
+                      Text(size, style: theme.textTheme.bodySmall),
+                    ],
                     const SizedBox(width: DesignTokens.spacingXs),
-                    Text(size, style: theme.textTheme.bodySmall),
+                    Icon(
+                      AppIcons.forward,
+                      size: DesignTokens.componentIconSmallSize,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ],
-                  const SizedBox(width: DesignTokens.spacingXs),
-                  Icon(
-                    LucideIcons.chevronRight,
-                    size: DesignTokens.componentIconSmallSize,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ],
+                ),
               ),
             ),
           ),

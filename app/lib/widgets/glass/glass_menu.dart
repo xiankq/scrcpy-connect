@@ -4,14 +4,12 @@ import 'dart:ui';
 import 'package:material_ui/material_ui.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_action_bar.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_press_feedback.dart';
 
-/// 顶部独立按钮使用自己的采样层，避免按压放大被标题栏边界裁切。
-///
-/// 工具栏按钮仍然是官方 `GlassIconButton`，但不把交互光晕扩散到标题平面；
-/// 多按钮集合继续由 [GlassToolbarGroup] 共享一个玻璃平面。
+/// 独立圆键使用自己的采样层，保留控件轮廓与按压高光。
 class GlassToolbarIconButton extends StatelessWidget {
   const GlassToolbarIconButton({
     super.key,
@@ -21,8 +19,6 @@ class GlassToolbarIconButton extends StatelessWidget {
     this.variant = GlassVariant.regular,
     this.size = DesignTokens.componentIconButtonSize,
     this.iconSize = DesignTokens.componentIconSize,
-    this.interactionScale = 1,
-    this.anchorStretch = false,
   });
 
   final Widget icon;
@@ -31,13 +27,21 @@ class GlassToolbarIconButton extends StatelessWidget {
   final GlassVariant variant;
   final double size;
   final double iconSize;
-  final double interactionScale;
-  final bool anchorStretch;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final reduceMotion = GlassMaterial.reduceMotion(context);
     return liquid.GlassIconButton(
-      icon: icon,
+      icon: IconTheme(
+        data: IconThemeData(
+          color: onPressed == null
+              ? theme.disabledColor
+              : theme.colorScheme.onSurface,
+          size: iconSize,
+        ),
+        child: icon,
+      ),
       onPressed: onPressed,
       semanticLabel: semanticLabel,
       size: size,
@@ -45,10 +49,11 @@ class GlassToolbarIconButton extends StatelessWidget {
       settings: GlassMaterial.settings(context, variant: variant),
       quality: GlassMaterial.quality(context),
       useOwnLayer: true,
-      glowColor: Colors.transparent,
-      glowRadius: 0,
-      interactionScale: interactionScale,
-      anchorStretch: anchorStretch,
+      interactionScale: reduceMotion
+          ? 1
+          : DesignTokens.componentGlassInteractionScale,
+      anchorStretch: !reduceMotion,
+      persistPressOnDrag: false,
     );
   }
 }
@@ -75,12 +80,14 @@ class GlassMenuButton extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     required this.actions,
+    this.label,
     this.variant = GlassVariant.regular,
     this.enabled = true,
   }) : assert(actions.length > 0);
   final Widget icon;
   final String tooltip;
   final List<GlassMenuAction> actions;
+  final String? label;
   final GlassVariant variant;
   final bool enabled;
 
@@ -96,21 +103,22 @@ class GlassMenuButton extends StatelessWidget {
           2 * DesignTokens.spacingSm,
     );
     if (!enabled) {
+      if (label case final label?) {
+        return GlassActionBarButton(
+          label: label,
+          icon: icon,
+          tooltip: tooltip,
+          onPressed: null,
+        );
+      }
       return Tooltip(
         message: tooltip,
-        child: liquid.GlassIconButton(
+        excludeFromSemantics: true,
+        child: GlassToolbarIconButton(
           icon: icon,
           semanticLabel: tooltip,
           onPressed: null,
-          size: DesignTokens.componentIconButtonSize,
-          iconSize: DesignTokens.componentIconSize,
-          settings: GlassMaterial.settings(context, variant: variant),
-          quality: GlassMaterial.quality(context),
-          useOwnLayer: true,
-          interactionScale: reducedMotion
-              ? 1
-              : DesignTokens.componentGlassInteractionScale,
-          anchorStretch: !reducedMotion,
+          variant: variant,
         ),
       );
     }
@@ -121,13 +129,36 @@ class GlassMenuButton extends StatelessWidget {
       foregroundColor: theme.colorScheme.onSurface,
       iconSize: DesignTokens.componentIconSize,
     );
-    if (reducedMotion || !ImageFilter.isShaderFilterSupported) {
+    Widget trigger(VoidCallback onPressed) => switch (label) {
+      final label? => GlassActionBarButton(
+        label: label,
+        icon: icon,
+        tooltip: tooltip,
+        onPressed: onPressed,
+      ),
+      null => GlassActionIcon(
+        style: triggerStyle,
+        icon: icon,
+        tooltip: tooltip,
+        onPressed: onPressed,
+      ),
+    };
+    if (label != null ||
+        reducedMotion ||
+        !ImageFilter.isShaderFilterSupported) {
       // 后端的“瞬时”形变仍使用空间弹簧。
       // 减少动态效果或不支持形变时保留框架菜单生命周期，材料仍交给自适应玻璃后端。
       return MenuAnchor(
         animated: !reducedMotion,
         clipBehavior: Clip.none,
         consumeOutsideTap: true,
+        alignmentOffset: label == null
+            ? Offset.zero
+            : const Offset(
+                0,
+                DesignTokens.componentFileActionBarPadding +
+                    DesignTokens.spacingXs,
+              ),
         style: const MenuStyle(
           backgroundColor: WidgetStatePropertyAll(
             DesignTokens.colorTransparent,
@@ -181,13 +212,21 @@ class GlassMenuButton extends StatelessWidget {
             ),
           ),
         ],
-        builder: (context, controller, child) => GlassActionIcon(
-          style: triggerStyle,
-          icon: icon,
-          tooltip: tooltip,
-          onPressed: () =>
-              controller.isOpen ? controller.close() : controller.open(),
-        ),
+        builder: (context, controller, child) {
+          void toggle() =>
+              controller.isOpen ? controller.close() : controller.open();
+          if (label != null) return trigger(toggle);
+          return Tooltip(
+            message: tooltip,
+            excludeFromSemantics: true,
+            child: GlassToolbarIconButton(
+              icon: icon,
+              semanticLabel: tooltip,
+              variant: variant,
+              onPressed: toggle,
+            ),
+          );
+        },
       );
     }
     return liquid.GlassAccessibilityScope(
@@ -202,12 +241,7 @@ class GlassMenuButton extends StatelessWidget {
         stretch: reducedMotion
             ? 0
             : DesignTokens.componentGlassInteractionStretch,
-        triggerBuilder: (context, toggle) => GlassActionIcon(
-          style: triggerStyle,
-          icon: icon,
-          tooltip: tooltip,
-          onPressed: toggle,
-        ),
+        triggerBuilder: (context, toggle) => trigger(toggle),
         items: [
           for (final action in actions)
             liquid.GlassMenuItem(
@@ -242,8 +276,11 @@ class GlassToolbarGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final compactStyle = IconButton.styleFrom(
       minimumSize: const Size.square(DesignTokens.componentIconButtonSize),
+      foregroundColor: theme.colorScheme.onSurface,
+      disabledForegroundColor: theme.disabledColor,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.standard,
     );
@@ -252,6 +289,7 @@ class GlassToolbarGroup extends StatelessWidget {
       child: GlassPressFeedback(
         child: Glass(
           radius: DesignTokens.roundedFull,
+          circular: children.length == 1,
           variant: variant,
           showShadow: false,
           child: IconButtonTheme(
@@ -263,7 +301,13 @@ class GlassToolbarGroup extends StatelessWidget {
             child: Wrap(
               alignment: WrapAlignment.center,
               crossAxisAlignment: WrapCrossAlignment.center,
-              children: children,
+              children: [
+                for (final action in children)
+                  SizedBox.square(
+                    dimension: DesignTokens.componentIconButtonSize,
+                    child: action,
+                  ),
+              ],
             ),
           ),
         ),
@@ -272,31 +316,30 @@ class GlassToolbarGroup extends StatelessWidget {
   }
 }
 
-/// iPhone Duo 侧边栏中的共享工具操作平面。
-///
-/// 子按钮保持普通按钮语义，共用一个玻璃层；这样侧边轴不会叠出多个
-/// 独立镜片，也不会把按钮交互光晕裁切到标题栏边界之外。
-class GlassVerticalToolbarGroup extends StatelessWidget {
-  const GlassVerticalToolbarGroup({
+/// 侧边控件按宿主的物理边缘定位。每个按钮拥有自己的轮廓。
+class GlassSideToolbar extends StatelessWidget {
+  const GlassSideToolbar({
     super.key,
+    required this.bar,
     required this.children,
-    this.variant = GlassVariant.regular,
   });
 
+  final liquid.GlassVerticalBarData bar;
   final List<Widget> children;
-  final GlassVariant variant;
 
   @override
-  Widget build(BuildContext context) => GlassSurfaceGroup(
-    variant: variant,
-    child: GlassPressFeedback(
-      child: Glass(
-        radius: DesignTokens.roundedFull,
-        variant: variant,
-        showShadow: false,
-        padding: const EdgeInsets.symmetric(vertical: DesignTokens.spacingXs),
-        child: Column(mainAxisSize: MainAxisSize.min, children: children),
+  Widget build(BuildContext context) {
+    final left = bar.edge == liquid.GlassVerticalBarEdge.leading;
+    return Positioned(
+      top: bar.top,
+      left: left ? 0 : null,
+      right: left ? null : 0,
+      width: math.min(bar.width, liquid.GlassVerticalBarMetrics.stripWidth),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        spacing: DesignTokens.spacingXs,
+        children: children,
       ),
-    ),
-  );
+    );
+  }
 }

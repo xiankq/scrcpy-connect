@@ -439,8 +439,8 @@ final class DeviceAudioService {
   void _updated(_DeviceAudioSource entry) {
     try {
       onChanged(DeviceAudioChanged(_snapshot(entry)));
-    } catch (_) {
-      // 投影消费者失败不能中断撤权或丢掉精确原生关闭权。
+    } catch (error, stack) {
+      Zone.current.handleUncaughtError(error, stack);
     }
   }
 

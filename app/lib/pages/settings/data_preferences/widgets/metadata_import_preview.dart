@@ -1,8 +1,13 @@
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/settings/metadata_management.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/page_frame.dart';
+import 'package:scrcpy_connect/widgets/state_note.dart';
+
+import '../../widgets/settings_row.dart';
 
 class MetadataImportPreview extends HookWidget {
   const MetadataImportPreview({super.key, required this.preview});
@@ -12,66 +17,73 @@ class MetadataImportPreview extends HookWidget {
     final importGlobal = useState(false);
     final duplicate = preview.alreadyImported;
     final changes = preview.globalChanges;
-    return SafeArea(
-      child: SingleChildScrollView(
+    return PageFrame(
+      title: '导入预览',
+      onBack: () => Navigator.pop(context),
+      bottom: FilledButton(
+        style: FilledButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(
+              DesignTokens.componentButtonPrimaryRounded,
+            ),
+          ),
+          minimumSize: const Size.fromHeight(
+            DesignTokens.componentButtonPrimaryHeight,
+          ),
+        ),
+        onPressed: () =>
+            Navigator.pop(context, duplicate ? null : importGlobal.value),
+        child: Text(duplicate ? '完成' : '导入 ${preview.newRecords} 条记录'),
+      ),
+      child: GroupedListView(
         padding: const EdgeInsets.all(DesignTokens.spacingMd),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              duplicate ? '此文件已经导入' : '预览设备记录',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: DesignTokens.spacingMd),
-            Text(
-              duplicate
-                  ? '上次已新增 ${preview.receipt!.restored} 条记录，不会重复追加。'
-                  : '将新增 ${preview.newRecords} 条未授权的设备记录。',
-            ),
-            const SizedBox(height: DesignTokens.spacingMd),
-            const Text('不能恢复连接许可，也不会恢复文件中的每设备画质、电源与剪贴板设置。本机已有的设备记录与偏好会保留。'),
-            if (duplicate) ...[
-              const SizedBox(height: DesignTokens.spacingMd),
-              Text(switch (preview.preferencesStatus) {
-                ImportPreferencesStatus.matchesCurrent => '当前全局偏好与此文件一致。',
-                ImportPreferencesStatus.needsReview =>
-                  '上次选择了导入全局偏好，当前值与文件不一致。请到对应设置中核对；这里不会重新应用旧设置。',
-                _ => '上次导入保留了本机全局偏好。',
-              }),
-            ] else if (changes.isNotEmpty) ...[
-              const SizedBox(height: DesignTokens.spacingMd),
-              ConnectSwitchRow(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('同时导入全局偏好'),
-                value: importGlobal.value,
-                onChanged: (next) => importGlobal.value = next,
+        children: [
+          SettingsGroup(
+            children: [
+              SettingsRow(
+                icon: LucideIcons.smartphone,
+                color: DesignTokens.colorListIconPurple,
+                title: duplicate ? '此文件已经导入' : '将新增 ${preview.newRecords} 条记录',
+                subtitle: duplicate
+                    ? '上次新增 ${preview.receipt!.restored} 条记录'
+                    : null,
               ),
-              Text(
-                '默认保留本机设置。开启后将应用以下变更：',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              for (final change in changes)
-                Padding(
-                  padding: const EdgeInsets.only(top: DesignTokens.spacingSm),
-                  child: Text(
-                    '${_preferenceName(change.key)}：${_preferenceValue(change.current)} → ${_preferenceValue(change.imported)}',
+              if (!duplicate && changes.isNotEmpty)
+                SettingsRow(
+                  icon: LucideIcons.settings,
+                  color: DesignTokens.colorListIconBlue,
+                  title: '同时导入全局偏好',
+                  onTap: () => importGlobal.value = !importGlobal.value,
+                  trailing: Checkbox(
+                    value: importGlobal.value,
+                    onChanged: (value) => importGlobal.value = value == true,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        DesignTokens.spacingXxs,
+                      ),
+                    ),
                   ),
                 ),
+              if (importGlobal.value)
+                for (final change in changes)
+                  ListTile(
+                    dense: true,
+                    title: Text(_preferenceName(change.key)),
+                    subtitle: Text(
+                      '${_preferenceValue(change.current)} → ${_preferenceValue(change.imported)}',
+                    ),
+                  ),
             ],
-            const SizedBox(height: DesignTokens.spacingLg),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.pop(context, duplicate ? null : importGlobal.value),
-              child: Text(duplicate ? '完成' : '导入 ${preview.newRecords} 条记录'),
-            ),
-            if (!duplicate)
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('取消'),
-              ),
-          ],
-        ),
+          ),
+          if (duplicate)
+            StateNote(switch (preview.preferencesStatus) {
+              ImportPreferencesStatus.matchesCurrent => '当前全局偏好与此文件一致。',
+              ImportPreferencesStatus.needsReview => '全局偏好已变化，可在设置中核对当前值。',
+              _ => '上次导入保留了本机全局偏好。',
+            })
+          else
+            const StateNote('导入后，手机仍需单独授权。各设备的画质、电源和剪贴板偏好需重新设置。'),
+        ],
       ),
     );
   }

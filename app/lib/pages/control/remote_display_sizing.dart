@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show ValueChanged, VoidCallback;
 import 'package:flutter/widgets.dart' show Size;
 import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/core/control/remote_display_settings.dart';
@@ -120,7 +120,6 @@ class RemoteDisplaySizing {
     _timer?.cancel();
     _scheduled = target;
     _scheduledBinding = binding;
-    _trace('display.scheduled target=$target binding=$binding viewport=$size');
     _timer = Timer(const Duration(milliseconds: 250), () async {
       if (!canSendInput ||
           binding != window.presentation.binding ||
@@ -138,18 +137,11 @@ class RemoteDisplaySizing {
           return;
         }
         _requested = target;
-        _trace('display.request target=$target binding=$binding');
         await displays.resizeDisplay(
           ControlTarget(sessionId: binding.$1),
           target,
         );
-        _trace(
-          'display.return target=$target current=${window.presentation.binding} submitted=$binding',
-        );
       } catch (failure) {
-        _trace(
-          'display.failed target=$target binding=$binding failure=$failure',
-        );
         if (!_disposed && binding == window.presentation.binding) {
           onFailure(failure);
         }
@@ -193,13 +185,5 @@ class RemoteDisplaySizing {
     _disposed = true;
     cancel();
     if (!_initialViewport.isCompleted) _initialViewport.complete(Size.zero);
-  }
-
-  void _trace(String detail) {
-    if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
-      debugPrint(
-        '[connect.remote ${DateTime.now().millisecondsSinceEpoch}] $detail',
-      );
-    }
   }
 }

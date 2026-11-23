@@ -1,55 +1,55 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/app.dart';
+import 'package:scrcpy_connect/app_startup.dart';
 import 'package:scrcpy_connect/bootstrap/app_bootstrap.dart';
 import 'package:scrcpy_connect/core/diagnostics/app_diagnostics.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart'
     show DiagnosticLog;
 import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
-import 'package:scrcpy_connect/pages/startup_error/startup_error_page.dart';
-import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
-import 'package:scrcpy_connect/core/notifications/local_notification_sink.dart';
-import 'package:scrcpy_connect/core/notifications/system_notification_sink_provider.dart';
-import 'package:scrcpy_connect/core/platform/window_launch_route.dart';
-
-// The bootstrap shell is intentionally outside the session ProviderScope;
-// replacing a mounted scope would reject the session overrides.
-// ignore_for_file: riverpod_lint/missing_provider_scope
 
 Future<void> main([List<String> args = const []]) async {
-  WidgetsFlutterBinding.ensureInitialized();
-  // Keep the loading shell outside the session scope. Riverpod scopes cannot
-  // add overrides after they have been mounted; replacing this root scope
-  // would make the release build fail during the first real frame.
-  runApp(const _StartupShell());
-  final launch = await _windowLaunch();
+  final binding = WidgetsFlutterBinding.ensureInitialized();
+  // A second engine cannot own the application's ADB admission scope.
+  if (await _isSeparateEngine()) {
+    // This message has no application session or provider dependencies.
+    // ignore: riverpod_lint/missing_provider_scope
+    runApp(
+      const MaterialApp(
+        home: Scaffold(body: Center(child: Text('请在主窗口的「远控窗口」中继续。'))),
+      ),
+    );
+    return;
+  }
+  // AppStartup mounts the Riverpod scope and attaches session overrides after the first frame.
+  // ignore: riverpod_lint/missing_provider_scope
+  runApp(
+    AppStartup(
+      initialLocation: '/devices',
+      desktopWindow: Platform.isMacOS || Platform.isWindows || Platform.isLinux,
+      initializeGlass: () async {
+        await binding.waitUntilFirstFrameRasterized;
+        await GlassMaterial.initialize();
+      },
+      loadSession: () async {
+        await binding.waitUntilFirstFrameRasterized;
+        return _loadSession();
+      },
+    ),
+  );
+}
+
+Future<AppBootstrap> _loadSession() async {
   DiagnosticLog? diagnostics;
   try {
     diagnostics = await appDiagnostics();
     diagnostics.record(DiagnosticArea.app, 'bootstrap.started');
-    await GlassMaterial.initialize();
-    final bootstrap = await bootstrapApp(diagnostics: diagnostics);
+    final session = await bootstrapApp(diagnostics: diagnostics);
     diagnostics.record(DiagnosticArea.app, 'bootstrap.ready');
-    runApp(
-      ProviderScope(
-        overrides: [
-          ...bootstrap.overrides,
-          systemNotificationSinkProvider.overrideWithValue(
-            LocalNotificationSink(),
-          ),
-        ],
-        child: GlassMaterial.wrap(
-          child: ConnectApp(initialLocation: launch.initialLocation),
-        ),
-      ),
-    );
+    return session;
   } catch (error) {
     diagnostics?.record(
       DiagnosticArea.app,
@@ -58,80 +58,32 @@ Future<void> main([List<String> args = const []]) async {
       fields: {'errorType': error.runtimeType.toString()},
     );
     await diagnostics?.flush();
-    runApp(
-      ProviderScope(
-        child: MaterialApp(
-          theme: ConnectTokens.theme(Brightness.light),
-          home: StartupErrorPage(error: error, onRetry: () => main(args)),
-        ),
-      ),
-    );
+    rethrow;
   }
 }
 
-final class _StartupShell extends StatelessWidget {
-  const _StartupShell();
-
-  @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: '邻接',
-    debugShowCheckedModeBanner: false,
-    theme: ConnectTokens.theme(Brightness.light),
-    darkTheme: ConnectTokens.theme(Brightness.dark),
-    themeMode: ThemeMode.system,
-    home: const StartupLoadingPage(),
-  );
-}
-
-final class _WindowLaunch {
-  const _WindowLaunch(this.initialLocation);
-  final String initialLocation;
-}
-
-Future<_WindowLaunch> _windowLaunch() async {
+Future<bool> _isSeparateEngine() async {
   final requestedRoute =
       WidgetsBinding.instance.platformDispatcher.defaultRouteName;
-  final mobileWindow = decodeIndependentWindowLaunchRoute(requestedRoute);
-  if (mobileWindow != null) {
-    return _WindowLaunch(
-      RemoteSessionRoute(
-        deviceId: mobileWindow['deviceId']!,
-        sessionId: mobileWindow['sessionId']!,
-      ).location,
-    );
+  if (Uri.tryParse(requestedRoute)?.path == '/__independent_remote') {
+    return true;
   }
   if (!Platform.isLinux && !Platform.isMacOS && !Platform.isWindows) {
-    return const _WindowLaunch('/devices');
+    return false;
   }
   try {
     final controller = await WindowController.fromCurrentEngine();
-    if (controller.arguments.isEmpty) return const _WindowLaunch('/devices');
-    final decoded = jsonDecode(controller.arguments);
-    if (decoded is! Map) return const _WindowLaunch('/devices');
-    final type = decoded['type'];
-    final deviceId = decoded['deviceId'];
-    final packageName = decoded['packageName'];
-    final sessionId = decoded['sessionId'];
-    if (type != 'remote' || deviceId is! String || packageName is! String) {
-      return const _WindowLaunch('/devices');
-    }
-    if (sessionId is String && sessionId.isNotEmpty) {
-      return _WindowLaunch(
-        RemoteSessionRoute(deviceId: deviceId, sessionId: sessionId).location,
-      );
-    }
-    return _WindowLaunch(
-      RemoteAppRoute(deviceId: deviceId, packageName: packageName).location,
-    );
+    return controller.arguments.isNotEmpty;
   } on MissingPluginException {
-    return const _WindowLaunch('/devices');
-  } on PlatformException {
-    return const _WindowLaunch('/devices');
-  } on WindowChannelException {
-    return const _WindowLaunch('/devices');
-  } on FormatException {
-    return const _WindowLaunch('/devices');
-  } on Exception {
-    return const _WindowLaunch('/devices');
+    return false;
+  } on Exception catch (error, stack) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stack,
+        context: ErrorDescription('reading the desktop window launch'),
+      ),
+    );
+    return false;
   }
 }

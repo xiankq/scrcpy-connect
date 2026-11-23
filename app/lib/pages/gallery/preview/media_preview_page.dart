@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -9,13 +11,18 @@ import 'package:scrcpy_connect/core/files/models/file_catalog_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/content/content_capabilities_provider.dart';
 import 'package:scrcpy_connect/pages/files/file_actions.dart';
+import 'package:scrcpy_connect/pages/gallery/preview/widgets/media_controls_protection.dart';
 import 'package:scrcpy_connect/pages/gallery/preview/widgets/media_preview_toolbar.dart';
 import 'package:scrcpy_connect/pages/gallery/preview/widgets/video_preview.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/content_arrival.dart';
 import 'package:scrcpy_connect/widgets/content/cached_file_image.dart';
+import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_action_bar.dart';
 import 'package:scrcpy_connect/widgets/media_cache_blocker.dart';
 
 class MediaPreviewPage extends HookConsumerWidget {
@@ -27,6 +34,9 @@ class MediaPreviewPage extends HookConsumerWidget {
     final content = ref.watch(contentReaderProvider);
     final video = file.mime.startsWith('video/');
     final retry = useState(0);
+    final originalSize = useState(false);
+    void retrieve() =>
+        retrieveFile(context, ref, device, file, openAfterTransfer: true);
     final request = useMemoized(
       () => video
           ? null
@@ -41,14 +51,21 @@ class MediaPreviewPage extends HookConsumerWidget {
     useEffect(() => request?.dispose, [request]);
     final result = useFuture(request?.result, preserveState: false);
     final preview = video
-        ? VideoPreview(fallback: () => retrieveFile(context, ref, device, file))
+        ? VideoPreview(fallback: retrieve)
         : result.connectionState != ConnectionState.done
-        ? const Center(child: CircularProgressIndicator.adaptive())
+        ? const SafeArea(
+            top: false,
+            bottom: false,
+            child: Center(child: CircularProgressIndicator.adaptive()),
+          )
         : result.hasError
         ? EmptyContent(
             icon: LucideIcons.imageOff,
             title: '无法预览此内容',
-            message: '${result.error}',
+            message: failureMessage(
+              result.error,
+              fallback: '无法打开预览。请检查手机连接，也可以尝试保存原文件。',
+            ),
             action: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -58,10 +75,7 @@ class MediaPreviewPage extends HookConsumerWidget {
                   onPressed: () => retry.value++,
                   child: const Text('重新预览'),
                 ),
-                TextButton(
-                  onPressed: () => retrieveFile(context, ref, device, file),
-                  child: const Text('保存原文件'),
-                ),
+                TextButton(onPressed: retrieve, child: const Text('取回文件')),
                 TextButton(
                   onPressed: () =>
                       openRemoteRoute(context, deviceId: device.id),
@@ -78,39 +92,47 @@ class MediaPreviewPage extends HookConsumerWidget {
                 return EmptyContent(
                   icon: LucideIcons.imageOff,
                   title: '无法预览此格式',
-                  message: data?.reason ?? '可以保存原文件，或在被控手机上查看。',
+                  message: '无法预览这种内容。可以保存原文件，或在手机上查看。',
                   action: FilledButton(
-                    onPressed: () => retrieveFile(context, ref, device, file),
-                    child: const Text('保存原文件'),
+                    onPressed: retrieve,
+                    child: const Text('取回文件'),
                   ),
                 );
               }
               return ColoredBox(
                 color: DesignTokens.colorMediaInk,
-                child: Center(
-                  child: InteractiveViewer(
-                    minScale: .5,
-                    maxScale: 5,
-                    child: source.startsWith('http')
-                        ? Image.network(
-                            source,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, e, _) => Text(
-                              '$e',
-                              style: const TextStyle(color: Colors.white),
-                            ),
+                child: Image(
+                  image: source.startsWith('http')
+                      ? NetworkImage(source)
+                      : CachedFileImage(File(source), lease: request?.lease),
+                  fit: originalSize.value ? BoxFit.none : BoxFit.contain,
+                  frameBuilder: (context, child, frame, synchronous) {
+                    final stage = frame == null
+                        ? const SafeArea(
+                            child: Center(child: ContentLoadingIndicator()),
                           )
-                        : Image(
-                            image: CachedFileImage(
-                              File(source),
-                              lease: request?.lease,
-                            ),
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, e, _) => Text(
-                              '$e',
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                          ),
+                        : InteractiveViewer(
+                            key: ValueKey(originalSize.value),
+                            constrained: !originalSize.value,
+                            minScale: .5,
+                            maxScale: 5,
+                            child: child,
+                          );
+                    return synchronous
+                        ? stage
+                        : ContentArrival(
+                            state: frame != null,
+                            waiting: frame == null,
+                            child: stage,
+                          );
+                  },
+                  errorBuilder: (_, _, _) => EmptyContent(
+                    icon: LucideIcons.imageOff,
+                    title: '无法读取这张图片',
+                    action: TextButton(
+                      onPressed: () => retry.value++,
+                      child: const Text('重新预览'),
+                    ),
                   ),
                 ),
               );
@@ -122,6 +144,21 @@ class MediaPreviewPage extends HookConsumerWidget {
         result.connectionState != ConnectionState.done ||
         result.hasError ||
         mediaSource.isEmpty;
+    final actions = <(String, IconData, VoidCallback)>[
+      ('取回原件', AppIcons.download, retrieve),
+      if (supportsSystemFileShare)
+        (
+          '分享',
+          AppIcons.share,
+          () => retrieveFile(context, ref, device, file, share: true),
+        ),
+      if (!reserveChrome)
+        (
+          originalSize.value ? '适合屏幕' : '原尺寸',
+          originalSize.value ? AppIcons.fitScreen : AppIcons.originalSize,
+          () => originalSize.value = !originalSize.value,
+        ),
+    ];
     final chromeInset =
         MediaQuery.paddingOf(context).top +
         DesignTokens.spacingMd * 2 +
@@ -154,34 +191,75 @@ class MediaPreviewPage extends HookConsumerWidget {
         ),
       ),
     );
-    return Theme(
-      data: mediaTheme,
-      child: Builder(
-        builder: (context) => Scaffold(
-          backgroundColor: DesignTokens.colorMediaInk,
-          body: Stack(
-            fit: StackFit.expand,
-            children: [
-              Positioned.fill(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    top: reserveChrome ? chromeInset : DesignTokens.spacingZero,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Theme(
+        data: mediaTheme,
+        child: Builder(
+          builder: (context) {
+            final actionBar = SafeArea(
+              top: false,
+              minimum: const EdgeInsets.all(DesignTokens.spacingMd),
+              child: Center(
+                heightFactor: 1,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth:
+                        DesignTokens.componentMediaPreviewBarWidth +
+                        2 * DesignTokens.spacingXs,
                   ),
-                  child: preview,
+                  child: GlassActionBar(
+                    variant: GlassVariant.clear,
+                    actions: [
+                      for (final (label, icon, onPressed) in actions)
+                        GlassActionBarButton(
+                          label: label,
+                          icon: Icon(icon),
+                          onPressed: onPressed,
+                        ),
+                    ],
+                  ),
                 ),
               ),
-              Align(
-                alignment: Alignment.topCenter,
-                child: MediaPreviewToolbar(
-                  title: file.name,
-                  onBack: () => closePage<void>(context),
-                  onSave: () => retrieveFile(context, ref, device, file),
-                  onShare: () =>
-                      retrieveFile(context, ref, device, file, share: true),
-                ),
+            );
+            return Scaffold(
+              backgroundColor: DesignTokens.colorMediaInk,
+              body: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (reserveChrome)
+                    Column(
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.only(top: chromeInset),
+                            child: preview,
+                          ),
+                        ),
+                        actionBar,
+                      ],
+                    )
+                  else ...[
+                    preview,
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: MediaControlsProtection(
+                        edge: MediaControlsEdge.bottom,
+                        child: actionBar,
+                      ),
+                    ),
+                  ],
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: MediaPreviewToolbar(
+                      title: file.name,
+                      onBack: () => closePage<void>(context),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

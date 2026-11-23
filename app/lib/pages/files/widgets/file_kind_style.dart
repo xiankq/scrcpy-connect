@@ -13,9 +13,15 @@ IconData fileKindIcon(FileKind kind) => switch (kind) {
   FileKind.other => LucideIcons.file,
 };
 
-Color fileKindColor(FileKind kind) => switch (kind) {
-  FileKind.documents || FileKind.archives => DesignTokens.colorListIconAmber,
-  FileKind.images || FileKind.videos => DesignTokens.colorListIconPurple,
-  FileKind.audio => DesignTokens.colorListIconSlate,
-  FileKind.other => DesignTokens.colorListIconSlate,
-};
+Color fileKindColor(FileKind kind, {String? name, String? mime}) =>
+    switch (kind) {
+      FileKind.documents
+          when mime == 'application/pdf' ||
+              name?.toLowerCase().endsWith('.pdf') == true =>
+        DesignTokens.colorListIconCoral,
+      FileKind.documents ||
+      FileKind.archives => DesignTokens.colorListIconAmber,
+      FileKind.images || FileKind.videos => DesignTokens.colorListIconPurple,
+      FileKind.audio => DesignTokens.colorListIconSlate,
+      FileKind.other => DesignTokens.colorListIconUtility,
+    };

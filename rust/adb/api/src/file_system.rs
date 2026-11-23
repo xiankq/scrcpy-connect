@@ -757,7 +757,12 @@ async fn mutate(
                 let replace = request.replace;
                 tokio::task::spawn_blocking(move || {
                     part.file.sync_all()?;
-                    #[cfg(any(target_os = "linux", target_os = "android"))]
+                    #[cfg(any(
+                        target_os = "linux",
+                        target_os = "android",
+                        target_os = "macos",
+                        target_os = "ios"
+                    ))]
                     {
                         if replace {
                             crate::file_publication::publish_file_replace(
@@ -769,7 +774,12 @@ async fn mutate(
                             crate::file_publication::publish_file(&part.file, &path, &destination)
                         }
                     }
-                    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+                    #[cfg(not(any(
+                        target_os = "linux",
+                        target_os = "android",
+                        target_os = "macos",
+                        target_os = "ios"
+                    )))]
                     {
                         let _ = (path, destination, replace);
                         Err(FileError::new(

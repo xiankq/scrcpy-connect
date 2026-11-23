@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/core/events/models/app_event.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
@@ -109,7 +110,10 @@ class DocumentOperationNotifier extends _$DocumentOperationNotifier {
       );
     } catch (failure) {
       if (_current(owner) && generation == owner.readGeneration) {
-        state = state.copyWith(loaded: false, error: '尚未核验上次系统保存结果：$failure');
+        state = state.copyWith(
+          loaded: false,
+          error: failureMessage(failure, fallback: '无法读取上次保存结果。请先查看保存位置。'),
+        );
       }
     } finally {
       if (_current(owner) && generation == owner.readGeneration) {
@@ -192,7 +196,14 @@ class DocumentOperationNotifier extends _$DocumentOperationNotifier {
       if (_current(owner) && owner.operationId == id) {
         reread = owner.exportSource != null;
         state = state.copyWith(
-          error: '$failure',
+          error: failureMessage(
+            failure,
+            fallback: exporting
+                ? '暂时无法确认文件是否已保存。请先查看保存位置。'
+                : !previousReleased
+                ? '上次选择的文件仍在使用。请稍后再试。'
+                : '无法导入所选内容。请重新选择文件。',
+          ),
           result: exporting
               ? DocumentOutcome(
                   status: .resultUnknown,
@@ -229,7 +240,10 @@ class DocumentOperationNotifier extends _$DocumentOperationNotifier {
       await owner.documents.cancelDocument(id);
     } catch (failure) {
       if (_current(owner)) {
-        state = state.copyWith(error: '$failure', cancelling: false);
+        state = state.copyWith(
+          error: failureMessage(failure, fallback: '暂时无法确认是否已取消。请先检查操作结果。'),
+          cancelling: false,
+        );
       }
     }
   }

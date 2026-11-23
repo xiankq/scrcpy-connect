@@ -1,15 +1,18 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:media_codec/media_codec.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/pages/control/remote_input_owner.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/motion.dart';
 import 'package:scrcpy_connect/widgets/ambient_loading_field.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
+import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/overlays.dart';
 
 class RemoteSurface extends StatelessWidget {
@@ -70,59 +73,95 @@ class RemoteStage extends StatelessWidget {
     required this.sensitive,
     required this.inputFocus,
     required this.needsWake,
+    required this.screenOff,
     required this.onWake,
     required this.onClose,
     required this.controls,
+    this.onSwitchWindow,
   });
 
   final RemotePresentation presentation;
   final RemoteInputOwner inputs;
   final ValueChanged<Size> onViewport;
   final String deviceLabel;
-  final bool independent, ime, sensitive, needsWake;
+  final bool independent, ime, sensitive, needsWake, screenOff;
   final FocusNode inputFocus;
   final VoidCallback? onWake, onClose;
+  final VoidCallback? onSwitchWindow;
   final Widget recovery, controls;
 
   @override
   Widget build(BuildContext context) {
     final waiting = presentation.awaitingFirstFrame;
+    final sideToolbar = liquid.GlassVerticalBar.maybeOf(context);
+    final closeWait = Tooltip(
+      message: '关闭等待',
+      excludeFromSemantics: true,
+      child: GlassToolbarIconButton(
+        key: const ValueKey('remote-first-frame-close'),
+        semanticLabel: '关闭等待',
+        onPressed: onClose,
+        icon: const Icon(AppIcons.close),
+      ),
+    );
+    final switchWait = onSwitchWindow == null
+        ? null
+        : GlassToolbarIconButton(
+            semanticLabel: '切换窗口',
+            onPressed: onSwitchWindow,
+            icon: const Icon(LucideIcons.layers),
+          );
     final loading = waiting || presentation.connecting;
     final abnormal =
         presentation.error != null ||
         (presentation.paused && !presentation.connecting) ||
         presentation.stateUnverified ||
         presentation.appLaunchUnknown;
+    final showMotion = !abnormal && !presentation.exiting;
     final stage = abnormal
-        ? presentation.connecting
-              ? '正在核对屏幕启动结果'
-              : presentation.stateUnverified || presentation.appLaunchUnknown
-              ? '屏幕启动结果待核对'
-              : '屏幕启动未完成'
+        ? '无法打开'
         : independent
-        ? '正在打开独立窗口'
+        ? '正在打开独立应用画面'
         : '正在打开手机屏幕';
     return Stack(
       children: [
         Positioned.fill(
           child: RemoteSurface(
-            textureId: presentation.session?.textureId,
+            textureId: screenOff ? null : presentation.session?.textureId,
             sourceSize: Size(presentation.imageWidth, presentation.imageHeight),
             inputs: inputs,
             onViewport: onViewport,
           ),
         ),
-        if (loading)
-          Positioned.fill(
-            key: const ValueKey('remote-first-frame-wait'),
-            child: AmbientLoadingField(
-              semanticsLabel: '$deviceLabel，$stage',
-              animating:
-                  !abnormal && presentation.connecting && !presentation.exiting,
-              showParticles: !abnormal && !presentation.exiting,
-              overlay: abnormal ? recovery : null,
+        Positioned.fill(
+          child: AnimatedSwitcher(
+            duration: reduceMotionOf(context) || screenOff
+                ? Duration.zero
+                : contentArrivalDuration,
+            switchOutCurve: panelCurve,
+            layoutBuilder: (current, outgoing) => Stack(
+              fit: StackFit.expand,
+              children: [
+                for (final child in outgoing)
+                  IgnorePointer(
+                    child: ExcludeSemantics(
+                      child: TickerMode(enabled: false, child: child),
+                    ),
+                  ),
+                ?current,
+              ],
             ),
+            child: loading && !screenOff
+                ? AmbientLoadingField(
+                    key: const ValueKey('remote-first-frame-wait'),
+                    semanticsLabel: '$deviceLabel，$stage',
+                    animating: showMotion,
+                    showParticles: showMotion,
+                    overlay: abnormal ? recovery : null,
+                  )
+                : const SizedBox.shrink(),
           ),
+        ),
         if (presentation.qualityRebuilding)
           const Align(
             alignment: Alignment.bottomCenter,
@@ -138,9 +177,40 @@ class RemoteStage extends StatelessWidget {
           ),
         if (!loading &&
             !presentation.connecting &&
-            (presentation.error != null || presentation.paused) &&
+            (presentation.error != null ||
+                presentation.stateUnverified ||
+                presentation.appLaunchUnknown ||
+                presentation.sessionEnded) &&
+            !needsWake &&
             presentation.errorCode != 'device_asleep')
-          recovery,
+          recovery
+        else if (!loading && presentation.paused && !screenOff)
+          const Align(
+            alignment: Alignment.topCenter,
+            child: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(top: DesignTokens.spacingXs),
+                child: ContentSurface(
+                  radius: DesignTokens.roundedFull,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: DesignTokens.spacingSm,
+                    vertical: DesignTokens.spacingXxs,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        LucideIcons.pause,
+                        size: DesignTokens.componentIconSmallSize,
+                      ),
+                      SizedBox(width: DesignTokens.spacingXxs),
+                      Text('已暂停'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         if (ime)
           Positioned(
             left: 0,
@@ -167,40 +237,34 @@ class RemoteStage extends StatelessWidget {
             ),
           ),
         if (needsWake)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: math.max(MediaQuery.paddingOf(context).bottom, 24) + 48,
-            child: Center(
-              child: GlassActionIcon(
-                tooltip: '点亮屏幕',
+          Center(
+            child: Tooltip(
+              message: '点亮屏幕',
+              excludeFromSemantics: true,
+              child: GlassToolbarIconButton(
+                variant: GlassVariant.clear,
+                semanticLabel: '点亮屏幕',
                 onPressed: onWake,
-                icon: Icon(
+                icon: const Icon(
                   LucideIcons.sun,
-                  color: loading
-                      ? Theme.of(context).colorScheme.onSurface
-                      : Colors.white,
+                  color: DesignTokens.colorWhite,
                 ),
               ),
             ),
           ),
-        if (waiting)
-          Positioned(
-            left: MediaQuery.paddingOf(context).left + 20,
-            top: MediaQuery.paddingOf(context).top + 12,
-            child: GlassActionIcon(
-              key: const ValueKey('remote-first-frame-close'),
-              tooltip: '关闭等待',
-              onPressed: onClose,
-              constraints: const BoxConstraints.tightFor(
-                width: DesignTokens.componentIconButtonSize,
-                height: DesignTokens.componentIconButtonSize,
-              ),
-              icon: const Icon(LucideIcons.x),
-            ),
-          )
+        if (!waiting)
+          controls
+        else if (sideToolbar != null)
+          GlassSideToolbar(bar: sideToolbar, children: [closeWait, ?switchWait])
         else
-          controls,
+          Positioned(
+            left:
+                MediaQuery.paddingOf(context).left +
+                (DesktopWindowInsets.of(context)?.left ?? 0) +
+                20,
+            top: MediaQuery.paddingOf(context).top + 12,
+            child: Row(children: [closeWait, ?switchWait]),
+          ),
       ],
     );
   }

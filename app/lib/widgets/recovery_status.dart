@@ -48,7 +48,6 @@ class _RecoveryStatusState extends ConsumerState<RecoveryStatus> {
     );
     if (!pending) return const SizedBox.shrink();
     final failed = error != null;
-    final reason = error?.trim();
     return Padding(
       padding: widget.padding,
       child: ContentPanel(
@@ -63,12 +62,8 @@ class _RecoveryStatusState extends ConsumerState<RecoveryStatus> {
             Flexible(
               child: SingleChildScrollView(
                 child: StateNote(
-                  failed
-                      ? '当前状态尚待核验：${reason == null || reason.isEmpty ? '暂未能完成检查，请重试。' : reason}'
-                      : '正在核验设备与活动状态，完成前暂缓新的操作。',
-                  icon: failed
-                      ? LucideIcons.circleAlert
-                      : LucideIcons.refreshCw,
+                  failed ? '暂时无法确认手机的连接状态。请重新检查。' : '正在检查手机的连接状态，请稍候。',
+                  icon: failed ? LucideIcons.circleAlert : AppIcons.refresh,
                 ),
               ),
             ),
@@ -76,10 +71,10 @@ class _RecoveryStatusState extends ConsumerState<RecoveryStatus> {
               OutlinedButton.icon(
                 onPressed: _retrying ? null : _retry,
                 icon: const Icon(
-                  LucideIcons.refreshCw,
+                  AppIcons.refresh,
                   size: DesignTokens.componentIconActionSize,
                 ),
-                label: const Text('重新核验'),
+                label: const Text('重新检查'),
               ),
           ],
         ),

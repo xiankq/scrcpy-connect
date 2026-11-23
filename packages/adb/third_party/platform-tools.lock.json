@@ -14,22 +14,22 @@
     },
     "windows": {
       "url": "https://dl.google.com/android/repository/platform-tools_r37.0.3-win.zip",
-      "sha256": "b5d2015f5d5b7a24a2ac646a245f20f63fb501e4174c61863c74bed1df6de4bd",
-      "archiveBytes": 8188595,
+      "sha256": "89d108360a3bf2924d3bea837239edaccc22fd6ff5befd3787c4348a9fe4f09d",
+      "archiveBytes": 8188601,
       "files": {
-        "adb.exe": "28d23e79d4371ea5a6a11d3518469087eb453d1872433c5d10e65ee5310d8f1b",
-        "AdbWinApi.dll": "5b10914959a3daabacb730a321e13c9deb06f3ef44d1d48b999d537fbf9e8d24",
-        "AdbWinUsbApi.dll": "37441be63880f1ce3741ab890c9af9d77492ec690c989c72f430a2e4905ebf5d",
+        "adb.exe": "bae5ce98846b19caa74a34900850caa8b21d01976932b2ad83baeb5de5651aee",
+        "AdbWinApi.dll": "ed20abfb8b423029a2278d3947c1a1235774afd1b0e0e08405591e6f1d237a49",
+        "AdbWinUsbApi.dll": "ac658211ac7991ce581f4f2efff86358abdca8eb1bc0f38d7686cbf4215f7c1f",
         "NOTICE.txt": "50ba5419a9e1f9e1236dec2aabb18c0a179d225e29155567c9b0baf2fc94a302",
         "source.properties": "360a713f5700c3a1b2d5bbb8ed01c6d1ade768c3f7971df668b7234c057561a9"
       }
     },
     "macos": {
       "url": "https://dl.google.com/android/repository/platform-tools_r37.0.3-darwin.zip",
-      "sha256": "f89baeb829903ceaf3ac92a78a2d25152728049d6316ebeaaca06d716e64842d",
-      "archiveBytes": 16597640,
+      "sha256": "df21339b9371fef9b19264404338dc686f59a88a1dce634b963da344909001d6",
+      "archiveBytes": 16597626,
       "files": {
-        "adb": "16d4549afe0c125c2f20f82416e412e71e7131a48966b4b94fc214bde0cc9e86",
+        "adb": "a1c4253c2f7336dd3e600689aef1c451ca0c74a614ea8495a79058fcd7299de3",
         "NOTICE.txt": "4bb69d666c27e0d020613e9add9dbe3881aa826b6c4e3641821835616bf76ffb",
         "source.properties": "360a713f5700c3a1b2d5bbb8ed01c6d1ade768c3f7971df668b7234c057561a9"
       }

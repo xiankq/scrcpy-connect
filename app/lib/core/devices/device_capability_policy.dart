@@ -93,10 +93,10 @@ class DeviceCapabilityPolicy implements DeviceAssessment {
           ? .available
           : .limited,
       !connected
-          ? '设备尚未连接，无法探测。'
+          ? '请先连接手机。'
           : shell.succeeded && shell.text == 'interop-capability-check'
           ? '已通过当前设备授权连接验证 shell。'
-          : 'ADB 已连接，但 shell 探测未成功。',
+          : '手机已连接，但无法执行调试命令。请解锁手机后重新检查。',
     );
     add(
       .files,
@@ -106,10 +106,10 @@ class DeviceCapabilityPolicy implements DeviceAssessment {
           ? .available
           : .limited,
       !connected
-          ? '设备尚未连接，无法探测。'
+          ? '请先连接手机。'
           : observed.observation('sync').succeeded
           ? '已通过当前连接验证文件服务；受 Android 文件权限限制。'
-          : '当前文件服务探测失败，可查看连接诊断。',
+          : '暂时无法读取手机文件。请检查手机连接和文件访问权限。',
     );
     add(
       .wirelessPairing,
@@ -125,7 +125,7 @@ class DeviceCapabilityPolicy implements DeviceAssessment {
           : observed.record.guid != null
           ? '已配对；当前连接状态单独判断。'
           : api == null
-          ? '尚未读取 Android 版本，无线配对能力待确认。'
+          ? '暂时无法确认手机是否支持无线配对。请在手机设置中查看。'
           : '请在被控设备开启无线调试并完成配对。',
     );
     final streaming = observed.streaming;
@@ -144,7 +144,7 @@ class DeviceCapabilityPolicy implements DeviceAssessment {
           ? '设备未连接或 Android 版本尚未读取。'
           : streaming
           ? '当前设备已有实际视频控制会话。'
-          : '编码器及厂商输入权限在实际启动时确认。',
+          : '打开手机屏幕后可检查画面和操作是否可用。',
     );
     add(
       .clipboard,
@@ -173,7 +173,7 @@ class DeviceCapabilityPolicy implements DeviceAssessment {
           ? '设备尚未连接，无法探测应用能力。'
           : packageReadable
           ? '已读取设备包列表；独立应用窗口要求 Android 10+，具体启动仍按系统与应用条件判断。'
-          : '应用列表探测未成功，不能据此认定不支持。',
+          : '暂时无法读取手机上的应用。请解锁手机后重试。',
     );
     final playing = observed.audioPlaying;
     add(
@@ -187,7 +187,7 @@ class DeviceCapabilityPolicy implements DeviceAssessment {
           ? '该设备当前已有实际主控播放器；捕获仍受应用内容权限约束。'
           : api != null && api < 30
           ? '声音转发要求 Android 11或更新版本。'
-          : '尚无实际播放结果，请在声音页主动开启后确认。',
+          : '请打开手机画面，开启手机声音后检查能否播放。',
     );
     for (final key in [DeviceFeature.notifications, DeviceFeature.calls]) {
       final feature = observed.observationCapabilities
@@ -196,7 +196,7 @@ class DeviceCapabilityPolicy implements DeviceAssessment {
       add(
         key,
         feature?.status ?? .unknown,
-        feature?.reason ?? '当前没有可核验的实时状态，请在对应功能页检查。',
+        feature?.reason ?? '暂时无法读取状态。请打开对应页面检查。',
       );
     }
     add(.background, .unknown, '后台保持由主控系统权限、电量策略与当前活动决定。');

@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$GalleryHistoryEntry {
 
- DeviceSnapshot get device; GalleryScanSnapshot get result; List<FileCatalogEntry> get items; double get scrollOffset;
+ DeviceSnapshot get device; GalleryScanSnapshot get result; List<FileCatalogEntry> get items; double get scrollOffset; GalleryScanSnapshot? get pendingResult;
 /// Create a copy of GalleryHistoryEntry
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -27,20 +27,20 @@ $GalleryHistoryEntryCopyWith<GalleryHistoryEntry> get copyWith => _$GalleryHisto
 @override
 bool operator ==(Object other) {
   final _this = this as GalleryHistoryEntry;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is GalleryHistoryEntry&&(identical(other.device, _this.device) || other.device == _this.device)&&(identical(other.result, _this.result) || other.result == _this.result)&&const DeepCollectionEquality().equals(other.items, _this.items)&&(identical(other.scrollOffset, _this.scrollOffset) || other.scrollOffset == _this.scrollOffset));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is GalleryHistoryEntry&&(identical(other.device, _this.device) || other.device == _this.device)&&(identical(other.result, _this.result) || other.result == _this.result)&&const DeepCollectionEquality().equals(other.items, _this.items)&&(identical(other.scrollOffset, _this.scrollOffset) || other.scrollOffset == _this.scrollOffset)&&(identical(other.pendingResult, _this.pendingResult) || other.pendingResult == _this.pendingResult));
 }
 
 
 @override
 int get hashCode {
   final _this = this as GalleryHistoryEntry;
-  return Object.hash(runtimeType,_this.device,_this.result,const DeepCollectionEquality().hash(_this.items),_this.scrollOffset);
+  return Object.hash(runtimeType,_this.device,_this.result,const DeepCollectionEquality().hash(_this.items),_this.scrollOffset,_this.pendingResult);
 }
 
 @override
 String toString() {
   final _this = this as GalleryHistoryEntry;
-  return 'GalleryHistoryEntry(device: ${_this.device}, result: ${_this.result}, items: ${_this.items}, scrollOffset: ${_this.scrollOffset})';
+  return 'GalleryHistoryEntry(device: ${_this.device}, result: ${_this.result}, items: ${_this.items}, scrollOffset: ${_this.scrollOffset}, pendingResult: ${_this.pendingResult})';
 }
 
 
@@ -51,11 +51,11 @@ abstract mixin class $GalleryHistoryEntryCopyWith<$Res>  {
   factory $GalleryHistoryEntryCopyWith(GalleryHistoryEntry value, $Res Function(GalleryHistoryEntry) _then) = _$GalleryHistoryEntryCopyWithImpl;
 @useResult
 $Res call({
- DeviceSnapshot device, GalleryScanSnapshot result, List<FileCatalogEntry> items, double scrollOffset
+ DeviceSnapshot device, GalleryScanSnapshot result, List<FileCatalogEntry> items, double scrollOffset, GalleryScanSnapshot? pendingResult
 });
 
 
-$DeviceSnapshotCopyWith<$Res> get device;$GalleryScanSnapshotCopyWith<$Res> get result;
+$DeviceSnapshotCopyWith<$Res> get device;$GalleryScanSnapshotCopyWith<$Res> get result;$GalleryScanSnapshotCopyWith<$Res>? get pendingResult;
 
 }
 /// @nodoc
@@ -68,13 +68,14 @@ class _$GalleryHistoryEntryCopyWithImpl<$Res>
 
 /// Create a copy of GalleryHistoryEntry
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? device = null,Object? result = null,Object? items = null,Object? scrollOffset = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? device = null,Object? result = null,Object? items = null,Object? scrollOffset = null,Object? pendingResult = freezed,}) {
   return _then(GalleryHistoryEntry(
 device: null == device ? _self.device : device // ignore: cast_nullable_to_non_nullable
 as DeviceSnapshot,result: null == result ? _self.result : result // ignore: cast_nullable_to_non_nullable
 as GalleryScanSnapshot,items: null == items ? _self.items : items // ignore: cast_nullable_to_non_nullable
 as List<FileCatalogEntry>,scrollOffset: null == scrollOffset ? _self.scrollOffset : scrollOffset // ignore: cast_nullable_to_non_nullable
-as double,
+as double,pendingResult: freezed == pendingResult ? _self.pendingResult : pendingResult // ignore: cast_nullable_to_non_nullable
+as GalleryScanSnapshot?,
   ));
 }
 /// Create a copy of GalleryHistoryEntry
@@ -94,6 +95,18 @@ $GalleryScanSnapshotCopyWith<$Res> get result {
   
   return $GalleryScanSnapshotCopyWith<$Res>(_self.result, (value) {
     return _then(_self.copyWith(result: value));
+  });
+}/// Create a copy of GalleryHistoryEntry
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$GalleryScanSnapshotCopyWith<$Res>? get pendingResult {
+    if (_self.pendingResult == null) {
+    return null;
+  }
+
+  return $GalleryScanSnapshotCopyWith<$Res>(_self.pendingResult!, (value) {
+    return _then(_self.copyWith(pendingResult: value));
   });
 }
 }
@@ -177,10 +190,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( DeviceSnapshot device,  GalleryScanSnapshot result,  List<FileCatalogEntry> items,  double scrollOffset)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( DeviceSnapshot device,  GalleryScanSnapshot result,  List<FileCatalogEntry> items,  double scrollOffset,  GalleryScanSnapshot? pendingResult)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _GalleryHistoryEntry() when $default != null:
-return $default(_that.device,_that.result,_that.items,_that.scrollOffset);case _:
+return $default(_that.device,_that.result,_that.items,_that.scrollOffset,_that.pendingResult);case _:
   return orElse();
 
 }
@@ -198,10 +211,10 @@ return $default(_that.device,_that.result,_that.items,_that.scrollOffset);case _
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( DeviceSnapshot device,  GalleryScanSnapshot result,  List<FileCatalogEntry> items,  double scrollOffset)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( DeviceSnapshot device,  GalleryScanSnapshot result,  List<FileCatalogEntry> items,  double scrollOffset,  GalleryScanSnapshot? pendingResult)  $default,) {final _that = this;
 switch (_that) {
 case _GalleryHistoryEntry():
-return $default(_that.device,_that.result,_that.items,_that.scrollOffset);case _:
+return $default(_that.device,_that.result,_that.items,_that.scrollOffset,_that.pendingResult);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -218,10 +231,10 @@ return $default(_that.device,_that.result,_that.items,_that.scrollOffset);case _
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( DeviceSnapshot device,  GalleryScanSnapshot result,  List<FileCatalogEntry> items,  double scrollOffset)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( DeviceSnapshot device,  GalleryScanSnapshot result,  List<FileCatalogEntry> items,  double scrollOffset,  GalleryScanSnapshot? pendingResult)?  $default,) {final _that = this;
 switch (_that) {
 case _GalleryHistoryEntry() when $default != null:
-return $default(_that.device,_that.result,_that.items,_that.scrollOffset);case _:
+return $default(_that.device,_that.result,_that.items,_that.scrollOffset,_that.pendingResult);case _:
   return null;
 
 }
@@ -233,7 +246,7 @@ return $default(_that.device,_that.result,_that.items,_that.scrollOffset);case _
 
 
 class _GalleryHistoryEntry extends GalleryHistoryEntry {
-  const _GalleryHistoryEntry({required this.device, required this.result, required  List<FileCatalogEntry> items, required this.scrollOffset}): _items = items,super._();
+  const _GalleryHistoryEntry({required this.device, required this.result, required  List<FileCatalogEntry> items, required this.scrollOffset, this.pendingResult}): _items = items,super._();
   
 
 @override final  DeviceSnapshot device;
@@ -246,6 +259,7 @@ class _GalleryHistoryEntry extends GalleryHistoryEntry {
 }
 
 @override final  double scrollOffset;
+@override final  GalleryScanSnapshot? pendingResult;
 
 /// Create a copy of GalleryHistoryEntry
 /// with the given fields replaced by the non-null parameter values.
@@ -257,18 +271,18 @@ _$GalleryHistoryEntryCopyWith<_GalleryHistoryEntry> get copyWith => __$GalleryHi
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _GalleryHistoryEntry&&(identical(other.device, device) || other.device == device)&&(identical(other.result, result) || other.result == result)&&const DeepCollectionEquality().equals(other.items, _items)&&(identical(other.scrollOffset, scrollOffset) || other.scrollOffset == scrollOffset));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _GalleryHistoryEntry&&(identical(other.device, device) || other.device == device)&&(identical(other.result, result) || other.result == result)&&const DeepCollectionEquality().equals(other.items, _items)&&(identical(other.scrollOffset, scrollOffset) || other.scrollOffset == scrollOffset)&&(identical(other.pendingResult, pendingResult) || other.pendingResult == pendingResult));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,device,result,const DeepCollectionEquality().hash(_items),scrollOffset);
+    return Object.hash(runtimeType,device,result,const DeepCollectionEquality().hash(_items),scrollOffset,pendingResult);
 }
 
 @override
 String toString() {
-    return 'GalleryHistoryEntry(device: $device, result: $result, items: $items, scrollOffset: $scrollOffset)';
+    return 'GalleryHistoryEntry(device: $device, result: $result, items: $items, scrollOffset: $scrollOffset, pendingResult: $pendingResult)';
 }
 
 
@@ -279,11 +293,11 @@ abstract mixin class _$GalleryHistoryEntryCopyWith<$Res> implements $GalleryHist
   factory _$GalleryHistoryEntryCopyWith(_GalleryHistoryEntry value, $Res Function(_GalleryHistoryEntry) _then) = __$GalleryHistoryEntryCopyWithImpl;
 @override @useResult
 $Res call({
- DeviceSnapshot device, GalleryScanSnapshot result, List<FileCatalogEntry> items, double scrollOffset
+ DeviceSnapshot device, GalleryScanSnapshot result, List<FileCatalogEntry> items, double scrollOffset, GalleryScanSnapshot? pendingResult
 });
 
 
-@override $DeviceSnapshotCopyWith<$Res> get device;@override $GalleryScanSnapshotCopyWith<$Res> get result;
+@override $DeviceSnapshotCopyWith<$Res> get device;@override $GalleryScanSnapshotCopyWith<$Res> get result;@override $GalleryScanSnapshotCopyWith<$Res>? get pendingResult;
 
 }
 /// @nodoc
@@ -296,13 +310,14 @@ class __$GalleryHistoryEntryCopyWithImpl<$Res>
 
 /// Create a copy of GalleryHistoryEntry
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? device = null,Object? result = null,Object? items = null,Object? scrollOffset = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? device = null,Object? result = null,Object? items = null,Object? scrollOffset = null,Object? pendingResult = freezed,}) {
   return _then(_GalleryHistoryEntry(
 device: null == device ? _self.device : device // ignore: cast_nullable_to_non_nullable
 as DeviceSnapshot,result: null == result ? _self.result : result // ignore: cast_nullable_to_non_nullable
 as GalleryScanSnapshot,items: null == items ? _self._items : items // ignore: cast_nullable_to_non_nullable
 as List<FileCatalogEntry>,scrollOffset: null == scrollOffset ? _self.scrollOffset : scrollOffset // ignore: cast_nullable_to_non_nullable
-as double,
+as double,pendingResult: freezed == pendingResult ? _self.pendingResult : pendingResult // ignore: cast_nullable_to_non_nullable
+as GalleryScanSnapshot?,
   ));
 }
 
@@ -323,6 +338,18 @@ $GalleryScanSnapshotCopyWith<$Res> get result {
   
   return $GalleryScanSnapshotCopyWith<$Res>(_self.result, (value) {
     return _then(_self.copyWith(result: value));
+  });
+}/// Create a copy of GalleryHistoryEntry
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$GalleryScanSnapshotCopyWith<$Res>? get pendingResult {
+    if (_self.pendingResult == null) {
+    return null;
+  }
+
+  return $GalleryScanSnapshotCopyWith<$Res>(_self.pendingResult!, (value) {
+    return _then(_self.copyWith(pendingResult: value));
   });
 }
 }

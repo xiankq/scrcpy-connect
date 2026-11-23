@@ -50,6 +50,30 @@ void main() {
     expect(queued.transferred, 0);
   });
 
+  test('清空历史保留暂存路径与原件，重新打开日志恢复隐藏标记', () async {
+    final original = File('${directory.path}/received.txt');
+    await original.writeAsString('original contents');
+    final journal = FileTransferJournal(directory);
+    await journal.load();
+    final complete = FileTransferRecord(
+      id: 'done',
+      deviceId: 'device',
+      batchId: 'batch',
+      direction: .pull,
+      source: '/sdcard/original.txt',
+      destination: original.path,
+      destinationScope: .privateCache,
+      status: .completed,
+    );
+    await journal.upsert(complete);
+    await journal.upsert(complete.copyWith(id: 'active', status: .running));
+    await journal.hideHistory(['done']);
+    final restored = await FileTransferJournal(directory).load();
+    expect(restored['done'], complete.copyWith(historyHidden: true));
+    expect(restored['active']?.historyHidden, isFalse);
+    expect(await original.readAsString(), 'original contents');
+  });
+
   test('旧检查点在协议入口补齐默认值，迁移保留原文件且不改变来源身份', () async {
     final old = File('${directory.path}/transfers.json');
     final content = jsonEncode([

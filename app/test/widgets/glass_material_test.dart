@@ -1,50 +1,22 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:material_ui/material_ui.dart';
-import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 
 void main() {
-  testWidgets('toolbar glass does not add a clipped drop shadow', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ConnectTokens.theme(Brightness.light),
-        home: GlassPreferences(
-          reduceTransparency: true,
-          child: Scaffold(
-            body: GlassToolbarGroup(
-              children: [
-                IconButton(onPressed: () {}, icon: const Icon(Icons.add)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    final glass = tester.widget<Glass>(find.byType(Glass));
-    expect(glass.showShadow, isFalse);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('navigation track uses the package shadow lifecycle', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ConnectTokens.theme(Brightness.light),
-        home: Builder(
-          builder: (context) {
-            final settings = GlassMaterial.navigationTrackSettings(context);
-            expect(settings.effectiveShadow, isNotEmpty);
-            return const SizedBox.shrink();
-          },
-        ),
-      ),
-    );
-    expect(tester.takeException(), isNull);
+  test('clear disables blur and retains refraction in both themes', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    for (final mode in Brightness.values) {
+      final regular = Glass.optics(brightness: mode);
+      final clear = Glass.optics(brightness: mode, variant: GlassVariant.clear);
+      expect(regular.frost, greaterThan(0));
+      expect(clear.frost, 0);
+      expect(clear.blur, 0);
+      expect(clear.bodyShade, 0);
+      expect(clear.saturation, 1);
+      expect(clear.lensModel, liquid.GlassLensModel.paraxial);
+      expect(clear.refractiveIndex, regular.refractiveIndex);
+    }
   });
 }

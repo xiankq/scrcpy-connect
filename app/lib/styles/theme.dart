@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/motion.dart';
 
 /// 直接映射 designs/design.md 的语义值。
 abstract final class ConnectTokens {
@@ -171,9 +172,9 @@ abstract final class ConnectTokens {
         builders: {
           TargetPlatform.android: CupertinoPageTransitionsBuilder(),
           TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.macOS: DesktopPageTransitionsBuilder(),
+          TargetPlatform.windows: DesktopPageTransitionsBuilder(),
+          TargetPlatform.linux: DesktopPageTransitionsBuilder(),
           TargetPlatform.fuchsia: CupertinoPageTransitionsBuilder(),
         },
       ),
@@ -181,7 +182,9 @@ abstract final class ConnectTokens {
       scaffoldBackgroundColor: dark ? DesignTokens.colorCanvasDark : canvas,
       splashFactory: NoSplash.splashFactory,
       splashColor: DesignTokens.colorTransparent,
-      highlightColor: DesignTokens.colorTransparent,
+      highlightColor: foreground.withValues(
+        alpha: DesignTokens.componentControlFeedbackOpacity,
+      ),
       hoverColor: foreground.withValues(
         alpha: DesignTokens.componentControlFeedbackOpacity,
       ),

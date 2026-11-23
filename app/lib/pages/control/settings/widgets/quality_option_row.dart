@@ -1,7 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 
 class QualityOptionRow extends StatelessWidget {
@@ -44,7 +43,7 @@ class QualityOptionRow extends StatelessWidget {
               DesignTokens.componentIconSmallSize -
               DesignTokens.spacingSm * 2;
       const chevron = Icon(
-        LucideIcons.chevronRight,
+        LucideIcons.chevronDown,
         size: DesignTokens.componentIconSmallSize,
       );
       return ListTile(
@@ -52,7 +51,7 @@ class QualityOptionRow extends StatelessWidget {
         minLeadingWidth: DesignTokens.componentListIconSize,
         leading: ListIconBadge(
           icon: icon,
-          backgroundColor: functionalIconColor(icon),
+          backgroundColor: DesignTokens.colorListIconSlate,
         ),
         title: Text(title, style: titleStyle),
         subtitle: stacked ? Text(currentValue, style: valueStyle) : null,

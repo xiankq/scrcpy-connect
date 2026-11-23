@@ -66,6 +66,16 @@ abstract final class PreferenceCodec {
                 (ratio) => ratio.wire == values['remoteAspectRatio'],
               ),
         remoteCustomRatio: values['remoteCustomRatio'] as String?,
+        favoriteApps: (values['favoriteApps'] as List?)
+            ?.map<FavoriteDeviceApp>((entry) {
+              final app = entry as Map;
+              return (
+                packageName: app['packageName'] as String,
+                name: app['name'] as String,
+                userId: app['userId'] as int?,
+              );
+            })
+            .toList(growable: false),
       );
 
   static VideoQualityPreferences decodeQuality(Map<String, Object?> values) =>
@@ -139,6 +149,15 @@ abstract final class PreferenceCodec {
     if (values.remoteAspectRatio case final value?)
       'remoteAspectRatio': value.wire,
     'remoteCustomRatio': ?values.remoteCustomRatio,
+    if (values.favoriteApps case final apps?)
+      'favoriteApps': [
+        for (final app in apps)
+          {
+            'packageName': app.packageName,
+            'name': app.name,
+            'userId': ?app.userId,
+          },
+      ],
   };
 
   static Map<String, Object?> encodeQuality(VideoQualityPreferences values) => {

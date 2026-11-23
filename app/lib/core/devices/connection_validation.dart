@@ -14,8 +14,8 @@ ConnectionTransport connectionTransportForRecord(DeviceSnapshot record) =>
 
 String? validateAddress(String? input) {
   final text = input?.trim() ?? '';
-  if (text.isEmpty) return '请输入被控手机的地址';
-  if (text.contains(RegExp(r'\s|://|/'))) return '只填写 IP 地址或主机名，不含端口和协议';
+  if (text.isEmpty) return '请输入手机上显示的地址';
+  if (text.contains(RegExp(r'\s|://|/'))) return '地址和端口请分开填写，地址无需带 http://';
   if (text.contains(':')) {
     final unwrapped = text.startsWith('[') && text.endsWith(']')
         ? text.substring(1, text.length - 1)
@@ -24,13 +24,13 @@ String? validateAddress(String? input) {
     if (zone.length > 2 ||
         (zone.length == 2 && zone[1].isEmpty) ||
         InternetAddress.tryParse(zone[0])?.type != InternetAddressType.IPv6) {
-      return '请输入有效的 IPv6 地址';
+      return '地址格式不对，请对照手机上显示的地址';
     }
     return null;
   }
   if (RegExp(r'^\d+(\.\d+){3}$').hasMatch(text) &&
       text.split('.').any((part) => int.parse(part) > 255)) {
-    return 'IPv4 每段应为 0–255';
+    return '地址里的每组数字应在 0 到 255 之间';
   }
   if (text.length > 253 ||
       !RegExp(r'^[a-zA-Z0-9][a-zA-Z0-9._-]*$').hasMatch(text) ||
@@ -43,14 +43,16 @@ String? validateAddress(String? input) {
                 label.endsWith('-') ||
                 label.length > 63,
           )) {
-    return '请输入有效的 IP 地址或主机名';
+    return '地址格式不对，请对照手机上显示的地址';
   }
   return null;
 }
 
 String? validatePort(String? input) {
-  final port = int.tryParse(input?.trim() ?? '');
-  return port == null || port < 1 || port > 65535 ? '端口应为 1–65535 的整数' : null;
+  final text = input?.trim() ?? '';
+  if (text.isEmpty) return '请输入端口号';
+  final port = int.tryParse(text);
+  return port == null || port < 1 || port > 65535 ? '端口范围 1–65535' : null;
 }
 
 String? responseDeviceId(Json? response, [String? fallback]) {

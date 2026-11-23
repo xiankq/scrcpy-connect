@@ -116,7 +116,7 @@ void main() {
     await first;
     expect(container.read(provider).pushed, isTrue);
     expect(container.read(provider).copied, isFalse);
-    expect(container.read(provider).error, contains('clipboard unavailable'));
+    expect(container.read(provider).error, contains('未能把文字复制到手机'));
     final retry = submit();
     expect(directories.reads, hasLength(1));
     expect(transfers.starts, hasLength(1));
@@ -196,7 +196,7 @@ void main() {
     await sending;
     expect(transfers.starts, isEmpty);
     expect(clipboard.writes, isEmpty);
-    expect(container.read(provider).error, contains('设备连接已变化'));
+    expect(container.read(provider).error, contains('手机连接已变化'));
     expect(container.read(provider).busy, isFalse);
   });
 
@@ -207,7 +207,7 @@ void main() {
     );
     await sending;
     expect(transfers.starts, isEmpty);
-    expect(container.read(provider).error, contains('无法核验'));
+    expect(container.read(provider).error, contains('请重新选择'));
   });
 
   testWidgets('分享页面独立提交，完成后关闭自身并打开传输中心', (tester) async {
@@ -247,7 +247,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byType(ShareDeviceCard));
     await tester.pump();
-    await tester.tap(find.text('确认提交'));
+    await tester.tap(find.text('确认发送'));
     await tester.pump();
     directories.complete();
     await tester.pump();
