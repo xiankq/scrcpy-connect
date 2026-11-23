@@ -26,9 +26,14 @@ import 'package:scrcpy_connect/pages/devices/devices_page.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_card.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/first_device_illustration.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/device_workspace_page.dart';
+import 'package:scrcpy_connect/pages/session_pending/session_content.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/app_session_scope.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
+import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
 
 const _phone = DeviceSnapshot(
   id: 'pixel',
@@ -59,6 +64,68 @@ const _failed = DeviceSnapshot(
 );
 
 void main() {
+  testWidgets('应用启动时设备页的加载指示位于可用内容区中心', (tester) async {
+    for (final (size, brightness, textScale) in [
+      (const Size(390, 844), Brightness.light, 1.0),
+      (const Size(320, 360), Brightness.dark, 2.0),
+      (const Size(1200, 700), Brightness.dark, 1.0),
+    ]) {
+      await _show(
+        tester,
+        AppSessionScope(
+          ready: false,
+          failure: null,
+          onRetry: () {},
+          child: const AppSessionContent(
+            title: '设备',
+            root: true,
+            child: DevicesPage(),
+          ),
+        ),
+        size: size,
+        brightness: brightness,
+        textScale: textScale,
+      );
+      final loader = find.byType(ContentLoadingIndicator);
+      final bounds = tester.getRect(
+        find
+            .ancestor(
+              of: loader,
+              matching: find.byWidgetPredicate(
+                (widget) => widget is NotificationListener<ScrollNotification>,
+              ),
+            )
+            .first,
+      );
+      final insets = PageChromePadding.of(tester.element(loader));
+      expect(tester.getCenter(loader), insets.deflateRect(bounds).center);
+      expect(find.text('设备'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('设备首次读取用列表骨架，已有设备刷新时行不移动', (tester) async {
+    await _show(tester, const DevicesPage(), loading: true);
+    await tester.pump(const Duration(milliseconds: 150));
+    final skeleton = find.byType(SkeletonRows);
+    expect(skeleton, findsOneWidget);
+    expect(
+      tester.getTopLeft(skeleton).dx,
+      tester.getTopLeft(find.byType(TextField)).dx,
+    );
+    expect(find.byType(ContentLoadingIndicator), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await _show(tester, const DevicesPage(), devices: [_offline]);
+    final row = find.byType(DeviceCard);
+    final beforeRefresh = tester.getRect(row);
+    final container = ProviderScope.containerOf(tester.element(row));
+    (container.read(deviceListProvider.notifier) as _Devices).startRefresh();
+    await tester.pump();
+    expect(tester.getRect(row), beforeRefresh);
+    expect(find.byType(ContentLoadingIndicator), findsNothing);
+  });
+
   testWidgets('设备列表按状态展示独立行尾动作，连接无需先打开菜单', (tester) async {
     final connections = _Connections();
     await _show(
@@ -278,6 +345,7 @@ Future<void> _show(
   _Connections? connections,
   DeviceInspection? inspection,
   bool reducedMotion = true,
+  bool loading = false,
   Size size = const Size(390, 844),
   Brightness brightness = Brightness.light,
   double textScale = 1,
@@ -290,7 +358,7 @@ Future<void> _show(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        deviceListProvider.overrideWith(() => _Devices(devices)),
+        deviceListProvider.overrideWith(() => _Devices(devices, loading)),
         deviceConnectionsProvider.overrideWithValue(
           connections ?? _Connections(),
         ),
@@ -333,12 +401,16 @@ Future<void> _show(
 }
 
 class _Devices extends DeviceListNotifier {
-  _Devices(this.devices);
+  _Devices(this.devices, this.loading);
 
   final List<DeviceSnapshot> devices;
+  final bool loading;
 
   @override
-  DeviceListState build() => DeviceListState(devices: devices, loading: false);
+  DeviceListState build() =>
+      DeviceListState(devices: devices, loading: loading);
+
+  void startRefresh() => state = state.copyWith(loading: true);
 
   void setDevice(DeviceSnapshot device) =>
       state = state.copyWith(devices: [device]);

@@ -241,13 +241,6 @@ class DevicesPage extends HookConsumerWidget {
                                             null)) ...[
                                   searchField,
                                 ],
-                                if (appLoading && !initialLoad)
-                                  const Padding(
-                                    padding: EdgeInsets.only(
-                                      top: DesignTokens.spacingMd,
-                                    ),
-                                    child: ContentLoadingIndicator(),
-                                  ),
                                 if (appDeviceError != null)
                                   StateNote(
                                     appDeviceError,
@@ -259,7 +252,7 @@ class DevicesPage extends HookConsumerWidget {
                           ),
                         ),
                         if (devices.isEmpty &&
-                            !appLoading &&
+                            !initialLoad &&
                             appDeviceError == null)
                           SliverFillRemaining(
                             hasScrollBody: false,

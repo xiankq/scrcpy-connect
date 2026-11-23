@@ -20,10 +20,41 @@ import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/pages/control/control_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/route_resource_resolver_provider.dart';
+import 'package:scrcpy_connect/router/route_resource_view.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('页面资源等待时在非对称安全区内居中', (tester) async {
+    const insets = EdgeInsets.fromLTRB(64, 24, 12, 48);
+    final resource = Completer<String>();
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            padding: insets,
+            viewPadding: insets,
+            disableAnimations: true,
+          ),
+          child: child!,
+        ),
+        home: RouteResourceView(
+          identity: 'pending',
+          load: () => resource.future,
+          builder: (_, value) => Text(value),
+        ),
+      ),
+    );
+    final loader = find.byType(CircularProgressIndicator);
+    final viewport = tester.getRect(find.byType(Scaffold));
+    expect(tester.getCenter(loader), insets.deflateRect(viewport).center);
+
+    resource.complete('目标页面');
+    await tester.pumpAndSettle();
+    expect(loader, findsNothing);
+    expect(find.text('目标页面'), findsOneWidget);
+  });
 
   testWidgets('系统恢复保留页面位置与返回链，切换主页保留运行中的状态', (tester) async {
     final router = createAppRouter();

@@ -51,7 +51,9 @@ class _RouteResourceViewState<T extends Object>
         );
       } else if (waiting) {
         child = const Scaffold(
-          body: Center(child: CircularProgressIndicator.adaptive()),
+          body: SafeArea(
+            child: Center(child: CircularProgressIndicator.adaptive()),
+          ),
         );
       } else if (widget.preserveContent) {
         // 路由刷新可能重新解析 extra；已附着画面保留原打开决定，并继续拥有会话。

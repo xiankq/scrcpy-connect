@@ -28,27 +28,28 @@ class AppSessionContent extends StatelessWidget {
       title: title,
       root: root,
       child: Builder(
-        builder: (context) => ListView(
-          padding:
-              PageChromePadding.of(context) +
-              const EdgeInsets.all(DesignTokens.spacingMd),
-          children: [
-            if (session.failure case final failure?) ...[
-              StateNote(failure, icon: LucideIcons.circleAlert),
-              Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: TextButton(
-                  onPressed: session.onRetry,
-                  child: const Text('重试'),
+        builder: (context) {
+          final chrome = PageChromePadding.of(context);
+          if (session.failure case final failure?) {
+            return ListView(
+              padding: chrome + const EdgeInsets.all(DesignTokens.spacingMd),
+              children: [
+                StateNote(failure, icon: LucideIcons.circleAlert),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton(
+                    onPressed: session.onRetry,
+                    child: const Text('重试'),
+                  ),
                 ),
-              ),
-            ] else
-              const Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: ContentLoadingIndicator(),
-              ),
-          ],
-        ),
+              ],
+            );
+          }
+          return Padding(
+            padding: chrome,
+            child: const Center(child: ContentLoadingIndicator()),
+          );
+        },
       ),
     );
   }
