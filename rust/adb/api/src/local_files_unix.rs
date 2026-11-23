@@ -297,8 +297,6 @@ pub async fn create_copy(id: String, request: LocalFileCopyRequest) -> Result<St
             return Err(error(LocalFileErrorCode::Cancelled, "复制准入已撤销。"));
         }
         let resources = scope.fs.resources(request, source, target)?;
-        #[cfg(test)]
-        tests::after_create(&id);
         let admission = scope.state.lock().expect("本机范围状态");
         let accepting = admission.accepting;
         let key = uuid::Uuid::new_v4().to_string();
