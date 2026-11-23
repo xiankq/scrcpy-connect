@@ -132,13 +132,7 @@ class DevicesPage extends HookConsumerWidget {
               : [
                   if (RemoteWindows.hasWindows(context))
                     const RemoteWindowsButton(),
-                  if (!showWelcome)
-                    Padding(
-                      padding: const EdgeInsetsDirectional.only(
-                        end: DesignTokens.spacingXs,
-                      ),
-                      child: addButton,
-                    ),
+                  if (!showWelcome) addButton,
                 ],
           child: RefreshIndicator(
             onRefresh: ref.read(deviceListProvider.notifier).refresh,

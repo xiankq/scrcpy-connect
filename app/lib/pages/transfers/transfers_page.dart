@@ -256,6 +256,7 @@ class TransfersPage extends HookConsumerWidget {
             pane: split,
             title: '传输',
             actions: useSideToolbar ? null : actions,
+            groupHorizontalActions: finished.value,
             child: AsyncContent<List<TransferHistoryEntry>>(
               loading: query.isLoading,
               data: query.value,

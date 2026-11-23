@@ -301,7 +301,13 @@ class GlassToolbarGroup extends StatelessWidget {
             child: Wrap(
               alignment: WrapAlignment.center,
               crossAxisAlignment: WrapCrossAlignment.center,
-              children: children,
+              children: [
+                for (final action in children)
+                  SizedBox.square(
+                    dimension: DesignTokens.componentIconButtonSize,
+                    child: action,
+                  ),
+              ],
             ),
           ),
         ),

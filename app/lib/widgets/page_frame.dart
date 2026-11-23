@@ -22,6 +22,7 @@ class PageFrame extends StatefulWidget {
     this.titleStyle,
     this.headerHeight = DesignTokens.componentPageHeaderHeight,
     this.actions,
+    this.groupHorizontalActions = false,
     this.trailingAction,
     this.bottom,
     this.onBack,
@@ -36,6 +37,9 @@ class PageFrame extends StatefulWidget {
   final TextStyle? titleStyle;
   final double headerHeight;
   final List<Widget>? actions;
+
+  /// 仅为设计稿中的横向动作组共用表面。竖栏始终逐个摆放。
+  final bool groupHorizontalActions;
   final Widget? trailingAction;
 
   /// Material is owned by the footer widget. PageFrame provides its layout.
@@ -168,6 +172,22 @@ class _PageFrameState extends State<PageFrame> {
       );
       final backLabel = MaterialLocalizations.of(context).backButtonTooltip;
       final onBack = widget.onBack ?? () => closePage<void>(context);
+      final actions = widget.actions ?? const <Widget>[];
+      final horizontalActions = actions.isEmpty
+          ? null
+          : widget.groupHorizontalActions && actions.length > 1
+          ? GlassToolbarGroup(children: actions)
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: DesignTokens.spacingXs,
+              children: [
+                for (final action in actions)
+                  GlassToolbarGroup(children: [action]),
+              ],
+            );
+      final actionMargin = widget.root && actions.isNotEmpty
+          ? DesignTokens.spacingLg
+          : DesignTokens.spacingMd;
       final appBar = AppBar(
         toolbarHeight: toolbarHeight,
         backgroundColor: DesignTokens.colorTransparent,
@@ -184,27 +204,26 @@ class _PageFrameState extends State<PageFrame> {
             : widget.root
             ? DesignTokens.spacingLg
             : DesignTokens.spacingMd,
-        leading: verticalBar != null
+        leading: verticalBar != null || !hasBack
             ? null
-            : widget.leading ??
-                  (hasBack
-                      ? Padding(
-                          padding: const EdgeInsets.only(
-                            left: DesignTokens.spacingMd,
-                          ),
-                          child: Center(
-                            child: Tooltip(
-                              message: backLabel,
-                              excludeFromSemantics: true,
-                              child: GlassToolbarIconButton(
-                                semanticLabel: backLabel,
-                                onPressed: onBack,
-                                icon: const Icon(AppIcons.back),
-                              ),
-                            ),
-                          ),
-                        )
-                      : null),
+            : Padding(
+                padding: const EdgeInsetsDirectional.only(
+                  start: DesignTokens.spacingMd,
+                ),
+                child: Center(
+                  child:
+                      widget.leading ??
+                      Tooltip(
+                        message: backLabel,
+                        excludeFromSemantics: true,
+                        child: GlassToolbarIconButton(
+                          semanticLabel: backLabel,
+                          onPressed: onBack,
+                          icon: const Icon(AppIcons.back),
+                        ),
+                      ),
+                ),
+              ),
         title:
             widget.titleContent ??
             Text(
@@ -214,24 +233,20 @@ class _PageFrameState extends State<PageFrame> {
               style: _titleStyle(context),
             ),
         actions: [
-          if (verticalBar == null &&
-              widget.actions != null &&
-              widget.actions!.isNotEmpty)
+          if (verticalBar == null && horizontalActions != null)
             Padding(
               padding: EdgeInsets.only(
                 right: widget.trailingAction == null
                     ? DesignTokens.spacingZero
                     : DesignTokens.spacingXs,
               ),
-              child: Center(
-                child: GlassToolbarGroup(children: widget.actions!),
-              ),
+              child: Center(child: horizontalActions),
             ),
           if (widget.trailingAction != null)
             Center(child: widget.trailingAction!),
           if (widget.trailingAction != null ||
-              (verticalBar == null && (widget.actions?.isNotEmpty ?? false)))
-            const SizedBox(width: DesignTokens.spacingMd),
+              (verticalBar == null && horizontalActions != null))
+            SizedBox(width: actionMargin),
         ],
       );
       final scaffold = Scaffold(
@@ -310,7 +325,8 @@ class _PageFrameState extends State<PageFrame> {
                       titleContent: widget.titleContent,
                       titleStyle: widget.titleStyle,
                       leading: widget.leading,
-                      actions: widget.actions,
+                      actions: horizontalActions,
+                      actionMargin: actionMargin,
                       trailingAction: widget.trailingAction,
                       onBack: onBack,
                       hasBack: hasBack,
@@ -412,8 +428,7 @@ class _PageFrameState extends State<PageFrame> {
             onPressed: onBack,
             icon: const Icon(AppIcons.back),
           ),
-        for (final action in widget.actions ?? const <Widget>[])
-          GlassToolbarGroup(children: [action]),
+        for (final action in actions) GlassToolbarGroup(children: [action]),
       ];
       if (verticalActions.isEmpty) return scaffold;
       return Stack(
@@ -435,6 +450,7 @@ class _WorkspaceToolbar extends StatelessWidget {
     required this.titleStyle,
     required this.leading,
     required this.actions,
+    required this.actionMargin,
     required this.trailingAction,
     required this.onBack,
     required this.hasBack,
@@ -444,7 +460,8 @@ class _WorkspaceToolbar extends StatelessWidget {
   final Widget? titleContent;
   final TextStyle? titleStyle;
   final Widget? leading;
-  final List<Widget>? actions;
+  final Widget? actions;
+  final double actionMargin;
   final Widget? trailingAction;
   final VoidCallback onBack;
   final bool hasBack;
@@ -459,11 +476,7 @@ class _WorkspaceToolbar extends StatelessWidget {
         : (DesignTokens.componentPageHeaderHeight -
                   DesignTokens.componentIconButtonSize) /
               2;
-    final trailing = <Widget>[
-      if (actions != null && actions!.isNotEmpty)
-        GlassToolbarGroup(children: actions!),
-      ?trailingAction,
-    ];
+    final trailing = <Widget>[?actions, ?trailingAction];
     return ConstrainedBox(
       constraints: const BoxConstraints(
         maxWidth: DesignTokens.componentPageContentMaxWidth,
@@ -479,11 +492,8 @@ class _WorkspaceToolbar extends StatelessWidget {
                 ),
           MediaQuery.paddingOf(context).top + rowPadding,
           window == null
-              ? DesignTokens.spacingMd
-              : math.max(
-                  DesignTokens.spacingMd,
-                  window.right + DesignTokens.spacingXs,
-                ),
+              ? actionMargin
+              : math.max(actionMargin, window.right + DesignTokens.spacingXs),
           rowPadding,
         ),
         child: Row(

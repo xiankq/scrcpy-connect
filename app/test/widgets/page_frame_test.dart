@@ -5,11 +5,136 @@ import 'package:scrcpy_connect/core/platform/window_environment.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/window_environment_scope.dart';
 import 'package:scrcpy_connect/widgets/workspace_panes.dart';
 
 void main() {
+  testWidgets('独立页头动作在手机和桌面保留各自的圆面和点击范围', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final tapped = <String>[];
+    for (final (width, brightness, opaque) in [
+      (320.0, Brightness.light, false),
+      (1120.0, Brightness.dark, true),
+    ]) {
+      tester.view.physicalSize = Size(width, 700);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(brightness: brightness),
+          home: GlassPreferences(
+            reduceTransparency: opaque,
+            child: Builder(
+              builder: (context) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: TextScaler.linear(width < 400 ? 2 : 1)),
+                child: PageFrame(
+                  root: true,
+                  title: '设备',
+                  actions: [
+                    IconButton(
+                      tooltip: '远控窗口',
+                      onPressed: () => tapped.add('远控窗口'),
+                      icon: const Icon(Icons.layers),
+                    ),
+                    IconButton(
+                      tooltip: '添加设备',
+                      onPressed: () => tapped.add('添加设备'),
+                      icon: const Icon(Icons.add),
+                    ),
+                  ],
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final surfaces = find.byType(Glass);
+      expect(surfaces, findsNWidgets(2));
+      for (final label in ['远控窗口', '添加设备']) {
+        final action = find.byWidgetPredicate(
+          (widget) => widget is IconButton && widget.tooltip == label,
+        );
+        final surface = find.ancestor(of: action, matching: surfaces);
+        expect(tester.getSize(surface), const Size.square(44));
+        expect(tester.getSize(action), const Size.square(44));
+        expect(tester.widget<Glass>(surface).circular, isTrue);
+        if (opaque) {
+          final outline = find.descendant(
+            of: surface,
+            matching: find.byType(ClipOval),
+          );
+          expect(tester.getSize(outline), const Size.square(44));
+        } else {
+          final outline = find.descendant(
+            of: surface,
+            matching: find.byType(liquid.AdaptiveGlass),
+          );
+          expect(
+            tester.widget<liquid.AdaptiveGlass>(outline).shape,
+            isA<liquid.LiquidOval>(),
+          );
+        }
+        await tester.tap(action);
+      }
+      expect(
+        tester.getRect(surfaces.first).right,
+        lessThan(tester.getRect(surfaces.last).left),
+      );
+      expect(tester.takeException(), isNull);
+    }
+    expect(tapped, ['远控窗口', '添加设备', '远控窗口', '添加设备']);
+  });
+
+  testWidgets('明确成组的传输页动作横排共用胶囊，竖栏分别显示圆面', (tester) async {
+    final page = PageFrame(
+      title: '传输',
+      root: true,
+      groupHorizontalActions: true,
+      actions: [
+        IconButton(
+          tooltip: '清空记录',
+          onPressed: null,
+          icon: const Icon(Icons.delete_outline),
+        ),
+        IconButton(
+          tooltip: '刷新任务',
+          onPressed: () {},
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+      child: const SizedBox.expand(),
+    );
+    await tester.pumpWidget(MaterialApp(home: page));
+    final surface = find.byType(Glass);
+    expect(surface, findsOneWidget);
+    expect(tester.getSize(surface), const Size(88, 44));
+    expect(tester.widget<Glass>(surface).circular, isFalse);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: liquid.GlassVerticalBar(
+          data: const liquid.GlassVerticalBarData(
+            edge: liquid.GlassVerticalBarEdge.trailing,
+            width: 84,
+            top: 24,
+          ),
+          child: page,
+        ),
+      ),
+    );
+    expect(surface, findsNWidgets(2));
+    for (final part in [surface.first, surface.last]) {
+      expect(tester.getSize(part), const Size.square(44));
+      expect(tester.widget<Glass>(part).circular, isTrue);
+    }
+  });
+
   testWidgets('Duo split panes put actions on the physical window edge', (
     tester,
   ) async {
@@ -44,11 +169,36 @@ void main() {
       );
       final actions = find.byType(GlassToolbarGroup);
       expect(actions, findsNWidgets(2));
+      final surfaces = find.byType(Glass);
+      for (final surface in [surfaces.first, surfaces.last]) {
+        expect(tester.getSize(surface), const Size.square(44));
+        expect(tester.widget<Glass>(surface).circular, isTrue);
+      }
       final x = edge == liquid.GlassVerticalBarEdge.leading ? 42.0 : 1158.0;
       expect(tester.getCenter(actions.first), Offset(x, 46));
       expect(tester.getCenter(actions.last).dx, x);
       expect(tester.takeException(), isNull);
     }
+  });
+
+  testWidgets('自定义页头前置圆键的尺寸独立于返回槽', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PageFrame(
+          title: '已选择 2 项',
+          leading: GlassToolbarIconButton(
+            semanticLabel: '退出选择',
+            icon: const Icon(Icons.close),
+            onPressed: () {},
+          ),
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
+    expect(
+      tester.getSize(find.byType(liquid.GlassIconButton)),
+      const Size.square(44),
+    );
   });
 
   testWidgets('正文与底部操作在同一安全窗格内水平居中', (tester) async {

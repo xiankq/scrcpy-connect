@@ -137,6 +137,14 @@ void main() {
     final search = find.byType(TextField);
     final first = find.byType(DeviceCard).first;
     final second = find.byType(DeviceCard).at(1);
+    final add = find.byWidgetPredicate(
+      (widget) => widget is GlassActionIcon && widget.tooltip == '添加设备',
+    );
+    final addSurface = find.ancestor(of: add, matching: find.byType(Glass));
+    expect(tester.widget<Glass>(addSurface).circular, isTrue);
+    expect(tester.getSize(addSurface), const Size.square(44));
+    expect(tester.getCenter(addSurface), tester.getCenter(add));
+    expect(tester.getTopRight(addSurface).dx, tester.getTopRight(search).dx);
     expect(tester.getTopLeft(first).dx, tester.getTopLeft(search).dx);
     expect(tester.getSize(first).height, 108);
     expect(tester.getTopLeft(second).dy - tester.getBottomLeft(first).dy, 12);
