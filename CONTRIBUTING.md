@@ -20,8 +20,8 @@ cargo install --locked flutter_rust_bridge_codegen --version 2.13.0
 | 构建目标 | 额外工具 |
 | --- | --- |
 | Android | JDK 21、Android SDK 36 和 37、Build Tools 37.0.0、NDK 28.2.13676358、CMake 3.22.1。接受 SDK 组件许可后再构建。 |
-| Linux x64 | Clang、CMake、pkg-config，以及 GTK 3、libdrm、libepoxy、libclang、libva 的开发包。 |
-| Windows x64 | Visual Studio 的「使用 C++ 的桌面开发」工作负载、Windows SDK、Git Bash 和 MSYS2 版 GNU Make。 |
+| Linux x64 / ARM64 | GCC、Clang、CMake、pkg-config，以及 GTK 3、libdrm、libepoxy、libclang、libva 的开发包。ARM64 还需要发行版提供的 ADB。 |
+| Windows x64 / ARM64 | Visual Studio 的「使用 C++ 的桌面开发」工作负载和对应架构工具、Windows SDK、LLVM 的 `clang` 和 `clang-cl`，以及 MSYS2 的 Bash、`make` 和 `diffutils`。 |
 | macOS / iOS | Xcode、CocoaPods 和对应平台的 SDK。 |
 
 改 Flutter 界面可以在 `app/` 下运行 `flutter test --no-pub`。提交前按改动范围运行[相应测试](test/README.md)。完整检查需要先准备当前宿主的 FFmpeg，例如 Apple Silicon 上运行：
