@@ -74,6 +74,9 @@ void verifyWindows(Directory bundle, String arch) {
   for (final name in [
     windowsExecutable,
     'flutter_windows.dll',
+    'msvcp140.dll',
+    'vcruntime140.dll',
+    if (arch == 'x64') 'vcruntime140_1.dll',
     'interop_scrcpy_bridge.dll',
     'media_codec_plugin.dll',
     'adb.exe',
@@ -543,7 +546,7 @@ Future<void> main(List<String> arguments) async {
             version,
           ]);
         case 'windows':
-          final iscc = executable('ISCC.exe');
+          final iscc = executable('ISCC');
           if (iscc == null) {
             throw StateError('Install Inno Setup and add ISCC.exe to PATH.');
           }

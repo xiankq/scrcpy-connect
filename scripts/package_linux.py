@@ -1,6 +1,7 @@
 """Package a verified Flutter bundle as DEB, RPM and AppImage."""
 import hashlib
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -99,16 +100,18 @@ cp -a "{root}/." "%{{buildroot}}/"
         )
         launch.chmod(0o755)
         tool, runtime = work / "appimagetool", work / "runtime"
-        download(f"https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-{machine}.AppImage",
-                 tool, TOOL_SHA256[machine])
+        host = platform.machine()
+        download(f"https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-{host}.AppImage",
+                 tool, TOOL_SHA256[host])
         download(f"https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-{machine}",
                  runtime, RUNTIME_SHA256[machine])
         tool.chmod(0o755)
         image = str(prefix) + ".AppImage"
         env = dict(os.environ, ARCH=machine, APPIMAGE_EXTRACT_AND_RUN="1")
         subprocess.run([tool, "--runtime-file", runtime, root, image], env=env, check=True)
-        subprocess.run([image, "--appimage-extract", "AppRun"], cwd=work,
-                       stdout=subprocess.DEVNULL, check=True)
+        subprocess.run(["unsquashfs", "-offset", str(runtime.stat().st_size),
+                        image, "AppRun"], cwd=work, stdout=subprocess.DEVNULL,
+                       check=True)
         if (work / "squashfs-root/AppRun").read_bytes() != launch.read_bytes():
             raise ValueError("AppImage launcher does not match the package input")
 
