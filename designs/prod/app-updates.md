@@ -28,4 +28,4 @@
 
 ## 构建渠道配置
 
-当前外部交付模式通过 `--dart-define=APP_UPDATE_FEED=<HTTPS 地址>` 配置。构建流水线为每个安装渠道和平台提供对应的发布清单。清单为 JSON 数组，每条提供稳定版 `version`、整数 `build`、ISO 8601 格式的 `publishedAt`、字符串数组 `notes`、HTTPS 渠道入口 `url`，可选提供安装包 `bytes`。发布渠道负责兼容性筛选与安装。未提供地址的构建显示实际安装版本和开源许可，检查更新时说明渠道尚未配置。
+当前外部交付模式通过 `--dart-define=APP_UPDATE_FEED=<HTTPS 地址>` 配置。GitHub 构建从最新 Release 下载更新清单，读取跳转时只接受 HTTPS。Android、Linux、Windows 和已启用签名渠道的 macOS 公开包在同一次发布中交付，共用一份清单；用户从版本页面选择自己的平台。试打包构建不接入公开清单。清单为 JSON 数组，每条提供稳定版 `version`、整数 `build`、ISO 8601 格式的 `publishedAt`、字符串数组 `notes`、HTTPS 渠道入口 `url`，可选提供安装包 `bytes`。发布渠道负责兼容性筛选与安装。未提供地址的构建显示实际安装版本和开源许可，检查更新时说明渠道尚未配置。

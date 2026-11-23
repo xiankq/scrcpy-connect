@@ -1,36 +1,46 @@
 # 邻接 · Interconnect
 
-通过系统USB/无线调试授权访问Android设备，提供远控、文件、相册与通信入口；被控不安装配套APK。功能门槛见[平台与能力](designs/prod/compatibility.md)。
+邻接是一款 Android 设备管理工具。用 USB 或无线调试连接设备后，可以查看和操作屏幕、管理文件、浏览相册，也可以从工作台打开常用应用。被控设备使用 Android 系统提供的调试授权，无需安装配套 APK。
 
-## 开发
+各主控平台的连接方式和功能支持见[平台与能力](designs/prod/compatibility.md)。
 
-准备 Flutter 3.50.1 或更新的稳定版（Dart 3.14+）、`rust-toolchain.toml` 指定的 Rust、JDK 21 和 Android SDK。
+## 下载与使用
+
+公开版本发布后，可在 [GitHub Releases](https://github.com/xiankq/scrcpy-connect/releases) 下载。每个版本的说明会列出可用平台和对应文件。
+
+- **Android** 按架构选择 APK。不确定时，下载 `android-universal.apk`。
+- **Windows** 按 x64 或 ARM64 选择安装器 EXE，也可以下载便携 ZIP。使用便携版时完整解压，然后运行 `Interconnect.exe`。
+- **Linux** 按 x64 或 ARM64 选择 AppImage、DEB、RPM 或 tar.gz。ARM64 使用发行版提供的 ADB。安装方法见[下载包说明](docs/releasing.md#怎么选下载包)。
+- **macOS** 签名渠道开启后，按 Apple Silicon 或 Intel 选择 DMG，将邻接拖入「应用程序」。
+- **iOS 和 iPadOS** 通过 Apple 渠道交付，当前可在 Actions 试编译。
+
+首次连接时，在 Android 被控设备上打开开发者选项，按连接方式启用 USB 或无线调试，只授权自己信任的主控。连接、配对和重连的区别见[设备连接](designs/prod/README.md)。
+
+Linux 用户如需添加应用菜单入口，可以将可执行文件目录加入桌面会话的 `PATH`，再把随包的 `share/applications/` 与 `share/icons/` 内容放到本机的 `$XDG_DATA_HOME` 对应目录。未设置时使用 `~/.local/share`。Windows 用户如果还在使用指向旧可执行文件名的快捷方式，请将它改为指向 `Interconnect.exe`。
+
+## 从源码运行
+
+准备 Flutter 3.50.1、`rust-toolchain.toml` 指定的 Rust、Node.js 22 和 Python 3。Android 还需要 JDK 21 和 Android SDK，桌面系统需要对应的原生编译工具。
 
 ```sh
+export PUB_HOSTED_URL=https://pub.flutter-io.cn
 flutter pub get --enforce-lockfile
-npm ci --ignore-scripts --prefix scripts/design_tokens
 cd app
 flutter run -d <device>
 ```
 
-完整检查在仓库根运行 `./scripts/check.sh`。Android 打包与桌面构建见[脚本入口](scripts/README.md)。
+安装依赖时使用锁文件中的 Pub 镜像。各系统的构建依赖和完整检查见[贡献指南](CONTRIBUTING.md)。遇到问题可以[提交 issue](https://github.com/xiankq/scrcpy-connect/issues)，安全问题按[安全报告](SECURITY.md)私下提交。
 
-## 应用标识与桌面启动
+## 项目文档
 
-中文产品名为「邻接」，英文名为 Interconnect。macOS 交付 `Interconnect.app`，Windows 入口是 `Interconnect.exe`，Linux 入口是 `interconnect`。Windows 从旧交付包升级后，指向旧文件名的快捷方式需指到新入口。
-
-Android 的 Application ID、Apple 端的 Bundle ID、Linux 的 GTK 应用 ID、Windows 的通知 AppUserModelID 和应用数据目录均沿用现有身份。更换身份需单独评估存储、授权、签名与覆盖升级。
-
-Linux 可直接运行解包目录下的 `./interconnect`。要添加到应用菜单，将解包目录加入桌面会话的 `PATH`，把随包的 `share/applications/` 与 `share/icons/` 内容分别安装到 `${XDG_DATA_HOME:-$HOME/.local/share}/applications/` 和 `${XDG_DATA_HOME:-$HOME/.local/share}/icons/`。保留解包目录下可执行文件与资源的相对位置。
-
-## 工作区
-
-| 目录 | 内容 |
+| 文档 | 内容 |
 | --- | --- |
-| `app/` | Flutter应用、业务与平台runner |
-| `packages/`、`rust/` | 同名通用能力包及原生实现 |
-| `servers/` | 被控临时执行产物及来源 |
-| `designs/` | 产品与视觉规范、Ardot 对照资料 |
-| `scripts/` | 生成、检查与构建 |
+| [产品规格](designs/prod/README.md) | 各页面和连接、远控、文件等功能的预期行为 |
+| [视觉规范](designs/design.md) | 设计稿、组件、色彩和布局约定 |
+| [构建脚本](scripts/README.md) | 本机验证、构建、产物检查和发布入口 |
+| [发布说明](docs/releasing.md) | 从试打包到公开发布，以及如何处理失败 |
+| [发布前补充清单](docs/release-owner-checklist.md) | 维护者需要决定、提供和配置的事项 |
+| [第三方组件](THIRD_PARTY_NOTICES.md) | 随仓库或安装包提供的外部代码、素材和许可 |
+| [变更记录](CHANGELOG.md) | 每个公开版本的用户可见变化 |
 
-入口：[产品](designs/prod/README.md) · [视觉](designs/design.md) · [应用约束](app/lib/AGENTS.md) · [脚本](scripts/README.md) · [词表](GLOSSARY.md)。
+Flutter 应用在 `app/`，可复用的 Dart 接口在 `packages/`，对应的原生实现位于 `rust/`。被控设备运行的临时组件在 `servers/`。
