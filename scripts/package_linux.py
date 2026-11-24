@@ -60,7 +60,8 @@ Description: Cross-device Android control and file workspace
 """)
         deb = work / "interconnect.deb"
         with stage("Linux package/DEB"):
-            subprocess.run(["dpkg-deb", "--root-owner-group", "--build", root, deb], check=True)
+            subprocess.run(["dpkg-deb", "-Zzstd", "-z3", "--root-owner-group",
+                            "--build", root, deb], check=True)
             subprocess.run(["dpkg-deb", "--contents", deb], stdout=subprocess.DEVNULL, check=True)
         shutil.rmtree(control.parent)
 
@@ -99,6 +100,9 @@ cp -a "{root}/." "%{{buildroot}}/"
         shutil.copyfile(root / f"usr/share/applications/{desktop.name}", desktop)
         shutil.copyfile(root / f"usr/share/icons/hicolor/scalable/apps/{APP_ID}.svg",
                         root / f"{APP_ID}.svg")
+        # appimagetool 1.9.1 still looks for the legacy AppStream filename.
+        metadata = root / "usr/share/metainfo"
+        (metadata / f"{APP_ID}.appdata.xml").symlink_to(f"{APP_ID}.metainfo.xml")
         launch = root / "AppRun"
         launch.write_text(
             '#!/bin/sh\nset -eu\n'

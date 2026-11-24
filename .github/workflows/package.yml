@@ -42,6 +42,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: packages-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type == 'branch' }}
+
 jobs:
   desktop:
     strategy:
