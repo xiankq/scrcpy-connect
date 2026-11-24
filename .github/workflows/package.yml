@@ -10,6 +10,7 @@ on:
       - 'app/android/**/*.gradle.kts'
       - 'app/android/gradle/wrapper/**'
       - 'app/linux/CMakeLists.txt'
+      - 'app/linux/*.xml'
       - 'app/windows/CMakeLists.txt'
       - 'packages/adb/lib/src/adb_host.dart'
       - 'packages/media_codec/darwin/build_native.sh'
@@ -21,6 +22,7 @@ on:
       - 'scripts/apple_bundle_resources.sh'
       - 'scripts/build_host.dart'
       - 'scripts/installer_windows.iss'
+      - 'scripts/src/packaging*'
       - 'scripts/package_*'
   workflow_dispatch:
   workflow_call:
@@ -61,7 +63,7 @@ jobs:
           media-profile: ${{ matrix.platform }}-${{ matrix.arch }}
       - if: matrix.platform == 'linux'
         name: Install Linux package tools
-        run: timeout 4m sudo apt-get install -y --no-install-recommends adb file rpm desktop-file-utils squashfs-tools
+        run: timeout 4m sudo apt-get install -y --no-install-recommends adb appstream file rpm desktop-file-utils squashfs-tools
       - if: matrix.platform == 'windows'
         name: Install the pinned Inno Setup compiler
         shell: pwsh
@@ -136,7 +138,9 @@ jobs:
           media-profile: ${{ matrix.platform }}${{ matrix.simulator && '-simulator' || '' }}-${{ matrix.arch }}
           media-cache-path: ${{ matrix.platform == 'macos' && 'app/build/macos/Build/Products/Release/media_codec_ffmpeg' || matrix.simulator && 'app/build/ios/Debug-iphonesimulator/media_codec_ffmpeg' || 'app/build/ios/Release-iphoneos/media_codec_ffmpeg' }}
       - name: Install Apple Rust targets
-        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim
+        env:
+          RUST_TARGET: ${{ matrix.platform == 'ios' && (matrix.simulator && 'aarch64-apple-ios-sim' || 'aarch64-apple-ios') || (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') }}
+        run: rustup target add "$RUST_TARGET"
       - name: Build and package Apple clients
         shell: bash
         env:
@@ -235,7 +239,7 @@ jobs:
           log="$RUNNER_TEMP/android-build.log"
           if ! dart scripts/android.dart build --mode "$mode" --abi all --no-pub "${flags[@]}" 2>&1 | tee "$log"; then
             grep -Eq 'Received status code (429|50[234]) from server' "$log" || exit 1
-            echo 'Gradle dependency repository returned a temporary HTTP error. Retrying in 45 seconds.'
+            echo '::warning title=Android dependencies::Gradle dependency repository returned a temporary HTTP error. Retrying in 45 seconds.'
             sleep 45
             dart scripts/android.dart build --mode "$mode" --abi all --no-pub "${flags[@]}"
           fi

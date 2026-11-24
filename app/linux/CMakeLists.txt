@@ -83,6 +83,8 @@ install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
 configure_file(interconnect.desktop.in "${CMAKE_CURRENT_BINARY_DIR}/${APPLICATION_ID}.desktop" @ONLY)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${APPLICATION_ID}.desktop"
   DESTINATION "share/applications" COMPONENT Runtime)
+install(FILES interconnect.metainfo.xml DESTINATION "share/metainfo"
+  RENAME "${APPLICATION_ID}.metainfo.xml" COMPONENT Runtime)
 install(FILES runner/interconnect.svg
   DESTINATION "share/icons/hicolor/scalable/apps"
   RENAME "${APPLICATION_ID}.svg" COMPONENT Runtime)

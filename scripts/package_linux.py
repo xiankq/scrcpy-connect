@@ -9,6 +9,8 @@ import tempfile
 import urllib.request
 from pathlib import Path
 
+from src.packaging_log import stage
+
 APP_ID = "dev.scrcpyconnect.scrcpy_connect"
 TOOL_SHA256 = {
     "x86_64": "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0",
@@ -31,12 +33,15 @@ def download(url, destination, expected):
 def main(bundle, prefix, arch, version):
     machine, deb_arch = {"x64": ("x86_64", "amd64"), "arm64": ("aarch64", "arm64")}[arch]
     prefix.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="interconnect-linux-") as temp:
+    with tempfile.TemporaryDirectory(prefix="interconnect-linux-", dir=prefix.parent) as temp:
         work = Path(temp)
         root = work / "root"
         app = root / "opt/interconnect"
-        shutil.copytree(bundle, app, symlinks=True)
-        shutil.copytree(app / "share", root / "usr/share")
+        with stage("Linux package/desktop metadata"):
+            shutil.copytree(bundle, app, symlinks=True)
+            shutil.copytree(app / "share", root / "usr/share")
+            subprocess.run(["appstreamcli", "validate", "--no-net",
+                            root / f"usr/share/metainfo/{APP_ID}.metainfo.xml"], check=True)
         command = root / "usr/bin/interconnect"
         command.parent.mkdir()
         # 相对链接同时适用于系统安装与 AppImage 解包运行。
@@ -53,9 +58,10 @@ Priority: optional
 Depends: libc6 (>= 2.39), libgtk-3-0t64 | libgtk-3-0, libepoxy0, libdrm2, libva2, libva-drm2, libstdc++6, adb
 Description: Cross-device Android control and file workspace
 """)
-        deb = str(prefix) + ".deb"
-        subprocess.run(["dpkg-deb", "--root-owner-group", "--build", root, deb], check=True)
-        subprocess.run(["dpkg-deb", "--contents", deb], stdout=subprocess.DEVNULL, check=True)
+        deb = work / "interconnect.deb"
+        with stage("Linux package/DEB"):
+            subprocess.run(["dpkg-deb", "--root-owner-group", "--build", root, deb], check=True)
+            subprocess.run(["dpkg-deb", "--contents", deb], stdout=subprocess.DEVNULL, check=True)
         shutil.rmtree(control.parent)
 
         rpm_top = work / "rpm"
@@ -78,12 +84,16 @@ cp -a "{root}/." "%{{buildroot}}/"
 /usr/bin/interconnect
 /usr/share/applications/{APP_ID}.desktop
 /usr/share/icons/hicolor/scalable/apps/{APP_ID}.svg
+/usr/share/metainfo/{APP_ID}.metainfo.xml
 """)
-        subprocess.run(["rpmbuild", "-bb", "--target", machine, "--define",
-                        f"_topdir {rpm_top}", spec], check=True)
-        rpm = str(prefix) + ".rpm"
-        shutil.copyfile(next((rpm_top / "RPMS").glob("*/*.rpm")), rpm)
-        subprocess.run(["rpm", "-qlp", rpm], stdout=subprocess.DEVNULL, check=True)
+        with stage("Linux package/RPM"):
+            subprocess.run(["rpmbuild", "-bb", "--target", machine, "--define",
+                            f"_topdir {rpm_top}", spec], check=True)
+            packages = list((rpm_top / "RPMS").glob("*/*.rpm"))
+            if len(packages) != 1:
+                raise ValueError(f"Expected one RPM, found {len(packages)}")
+            rpm = packages[0]
+            subprocess.run(["rpm", "-qlp", rpm], stdout=subprocess.DEVNULL, check=True)
 
         desktop = root / f"{APP_ID}.desktop"
         shutil.copyfile(root / f"usr/share/applications/{desktop.name}", desktop)
@@ -98,19 +108,23 @@ cp -a "{root}/." "%{{buildroot}}/"
         launch.chmod(0o755)
         tool, runtime = work / "appimagetool", work / "runtime"
         host = platform.machine()
-        download(f"https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-{host}.AppImage",
-                 tool, TOOL_SHA256[host])
-        download(f"https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-{machine}",
-                 runtime, RUNTIME_SHA256[machine])
-        tool.chmod(0o755)
-        image = str(prefix) + ".AppImage"
+        with stage("Linux package/AppImage tools"):
+            download(f"https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-{host}.AppImage",
+                     tool, TOOL_SHA256[host])
+            download(f"https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-{machine}",
+                     runtime, RUNTIME_SHA256[machine])
+            tool.chmod(0o755)
+        image = work / "Interconnect.AppImage"
         env = dict(os.environ, ARCH=machine, APPIMAGE_EXTRACT_AND_RUN="1")
-        subprocess.run([tool, "--runtime-file", runtime, root, image], env=env, check=True)
-        subprocess.run(["unsquashfs", "-offset", str(runtime.stat().st_size),
-                        image, "AppRun"], cwd=work, stdout=subprocess.DEVNULL,
-                       check=True)
-        if (work / "squashfs-root/AppRun").read_bytes() != launch.read_bytes():
-            raise ValueError("AppImage launcher does not match the package input")
+        with stage("Linux package/AppImage"):
+            subprocess.run([tool, "--runtime-file", runtime, root, image], env=env, check=True)
+            subprocess.run(["unsquashfs", "-offset", str(runtime.stat().st_size),
+                            image, "AppRun"], cwd=work, stdout=subprocess.DEVNULL,
+                           check=True)
+            if (work / "squashfs-root/AppRun").read_bytes() != launch.read_bytes():
+                raise ValueError("AppImage launcher does not match the package input")
+        for output, extension in [(deb, "deb"), (rpm, "rpm"), (image, "AppImage")]:
+            output.replace(f"{prefix}.{extension}")
 
 
 if __name__ == "__main__":

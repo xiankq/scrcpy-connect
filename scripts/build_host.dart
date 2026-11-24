@@ -97,11 +97,10 @@ void verifyWindows(Directory bundle, String arch) {
       .existsSync()) {
     throw StateError('Windows bundle lacks Flutter assets');
   }
-  verifyMedia(bundle);
+  verifyMedia(files);
 }
 
-void verifyMedia(Directory bundle) {
-  final files = bundleFiles(bundle).toList();
+void verifyMedia(List<File> files) {
   if (files.any(
     (file) => const {
       'adb',
@@ -229,7 +228,7 @@ Future<void> verifyLinux(Directory bundle, String arch) async {
       }
     }
   }
-  verifyMedia(bundle);
+  verifyMedia(files);
 }
 
 void installMediaNotices(Directory bundle, String platform, String arch) {
@@ -342,20 +341,22 @@ Future<void> verifyApple(
     if (rust.isEmpty) {
       throw StateError('Apple bundle lacks its Rust capability library: $name');
     }
-    for (final library in rust) {
-      await runTool(['xcrun', 'lipo', library.path, '-verify_arch', ...slices]);
+    for (final path
+        in rust.map((file) => file.resolveSymbolicLinksSync()).toSet()) {
+      await runTool(['xcrun', 'lipo', path, '-verify_arch', ...slices]);
     }
   }
   if (platform == 'macos') {
-    await _rejectDuplicateObjectiveCClasses(contents, File(binary));
+    await _rejectDuplicateObjectiveCClasses(contents, File(binary), slices);
   }
-  verifyMedia(bundle);
+  verifyMedia(files);
 }
 
 /// 同一插件被 CocoaPods 和 SwiftPM 同时链接时，构建成功但运行时存在类冲突。
 Future<void> _rejectDuplicateObjectiveCClasses(
   Directory contents,
   File executable,
+  List<String> architectures,
 ) async {
   final binaries = [executable];
   for (final framework in Directory(
@@ -367,13 +368,7 @@ Future<void> _rejectDuplicateObjectiveCClasses(
     );
     if (binary.existsSync()) binaries.add(binary);
   }
-  final architectures = await runTool([
-    'xcrun',
-    'lipo',
-    '-archs',
-    executable.path,
-  ], quiet: true);
-  for (final arch in '${architectures.stdout}'.trim().split(RegExp(r'\s+'))) {
+  for (final arch in architectures) {
     final owners = <String, String>{};
     for (final binary in binaries) {
       final result = await runTool([
@@ -432,6 +427,7 @@ Future<void> archiveBundle(
 }
 
 Future<void> main(List<String> arguments) async {
+  final log = PackagingLog('Host package');
   try {
     final parser = ArgParser()
       ..addFlag('verify-only', negatable: false)
@@ -490,6 +486,7 @@ Future<void> main(List<String> arguments) async {
     }
     final verifyOnly = args.flag('verify-only');
     if (!verifyOnly) {
+      log.begin('build $platform $arch');
       final appleConfig = platform == 'macos' || simulator
           ? Directory.systemTemp.createTempSync('interconnect-arch-')
           : null;
@@ -533,6 +530,7 @@ Future<void> main(List<String> arguments) async {
         _ => 'build/macos/Build/Products/Release/$macApplication',
       }),
     );
+    log.begin('verify $platform $arch bundle');
     if (!bundle.existsSync()) {
       throw StateError('Missing final application at ${bundle.path}');
     }
@@ -548,6 +546,7 @@ Future<void> main(List<String> arguments) async {
     final artifacts = Directory(p.join(root.path, 'build/verified'));
     final target = '$platform${simulator ? '-simulator' : ''}-$arch';
     if (platform != 'macos' || !args.flag('installers')) {
+      log.begin('archive $target');
       await archiveBundle(
         bundle,
         target,
@@ -556,6 +555,7 @@ Future<void> main(List<String> arguments) async {
       );
     }
     if (args.flag('installers')) {
+      log.begin('package $target installers');
       final pubspec = loadYaml(
         File(p.join(application.path, 'pubspec.yaml')).readAsStringSync(),
       );
@@ -597,11 +597,12 @@ Future<void> main(List<String> arguments) async {
           throw ArgumentError('Use Apple distribution tooling for iOS.');
       }
     }
+    log.done();
     stdout.writeln(
       'PASS: final $platform application, Flutter engine, Rust and trimmed media codec',
     );
   } on Object catch (error) {
-    stderr.writeln(error);
+    log.fail(error);
     exitCode = 1;
   }
 }

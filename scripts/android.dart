@@ -280,6 +280,7 @@ Future<Map<String, Object>> verifyApk(
 }
 
 Future<void> buildApk({
+  required PackagingLog log,
   String mode = 'release',
   String abi = 'split',
   bool noPub = false,
@@ -317,7 +318,7 @@ Future<void> buildApk({
     File(p.join(application.path, 'pubspec.yaml')).readAsStringSync(),
   );
   final versionCode = int.parse((pubspec['version'] as String).split('+').last);
-  final watch = Stopwatch()..start();
+  log.begin('build $mode APKs ($abi)');
   await streamTool([
     flutter,
     'build',
@@ -334,7 +335,6 @@ Future<void> buildApk({
     ?feed,
     if (noPub) '--no-pub',
   ], cwd: application);
-  watch.stop();
   for (final architecture in [
     if (split) ...platform.$2,
     if (!split || packageSet) null,
@@ -342,6 +342,7 @@ Future<void> buildApk({
     final filename = architecture == null
         ? 'app-$mode.apk'
         : 'app-$architecture-$mode.apk';
+    log.begin('verify $filename');
     await verifyApk(
       File(p.join(application.path, 'build/app/outputs/flutter-apk', filename)),
       expectedAbis: architecture == null ? platform.$2 : [architecture],
@@ -349,9 +350,6 @@ Future<void> buildApk({
       expectedVersionCode: abi == 'split' ? null : versionCode,
     );
   }
-  stdout.writeln(
-    'Build wall time: ${(watch.elapsedMicroseconds / 1000000).toStringAsFixed(2)}s. Reuse .dart_tool/hooks_runner and Gradle caches between builds.',
-  );
 }
 
 String? _signerFingerprint(ArgResults command) {
@@ -367,6 +365,7 @@ String? _signerFingerprint(ArgResults command) {
 }
 
 Future<void> main(List<String> arguments) async {
+  final log = PackagingLog('Android');
   try {
     ArgParser commandParser() =>
         ArgParser()..addFlag('help', abbr: 'h', negatable: false);
@@ -429,12 +428,14 @@ Future<void> main(List<String> arguments) async {
         if (command.rest.isNotEmpty) {
           throw ArgumentError('init-signing accepts no arguments');
         }
+        log.begin('initialize local signing');
         await initializeSigning();
       case 'build':
         if (command.rest.isNotEmpty) {
           throw ArgumentError('build accepts no positional arguments');
         }
         await buildApk(
+          log: log,
           mode: command['mode'] as String,
           abi: command['abi'] as String,
           noPub: command['no-pub'] as bool,
@@ -447,14 +448,16 @@ Future<void> main(List<String> arguments) async {
           throw ArgumentError('verify requires one APK path');
         }
         final expected = command.multiOption('abis');
+        log.begin('verify APK');
         await verifyApk(
           File(command.rest.single),
           expectedAbis: expected.isEmpty ? null : expected,
           signerSha256: _signerFingerprint(command),
         );
     }
+    log.done();
   } on Object catch (error) {
-    stderr.writeln('Android packaging failed: $error');
+    log.fail(error);
     exitCode = 1;
   }
 }

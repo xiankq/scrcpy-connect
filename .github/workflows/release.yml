@@ -108,30 +108,8 @@ jobs:
           python3 scripts/release_media_source.py build/downloads/release-media-source.tar.gz
           dart scripts/release.dart --tag "$GITHUB_REF_NAME" --repository "$GITHUB_REPOSITORY" \
             --packages build/downloads --output build/release --notes "$RUNNER_TEMP/release-notes.md" "${previous[@]}" "${macos[@]}"
-          (cd build/release && sha256sum --check SHA256SUMS)
       - name: Publish after uploading the complete draft
         env:
           GH_TOKEN: ${{ github.token }}
           PREVIEW: ${{ needs.preflight.outputs.preview }}
-        run: |
-          published_draft="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-            | jq -sr --arg tag "$GITHUB_REF_NAME" 'flatten[] | select(.tag_name == $tag) | .draft')"
-          case "$published_draft" in
-            '')
-              gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
-                --title "Interconnect $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"
-              ;;
-            true)
-              gh release edit "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"
-              ;;
-            false)
-              echo "Release $GITHUB_REF_NAME is already public." >&2
-              exit 1
-              ;;
-          esac
-          gh release upload "$GITHUB_REF_NAME" --clobber build/release/*
-          if [[ "$PREVIEW" == true ]]; then
-            gh release edit "$GITHUB_REF_NAME" --draft=false --prerelease --latest=false
-          else
-            gh release edit "$GITHUB_REF_NAME" --draft=false --latest
-          fi
+        run: bash scripts/publish_release.sh build/release "$RUNNER_TEMP/release-notes.md"

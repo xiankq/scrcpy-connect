@@ -13,6 +13,9 @@ inputs:
   media-cache-path:
     description: Directory containing the compiled media libraries and their receipts
     default: .dart_tool/media_codec/ffmpeg
+  resolve-packages:
+    description: Restore the locked Dart and Flutter dependencies
+    default: 'true'
 runs:
   using: composite
   steps:
@@ -95,7 +98,9 @@ runs:
         flutter-version: '3.50.1'
         channel: stable
         cache: true
-    - shell: bash
+    - name: Restore locked workspace dependencies
+      if: inputs.resolve-packages == 'true'
+      shell: bash
       env:
         PUB_HOSTED_URL: https://pub.flutter-io.cn
       run: flutter pub get --enforce-lockfile

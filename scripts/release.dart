@@ -9,9 +9,11 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
 
+import 'src/packaging.dart';
 import 'src/repository_tooling.dart';
 
 Future<void> main(List<String> arguments) async {
+  final log = PackagingLog('Release');
   final parser = ArgParser()
     ..addOption('tag', mandatory: true)
     ..addOption('repository')
@@ -21,6 +23,7 @@ Future<void> main(List<String> arguments) async {
     ..addOption('output')
     ..addOption('notes');
   try {
+    log.begin('validate tag and release notes');
     final args = parser.parse(arguments);
     final root = repositoryRoot().path;
     final pubspec = loadYaml(
@@ -59,7 +62,10 @@ Future<void> main(List<String> arguments) async {
     final notePath = args.option('notes');
     if (notePath != null) File(notePath).writeAsStringSync('$notes\n');
     final output = args.option('output');
-    if (output == null) return;
+    if (output == null) {
+      log.done();
+      return;
+    }
 
     final repository = args.option('repository');
     final packages = args.option('packages');
@@ -117,6 +123,7 @@ Future<void> main(List<String> arguments) async {
       },
       'release-media-source.tar.gz': 'interconnect-$tag-media-source.tar.gz',
     };
+    log.begin('check artifact set');
     final missing = artifacts.keys.where((name) {
       final file = File(p.join(packages, name));
       return !file.existsSync() || file.lengthSync() == 0;
@@ -126,10 +133,15 @@ Future<void> main(List<String> arguments) async {
         'Release package set is incomplete:\n${missing.join("\n")}',
       );
     }
+    log.begin('stage artifacts and checksums');
     Directory(output).createSync(recursive: true);
+    final checksums = <String>[];
     for (final artifact in artifacts.entries) {
-      await File(p.join(packages, artifact.key))
-          .copy(p.join(output, artifact.value));
+      final digest = await copyWithDigest(
+        File(p.join(packages, artifact.key)),
+        File(p.join(output, artifact.value)),
+      );
+      checksums.add('$digest  ${artifact.value}');
     }
     if (notePath != null) {
       final download = 'https://github.com/$repository/releases/download/$tag';
@@ -176,25 +188,47 @@ Future<void> main(List<String> arguments) async {
     }
     const feed = 'release-feed.json';
     if (!preview) {
-      File(p.join(output, feed)).writeAsStringSync(
+      final content = utf8.encode(
         '${const JsonEncoder.withIndent('  ').convert([
           {'version': version[1]!, 'build': build, 'publishedAt': DateTime.now().toUtc().toIso8601String(), 'notes': summary, 'url': 'https://github.com/$repository/releases/tag/$tag'},
           ...previous,
         ])}\n',
       );
-    }
-    final checksums = <String>[];
-    for (final name in [...artifacts.values, if (!preview) feed]) {
-      final digest = await sha256
-          .bind(File(p.join(output, name)).openRead())
-          .first;
-      checksums.add('$digest  $name');
+      File(p.join(output, feed)).writeAsBytesSync(content);
+      checksums.add('${sha256.convert(content)}  $feed');
     }
     File(p.join(output, 'SHA256SUMS'))
         .writeAsStringSync('${checksums.join('\n')}\n');
+    log.done();
     stdout.writeln('Assembled release $tag in $output.');
   } on Object catch (error) {
-    stderr.writeln(error);
+    log.fail(error);
     exitCode = 1;
   }
+}
+
+Future<Digest> copyWithDigest(File source, File destination) async {
+  final result = _DigestResult();
+  final digest = sha256.startChunkedConversion(result);
+  final file = await destination.open(mode: FileMode.write);
+  try {
+    await for (final chunk in source.openRead()) {
+      await file.writeFrom(chunk);
+      digest.add(chunk);
+    }
+  } finally {
+    await file.close();
+  }
+  digest.close();
+  return result.value;
+}
+
+class _DigestResult implements Sink<Digest> {
+  late Digest value;
+
+  @override
+  void add(Digest data) => value = data;
+
+  @override
+  void close() {}
 }
