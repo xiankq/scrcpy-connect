@@ -196,6 +196,30 @@ void main() {
     expect(fixture.player.releases, 1);
   });
 
+  test('画质变化继续使用独立窗口的播放器', () async {
+    final fixture = _Fixture();
+    final windowPlayers = <_VideoPlayer>[];
+    await fixture.service.start(
+      _capture,
+      playerFactory: () {
+        final player = _VideoPlayer();
+        windowPlayers.add(player);
+        return player;
+      },
+    );
+
+    final changed = await fixture.service.reconfigure(
+      _capture.copyWith(captureGeneration: 2, generation: 2),
+    );
+
+    expect(changed.generation, 2);
+    expect(windowPlayers, hasLength(2));
+    expect(windowPlayers.first.releases, 1);
+    expect(fixture.player.releases, 0);
+    expect((await fixture.service.stop('session')).confirmed, isTrue);
+    expect(windowPlayers.last.releases, 1);
+  });
+
   test('释放超时保留原输出与真实 Future，迟到确认前重试不重复删除', () async {
     final fixture = _Fixture();
     await fixture.service.start(_capture);

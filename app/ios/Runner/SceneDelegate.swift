@@ -29,6 +29,8 @@ class SceneDelegate: FlutterSceneDelegate {
       appDelegate.configure(engine: engine, window: window, windowId: windowId)
     }
     registerSceneLifeCycle(with: engine)
+    appDelegate.registerScene(session: session, engine: engine, windowId: windowId)
+    windowScene.title = activity?.title
     appDelegate.refreshEnvironment(for: engine)
     super.scene(scene, willConnectTo: session, options: connectionOptions)
   }
@@ -53,15 +55,17 @@ class SceneDelegate: FlutterSceneDelegate {
   }
 
   override func sceneDidDisconnect(_ scene: UIScene) {
-    if let appDelegate = UIApplication.shared.delegate as? AppDelegate,
-      let engine = flutterEngine {
-      appDelegate.removeEnvironment(for: engine)
-    }
-    if let engine = flutterEngine {
-      unregisterSceneLifeCycle(with: engine)
-    }
-    flutterEngine = nil
     super.sceneDidDisconnect(scene)
+    guard let appDelegate = UIApplication.shared.delegate as? AppDelegate,
+      let engine = flutterEngine else { return }
+    appDelegate.removeEnvironment(for: engine)
+    unregisterSceneLifeCycle(with: engine)
+    flutterEngine = nil
+    if let id = restorationWindowId {
+      window?.rootViewController = nil
+      engine.destroyContext()
+      appDelegate.remoteSceneDestroyed(id)
+    }
   }
 
   override func stateRestorationActivity(for scene: UIScene) -> NSUserActivity? {

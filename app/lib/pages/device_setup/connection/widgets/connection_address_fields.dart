@@ -1,14 +1,14 @@
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/devices/connection_validation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 
-class ConnectionAddressFields extends StatelessWidget {
+class ConnectionAddressFields extends HookWidget {
   const ConnectionAddressFields({
     super.key,
     required this.address,
     required this.port,
     required this.pairingCode,
-    required this.focus,
     required this.pairing,
     required this.legacyTcp,
     required this.enabled,
@@ -18,7 +18,6 @@ class ConnectionAddressFields extends StatelessWidget {
   final TextEditingController address;
   final TextEditingController port;
   final TextEditingController pairingCode;
-  final ({FocusNode address, FocusNode port, FocusNode pairingCode}) focus;
   final bool pairing;
   final bool legacyTcp;
   final bool enabled;
@@ -26,6 +25,11 @@ class ConnectionAddressFields extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final focus = (
+      address: useFocusNode(),
+      port: useFocusNode(),
+      pairingCode: useFocusNode(),
+    );
     final textTheme = Theme.of(context).textTheme;
     const contentPadding = EdgeInsets.all(
       DesignTokens.componentConnectionFieldPadding,

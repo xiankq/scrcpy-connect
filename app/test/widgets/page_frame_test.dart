@@ -196,7 +196,7 @@ void main() {
       ),
     );
     expect(
-      tester.getSize(find.byType(liquid.GlassIconButton)),
+      tester.getSize(find.byType(GlassToolbarIconButton)),
       const Size.square(44),
     );
   });

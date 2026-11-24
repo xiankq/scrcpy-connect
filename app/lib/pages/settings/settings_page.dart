@@ -10,9 +10,12 @@ import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/choice_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/form_controls.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/overlays.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:scrcpy_connect/widgets/system_notifications.dart';
@@ -128,6 +131,36 @@ class SettingsPage extends HookConsumerWidget {
           ? (next) => update(() => save(PreferenceChanges(appearance: next)))
           : null,
     );
+    final platformEffects = platformGlassEffects(Theme.of(context).platform);
+    Future<void> chooseGlassEffects() async {
+      final selected = await showAppDialog<GlassEffects>(
+        context: context,
+        builder: (context) => AppAlertDialog(
+          title: const Text('液态玻璃'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final mode in GlassEffects.values)
+                ChoiceRow<GlassEffects>(
+                  title: Text(
+                    mode == GlassEffects.automatic
+                        ? '跟随平台（${_glassEffectsLabel(platformEffects)}）'
+                        : _glassEffectsLabel(mode),
+                  ),
+                  value: mode,
+                  groupValue: settings.glassEffects,
+                  onChanged: (value) => Navigator.pop(context, value),
+                ),
+            ],
+          ),
+        ),
+      );
+      if (selected == null || selected == settings.glassEffects || !current()) {
+        return;
+      }
+      await update(() => save(PreferenceChanges(glassEffects: selected)));
+    }
+
     void openBackground() => const BackgroundRoute().push<void>(context);
     Widget heading(String label) => Padding(
       padding: const EdgeInsetsDirectional.fromSTEB(
@@ -191,6 +224,14 @@ class SettingsPage extends HookConsumerWidget {
                           ],
                         );
                 },
+              ),
+              SettingsRow(
+                compact: true,
+                icon: LucideIcons.layers,
+                color: DesignTokens.colorListIconBlue,
+                title: '液态玻璃',
+                value: _glassEffectsLabel(settings.glassEffects),
+                onTap: enabled ? chooseGlassEffects : null,
               ),
               SettingsRow(
                 compact: true,
@@ -292,6 +333,13 @@ class SettingsPage extends HookConsumerWidget {
     );
   }
 }
+
+String _glassEffectsLabel(GlassEffects mode) => switch (mode) {
+  GlassEffects.automatic => '跟随平台',
+  GlassEffects.premium => '极致',
+  GlassEffects.standard => '标准',
+  GlassEffects.off => '关闭',
+};
 
 class _AppearanceSelector extends StatelessWidget {
   const _AppearanceSelector({required this.selected, required this.onSelected});

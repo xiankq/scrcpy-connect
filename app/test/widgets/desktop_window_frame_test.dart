@@ -16,7 +16,7 @@ void main() {
     ('Windows', 0.0, 138.0),
     ('Linux with left-side buttons', 96.0, 0.0),
   ]) {
-    testWidgets('$platform reserves the native controls in the page toolbar', (
+    testWidgets('$platform puts page actions below the native controls', (
       tester,
     ) async {
       final calls = <String>[];
@@ -46,8 +46,9 @@ void main() {
       await tester.pumpAndSettle();
       final first = find.byIcon(LucideIcons.chevronLeft);
       final last = find.byIcon(LucideIcons.info);
-      expect(tester.getRect(first).left, greaterThanOrEqualTo(left));
-      expect(tester.getRect(last).right, lessThanOrEqualTo(800 - right));
+      final immersive = tester.getRect(first);
+      expect(immersive.top, greaterThanOrEqualTo(32));
+      expect(tester.getCenter(last).dy, immersive.center.dy);
 
       await tester.tap(first);
       expect(back, 1);
@@ -63,8 +64,8 @@ void main() {
         (_) {},
       );
       await tester.pump();
-      expect(tester.getRect(first).left, lessThan(40));
-      expect(tester.getRect(last).right, greaterThan(760));
+      expect(tester.getRect(first).top, immersive.top - 32);
+      expect(tester.getRect(first).left, immersive.left);
     });
   }
 

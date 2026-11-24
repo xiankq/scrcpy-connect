@@ -20,6 +20,7 @@ class ExitHandle extends StatefulWidget {
     this.onSleep,
     this.onScreenshot,
     this.onConvert,
+    this.onMoveToPhone,
     this.onKeyboard,
     this.onRotate,
     this.onSwitchWindow,
@@ -30,7 +31,7 @@ class ExitHandle extends StatefulWidget {
   final String connectionLabel;
   final Widget? soundControl;
   final VoidCallback? onSleep, onScreenshot, onConvert, onKeyboard, onRotate;
-  final VoidCallback? onSwitchWindow;
+  final VoidCallback? onSwitchWindow, onMoveToPhone;
   final bool independent;
   static const initialTopFraction = 0.44;
 
@@ -318,9 +319,17 @@ class _ExitHandleState extends State<ExitHandle> with TickerProviderStateMixin {
                                             if (!widget.independent)
                                               RemoteToolAction(
                                                 icon: LucideIcons.layers,
-                                                label: '打开独立应用',
+                                                label: '转换为独立应用',
                                                 onPressed: closeThen(
                                                   widget.onConvert,
+                                                ),
+                                              ),
+                                            if (widget.independent)
+                                              RemoteToolAction(
+                                                icon: LucideIcons.smartphone,
+                                                label: '移回手机屏幕',
+                                                onPressed: closeThen(
+                                                  widget.onMoveToPhone,
                                                 ),
                                               ),
                                             RemoteToolAction(

@@ -9,10 +9,22 @@ import 'package:scrcpy_connect/core/diagnostics/app_diagnostics.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart'
     show DiagnosticLog;
 import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
+import 'package:scrcpy_connect/router/desktop_remote_window.dart';
+import 'package:scrcpy_connect/core/platform/platform_window_host.dart';
+import 'package:scrcpy_connect/core/platform/window_launch_route.dart';
+import 'package:scrcpy_connect/router/mobile_remote_app.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 
 Future<void> main([List<String> args = const []]) async {
+  enableDesktopRemoteWindows();
   final binding = WidgetsFlutterBinding.ensureInitialized();
+  final initialRoute = binding.platformDispatcher.defaultRouteName;
+  if (decodeIndependentWindowLaunchRoute(initialRoute) case final windowId?) {
+    // This engine borrows the workbench's session capabilities.
+    // ignore: riverpod_lint/missing_provider_scope
+    runApp(MobileRemoteApp(windowId: windowId));
+    return;
+  }
   // A second engine cannot own the application's ADB admission scope.
   if (await _isSeparateEngine()) {
     // This message has no application session or provider dependencies.
@@ -30,6 +42,7 @@ Future<void> main([List<String> args = const []]) async {
     AppStartup(
       initialLocation: '/devices',
       desktopWindow: Platform.isMacOS || Platform.isWindows || Platform.isLinux,
+      mobileWindow: PlatformWindowHost.supportsMobileWindows,
       initializeGlass: () async {
         await binding.waitUntilFirstFrameRasterized;
         await GlassMaterial.initialize();

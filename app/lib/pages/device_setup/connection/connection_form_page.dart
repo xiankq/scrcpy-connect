@@ -16,7 +16,7 @@ import 'package:scrcpy_connect/pages/device_setup/pairing/qr_pairing_page.dart';
 import 'package:scrcpy_connect/pages/device_setup/usb/usb_setup_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/content_arrival.dart';
+import 'package:scrcpy_connect/widgets/tab_transition.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -74,13 +74,8 @@ class ConnectionFormPage extends HookConsumerWidget {
           : '',
     );
     final code = useTextEditingController();
-    final fieldFocus = (
-      address: useFocusNode(),
-      port: useFocusNode(),
-      pairingCode: useFocusNode(),
-    );
     final attemptPage = useState(false);
-    final form = useMemoized(() => GlobalKey<FormState>());
+    final form = useMemoized(() => GlobalKey<FormState>(), [mode.value]);
     final scope = useMemoized(Object.new, [
       deviceId,
       configuring,
@@ -218,7 +213,64 @@ class ConnectionFormPage extends HookConsumerWidget {
       attemptPage.value = false;
     }
 
-    Widget page({Widget? supplemental, Widget? primary}) => PopScope(
+    final qr = useQrPairingContent(
+      context,
+      ref,
+      active: mode.value == .qr,
+      autoGenerate: !configuring && !reauthorizing,
+      prepareConnection: prepareConnection,
+      deviceId: deviceId,
+      onConnectionPort: completePairing,
+      onPaired: (paired) {
+        host.text = paired.address;
+        identityAddress.value = host.text.trim();
+        currentDeviceId.value = paired.deviceId ?? currentDeviceId.value;
+        tlsLocked.value = true;
+        selectedTransport.value = ConnectionTransport.tls;
+        portField.clear();
+      },
+    );
+    final usb = useUsbSetupContent(
+      context,
+      ref,
+      active: mode.value == .usb,
+      deviceId: targetDeviceId(),
+      prepareConnection: prepareConnection,
+      onUseWireless: () => selectMode(.pairing),
+    );
+    final primary = switch (mode.value) {
+      .qr => qr!.primary,
+      .usb =>
+        usb!.primary ??
+            const SizedBox(height: DesignTokens.componentButtonPrimaryHeight),
+      _ => FilledButton(
+        onPressed: flow.busy ? null : submit,
+        child: Text(pairing ? '配对并连接' : '连接设备'),
+      ),
+    };
+    final body = switch (mode.value) {
+      .qr => qr!.body,
+      .usb => usb!.body,
+      _ => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ConnectionAddressFields(
+            address: host,
+            port: activePort,
+            pairingCode: code,
+            pairing: pairing,
+            legacyTcp: legacyTcp,
+            enabled: !flow.busy,
+            onAddressChanged: (next) {
+              if (next.trim() != identityAddress.value) actions.clearFeedback();
+            },
+          ),
+          if (flow.notice != null) StateNote(flow.notice!),
+        ],
+      ),
+    };
+
+    return PopScope(
       canPop: !attemptPage.value,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop || !attemptPage.value) return;
@@ -258,224 +310,192 @@ class ConnectionFormPage extends HookConsumerWidget {
                       ),
                     ),
                   ),
-                  child:
-                      primary ??
-                      (mode.value == .pairing || mode.value == .ip
-                          ? FilledButton(
-                              onPressed: flow.busy ? null : submit,
-                              child: Text(pairing ? '配对并连接' : '连接设备'),
-                            )
-                          : const SizedBox.shrink()),
+                  child: primary,
                 ),
               ),
               child: ConnectionContent(
-                child: Form(
-                  key: form,
-                  child: CustomScrollView(
-                    slivers: [
-                      const PageChromeSliver(),
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(
-                          DesignTokens.spacingMd,
-                          DesignTokens.spacingXs,
-                          DesignTokens.spacingMd,
-                          DesignTokens.spacingMd,
-                        ),
-                        sliver: SliverMainAxisGroup(
-                          slivers: [
-                            SliverToBoxAdapter(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  if (!configuring) ...[
-                                    Material(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .surface,
-                                      borderRadius: BorderRadius.circular(
-                                        DesignTokens
-                                            .componentConnectionNearbyEntryRounded,
+                child: CustomScrollView(
+                  slivers: [
+                    const PageChromeSliver(),
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(
+                        DesignTokens.spacingMd,
+                        DesignTokens.spacingXs,
+                        DesignTokens.spacingMd,
+                        DesignTokens.spacingMd,
+                      ),
+                      sliver: SliverMainAxisGroup(
+                        slivers: [
+                          SliverToBoxAdapter(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (!configuring) ...[
+                                  Material(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .surface,
+                                    borderRadius: BorderRadius.circular(
+                                      DesignTokens
+                                          .componentConnectionNearbyEntryRounded,
+                                    ),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: ListTile(
+                                      minTileHeight: DesignTokens
+                                          .componentConnectionNearbyEntryHeight,
+                                      leading: const Icon(
+                                        AppIcons.connectionDiscovery,
+                                        color: DesignTokens
+                                            .componentConnectionIconNearbyTextColor,
                                       ),
-                                      clipBehavior: Clip.antiAlias,
-                                      child: ListTile(
-                                        minTileHeight: DesignTokens
-                                            .componentConnectionNearbyEntryHeight,
-                                        leading: const Icon(
-                                          AppIcons.connectionDiscovery,
-                                          color: DesignTokens
-                                              .componentConnectionIconNearbyTextColor,
-                                        ),
-                                        title: const Text('附近设备'),
-                                        trailing: const Icon(
-                                          AppIcons.forward,
-                                          size: DesignTokens
-                                              .componentIconSmallSize,
-                                        ),
-                                        onTap: flow.busy
-                                            ? null
-                                            : () async {
-                                                final previousMode = mode.value;
-                                                if (mode.value ==
-                                                        AddDeviceMode.qr ||
-                                                    mode.value ==
-                                                        AddDeviceMode.usb) {
-                                                  if (!await selectMode(
-                                                    AddDeviceMode.pairing,
-                                                  )) {
-                                                    return;
-                                                  }
-                                                }
-                                                if (!context.mounted) return;
-                                                final selection =
-                                                    await const DiscoveryRoute(
-                                                      selection: true,
-                                                    ).push<DiscoveredDevice>(
-                                                      context,
-                                                    );
-                                                if (!context.mounted ||
-                                                    !ownsScope()) {
-                                                  return;
-                                                }
-                                                if (selection == null) {
-                                                  await selectMode(
-                                                    previousMode,
-                                                  );
-                                                  return;
-                                                }
-                                                actions.clearFeedback();
-                                                final device = selection;
-                                                final endpoint = device
-                                                    .endpoints
-                                                    .firstOrNull;
-                                                final isPairing =
-                                                    device.kind == .pairing;
-                                                if (!await selectMode(
-                                                  isPairing
-                                                      ? AddDeviceMode.pairing
-                                                      : AddDeviceMode.ip,
-                                                )) {
-                                                  return;
-                                                }
-                                                if (!context.mounted ||
-                                                    !ownsScope()) {
-                                                  return;
-                                                }
-                                                completingPairing.value = false;
-                                                host.text =
-                                                    endpoint?.address ?? '';
-                                                if (isPairing) {
-                                                  portField.clear();
-                                                }
-                                                (isPairing
-                                                            ? pairingPort
-                                                            : portField)
-                                                        .text =
-                                                    endpoint?.port.toString() ??
-                                                    '';
-                                                currentDeviceId.value =
-                                                    deviceId ?? device.deviceId;
-                                                identityAddress.value = host
-                                                    .text
-                                                    .trim();
-                                                tlsLocked.value =
-                                                    transport ==
-                                                        ConnectionTransport
-                                                            .tls ||
-                                                    device.kind != .tcp;
-                                                selectedTransport.value =
-                                                    device.kind == .tcp
-                                                    ? ConnectionTransport.tcp
-                                                    : ConnectionTransport.tls;
-                                              },
-                                      ),
-                                    ),
-                                    const SizedBox(
-                                      height: DesignTokens.roundedMd,
-                                    ),
-                                  ],
-                                  if (!configuring) ...[
-                                    ConnectionModeSelector(
-                                      selected: mode.value,
-                                      onChanged: selectMode,
-                                    ),
-                                    const SizedBox(
-                                      height: DesignTokens.spacingMd,
-                                    ),
-                                  ],
-                                  if (mode.value == .pairing ||
-                                      mode.value == .ip) ...[
-                                    ConnectionAddressFields(
-                                      address: host,
-                                      port: activePort,
-                                      pairingCode: code,
-                                      focus: fieldFocus,
-                                      pairing: pairing,
-                                      legacyTcp: legacyTcp,
-                                      enabled: !flow.busy,
-                                      onAddressChanged: (next) {
-                                        if (next.trim() !=
-                                            identityAddress.value) {
-                                          actions.clearFeedback();
-                                        }
-                                      },
-                                    ),
-                                    if (flow.notice != null)
-                                      StateNote(flow.notice!),
-                                  ],
-                                ],
-                              ),
-                            ),
-                            ?supplemental,
-                            const SliverToBoxAdapter(
-                              child: SizedBox(height: DesignTokens.spacingSm),
-                            ),
-                            SliverToBoxAdapter(
-                              child: Align(
-                                alignment: AlignmentDirectional.centerStart,
-                                child: TextButton(
-                                  style: TextButton.styleFrom(
-                                    padding: EdgeInsets.zero,
-                                    minimumSize: const Size(44, 44),
-                                  ),
-                                  onPressed: () =>
-                                      Navigator.of(context).push<void>(
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              _ConnectionHelpPage(
-                                                mode: mode.value,
-                                                legacyTcp: legacyTcp,
-                                              ),
-                                        ),
-                                      ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Flexible(
-                                        child: Text(switch (mode.value) {
-                                          .pairing => '配对码帮助',
-                                          .qr => '扫码帮助',
-                                          .usb => 'USB 连接帮助',
-                                          .ip => 'IP 连接帮助',
-                                        }),
-                                      ),
-                                      const Icon(
+                                      title: const Text('附近设备'),
+                                      trailing: const Icon(
                                         AppIcons.forward,
                                         size:
                                             DesignTokens.componentIconSmallSize,
                                       ),
-                                    ],
+                                      onTap: flow.busy
+                                          ? null
+                                          : () async {
+                                              final previousMode = mode.value;
+                                              if (mode.value ==
+                                                      AddDeviceMode.qr ||
+                                                  mode.value ==
+                                                      AddDeviceMode.usb) {
+                                                if (!await selectMode(
+                                                  AddDeviceMode.pairing,
+                                                )) {
+                                                  return;
+                                                }
+                                              }
+                                              if (!context.mounted) return;
+                                              final selection =
+                                                  await const DiscoveryRoute(
+                                                    selection: true,
+                                                  ).push<DiscoveredDevice>(
+                                                    context,
+                                                  );
+                                              if (!context.mounted ||
+                                                  !ownsScope()) {
+                                                return;
+                                              }
+                                              if (selection == null) {
+                                                await selectMode(previousMode);
+                                                return;
+                                              }
+                                              actions.clearFeedback();
+                                              final device = selection;
+                                              final endpoint =
+                                                  device.endpoints.firstOrNull;
+                                              final isPairing =
+                                                  device.kind == .pairing;
+                                              if (!await selectMode(
+                                                isPairing
+                                                    ? AddDeviceMode.pairing
+                                                    : AddDeviceMode.ip,
+                                              )) {
+                                                return;
+                                              }
+                                              if (!context.mounted ||
+                                                  !ownsScope()) {
+                                                return;
+                                              }
+                                              completingPairing.value = false;
+                                              host.text =
+                                                  endpoint?.address ?? '';
+                                              if (isPairing) {
+                                                portField.clear();
+                                              }
+                                              (isPairing
+                                                          ? pairingPort
+                                                          : portField)
+                                                      .text =
+                                                  endpoint?.port.toString() ??
+                                                  '';
+                                              currentDeviceId.value =
+                                                  deviceId ?? device.deviceId;
+                                              identityAddress.value = host.text
+                                                  .trim();
+                                              tlsLocked.value =
+                                                  transport ==
+                                                      ConnectionTransport.tls ||
+                                                  device.kind != .tcp;
+                                              selectedTransport.value =
+                                                  device.kind == .tcp
+                                                  ? ConnectionTransport.tcp
+                                                  : ConnectionTransport.tls;
+                                            },
+                                    ),
                                   ),
+                                  const SizedBox(
+                                    height: DesignTokens.roundedMd,
+                                  ),
+                                ],
+                                if (!configuring) ...[
+                                  ConnectionModeSelector(
+                                    selected: mode.value,
+                                    onChanged: selectMode,
+                                  ),
+                                  const SizedBox(
+                                    height: DesignTokens.spacingMd,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          SliverToBoxAdapter(
+                            child: TabContent(
+                              child: Form(key: form, child: body),
+                            ),
+                          ),
+                          const SliverToBoxAdapter(
+                            child: SizedBox(height: DesignTokens.spacingSm),
+                          ),
+                          SliverToBoxAdapter(
+                            child: Align(
+                              alignment: AlignmentDirectional.centerStart,
+                              child: TextButton(
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: const Size(44, 44),
+                                ),
+                                onPressed: () =>
+                                    Navigator.of(context).push<void>(
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            _ConnectionHelpPage(
+                                              mode: mode.value,
+                                              legacyTcp: legacyTcp,
+                                            ),
+                                      ),
+                                    ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Flexible(
+                                      child: Text(switch (mode.value) {
+                                        .pairing => '配对码帮助',
+                                        .qr => '扫码帮助',
+                                        .usb => 'USB 连接帮助',
+                                        .ip => 'IP 连接帮助',
+                                      }),
+                                    ),
+                                    const Icon(
+                                      AppIcons.forward,
+                                      size: DesignTokens.componentIconSmallSize,
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
-                            if (additionalContent != null)
-                              SliverToBoxAdapter(child: additionalContent!),
-                          ],
-                        ),
+                          ),
+                          if (additionalContent != null)
+                            SliverToBoxAdapter(child: additionalContent!),
+                        ],
                       ),
-                      const PageChromeBottomSliver(),
-                    ],
-                  ),
+                    ),
+                    const PageChromeBottomSliver(),
+                  ],
                 ),
               ),
             ),
@@ -509,39 +529,6 @@ class ConnectionFormPage extends HookConsumerWidget {
         ],
       ),
     );
-
-    final formPage = switch (mode.value) {
-      .qr => QrPairingPage(
-        autoGenerate: !configuring && !reauthorizing,
-        prepareConnection: prepareConnection,
-        deviceId: deviceId,
-        embedded: true,
-        onUsePairingCode: () => selectMode(.pairing),
-        onConnectionPort: completePairing,
-        onPaired: (paired) {
-          host.text = paired.address;
-          identityAddress.value = host.text.trim();
-          currentDeviceId.value = paired.deviceId ?? currentDeviceId.value;
-          tlsLocked.value = true;
-          selectedTransport.value = ConnectionTransport.tls;
-          portField.clear();
-        },
-        embeddedBuilder: (body, primary) => page(
-          supplemental: SliverToBoxAdapter(child: body),
-          primary: primary,
-        ),
-      ),
-      .usb => UsbSetupPage(
-        prepareConnection: prepareConnection,
-        deviceId: targetDeviceId(),
-        embedded: true,
-        onUseWireless: () => selectMode(.pairing),
-        embeddedBuilder: (body, primary) =>
-            page(supplemental: body, primary: primary),
-      ),
-      _ => page(),
-    };
-    return ContentArrival(state: mode.value, child: formPage);
   }
 }
 

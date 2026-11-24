@@ -6,8 +6,8 @@ import 'package:foldable/foldable.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
-import 'package:scrcpy_connect/widgets/content_arrival.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/motion.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_press_feedback.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
@@ -23,6 +23,7 @@ class NavigationScaffold extends HookConsumerWidget {
     final theme = Theme.of(context);
     final opaque = opaqueGlass(context);
     final reducedMotion = GlassMaterial.reduceMotion(context);
+    final liquidMotion = !opaque && !reducedMotion;
     final history = useRef(<int>[0]);
     if (history.value.last != tab) history.value.add(tab);
     void selectTab(int index) {
@@ -55,14 +56,14 @@ class NavigationScaffold extends HookConsumerWidget {
           for (final destination in destinations)
             liquid.GlassTab(icon: Icon(destination.$1), label: destination.$2),
         ],
-        indicatorExpansion: reducedMotion
-            ? EdgeInsets.zero
-            : const EdgeInsets.symmetric(
+        indicatorExpansion: liquidMotion
+            ? const EdgeInsets.symmetric(
                 horizontal: DesignTokens.spacingSm,
                 vertical: DesignTokens.spacingXs,
-              ),
-        indicatorPinchStrength: reducedMotion ? 0 : 0.4,
-        magnification: reducedMotion ? 1 : 1.15,
+              )
+            : EdgeInsets.zero,
+        indicatorPinchStrength: liquidMotion ? 0.4 : 0,
+        magnification: liquidMotion ? null : 1,
         selectedIndex: tab,
         onTabSelected: selectTab,
         horizontalPadding: 0,
@@ -86,15 +87,15 @@ class NavigationScaffold extends HookConsumerWidget {
             : theme.brightness == Brightness.dark
             ? DesignTokens.colorGlassSelectedDark
             : DesignTokens.colorGlassSelected,
-        settings: GlassMaterial.navigationTrackSettings(context),
+        settings: opaque ? GlassMaterial.settings(context) : null,
         quality: GlassMaterial.quality(context),
         indicatorSettings: GlassMaterial.navigationIndicatorSettings(context),
-        pressScale: reducedMotion
-            ? 1
-            : DesignTokens.componentGlassInteractionScale,
-        interactionBehavior: reducedMotion
-            ? liquid.GlassInteractionBehavior.glowOnly
-            : liquid.GlassInteractionBehavior.full,
+        pressScale: liquidMotion ? 1.04 : 1,
+        interactionBehavior: liquidMotion
+            ? liquid.GlassInteractionBehavior.full
+            : opaque
+            ? liquid.GlassInteractionBehavior.none
+            : liquid.GlassInteractionBehavior.glowOnly,
       ),
     );
     final navigationBar = _duoEdgeAttachedBar(
@@ -146,7 +147,7 @@ class NavigationScaffold extends HookConsumerWidget {
     return withBack(
       Scaffold(
         extendBody: true,
-        body: ContentArrival(state: tab, child: navigationShell),
+        body: navigationShell,
         // Keep the package-owned tab bar mounted while the keyboard changes
         // viewInsets. Offstage removes its layout footprint without tearing
         // down the package state that owns the moving glass indicator.
@@ -258,18 +259,20 @@ class AppNavigationShell extends StatelessWidget {
               !duoInnerPortrait &&
               (sizeClass != WindowSizeClass.compact || divider != null);
           final compactSidebar = sizeClass == WindowSizeClass.medium || short;
-          final desktop = DesktopWindowInsets.of(context);
-          final navigationWidth = compactSidebar
-              ? DesignTokens.componentSidebarCompactWidth
-              : DesignTokens.componentSidebarWidth;
-          final page = sidebar && desktop != null
-              ? DesktopWindowInsets(
-                  left: math.max(0.0, desktop.left - navigationWidth),
-                  right: desktop.right,
-                  top: desktop.top,
+          if (DesktopWindowInsets.of(context) != null) {
+            return _NavigationLayout(
+              sidebar: sidebar,
+              visible: visible,
+              child: Scaffold(
+                body: _DesktopNavigation(
+                  tab: tab,
+                  sidebar: sidebar,
+                  compact: compactSidebar,
                   child: child,
-                )
-              : child;
+                ),
+              ),
+            );
+          }
           return _NavigationLayout(
             sidebar: sidebar,
             visible: visible,
@@ -293,11 +296,6 @@ class AppNavigationShell extends StatelessWidget {
                           children: [
                             SafeArea(
                               right: false,
-                              minimum: EdgeInsets.only(
-                                top: compactSidebar && (desktop?.left ?? 0) > 0
-                                    ? desktop!.top
-                                    : 0,
-                              ),
                               child: SizedBox(
                                 key: const ValueKey('app-sidebar'),
                                 width: sidebarWidth,
@@ -321,18 +319,6 @@ class AppNavigationShell extends StatelessWidget {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          if (!compactSidebar &&
-                                              (desktop?.left ?? 0) > 0)
-                                            DesktopWindowDragArea(
-                                              child: SizedBox(
-                                                height: math.max(
-                                                  0,
-                                                  desktop!.top -
-                                                      DesignTokens.spacingSm,
-                                                ),
-                                                width: double.infinity,
-                                              ),
-                                            ),
                                           if (!compactSidebar && !short)
                                             Padding(
                                               padding:
@@ -438,12 +424,192 @@ class AppNavigationShell extends StatelessWidget {
                         );
                       },
                     ),
-                  Expanded(key: const ValueKey('app-content'), child: page),
+                  Expanded(key: const ValueKey('app-content'), child: child),
                 ],
               ),
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _DesktopNavigation extends StatelessWidget {
+  const _DesktopNavigation({
+    required this.tab,
+    required this.sidebar,
+    required this.compact,
+    required this.child,
+  });
+
+  final int tab;
+  final bool sidebar;
+  final bool compact;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    const rail = DesignTokens.componentSidebarCompactWidth;
+    const expanded = DesignTokens.componentSidebarWidth;
+    const inset = DesignTokens.componentDesktopHeaderPadding;
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final frame = DesktopWindowInsets.of(context)!;
+    final top = math.max(frame.top, MediaQuery.paddingOf(context).top);
+    final reducedMotion = GlassMaterial.reduceMotion(context);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: sidebar ? (compact ? rail : expanded) : 0),
+      duration: reducedMotion ? Duration.zero : panelOpenDuration,
+      curve: panelCurve,
+      child: child,
+      builder: (context, width, page) {
+        final labelProgress = ((width - rail) / (expanded - rail)).clamp(
+          0.0,
+          1.0,
+        );
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              key: const ValueKey('app-sidebar'),
+              width: width,
+              child: Offstage(
+                offstage: width == 0,
+                child: IgnorePointer(
+                  ignoring: !sidebar,
+                  child: ExcludeSemantics(
+                    excluding: !sidebar,
+                    child: ClipRect(
+                      child: OverflowBox(
+                        alignment: AlignmentDirectional.topStart,
+                        minWidth: rail,
+                        maxWidth: math.max(width, rail),
+                        child: Material(
+                          color: dark
+                              ? DesignTokens
+                                    .componentDeviceHeroDarkBackgroundColor
+                              : DesignTokens
+                                    .componentWorkspaceSidebarBackgroundColor,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              border: BorderDirectional(
+                                end: BorderSide(
+                                  color: theme.colorScheme.outlineVariant,
+                                  width: 0,
+                                ),
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                DesktopWindowDragArea(
+                                  child: SizedBox(
+                                    height: top + inset,
+                                    width: double.infinity,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: ListView(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: DesignTokens.spacingSm,
+                                    ),
+                                    children: [
+                                      for (
+                                        var i = 0;
+                                        i < appDestinations.length;
+                                        i++
+                                      )
+                                        _DesktopDestination(
+                                          destination: appDestinations[i],
+                                          selected: tab == i,
+                                          labelOpacity: labelProgress,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(key: const ValueKey('app-content'), child: page!),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _DesktopDestination extends StatelessWidget {
+  const _DesktopDestination({
+    required this.destination,
+    required this.selected,
+    required this.labelOpacity,
+  });
+
+  final (IconData, String, String) destination;
+  final bool selected;
+  final double labelOpacity;
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, label, path) = destination;
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: DesignTokens.spacingXs),
+      child: Tooltip(
+        message: label,
+        excludeFromSemantics: true,
+        child: Semantics(
+          button: true,
+          selected: selected,
+          label: label,
+          child: Material(
+            color: !selected
+                ? DesignTokens.colorTransparent
+                : theme.brightness == Brightness.dark
+                ? DesignTokens.colorGlassSelectedDark
+                : DesignTokens.colorGlassSelected,
+            borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => context.go(path),
+              child: ExcludeSemantics(
+                child: Row(
+                  children: [
+                    SizedBox.square(
+                      dimension:
+                          DesignTokens.componentSidebarCompactWidth -
+                          2 * DesignTokens.spacingSm,
+                      child: Icon(
+                        icon,
+                        color: selected
+                            ? theme.colorScheme.onSurface
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    Expanded(
+                      child: Opacity(
+                        opacity: labelOpacity,
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.clip,
+                          style: theme.textTheme.labelLarge,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

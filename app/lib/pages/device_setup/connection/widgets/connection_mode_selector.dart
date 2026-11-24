@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/motion.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 
 import '../models/add_device_mode.dart';
@@ -71,6 +72,9 @@ class ConnectionModeSelector extends StatelessWidget {
                     button: true,
                     selected: selected == mode,
                     child: Material(
+                      animationDuration: reduceMotionOf(context)
+                          ? Duration.zero
+                          : shortTransitionDuration,
                       color: selected == mode
                           ? theme.colorScheme.surfaceContainerHigh
                           : DesignTokens.colorTransparent,

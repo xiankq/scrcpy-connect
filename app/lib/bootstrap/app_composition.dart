@@ -31,6 +31,7 @@ import 'package:scrcpy_connect/core/identity/identity_management_provider.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_lifecycle.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_lifetime.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
+import 'package:scrcpy_connect/core/lifecycle/app_window_visibility_provider.dart';
 import 'package:scrcpy_connect/core/media/audio_focus_service.dart';
 import 'package:scrcpy_connect/core/media/audio_platform.dart';
 import 'package:scrcpy_connect/core/media/media_capabilities_provider.dart';
@@ -62,6 +63,8 @@ final class AppComposition {
   final _lifetime = AppLifetime();
   bool get _isDisposed => _lifetime.ended;
   late final AppLifecycle lifecycle;
+  late final AppWindowVisibility _windowVisibility;
+  final _workbenchWindow = Object();
   late final DeviceResources _connections;
   late final AppLaunchJournal _launches;
   late final FileResources _files;
@@ -300,6 +303,9 @@ final class AppComposition {
       media: session._media,
       diagnostics: session._diagnostics,
     );
+    session._windowVisibility = AppWindowVisibility(
+      session.lifecycle.setVisible,
+    );
     return session;
   }
 
@@ -308,6 +314,8 @@ final class AppComposition {
     audio: _media,
     screenshots: _media,
     quality: _media,
+    startWithPlayer: (plan, factory) =>
+        _media.startVideo(plan, playerFactory: factory),
     resizeDisplayCapture: (target, size) =>
         _captureResources.capture.resizeDisplay(target, size),
     onStopRequested: _events.emitEvent,
@@ -326,7 +334,8 @@ final class AppComposition {
       AppSession(
         events: _events.stream,
         close: close,
-        setVisible: lifecycle.setVisible,
+        setVisible: (visible) =>
+            _windowVisibility.set(_workbenchWindow, visible),
         diagnostics: diagnostics,
       ),
     ),
@@ -374,6 +383,10 @@ final class AppComposition {
     ),
     diagnosticLogProvider.overrideWith((ref) => diagnostics),
     videoSessionsProvider.overrideWith((ref) => _mediaOperations),
+    windowVideoStartProvider.overrideWithValue(
+      _mediaOperations.startVideoInWindow,
+    ),
+    appWindowVisibilityProvider.overrideWithValue(_windowVisibility),
   ];
 
   Future<void> configureOutgoingDirectory(String path) =>

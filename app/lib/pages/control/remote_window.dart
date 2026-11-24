@@ -475,13 +475,17 @@ class RemoteWindow {
     }
   }
 
-  Future<RemoteWindowClose> close(Future<void> Function() releaseInputs) async {
+  Future<RemoteWindowClose> close(
+    Future<void> Function() releaseInputs, {
+    bool movingToPhone = false,
+  }) async {
     _releaseDeviceView();
     presentation.leave();
     final owned = _view;
     final id = presentation.sessionId;
     final captureGeneration = presentation.session?.session.captureGeneration;
     final lock =
+        !movingToPhone &&
         owned?.isCurrent == true &&
         presentation.controlAvailable &&
         !presentation.stateUnverified &&

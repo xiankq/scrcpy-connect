@@ -11,6 +11,8 @@ import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
 import 'package:scrcpy_connect/core/platform/platform_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/platform/background_control.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
+import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/files/file_transfers.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
 import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
@@ -18,10 +20,14 @@ import 'package:scrcpy_connect/core/settings/settings_management.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences_state.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/pages/control/control_page.dart';
+import 'package:scrcpy_connect/pages/devices/devices_page.dart';
+import 'package:scrcpy_connect/pages/transfers/transfer_history_provider.dart';
+import 'package:scrcpy_connect/pages/transfers/transfers_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/route_resource_resolver_provider.dart';
 import 'package:scrcpy_connect/router/route_resource_view.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/styles/motion.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -64,6 +70,8 @@ void main() {
         overrides: [
           deviceListProvider.overrideWith(_Devices.new),
           recoveryStateProvider.overrideWith(_Recovery.new),
+          fileTransfersProvider.overrideWithValue(_Transfers()),
+          transferHistoryRowsProvider.overrideWith((_) => const AsyncData([])),
           preferencesProvider.overrideWith(_Preferences.new),
           runtimeEventsProvider.overrideWithValue(const Stream.empty()),
           appSnapshotProvider.overrideWithValue(AppState(loading: false)),
@@ -86,14 +94,55 @@ void main() {
     await _settle(tester);
     expect(tester.takeException(), isNull);
     expect(find.text('AVD'), findsOneWidget);
-    tester.widget<TextField>(find.byType(TextField)).controller!.text = '测试';
+    await tester.tap(find.byKey(const ValueKey('page-search-open')));
+    await _settle(tester);
+    await tester.enterText(find.byType(EditableText), '测试');
+    await _settle(tester);
+    final devices = tester.element(find.byType(DevicesPage));
+    router.go(const TransfersRoute().location);
     await tester.pump();
+    await tester.pump(shortTransitionDuration ~/ 2);
+    double branchOpacity(Type page) => tester
+        .widget<Opacity>(
+          find
+              .ancestor(of: find.byType(page), matching: find.byType(Opacity))
+              .first,
+        )
+        .opacity;
+    expect(branchOpacity(DevicesPage), closeTo(.5, .01));
+    expect(branchOpacity(TransfersPage), closeTo(.5, .01));
+    expect(find.byType(EditableText).hitTestable(), findsNothing);
+    await _settle(tester);
+    expect(find.byType(DevicesPage), findsNothing);
+    final ongoing = find.text('暂无正在传输的任务');
+    final completed = find.text('暂无已结束的传输');
+    final selector = find.text('传输中');
+    final stableSelector = tester.element(selector);
+    await tester.tap(find.text('已结束').hitTestable());
+    await tester.pump();
+    await tester.pump(shortTransitionDuration ~/ 2);
+    expect(tester.element(selector), same(stableSelector));
+    expect(ongoing, findsOneWidget);
+    expect(ongoing.hitTestable(), findsNothing);
+    expect(completed, findsOneWidget);
+    await _settle(tester);
+    expect(ongoing, findsNothing);
+    expect(completed, findsOneWidget);
+
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
     router.go(const SettingsRoute().location);
+    await tester.pump();
+    expect(find.byType(TransfersPage), findsNothing);
+    expect(find.text('外观'), findsOneWidget);
+    tester.platformDispatcher.clearAccessibilityFeaturesTestValue();
     await _settle(tester);
     router.go(const DevicesRoute().location);
     await _settle(tester);
+    expect(tester.element(find.byType(DevicesPage)), same(devices));
     expect(
-      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      tester.widget<EditableText>(find.byType(EditableText)).controller.text,
       '测试',
     );
     router.go(const SettingsRoute().location);
@@ -258,6 +307,11 @@ class _Preferences extends PreferencesNotifier {
 }
 
 class _Settings implements SettingsManagement {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _Transfers implements FileTransfers {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

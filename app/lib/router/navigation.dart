@@ -4,7 +4,12 @@ import 'package:scrcpy_connect/router/models/remote_control_intent.dart';
 
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/errors/request_failure.dart';
+import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
+import 'package:scrcpy_connect/router/mobile_remote_capabilities.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/router/models/remote_launch_intent.dart';
 import 'package:scrcpy_connect/router/remote_windows.dart';
 import 'package:scrcpy_connect/router/route_resource_resolver_provider.dart';
@@ -17,6 +22,7 @@ Future<void> openRemoteRoute(
   String? packageName,
   String? appName,
   bool onPhoneScreen = false,
+  bool moveForegroundApp = false,
   bool requestKeyboard = false,
   RemoteControlIntent? action,
 }) async {
@@ -24,6 +30,19 @@ Future<void> openRemoteRoute(
     await RouteErrorRoute(
       reason: sessionId == '' ? 'missing-session' : 'missing-record',
     ).push<void>(context);
+    return;
+  }
+  if (MobileRemoteScope.maybeOf(context) case final client?) {
+    await client.open((
+      deviceId: deviceId,
+      sessionId: sessionId,
+      packageName: packageName,
+      appName: appName,
+      onPhoneScreen: onPhoneScreen,
+      moveForegroundApp: moveForegroundApp,
+      keyboard: requestKeyboard,
+      action: action,
+    ));
     return;
   }
   final host = RemoteWindows.maybeOf(context);
@@ -60,7 +79,7 @@ Future<void> openRemoteRoute(
       $extra: sessionAction,
     );
   } else if (independentPackage != null) {
-    extra = const RemoteLaunchIntent();
+    extra = RemoteLaunchIntent(moveForegroundApp: moveForegroundApp);
     route = RemoteAppRoute(
       deviceId: deviceId,
       packageName: independentPackage,
@@ -76,8 +95,34 @@ Future<void> openRemoteRoute(
     );
   }
   if (host != null) {
-    host.open(
-      (deviceId: deviceId, packageName: independentPackage),
+    final target = (deviceId: deviceId, packageName: independentPackage);
+    Size? screenSize;
+    var navigationHeight = 0.0;
+    if (independentPackage == null &&
+        (host.willCreateDesktopWindow(target) ||
+            host.willCreateMobileWindow(target))) {
+      final providers = ProviderScope.containerOf(context, listen: false);
+      final inspection = providers.read(deviceInspectionProvider);
+      try {
+        final size = (await inspection.readScreenSize(deviceId)).value;
+        if (size != null) {
+          screenSize = Size(size.width.toDouble(), size.height.toDouble());
+        }
+      } on RequestFailure {
+        // The embedded control page can show and recover the connection error.
+      }
+      if (!context.mounted || !host.mounted) return;
+      if (providers
+              .read(preferencesProvider)
+              .values
+              .deviceSettings[deviceId]
+              ?.showNavigationBar !=
+          false) {
+        navigationHeight = DesignTokens.componentRemoteNavigationHeight;
+      }
+    }
+    await host.open(
+      target,
       (observer) => createAppRouter(
         initialLocation: route.location,
         initialExtra: extra,
@@ -87,6 +132,24 @@ Future<void> openRemoteRoute(
       appName: appName,
       action: initialAction,
       keyboard: requestKeyboard,
+      screenSize: screenSize,
+      navigationHeight: navigationHeight,
+      mobileLocation: sessionId == null ? route.location : null,
+      mobileExtra: RemoteLaunchIntent(
+        action: initialAction,
+        moveForegroundApp: moveForegroundApp,
+      ),
+      openMobileTarget: (workbench, request) => openRemoteRoute(
+        workbench,
+        deviceId: request.deviceId,
+        sessionId: request.sessionId,
+        packageName: request.packageName,
+        appName: request.appName,
+        onPhoneScreen: request.onPhoneScreen,
+        moveForegroundApp: request.moveForegroundApp,
+        requestKeyboard: request.keyboard,
+        action: request.action,
+      ),
     );
   } else {
     await route.push<void>(context);

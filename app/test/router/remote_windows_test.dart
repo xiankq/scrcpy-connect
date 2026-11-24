@@ -1,6 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/core/devices/device_query_provider.dart';
+import 'package:scrcpy_connect/pages/apps/widgets/phone_app_icon.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/remote_windows.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
@@ -24,11 +27,20 @@ void main() {
     );
     addTearDown(router.dispose);
     await tester.pumpWidget(
-      MaterialApp.router(
-        theme: ConnectTokens.theme(Brightness.light),
-        routerConfig: router,
-        builder: (context, child) =>
-            RemoteWindows(router: router, child: child!),
+      ProviderScope(
+        overrides: [
+          deviceAppIconProvider((
+            deviceId: target.deviceId,
+            packageName: target.packageName,
+            userId: null,
+          )).overrideWith((_) async => throw StateError('图标暂不可用')),
+        ],
+        child: MaterialApp.router(
+          theme: ConnectTokens.theme(Brightness.light),
+          routerConfig: router,
+          builder: (context, child) =>
+              RemoteWindows(router: router, child: child!),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -45,11 +57,14 @@ void main() {
         ],
       ),
       workbenchLocation: workspace,
+      appName: '设置',
     );
     await tester.pumpAndSettle();
 
     final show = windows.showSwitcher(tester.element(find.text('独立应用画面')));
     await tester.pumpAndSettle();
+    expect(find.byType(PhoneAppIcon), findsOneWidget);
+    expect(find.byTooltip('关闭窗口'), findsNothing);
     await tester.tap(find.text('返回工作台'));
     await tester.pumpAndSettle();
     await show;

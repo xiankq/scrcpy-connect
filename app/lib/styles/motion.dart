@@ -3,6 +3,8 @@ import 'package:material_ui/material_ui.dart';
 const skeletonDelay = Duration(milliseconds: 150);
 const skeletonCycle = Duration(milliseconds: 1800);
 const contentArrivalDuration = Duration(milliseconds: 200);
+const shortTransitionDuration = Duration(milliseconds: 180);
+const shortTransitionCurve = Curves.easeInOut;
 const panelOpenDuration = Duration(milliseconds: 260);
 const panelCloseDuration = Duration(milliseconds: 200);
 const panelCurve = Curves.easeOutCubic;

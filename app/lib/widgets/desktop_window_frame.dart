@@ -78,18 +78,30 @@ class DesktopWindowInsets extends InheritedWidget {
 
 /// Only a toolbar's passive title and blank space initiate a window drag.
 class DesktopWindowDragArea extends StatelessWidget {
-  const DesktopWindowDragArea({super.key, required this.child});
+  const DesktopWindowDragArea({
+    super.key,
+    this.enabled = true,
+    required this.child,
+  });
 
+  final bool enabled;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    if (DesktopWindowInsets.of(context) == null) return child;
+    final immersive = (DesktopWindowInsets.of(context)?.top ?? 0) > 0;
+    final draggable = enabled && immersive;
     return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+      behavior: draggable
+          ? HitTestBehavior.opaque
+          : HitTestBehavior.deferToChild,
       excludeFromSemantics: true,
-      onPanStart: (_) => unawaited(DesktopWindow.command('move')),
-      onDoubleTap: () => unawaited(DesktopWindow.command('toggleMaximized')),
+      onPanStart: draggable
+          ? (_) => unawaited(DesktopWindow.command('move'))
+          : null,
+      onDoubleTap: draggable
+          ? () => unawaited(DesktopWindow.command('toggleMaximized'))
+          : null,
       child: child,
     );
   }

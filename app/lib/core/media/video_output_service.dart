@@ -50,6 +50,7 @@ class VideoOutputService {
   Future<VideoOutputReceipt> start(
     VideoCapture stream, {
     bool Function()? cancelled,
+    VideoPlayerFactory? playerFactory,
   }) async {
     _validateCapture(stream);
     final id = stream.sessionId;
@@ -73,7 +74,7 @@ class VideoOutputService {
       device,
       stream.codec.name,
       stream.generation,
-      _factory(),
+      playerFactory ?? _factory,
       cancelled,
       captureGeneration: stream.captureGeneration,
     );
@@ -300,7 +301,7 @@ class VideoOutputService {
       old.device,
       nextCodec,
       generation,
-      _factory(),
+      old.createPlayer,
       old.cancelled,
       playback: old.playback,
       captureGeneration: captureGeneration ?? old.captureGeneration,
@@ -692,13 +693,15 @@ class _Output {
     this.device,
     this.codec,
     this.generation,
-    this.player,
+    this.createPlayer,
     this.cancelled, {
     _Playback? playback,
     this.captureGeneration = 1,
-  }) : playback = playback ?? _Playback();
+  }) : player = createPlayer(),
+       playback = playback ?? _Playback();
   final String id, device, codec;
   final int generation, captureGeneration;
+  final VideoPlayerFactory createPlayer;
   final VideoPlayer player;
   final bool Function()? cancelled;
   final _Playback playback;

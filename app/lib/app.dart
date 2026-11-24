@@ -23,7 +23,7 @@ import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/app_lifecycle_observer.dart';
 import 'package:scrcpy_connect/widgets/app_presentation_host.dart';
 import 'package:scrcpy_connect/widgets/app_session_scope.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
 import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
@@ -36,11 +36,13 @@ class ConnectApp extends HookConsumerWidget {
     this.initialLocation = '/devices',
     this.glassReady = true,
     this.desktopWindow = false,
+    this.mobileWindow = false,
   });
 
   final String initialLocation;
   final bool glassReady;
   final bool desktopWindow;
+  final bool mobileWindow;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -50,6 +52,9 @@ class ConnectApp extends HookConsumerWidget {
             preferencesProvider.select((state) => state.values.appearance),
           )
         : Appearance.system;
+    final glassEffects = ready
+        ? ref.watch(preferencesProvider.select((s) => s.values.glassEffects))
+        : GlassEffects.automatic;
     final navigator = useMemoized(() => GlobalKey<NavigatorState>());
     final router = useMemoized(
       () => createAppRouter(
@@ -100,24 +105,20 @@ class ConnectApp extends HookConsumerWidget {
           // Expose the hinge while the iPhone Duo is partially open.
           bridgeMode: DisplayFeatureBridgeMode.full,
           child: WindowEnvironmentScope(
-            child: liquid.GlassTheme(
-              data: GlassMaterial.theme(context),
-              child: liquid.GlassAccessibilityScope(
-                reduceTransparency:
-                    !glassReady ||
-                    systemVisualPreferences.reduceTransparency ||
-                    MediaQuery.highContrastOf(context) ||
-                    liquid.GlassAccessibilityData.of(context)
-                        .reduceTransparency,
-                child: liquid.GlassNavigationShell(
-                  child: ready
-                      ? _SessionPresentation(
-                          navigator: navigator,
-                          router: router,
-                          child: content,
-                        )
-                      : content,
-                ),
+            child: GlassPreferences(
+              effects: glassEffects,
+              reduceTransparency:
+                  !glassReady || systemVisualPreferences.reduceTransparency,
+              child: liquid.GlassNavigationShell(
+                child: ready
+                    ? _SessionPresentation(
+                        navigator: navigator,
+                        router: router,
+                        desktopWindow: desktopWindow,
+                        mobileWindow: mobileWindow,
+                        child: content,
+                      )
+                    : content,
               ),
             ),
           ),
@@ -134,11 +135,15 @@ class _SessionPresentation extends HookConsumerWidget {
   const _SessionPresentation({
     required this.navigator,
     required this.router,
+    required this.desktopWindow,
+    required this.mobileWindow,
     required this.child,
   });
 
   final GlobalKey<NavigatorState> navigator;
   final GoRouter router;
+  final bool desktopWindow;
+  final bool mobileWindow;
   final Widget child;
 
   @override
@@ -198,7 +203,12 @@ class _SessionPresentation extends HookConsumerWidget {
       child: AppPresentationHost(
         navigator: navigator,
         router: router,
-        child: RemoteWindows(router: router, child: child),
+        child: RemoteWindows(
+          router: router,
+          desktopWindow: desktopWindow,
+          mobileWindow: mobileWindow,
+          child: child,
+        ),
       ),
     );
   }

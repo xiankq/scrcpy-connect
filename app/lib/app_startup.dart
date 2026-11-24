@@ -16,11 +16,13 @@ class AppStartup extends StatefulWidget {
     required this.initialLocation,
     required this.loadSession,
     this.desktopWindow = false,
+    this.mobileWindow = false,
     this.initializeGlass = GlassMaterial.initialize,
   });
 
   final String initialLocation;
   final bool desktopWindow;
+  final bool mobileWindow;
   final Future<AppBootstrap> Function() loadSession;
   final Future<void> Function() initializeGlass;
 
@@ -101,6 +103,7 @@ class _AppStartupState extends State<AppStartup> {
             initialLocation: widget.initialLocation,
             glassReady: _glassReady,
             desktopWindow: widget.desktopWindow,
+            mobileWindow: widget.mobileWindow,
           ),
         ),
       ),

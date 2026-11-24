@@ -102,6 +102,24 @@ final class DeviceDetailsReader implements DeviceInspection {
   );
 
   @override
+  Future<DeviceReading<({int width, int height})?>> readScreenSize(
+    String deviceId,
+  ) => _query(deviceId, null, null, (scope, _, stop) async {
+    final display = await _read(scope, 'dumpsys display', stop);
+    final mainDisplay = RegExp(
+      r'DisplayInfo\{[^\n]*?\bdisplayId[ =]0"?,[^\n]*?\breal (\d+) x (\d+)',
+    );
+    for (final match in mainDisplay.allMatches(display).toList().reversed) {
+      final width = _positive(match[1]!);
+      final height = _positive(match[2]!);
+      if (width != null && height != null) {
+        return (width: width, height: height);
+      }
+    }
+    return null;
+  });
+
+  @override
   Future<DeviceReading<String>> readForegroundApp(
     String deviceId, {
     String? connectionId,

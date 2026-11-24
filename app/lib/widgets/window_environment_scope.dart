@@ -196,6 +196,35 @@ final class _WindowEnvironmentScopeState extends State<WindowEnvironmentScope>
   }
 }
 
+/// A secondary Flutter view already knows its own geometry and identity.
+final class FlutterWindowEnvironment extends StatelessWidget {
+  const FlutterWindowEnvironment({
+    super.key,
+    required this.mode,
+    required this.child,
+  });
+
+  final WindowMode mode;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = windowEnvironmentFromMedia(MediaQuery.of(context));
+    return _WindowEnvironmentInherited(
+      environment: WindowEnvironment(
+        width: media.width,
+        height: media.height,
+        insets: media.insets,
+        displayFeatures: media.displayFeatures,
+        windowId: 'desktop:flutter:${View.of(context).viewId}',
+        mode: mode,
+        posture: media.posture,
+      ),
+      child: child,
+    );
+  }
+}
+
 final class _WindowEnvironmentInherited extends InheritedWidget {
   const _WindowEnvironmentInherited({
     required this.environment,

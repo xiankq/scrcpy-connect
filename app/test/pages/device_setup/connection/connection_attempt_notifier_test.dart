@@ -23,6 +23,8 @@ import 'package:scrcpy_connect/pages/device_setup/connection/widgets/connection_
 import 'package:scrcpy_connect/pages/device_setup/connection/widgets/connection_attempt_status.dart';
 import 'package:scrcpy_connect/pages/device_setup/connection/widgets/connection_mode_selector.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/styles/motion.dart';
+import 'package:scrcpy_connect/widgets/page_frame.dart';
 
 const _endpoint = DeviceEndpoint(address: 'phone.local', port: 5555);
 const _connect = ConnectionAttemptRequest.connect(endpoint: _endpoint);
@@ -351,6 +353,13 @@ void main() {
     await tester.pumpAndSettle();
 
     final tabs = find.byType(ConnectionModeSelector);
+    final frame = tester.state(find.byType(PageFrame));
+    final selector = tester.element(tabs);
+    final viewport = tester.state(find.byType(Scrollable));
+    final headerFades = find.ancestor(
+      of: find.text('添加设备'),
+      matching: find.byType(FadeTransition),
+    );
     final status = find.text('连接手机');
     final statusIcon = find.byIcon(LucideIcons.circle);
     final check = find.widgetWithText(FilledButton, '检查连接');
@@ -365,6 +374,27 @@ void main() {
 
     for (final (label, action) in [('配对码', '配对并连接'), ('IP 连接', '连接设备')]) {
       await tester.tap(find.text(label));
+      await tester.pump();
+      await tester.pump(shortTransitionDuration ~/ 2);
+      expect(tester.state(find.byType(PageFrame)), same(frame));
+      expect(tester.element(tabs), same(selector));
+      expect(tester.state(find.byType(Scrollable).first), same(viewport));
+      expect(
+        tester
+            .widgetList<FadeTransition>(headerFades)
+            .every((fade) => fade.opacity.value == 1),
+        isTrue,
+      );
+      final formFades = tester
+          .widgetList<FadeTransition>(
+            find.ancestor(
+              of: find.byType(Form),
+              matching: find.byType(FadeTransition),
+            ),
+          )
+          .where((fade) => fade.opacity.value < 1);
+      expect(formFades, hasLength(2));
+      expect(formFades.every((fade) => fade.opacity.value > 0), isTrue);
       await tester.pumpAndSettle();
       expect(tester.getCenter(find.byType(ConnectionAddressFields)).dx, 640);
       expect(
@@ -372,6 +402,22 @@ void main() {
         640,
       );
     }
+
+    final inputs = find.byType(EditableText);
+    await tester.enterText(inputs.first, 'phone.local');
+    await tester.enterText(inputs.at(1), '45678');
+    for (final label in ['配对码', '扫码', 'IP 连接']) {
+      await tester.tap(find.text(label));
+      await tester.pump();
+      await tester.pump(shortTransitionDuration ~/ 4);
+    }
+    await tester.pumpAndSettle();
+    expect(tester.element(tabs), same(selector));
+    expect(
+      tester.widget<EditableText>(inputs.first).controller.text,
+      'phone.local',
+    );
+    expect(tester.widget<EditableText>(inputs.at(1)).controller.text, '45678');
 
     await tester.tap(find.text('USB'));
     tester.view.physicalSize = const Size(320, 520);

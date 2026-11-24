@@ -729,6 +729,11 @@ class RemotePresentation {
     invalidateStart();
   }
 
+  void phoneMoveFailed(String reason) {
+    _exiting = false;
+    failOperation(reason);
+  }
+
   /// 队列用捕获的绑定判断准入，包含未知应用打开将存活会话替换成记录后仍需排空的清理。
   bool admitsQueuedInput(
     RemoteBinding captured,

@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterEngineGroup
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import java.util.IdentityHashMap
@@ -20,9 +21,10 @@ internal object ProcessFlutterHost {
 
     fun engine(context: Context, shellArgs: Array<String>): FlutterEngine {
         check(Looper.myLooper() == Looper.getMainLooper())
-        // 仅首次创建继承 Flutter 启动参数；Activity 重新附着仍复用原引擎。
-        return engine ?: FlutterEngine(context.applicationContext, shellArgs).also { created ->
-            // 构造器仅注册一次生成插件；FlutterActivity 仅首次附着时启动 Dart 入口。
+        // 主窗口与子窗口须从同一引擎组启动，才能传递强类型 Dart 请求。
+        return engine ?: ConnectApplication.engineGroup(context, shellArgs)
+            .createAndRunEngine(FlutterEngineGroup.Options(context.applicationContext))
+            .also { created ->
             engine = created
             val audio = NativeAudioRuntime.get(context)
             audio.bind(::emit)
@@ -65,6 +67,14 @@ internal object ProcessFlutterHost {
                                 val host = activity?.get()
                                 if (host == null) result.error("activity_unavailable", "请返回应用后创建独立窗口。", null)
                                 else IndependentWindowActivity.openFrom(host, call, result)
+                            }
+                            "window.closeIndependent" -> {
+                                IndependentWindowActivity.close(call.argument<String>("windowId"))
+                                result.success(null)
+                            }
+                            "window.showWorkbench" -> {
+                                IndependentWindowActivity.showWorkbench(context)
+                                result.success(null)
                             }
                             "window.readEnvironment" -> {
                                 result.success(
@@ -124,7 +134,10 @@ internal object ProcessFlutterHost {
                             environmentBridges[created]?.readEnvironment()
                                 ?: host.readWindowEnvironment(),
                         )
-                        "window.openIndependent" -> host.openIndependent(call, result)
+                        "window.closeIndependent" -> {
+                            IndependentWindowActivity.close(host.readWindowId())
+                            result.success(null)
+                        }
                         else -> if (!audio.handle(call, result)) {
                             val mainHost = activity?.get()
                             if (mainHost != null) mainHost.handlePlatform(call, result)
@@ -165,6 +178,12 @@ internal object ProcessFlutterHost {
                 else -> { { host.componentName.flattenToShortString() } }
             },
         )
+    }
+
+    fun remoteWindowDestroyed(id: String) {
+        val messenger = engine?.dartExecutor?.binaryMessenger ?: return
+        MethodChannel(messenger, "dev.scrcpyconnect/window_lifecycle")
+            .invokeMethod("destroyed", id)
     }
 
     fun refreshEnvironment(host: android.app.Activity) {

@@ -70,7 +70,7 @@ class MetadataImportPreview extends HookWidget {
                     dense: true,
                     title: Text(_preferenceName(change.key)),
                     subtitle: Text(
-                      '${_preferenceValue(change.current)} → ${_preferenceValue(change.imported)}',
+                      '${_preferenceValue(change.current, key: change.key)} → ${_preferenceValue(change.imported, key: change.key)}',
                     ),
                   ),
             ],
@@ -92,6 +92,7 @@ class MetadataImportPreview extends HookWidget {
 String _preferenceName(String key) =>
     const {
       'appearance': '外观',
+      'glassEffects': '液态玻璃',
       'backgroundKeepAlive': '后台保持',
       'notificationAlerts': '通知提醒',
       'callAlerts': '来电提醒',
@@ -107,21 +108,26 @@ String _preferenceName(String key) =>
       'videoEncoder': '默认编码器',
     }[key] ??
     '全局偏好';
-String _preferenceValue(Object? input) => switch (input) {
-  true => '开启',
-  false => '关闭',
-  null => '自动',
-  'light' => '浅色',
-  'dark' => '深色',
-  'system' => '跟随系统',
-  'grid' => '宫格',
-  'list' => '列表',
-  'name' => '名称',
-  'size' => '大小',
-  'modified' => '修改时间',
-  'type' => '类型',
-  'smooth' => '流畅',
-  'balanced' => '均衡',
-  'clear' => '清晰',
-  _ => '$input',
-};
+String _preferenceValue(Object? input, {required String key}) =>
+    switch (input) {
+      'automatic' when key == 'glassEffects' => '跟随平台',
+      'premium' when key == 'glassEffects' => '极致',
+      'standard' when key == 'glassEffects' => '标准',
+      'off' when key == 'glassEffects' => '关闭',
+      true => '开启',
+      false => '关闭',
+      null => '自动',
+      'light' => '浅色',
+      'dark' => '深色',
+      'system' => '跟随系统',
+      'grid' => '宫格',
+      'list' => '列表',
+      'name' => '名称',
+      'size' => '大小',
+      'modified' => '修改时间',
+      'type' => '类型',
+      'smooth' => '流畅',
+      'balanced' => '均衡',
+      'clear' => '清晰',
+      _ => '$input',
+    };

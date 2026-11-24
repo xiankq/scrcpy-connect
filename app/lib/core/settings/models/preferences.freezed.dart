@@ -419,20 +419,20 @@ $PreferencesCopyWith<Preferences> get copyWith => _$PreferencesCopyWithImpl<Pref
 @override
 bool operator ==(Object other) {
   final _this = this as Preferences;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Preferences&&(identical(other.appearance, _this.appearance) || other.appearance == _this.appearance)&&(identical(other.backgroundKeepAlive, _this.backgroundKeepAlive) || other.backgroundKeepAlive == _this.backgroundKeepAlive)&&(identical(other.notificationAlerts, _this.notificationAlerts) || other.notificationAlerts == _this.notificationAlerts)&&(identical(other.callAlerts, _this.callAlerts) || other.callAlerts == _this.callAlerts)&&(identical(other.adbBurstMode, _this.adbBurstMode) || other.adbBurstMode == _this.adbBurstMode)&&(identical(other.fileViewMode, _this.fileViewMode) || other.fileViewMode == _this.fileViewMode)&&(identical(other.fileSortKey, _this.fileSortKey) || other.fileSortKey == _this.fileSortKey)&&(identical(other.fileSortAscending, _this.fileSortAscending) || other.fileSortAscending == _this.fileSortAscending)&&(identical(other.quality, _this.quality) || other.quality == _this.quality)&&const DeepCollectionEquality().equals(other.deviceSettings, _this.deviceSettings)&&const DeepCollectionEquality().equals(other.appOpenModes, _this.appOpenModes)&&const DeepCollectionEquality().equals(other.deviceQuality, _this.deviceQuality));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Preferences&&(identical(other.appearance, _this.appearance) || other.appearance == _this.appearance)&&(identical(other.glassEffects, _this.glassEffects) || other.glassEffects == _this.glassEffects)&&(identical(other.backgroundKeepAlive, _this.backgroundKeepAlive) || other.backgroundKeepAlive == _this.backgroundKeepAlive)&&(identical(other.notificationAlerts, _this.notificationAlerts) || other.notificationAlerts == _this.notificationAlerts)&&(identical(other.callAlerts, _this.callAlerts) || other.callAlerts == _this.callAlerts)&&(identical(other.adbBurstMode, _this.adbBurstMode) || other.adbBurstMode == _this.adbBurstMode)&&(identical(other.fileViewMode, _this.fileViewMode) || other.fileViewMode == _this.fileViewMode)&&(identical(other.fileSortKey, _this.fileSortKey) || other.fileSortKey == _this.fileSortKey)&&(identical(other.fileSortAscending, _this.fileSortAscending) || other.fileSortAscending == _this.fileSortAscending)&&(identical(other.quality, _this.quality) || other.quality == _this.quality)&&const DeepCollectionEquality().equals(other.deviceSettings, _this.deviceSettings)&&const DeepCollectionEquality().equals(other.appOpenModes, _this.appOpenModes)&&const DeepCollectionEquality().equals(other.deviceQuality, _this.deviceQuality));
 }
 
 
 @override
 int get hashCode {
   final _this = this as Preferences;
-  return Object.hash(runtimeType,_this.appearance,_this.backgroundKeepAlive,_this.notificationAlerts,_this.callAlerts,_this.adbBurstMode,_this.fileViewMode,_this.fileSortKey,_this.fileSortAscending,_this.quality,const DeepCollectionEquality().hash(_this.deviceSettings),const DeepCollectionEquality().hash(_this.appOpenModes),const DeepCollectionEquality().hash(_this.deviceQuality));
+  return Object.hash(runtimeType,_this.appearance,_this.glassEffects,_this.backgroundKeepAlive,_this.notificationAlerts,_this.callAlerts,_this.adbBurstMode,_this.fileViewMode,_this.fileSortKey,_this.fileSortAscending,_this.quality,const DeepCollectionEquality().hash(_this.deviceSettings),const DeepCollectionEquality().hash(_this.appOpenModes),const DeepCollectionEquality().hash(_this.deviceQuality));
 }
 
 @override
 String toString() {
   final _this = this as Preferences;
-  return 'Preferences(appearance: ${_this.appearance}, backgroundKeepAlive: ${_this.backgroundKeepAlive}, notificationAlerts: ${_this.notificationAlerts}, callAlerts: ${_this.callAlerts}, adbBurstMode: ${_this.adbBurstMode}, fileViewMode: ${_this.fileViewMode}, fileSortKey: ${_this.fileSortKey}, fileSortAscending: ${_this.fileSortAscending}, quality: ${_this.quality}, deviceSettings: ${_this.deviceSettings}, appOpenModes: ${_this.appOpenModes}, deviceQuality: ${_this.deviceQuality})';
+  return 'Preferences(appearance: ${_this.appearance}, glassEffects: ${_this.glassEffects}, backgroundKeepAlive: ${_this.backgroundKeepAlive}, notificationAlerts: ${_this.notificationAlerts}, callAlerts: ${_this.callAlerts}, adbBurstMode: ${_this.adbBurstMode}, fileViewMode: ${_this.fileViewMode}, fileSortKey: ${_this.fileSortKey}, fileSortAscending: ${_this.fileSortAscending}, quality: ${_this.quality}, deviceSettings: ${_this.deviceSettings}, appOpenModes: ${_this.appOpenModes}, deviceQuality: ${_this.deviceQuality})';
 }
 
 
@@ -443,7 +443,7 @@ abstract mixin class $PreferencesCopyWith<$Res>  {
   factory $PreferencesCopyWith(Preferences value, $Res Function(Preferences) _then) = _$PreferencesCopyWithImpl;
 @useResult
 $Res call({
- Appearance appearance, bool backgroundKeepAlive, bool notificationAlerts, bool callAlerts, bool adbBurstMode, FileViewMode fileViewMode, FileSortKey fileSortKey, bool fileSortAscending, VideoQualityPreferences quality, Map<String, DevicePreferences> deviceSettings, Map<String, Map<String, AppOpenMode>> appOpenModes, Map<String, VideoQualityPreferences> deviceQuality
+ Appearance appearance, GlassEffects glassEffects, bool backgroundKeepAlive, bool notificationAlerts, bool callAlerts, bool adbBurstMode, FileViewMode fileViewMode, FileSortKey fileSortKey, bool fileSortAscending, VideoQualityPreferences quality, Map<String, DevicePreferences> deviceSettings, Map<String, Map<String, AppOpenMode>> appOpenModes, Map<String, VideoQualityPreferences> deviceQuality
 });
 
 
@@ -460,10 +460,11 @@ class _$PreferencesCopyWithImpl<$Res>
 
 /// Create a copy of Preferences
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? appearance = null,Object? backgroundKeepAlive = null,Object? notificationAlerts = null,Object? callAlerts = null,Object? adbBurstMode = null,Object? fileViewMode = null,Object? fileSortKey = null,Object? fileSortAscending = null,Object? quality = null,Object? deviceSettings = null,Object? appOpenModes = null,Object? deviceQuality = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? appearance = null,Object? glassEffects = null,Object? backgroundKeepAlive = null,Object? notificationAlerts = null,Object? callAlerts = null,Object? adbBurstMode = null,Object? fileViewMode = null,Object? fileSortKey = null,Object? fileSortAscending = null,Object? quality = null,Object? deviceSettings = null,Object? appOpenModes = null,Object? deviceQuality = null,}) {
   return _then(Preferences(
 appearance: null == appearance ? _self.appearance : appearance // ignore: cast_nullable_to_non_nullable
-as Appearance,backgroundKeepAlive: null == backgroundKeepAlive ? _self.backgroundKeepAlive : backgroundKeepAlive // ignore: cast_nullable_to_non_nullable
+as Appearance,glassEffects: null == glassEffects ? _self.glassEffects : glassEffects // ignore: cast_nullable_to_non_nullable
+as GlassEffects,backgroundKeepAlive: null == backgroundKeepAlive ? _self.backgroundKeepAlive : backgroundKeepAlive // ignore: cast_nullable_to_non_nullable
 as bool,notificationAlerts: null == notificationAlerts ? _self.notificationAlerts : notificationAlerts // ignore: cast_nullable_to_non_nullable
 as bool,callAlerts: null == callAlerts ? _self.callAlerts : callAlerts // ignore: cast_nullable_to_non_nullable
 as bool,adbBurstMode: null == adbBurstMode ? _self.adbBurstMode : adbBurstMode // ignore: cast_nullable_to_non_nullable
@@ -629,20 +630,20 @@ $PreferenceChangesCopyWith<PreferenceChanges> get copyWith => _$PreferenceChange
 @override
 bool operator ==(Object other) {
   final _this = this as PreferenceChanges;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is PreferenceChanges&&(identical(other.appearance, _this.appearance) || other.appearance == _this.appearance)&&(identical(other.backgroundKeepAlive, _this.backgroundKeepAlive) || other.backgroundKeepAlive == _this.backgroundKeepAlive)&&(identical(other.notificationAlerts, _this.notificationAlerts) || other.notificationAlerts == _this.notificationAlerts)&&(identical(other.callAlerts, _this.callAlerts) || other.callAlerts == _this.callAlerts)&&(identical(other.adbBurstMode, _this.adbBurstMode) || other.adbBurstMode == _this.adbBurstMode)&&(identical(other.fileViewMode, _this.fileViewMode) || other.fileViewMode == _this.fileViewMode)&&(identical(other.fileSortKey, _this.fileSortKey) || other.fileSortKey == _this.fileSortKey)&&(identical(other.fileSortAscending, _this.fileSortAscending) || other.fileSortAscending == _this.fileSortAscending)&&(identical(other.quality, _this.quality) || other.quality == _this.quality)&&const DeepCollectionEquality().equals(other.deviceSettings, _this.deviceSettings)&&const DeepCollectionEquality().equals(other.appOpenModes, _this.appOpenModes)&&const DeepCollectionEquality().equals(other.deviceQuality, _this.deviceQuality));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is PreferenceChanges&&(identical(other.appearance, _this.appearance) || other.appearance == _this.appearance)&&(identical(other.glassEffects, _this.glassEffects) || other.glassEffects == _this.glassEffects)&&(identical(other.backgroundKeepAlive, _this.backgroundKeepAlive) || other.backgroundKeepAlive == _this.backgroundKeepAlive)&&(identical(other.notificationAlerts, _this.notificationAlerts) || other.notificationAlerts == _this.notificationAlerts)&&(identical(other.callAlerts, _this.callAlerts) || other.callAlerts == _this.callAlerts)&&(identical(other.adbBurstMode, _this.adbBurstMode) || other.adbBurstMode == _this.adbBurstMode)&&(identical(other.fileViewMode, _this.fileViewMode) || other.fileViewMode == _this.fileViewMode)&&(identical(other.fileSortKey, _this.fileSortKey) || other.fileSortKey == _this.fileSortKey)&&(identical(other.fileSortAscending, _this.fileSortAscending) || other.fileSortAscending == _this.fileSortAscending)&&(identical(other.quality, _this.quality) || other.quality == _this.quality)&&const DeepCollectionEquality().equals(other.deviceSettings, _this.deviceSettings)&&const DeepCollectionEquality().equals(other.appOpenModes, _this.appOpenModes)&&const DeepCollectionEquality().equals(other.deviceQuality, _this.deviceQuality));
 }
 
 
 @override
 int get hashCode {
   final _this = this as PreferenceChanges;
-  return Object.hash(runtimeType,_this.appearance,_this.backgroundKeepAlive,_this.notificationAlerts,_this.callAlerts,_this.adbBurstMode,_this.fileViewMode,_this.fileSortKey,_this.fileSortAscending,_this.quality,const DeepCollectionEquality().hash(_this.deviceSettings),const DeepCollectionEquality().hash(_this.appOpenModes),const DeepCollectionEquality().hash(_this.deviceQuality));
+  return Object.hash(runtimeType,_this.appearance,_this.glassEffects,_this.backgroundKeepAlive,_this.notificationAlerts,_this.callAlerts,_this.adbBurstMode,_this.fileViewMode,_this.fileSortKey,_this.fileSortAscending,_this.quality,const DeepCollectionEquality().hash(_this.deviceSettings),const DeepCollectionEquality().hash(_this.appOpenModes),const DeepCollectionEquality().hash(_this.deviceQuality));
 }
 
 @override
 String toString() {
   final _this = this as PreferenceChanges;
-  return 'PreferenceChanges(appearance: ${_this.appearance}, backgroundKeepAlive: ${_this.backgroundKeepAlive}, notificationAlerts: ${_this.notificationAlerts}, callAlerts: ${_this.callAlerts}, adbBurstMode: ${_this.adbBurstMode}, fileViewMode: ${_this.fileViewMode}, fileSortKey: ${_this.fileSortKey}, fileSortAscending: ${_this.fileSortAscending}, quality: ${_this.quality}, deviceSettings: ${_this.deviceSettings}, appOpenModes: ${_this.appOpenModes}, deviceQuality: ${_this.deviceQuality})';
+  return 'PreferenceChanges(appearance: ${_this.appearance}, glassEffects: ${_this.glassEffects}, backgroundKeepAlive: ${_this.backgroundKeepAlive}, notificationAlerts: ${_this.notificationAlerts}, callAlerts: ${_this.callAlerts}, adbBurstMode: ${_this.adbBurstMode}, fileViewMode: ${_this.fileViewMode}, fileSortKey: ${_this.fileSortKey}, fileSortAscending: ${_this.fileSortAscending}, quality: ${_this.quality}, deviceSettings: ${_this.deviceSettings}, appOpenModes: ${_this.appOpenModes}, deviceQuality: ${_this.deviceQuality})';
 }
 
 
@@ -653,7 +654,7 @@ abstract mixin class $PreferenceChangesCopyWith<$Res>  {
   factory $PreferenceChangesCopyWith(PreferenceChanges value, $Res Function(PreferenceChanges) _then) = _$PreferenceChangesCopyWithImpl;
 @useResult
 $Res call({
- Appearance? appearance, bool? backgroundKeepAlive, bool? notificationAlerts, bool? callAlerts, bool? adbBurstMode, FileViewMode? fileViewMode, FileSortKey? fileSortKey, bool? fileSortAscending, VideoQualityPreferences quality, Map<String, DevicePreferences>? deviceSettings, Map<String, Map<String, AppOpenMode>>? appOpenModes, Map<String, VideoQualityPreferences>? deviceQuality
+ Appearance? appearance, GlassEffects? glassEffects, bool? backgroundKeepAlive, bool? notificationAlerts, bool? callAlerts, bool? adbBurstMode, FileViewMode? fileViewMode, FileSortKey? fileSortKey, bool? fileSortAscending, VideoQualityPreferences quality, Map<String, DevicePreferences>? deviceSettings, Map<String, Map<String, AppOpenMode>>? appOpenModes, Map<String, VideoQualityPreferences>? deviceQuality
 });
 
 
@@ -670,10 +671,11 @@ class _$PreferenceChangesCopyWithImpl<$Res>
 
 /// Create a copy of PreferenceChanges
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? appearance = freezed,Object? backgroundKeepAlive = freezed,Object? notificationAlerts = freezed,Object? callAlerts = freezed,Object? adbBurstMode = freezed,Object? fileViewMode = freezed,Object? fileSortKey = freezed,Object? fileSortAscending = freezed,Object? quality = null,Object? deviceSettings = freezed,Object? appOpenModes = freezed,Object? deviceQuality = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? appearance = freezed,Object? glassEffects = freezed,Object? backgroundKeepAlive = freezed,Object? notificationAlerts = freezed,Object? callAlerts = freezed,Object? adbBurstMode = freezed,Object? fileViewMode = freezed,Object? fileSortKey = freezed,Object? fileSortAscending = freezed,Object? quality = null,Object? deviceSettings = freezed,Object? appOpenModes = freezed,Object? deviceQuality = freezed,}) {
   return _then(PreferenceChanges(
 appearance: freezed == appearance ? _self.appearance : appearance // ignore: cast_nullable_to_non_nullable
-as Appearance?,backgroundKeepAlive: freezed == backgroundKeepAlive ? _self.backgroundKeepAlive : backgroundKeepAlive // ignore: cast_nullable_to_non_nullable
+as Appearance?,glassEffects: freezed == glassEffects ? _self.glassEffects : glassEffects // ignore: cast_nullable_to_non_nullable
+as GlassEffects?,backgroundKeepAlive: freezed == backgroundKeepAlive ? _self.backgroundKeepAlive : backgroundKeepAlive // ignore: cast_nullable_to_non_nullable
 as bool?,notificationAlerts: freezed == notificationAlerts ? _self.notificationAlerts : notificationAlerts // ignore: cast_nullable_to_non_nullable
 as bool?,callAlerts: freezed == callAlerts ? _self.callAlerts : callAlerts // ignore: cast_nullable_to_non_nullable
 as bool?,adbBurstMode: freezed == adbBurstMode ? _self.adbBurstMode : adbBurstMode // ignore: cast_nullable_to_non_nullable
