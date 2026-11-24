@@ -42,6 +42,10 @@ android {
     compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
+    if (providers.gradleProperty("include-universal-apk").orNull == "true") {
+        splits.abi.isUniversalApk = true
+    }
+
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
@@ -99,6 +103,8 @@ android {
             // 可选的侧载 APK 压缩；Android 安装时解压这些库，以安装空间换取更小的下载体积。
             useLegacyPackaging = providers.gradleProperty("compress-native-libs")
                 .orNull?.toBooleanStrict() ?: true
+            // 插件可能自带 x86 库，Flutter 没有对应的引擎。
+            excludes += "**/x86/**"
         }
     }
 }

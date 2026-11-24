@@ -4,7 +4,7 @@
 
 | 任务 | 入口 |
 | --- | --- |
-| Android 构建与交付校验 | `android.dart build` / `android.dart verify <APK> [--abis ...]`；通用包显式 `--abi universal` |
+| Android 构建与交付校验 | `android.dart build` / `android.dart verify <APK> [--abis ...]`。用 `--abi all` 一次构建三个 ABI 包和同构建号的通用包，单独构建通用包用 `--abi universal` |
 | 桌面/Apple 构建 | `build_host.dart <平台> --arch <架构> --installers`。iOS 真机编译归档用 `build_host.dart ios`，模拟器包用 `build_host.dart ios --simulator` |
 | 生成及漂移检查 | `generate.dart` / `generate.dart --check` |
 | 完整门禁 | `check.sh`；`--android` 默认仅 arm64 调试包 |

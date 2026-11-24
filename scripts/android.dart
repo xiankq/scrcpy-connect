@@ -308,7 +308,9 @@ Future<void> buildApk({
   }
   final flutter = executable('flutter');
   if (flutter == null) throw StateError('Add Flutter to PATH.');
-  final platform = platforms[abi];
+  final packageSet = abi == 'all';
+  final split = abi == 'split' || packageSet;
+  final platform = platforms[packageSet ? 'split' : abi];
   if (platform == null) throw ArgumentError.value(abi, 'abi');
   final feed = updateFeedDefine(updateFeed);
   final pubspec = loadYaml(
@@ -323,13 +325,20 @@ Future<void> buildApk({
     '--$mode',
     '--target-platform',
     platform.$1,
-    if (abi == 'split') '--split-per-abi',
+    if (split) '--split-per-abi',
+    if (packageSet) ...[
+      '-Pinclude-universal-apk=true',
+      '-Pforce-version-code-ignoring-abi=true',
+    ],
     '-Pcompress-native-libs=$compressNative',
     ?feed,
     if (noPub) '--no-pub',
   ], cwd: application);
   watch.stop();
-  for (final architecture in abi == 'split' ? platform.$2 : [null]) {
+  for (final architecture in [
+    if (split) ...platform.$2,
+    if (!split || packageSet) null,
+  ]) {
     final filename = architecture == null
         ? 'app-$mode.apk'
         : 'app-$architecture-$mode.apk';
@@ -368,9 +377,9 @@ Future<void> main(List<String> arguments) async {
         commandParser()
           ..addOption(
             'abi',
-            allowed: platforms.keys.toList(),
+            allowed: [...platforms.keys, 'all'],
             defaultsTo: 'split',
-            help: 'Build separate installable APKs by default; universal is an explicit compatibility bundle.',
+            help: 'Build separate APKs by default. Use all for three ABI APKs and a universal APK with the same version code.',
           )
           ..addOption(
             'mode',
