@@ -38,10 +38,8 @@ void main(List<String> args) async {
         ),
       );
     buildInput.config.setupBuild(linkingEnabled: false);
-    final built = BuildOutputBuilder();
-    await buildNativeAdb(buildInput.build(), built);
-    final result = built.build();
-    output.assets.code.addAll(result.assets.code);
-    output.dependencies.addAll(result.dependencies);
+    final built = await buildNativeAdb(buildInput.build());
+    output.assets.code.addAll(built.assets);
+    output.dependencies.addAll(built.dependencies);
   });
 }

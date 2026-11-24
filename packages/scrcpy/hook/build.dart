@@ -14,9 +14,18 @@ void main(List<String> args) async {
       ])
         input.packageRoot.resolve('../../rust/adb/api/$source'),
     ]);
+    final rustOutput = BuildOutputBuilder();
     await FlutterRustBridgeNativeAssetsBuilder(
       cratePath: '../../rust/scrcpy/bridge',
       assetName: 'src/native/generated/frb_generated.io.dart',
-    ).run(input: input, output: output);
+    ).run(input: input, output: rustOutput);
+    final built = rustOutput.build();
+    output.assets.code.addAll(built.assets.code);
+    // 保留源文件作为输入，监督器二进制由 Cargo 在本轮生成。
+    output.dependencies.addAll(
+      built.dependencies.where(
+        (uri) => !uri.path.endsWith('/out/interop-adb-supervisor'),
+      ),
+    );
   });
 }
