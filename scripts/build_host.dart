@@ -231,19 +231,13 @@ Future<void> verifyLinux(Directory bundle, String arch) async {
   verifyMedia(files);
 }
 
-void installMediaNotices(
-  Directory bundle,
-  String platform,
-  String arch,
-  String? ffmpegRoot,
-) {
+void installMediaNotices(Directory bundle, String platform, String arch) {
   if (platform == 'macos' || platform == 'ios') {
     // Xcode 在签名前从对应 SDK 和架构的 CocoaPods 产物复制声明。
     return;
   }
   final prefix = Directory(
-    ffmpegRoot ??
-        p.join(root.path, '.dart_tool/media_codec/ffmpeg/$platform-$arch'),
+    p.join(root.path, '.dart_tool/media_codec/ffmpeg/$platform-$arch'),
   );
   final source = Directory(p.join(prefix.path, 'share/media_codec'));
   if (!source.existsSync()) {
@@ -497,23 +491,7 @@ Future<void> main(List<String> arguments) async {
       );
     }
     final verifyOnly = args.flag('verify-only');
-    var ffmpegRoot = Platform.environment['MEDIA_CODEC_FFMPEG_ROOT'];
-    if (ffmpegRoot == '') ffmpegRoot = null;
     if (!verifyOnly) {
-      if (platform == 'windows' && ffmpegRoot == null) {
-        log.begin('prepare Windows $arch FFmpeg and dav1d');
-        ffmpegRoot = p
-            .join(root.path, '.dart_tool/media_codec/ffmpeg/windows-$arch')
-            .replaceAll(r'\', '/');
-        await streamTool([
-          executable('python') ?? 'python',
-          'packages/media_codec/tool/build_ffmpeg.py',
-          '--platform',
-          'windows',
-          '--arch',
-          arch,
-        ], cwd: root);
-      }
       log.begin('build $platform $arch');
       final appleConfig = platform == 'macos' || simulator
           ? Directory.systemTemp.createTempSync('interconnect-arch-')
@@ -544,11 +522,7 @@ Future<void> main(List<String> arguments) async {
             if (platform == 'ios' && !simulator) '--no-codesign',
           ],
           cwd: application,
-          environment: {
-            if (config != null) 'XCODE_XCCONFIG_FILE': config.path,
-            if (platform == 'windows' && ffmpegRoot != null)
-              'MEDIA_CODEC_FFMPEG_ROOT': ffmpegRoot,
-          },
+          environment: {if (config != null) 'XCODE_XCCONFIG_FILE': config.path},
         );
       } finally {
         appleConfig?.deleteSync(recursive: true);
@@ -567,7 +541,7 @@ Future<void> main(List<String> arguments) async {
     if (!bundle.existsSync()) {
       throw StateError('Missing final application at ${bundle.path}');
     }
-    if (!verifyOnly) installMediaNotices(bundle, platform, arch, ffmpegRoot);
+    if (!verifyOnly) installMediaNotices(bundle, platform, arch);
     switch (platform) {
       case 'windows':
         verifyWindows(bundle, arch);

@@ -83,39 +83,22 @@ runs:
       run: python -m pip install meson==1.12.1 ninja==1.13.2
     # Flutter 3.50.1 has native ARM64 engines and Dart SDKs on these hosts,
     # but the stable archive indexes only advertise x64 desktop bundles.
-    - name: Cache the native ARM64 Flutter SDK
-      id: flutter-arm64
+    - name: Check out the pinned ARM64 Flutter SDK
       if: runner.arch == 'ARM64' && runner.os != 'macOS'
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
-        path: ${{ runner.temp }}/flutter-arm64
-        key: flutter-native-${{ runner.os }}-${{ runner.arch }}-ae9b586f34a8443573f82ef57c3bf914a908cbf7
-    - name: Prepare the native ARM64 Flutter SDK
+        repository: flutter/flutter
+        ref: refs/tags/3.50.1
+        path: .dart_tool/flutter-arm64
+        persist-credentials: false
+    - name: Use the native ARM64 Flutter SDK
       if: runner.arch == 'ARM64' && runner.os != 'macOS'
       shell: bash
-      env:
-        FLUTTER_HOST_ARCH: arm64
-        SDK_CACHE_HIT: ${{ steps.flutter-arm64.outputs.cache-hit }}
       run: |
-        sdk="$RUNNER_TEMP/flutter-arm64"
-        if [[ "$RUNNER_OS" == Windows ]]; then sdk="$(cygpath -u "$sdk")"; fi
-        if [[ "$SDK_CACHE_HIT" != true ]]; then
-          git clone --depth 1 --branch 3.50.1 https://github.com/flutter/flutter.git "$sdk"
-        fi
+        sdk="$GITHUB_WORKSPACE/.dart_tool/flutter-arm64"
         test "$(git -C "$sdk" rev-parse HEAD)" = ae9b586f34a8443573f82ef57c3bf914a908cbf7
-        "$sdk/bin/flutter" --version
-        if [[ "$RUNNER_OS" == Windows ]]; then sdk="$(cygpath -w "$sdk")"; fi
         echo "$sdk/bin" >> "$GITHUB_PATH"
-    - name: Set the ARM64 pub cache location
-      if: runner.arch == 'ARM64' && runner.os != 'macOS'
-      shell: bash
-      run: echo "PUB_CACHE=$RUNNER_TEMP/flutter-arm64-pub" >> "$GITHUB_ENV"
-    - name: Cache ARM64 Dart and Flutter packages
-      if: runner.arch == 'ARM64' && runner.os != 'macOS'
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: ${{ runner.temp }}/flutter-arm64-pub
-        key: flutter-native-pub-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock') }}
+        echo 'FLUTTER_HOST_ARCH=arm64' >> "$GITHUB_ENV"
     - if: runner.arch != 'ARM64' || runner.os == 'macOS'
       uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
       with:

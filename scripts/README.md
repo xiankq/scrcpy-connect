@@ -28,4 +28,4 @@ Android 和桌面构建都接受 `--update-feed <HTTPS 地址>`，给应用配�
 
 桌面打包可用 `--verify-only` 复用已构建的同架构应用。Linux 发布格式需要 `dpkg-deb`、`rpmbuild`、`file`、`desktop-file-validate`、`appstreamcli` 和 `squashfs-tools`。Windows 安装器由 Inno Setup 的 `ISCC.exe` 生成。macOS 试打包直接生成 DMG。
 
-Windows 构建单独计时 FFmpeg 和 dav1d 的准备阶段。排查编译耗时时可用 `build_host.dart windows --verbose` 查看 Flutter、CMake 和媒体 Rust 目标的构建日志。
+排查编译耗时时可用 `build_host.dart windows --verbose` 查看 Flutter、CMake、FFmpeg 和媒体 Rust 的原生构建日志。
