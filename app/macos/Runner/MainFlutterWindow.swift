@@ -9,9 +9,19 @@ class MainFlutterWindow: NSWindow {
   private var environmentEvents: WindowEnvironmentEvents?
   private var platformMethods: FlutterMethodChannel?
   private var windowChrome: DesktopWindowChrome?
+  private let fileShare = WindowFileShare()
 
   override func awakeFromNib() {
-    let flutterViewController = FlutterViewController()
+    let engine = FlutterEngine(name: "Interconnect", project: nil)
+    let flutterViewController = FlutterViewController(engine: engine, nibName: nil, bundle: nil)
+    // Opt in before the engine starts, then keep the primary controller on the
+    // implicit view used by Flutter 3.50's macOS accessibility bridge.
+    let enableMultiView = NSSelectorFromString("enableMultiView")
+    if engine.responds(to: enableMultiView) {
+      engine.viewController = nil
+      _ = engine.perform(enableMultiView)
+      engine.viewController = flutterViewController
+    }
     let windowFrame = self.frame
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
@@ -43,6 +53,10 @@ class MainFlutterWindow: NSWindow {
         ])
         return
       }
+      if call.method == "documents.shareFile" {
+        self.fileShare.show(call.arguments, result: result)
+        return
+      }
       guard call.method == "window.openIndependent" else {
         result(FlutterMethodNotImplemented)
         return
@@ -71,6 +85,50 @@ class MainFlutterWindow: NSWindow {
       services,
       .OBJC_ASSOCIATION_RETAIN_NONATOMIC
     )
+  }
+}
+
+/// The share_plus macOS picker uses the implicit view. Choose the caller's
+/// actual view when the engine has several windows.
+private final class WindowFileShare: NSObject, NSSharingServicePickerDelegate {
+  private var picker: NSSharingServicePicker?
+  private var completion: FlutterResult?
+
+  func show(_ arguments: Any?, result: @escaping FlutterResult) {
+    guard let data = arguments as? [String: Any],
+      let path = data["path"] as? String,
+      let viewId = data["viewId"] as? NSNumber,
+      let window = NSApp.keyWindow,
+      let controller = window.contentViewController as? FlutterViewController,
+      controller.viewIdentifier == viewId.int64Value else {
+      result(FlutterError(code: "window_unavailable", message: "请切回原窗口后再分享。", details: nil))
+      return
+    }
+    guard picker == nil else {
+      result(FlutterError(code: "share_in_progress", message: "请先关闭已打开的系统分享面板。", details: nil))
+      return
+    }
+    let view = controller.view
+    let bounds = view.bounds
+    let origin = NSRect(
+      x: data["x"] as? Double ?? bounds.midX,
+      y: data["y"] as? Double ?? bounds.midY,
+      width: data["width"] as? Double ?? 1,
+      height: data["height"] as? Double ?? 1)
+    let picker = NSSharingServicePicker(items: [URL(fileURLWithPath: path)])
+    picker.delegate = self
+    self.picker = picker
+    completion = result
+    picker.show(relativeTo: origin, of: view, preferredEdge: .maxY)
+  }
+
+  func sharingServicePicker(
+    _ sharingServicePicker: NSSharingServicePicker, didChoose service: NSSharingService?
+  ) {
+    let result = completion
+    completion = nil
+    picker = nil
+    result?(["selected": service != nil])
   }
 }
 
@@ -133,17 +191,15 @@ private final class DesktopWindowChrome {
   private var dragOffset: NSPoint?
   private var dragLocation = NSPoint.zero
   private var dragging = false
+  private static let compactWidth: CGFloat = 600
 
   init(window: NSWindow, messenger: FlutterBinaryMessenger) {
-    window.styleMask.insert(.fullSizeContentView)
-    window.titleVisibility = .hidden
-    window.titlebarAppearsTransparent = true
-    window.titlebarSeparatorStyle = .none
     window.contentMinSize = NSSize(width: 400, height: 300)
     window.isMovableByWindowBackground = false
     window.collectionBehavior.insert(.fullScreenPrimary)
     methods = FlutterMethodChannel(
       name: "dev.scrcpyconnect/desktop_window", binaryMessenger: messenger)
+    Self.updateChrome(window)
     methods.setMethodCallHandler { [weak self, weak window] call, result in
       guard let window else {
         result(FlutterError(code: "unavailable", message: "Window is closed", details: nil))
@@ -160,6 +216,9 @@ private final class DesktopWindowChrome {
         case "None": break
         default: window.performZoom(nil)
         }
+      case "activate":
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        window.makeKeyAndOrderFront(nil)
       case "move":
         if let self, self.dragOffset != nil, !window.styleMask.contains(.fullScreen) {
           self.dragging = true
@@ -193,14 +252,44 @@ private final class DesktopWindowChrome {
       }
       return event
     }
-    observers = [NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification]
+    observers = [
+      NSWindow.didResizeNotification,
+      NSWindow.didEnterFullScreenNotification,
+      NSWindow.didExitFullScreenNotification,
+    ]
       .map { name in
         NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) {
           [weak self, weak window] _ in
           guard let window else { return }
-          self?.methods.invokeMethod("layoutChanged", arguments: Self.layout(of: window))
+          Self.updateChrome(window)
+          self?.publishLayout(window)
         }
       }
+  }
+
+  private var lastLayout: [String: CGFloat]?
+
+  private func publishLayout(_ window: NSWindow) {
+    let layout = Self.layout(of: window)
+    guard layout != lastLayout else { return }
+    lastLayout = layout
+    methods.invokeMethod("layoutChanged", arguments: layout)
+  }
+
+  private static func updateChrome(_ window: NSWindow) {
+    guard !window.styleMask.contains(.fullScreen) else { return }
+    let immersive = window.frame.width >= compactWidth
+    guard immersive != window.styleMask.contains(.fullSizeContentView) else { return }
+    // Set the appearance before changing the content rectangle, which can
+    // synchronously emit another resize notification.
+    window.titleVisibility = immersive ? .hidden : .visible
+    window.titlebarAppearsTransparent = immersive
+    window.titlebarSeparatorStyle = immersive ? .none : .automatic
+    if immersive {
+      window.styleMask.insert(.fullSizeContentView)
+    } else {
+      window.styleMask.remove(.fullSizeContentView)
+    }
   }
 
   private func move(_ window: NSWindow) {
@@ -210,7 +299,8 @@ private final class DesktopWindowChrome {
   }
 
   private static func layout(of window: NSWindow) -> [String: CGFloat] {
-    guard !window.styleMask.contains(.fullScreen), let content = window.contentView else {
+    guard !window.styleMask.contains(.fullScreen),
+      window.styleMask.contains(.fullSizeContentView), let content = window.contentView else {
       return ["left": 0, "right": 0, "top": 0]
     }
     let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton]

@@ -1,5 +1,6 @@
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
+import 'package:scrcpy_connect/router/mobile_remote_capabilities.dart';
 import 'package:scrcpy_connect/router/remote_windows.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:material_ui/material_ui.dart';
@@ -13,6 +14,7 @@ class RouteErrorPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pane = RemoteWindowScope.of(context)?.pane;
+    final mobile = MobileRemoteScope.maybeOf(context);
     return PageFrame(
       title: '暂时无法打开',
       child: PageChromeBody(
@@ -26,10 +28,12 @@ class RouteErrorPage extends StatelessWidget {
               if (onRetry != null)
                 OutlinedButton(onPressed: onRetry, child: const Text('重新读取')),
               FilledButton(
-                onPressed: pane == null
+                onPressed: mobile != null
+                    ? () => mobile.close()
+                    : pane == null
                     ? () => const DevicesRoute().go(context)
                     : () => RemoteWindows.maybeOf(context)?.remove(pane),
-                child: Text(pane == null ? '返回设备列表' : '关闭窗口'),
+                child: Text(pane == null && mobile == null ? '返回设备列表' : '关闭窗口'),
               ),
             ],
           ),

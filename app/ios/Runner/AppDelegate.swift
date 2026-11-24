@@ -5,6 +5,11 @@ import UserNotifications
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private let engineGroup = FlutterEngineGroup(name: "scrcpy_connect", project: nil)
+  private var workbenchEngine: FlutterEngine?
+  private var workbenchSession: UISceneSession?
+  private var workbenchMessenger: FlutterBinaryMessenger?
+  private var remoteSessions: [String: UISceneSession] = [:]
+  private var windowRequests: [String: [FlutterResult]] = [:]
   private var environmentEventHandlers: [ObjectIdentifier: WindowEnvironmentEvents] = [:]
 
   override func application(
@@ -26,11 +31,15 @@ import UserNotifications
   }
 
   func makeEngine(initialRoute: String?) -> FlutterEngine {
+    if initialRoute == nil, let engine = workbenchEngine {
+      return engine
+    }
     let engine = engineGroup.makeEngine(
       withEntrypoint: nil,
       libraryURI: nil,
       initialRoute: initialRoute)
     GeneratedPluginRegistrant.register(with: engine)
+    if initialRoute == nil { workbenchEngine = engine }
     return engine
   }
 
@@ -41,6 +50,24 @@ import UserNotifications
       registry: engine,
       windowProvider: { [weak window] in window },
       windowIdProvider: { windowId })
+  }
+
+  func registerScene(session: UISceneSession, engine: FlutterEngine, windowId: String?) {
+    guard let id = windowId else {
+      workbenchSession = session
+      workbenchMessenger = engine.binaryMessenger
+      return
+    }
+    remoteSessions[id] = session
+    let requests = windowRequests.removeValue(forKey: id) ?? []
+    for result in requests { result(["supported": true, "windowId": id]) }
+  }
+
+  func remoteSceneDestroyed(_ id: String) {
+    remoteSessions.removeValue(forKey: id)
+    guard let messenger = workbenchMessenger else { return }
+    FlutterMethodChannel(name: "dev.scrcpyconnect/window_lifecycle", binaryMessenger: messenger)
+      .invokeMethod("destroyed", arguments: id)
   }
 
   private func registerPlatformChannels(
@@ -79,11 +106,25 @@ import UserNotifications
         result(environment)
         return
       }
-      guard call.method == "window.openIndependent" else {
+      switch call.method {
+      case "window.openIndependent":
+        self.openIndependentScene(call, result: result)
+      case "window.showWorkbench":
+        let application = UIApplication.shared
+        let session = self.workbenchSession.flatMap {
+          application.openSessions.contains($0) ? $0 : nil
+        }
+        application.requestSceneSessionActivation(session, userActivity: nil, options: nil)
+        result(nil)
+      case "window.closeIndependent":
+        if let id = (call.arguments as? [String: Any])?["windowId"] as? String,
+          let session = self.remoteSessions[id] {
+          UIApplication.shared.requestSceneSessionDestruction(session, options: nil)
+        }
+        result(nil)
+      default:
         result(FlutterMethodNotImplemented)
-        return
       }
-      self.openIndependentScene(call, result: result)
     }
     if let registrar = registry.registrar(forPlugin: "SystemVisualPreferences") {
       SystemVisualPreferences.register(with: registrar)
@@ -122,35 +163,41 @@ import UserNotifications
   }
 
   private func openIndependentScene(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let app = UIApplication.shared
+    guard UIDevice.current.userInterfaceIdiom == .pad,
+      app.supportsMultipleScenes else {
+      result(["supported": false, "reason": "当前系统使用应用内控制页。"])
+      return
+    }
     guard let arguments = call.arguments as? [String: Any],
-      let deviceId = arguments["deviceId"] as? String,
-      let packageName = arguments["packageName"] as? String,
-      let sessionId = arguments["sessionId"] as? String,
+      let id = arguments["windowId"] as? String,
       let initialRoute = arguments["initialRoute"] as? String,
-      !deviceId.isEmpty, !packageName.isEmpty, !sessionId.isEmpty,
-      !initialRoute.isEmpty else {
+      !id.isEmpty, !initialRoute.isEmpty else {
       result(FlutterError(code: "invalid_window_request", message: "独立窗口参数不完整。", details: nil))
       return
     }
-    let windowId = UUID().uuidString
+    if let session = remoteSessions[id] {
+      app.requestSceneSessionActivation(session, userActivity: nil, options: nil)
+      result(["supported": true, "windowId": id])
+      return
+    }
+    if windowRequests[id] != nil {
+      windowRequests[id]?.append(result)
+      return
+    }
+    windowRequests[id] = [result]
     let activity = NSUserActivity(activityType: "dev.scrcpyconnect.remote-window")
-    activity.userInfo = [
-      "initialRoute": initialRoute,
-      "windowId": windowId,
-    ]
-    UIApplication.shared.requestSceneSessionActivation(
-      nil, userActivity: activity, options: nil) { error in
-        DispatchQueue.main.async {
-          if error != nil {
-            result([
-              "supported": false,
-              "reason": "系统拒绝创建独立窗口，已回退到当前窗口",
-            ])
-          } else {
-            result(["supported": true, "windowId": windowId])
-          }
+    activity.title = arguments["title"] as? String
+    activity.targetContentIdentifier = id
+    activity.userInfo = ["initialRoute": initialRoute, "windowId": id]
+    app.requestSceneSessionActivation(nil, userActivity: activity, options: nil) { [weak self] _ in
+      DispatchQueue.main.async {
+        let requests = self?.windowRequests.removeValue(forKey: id) ?? []
+        for reply in requests {
+          reply(["supported": false, "reason": "当前系统拒绝创建远控窗口。"])
         }
       }
+    }
   }
 
   private static func activeWindow() -> UIWindow? {

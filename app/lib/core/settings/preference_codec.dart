@@ -16,6 +16,9 @@ abstract final class PreferenceCodec {
         appearance: values['appearance'] == null
             ? null
             : Appearance.values.byName(values['appearance']! as String),
+        glassEffects: values['glassEffects'] == null
+            ? null
+            : GlassEffects.values.byName(values['glassEffects']! as String),
         backgroundKeepAlive: values['backgroundKeepAlive'] as bool?,
         notificationAlerts: values['notificationAlerts'] as bool?,
         callAlerts: values['callAlerts'] as bool?,
@@ -97,6 +100,7 @@ abstract final class PreferenceCodec {
   static Map<String, Object?> encode(Preferences values) => encodeChanges(
     PreferenceChanges(
       appearance: values.appearance,
+      glassEffects: values.glassEffects,
       backgroundKeepAlive: values.backgroundKeepAlive,
       notificationAlerts: values.notificationAlerts,
       callAlerts: values.callAlerts,
@@ -113,6 +117,7 @@ abstract final class PreferenceCodec {
 
   static Map<String, Object?> encodeChanges(PreferenceChanges values) => {
     if (values.appearance case final value?) 'appearance': value.name,
+    if (values.glassEffects case final value?) 'glassEffects': value.name,
     'backgroundKeepAlive': ?values.backgroundKeepAlive,
     'notificationAlerts': ?values.notificationAlerts,
     'callAlerts': ?values.callAlerts,

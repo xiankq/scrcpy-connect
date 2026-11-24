@@ -57,14 +57,7 @@ class RunningApps extends HookConsumerWidget {
         apps: apps,
         loading: loading,
         onOpen: (app) async {
-          await openPhoneApp(
-            context,
-            ref,
-            device,
-            app,
-            changeMode: true,
-            existingTask: true,
-          );
+          await openPhoneApp(context, ref, device, app);
           if (context.mounted) refresh();
         },
         actionLabel: '全部应用',

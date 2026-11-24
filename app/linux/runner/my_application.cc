@@ -127,9 +127,12 @@ void register_system_typography(FlView* view) {
 
 struct DesktopWindow {
   GtkWindow* window;
+  GtkWidget* titlebar;
   GtkWidget* start;
   GtkWidget* end;
 };
+
+constexpr int kCompactWidth = 600;
 
 FlValue* desktop_window_layout(const DesktopWindow* chrome) {
   GtkRequisition start = {}, end = {};
@@ -158,7 +161,9 @@ void handle_desktop_window(FlMethodChannel*, FlMethodCall* call, gpointer data) 
     fl_method_call_respond_success(call, layout, nullptr);
     return;
   }
-  if (g_str_equal(method, "toggleMaximized")) {
+  if (g_str_equal(method, "activate")) {
+    gtk_window_present(window);
+  } else if (g_str_equal(method, "toggleMaximized")) {
     if (gtk_window_is_maximized(window)) {
       gtk_window_unmaximize(window);
     } else {
@@ -187,8 +192,24 @@ void publish_desktop_window_layout(FlMethodChannel* channel) {
                                    nullptr, nullptr);
 }
 
+void update_desktop_chrome(FlMethodChannel* channel, int width) {
+  auto* chrome = static_cast<DesktopWindow*>(
+      g_object_get_data(G_OBJECT(channel), "desktop-window"));
+  auto* surface = gtk_widget_get_window(GTK_WIDGET(chrome->window));
+  const bool fullscreen = surface != nullptr &&
+      (gdk_window_get_state(surface) & GDK_WINDOW_STATE_FULLSCREEN);
+  const bool immersive = !fullscreen && width >= kCompactWidth;
+  const bool title = !fullscreen && !immersive;
+  if (gtk_widget_get_visible(chrome->titlebar) == title &&
+      gtk_widget_get_visible(chrome->start) == immersive) return;
+  gtk_widget_set_visible(chrome->titlebar, title);
+  gtk_widget_set_visible(chrome->start, immersive);
+  gtk_widget_set_visible(chrome->end, immersive);
+  publish_desktop_window_layout(channel);
+}
+
 void register_desktop_window(FlView* view, GtkWidget* start = nullptr,
-                             GtkWidget* end = nullptr) {
+                             GtkWidget* end = nullptr, GtkWidget* titlebar = nullptr) {
   auto* window = GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(view)));
   gtk_window_set_title(window, APP_DISPLAY_NAME);
   gtk_widget_set_size_request(GTK_WIDGET(view), 400, 300);
@@ -197,7 +218,7 @@ void register_desktop_window(FlView* view, GtkWidget* start = nullptr,
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
   auto* channel = fl_method_channel_new(
       messenger, "dev.scrcpyconnect/desktop_window", FL_METHOD_CODEC(codec));
-  auto* chrome = new DesktopWindow{window, start, end};
+  auto* chrome = new DesktopWindow{window, titlebar, start, end};
   g_object_set_data_full(G_OBJECT(channel), "desktop-window", chrome,
                          +[](gpointer data) {
                            delete static_cast<DesktopWindow*>(data);
@@ -205,6 +226,12 @@ void register_desktop_window(FlView* view, GtkWidget* start = nullptr,
   fl_method_channel_set_method_call_handler(channel, handle_desktop_window,
                                             chrome, nullptr);
   if (start != nullptr) {
+    g_signal_connect_object(
+        view, "size-allocate",
+        G_CALLBACK(+[](GtkWidget*, GtkAllocation* allocation, FlMethodChannel* channel) {
+          update_desktop_chrome(channel, allocation->width);
+        }),
+        channel, static_cast<GConnectFlags>(0));
     for (auto* header : {start, end}) {
       g_signal_connect_object(
           header, "size-allocate",
@@ -215,14 +242,9 @@ void register_desktop_window(FlView* view, GtkWidget* start = nullptr,
     }
     g_signal_connect_object(
         window, "window-state-event",
-        G_CALLBACK(+[](GtkWidget*, GdkEventWindowState* event,
+        G_CALLBACK(+[](GtkWidget* window, GdkEventWindowState*,
                        FlMethodChannel* channel) -> gboolean {
-          auto* chrome = static_cast<DesktopWindow*>(
-              g_object_get_data(G_OBJECT(channel), "desktop-window"));
-          const bool visible = !(event->new_window_state & GDK_WINDOW_STATE_FULLSCREEN);
-          gtk_widget_set_visible(chrome->start, visible);
-          gtk_widget_set_visible(chrome->end, visible);
-          publish_desktop_window_layout(channel);
+          update_desktop_chrome(channel, gtk_widget_get_allocated_width(window));
           return FALSE;
         }),
         channel, static_cast<GConnectFlags>(0));
@@ -302,9 +324,13 @@ static void my_application_activate(GApplication* application) {
   // 背景默认为黑色；需要透明背景时可改为 #00000000。
   gdk_rgba_parse(&background_color, "#000000");
   fl_view_set_background_color(view, &background_color);
-  // Let GTK keep client decorations and resize borders while Flutter paints
-  // beneath the themed controls in the two top corners.
-  gtk_window_set_titlebar(window, gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0));
+  // Install the GTK titlebar before realization. Wide windows hide it and
+  // show the same themed controls above the Flutter surface instead.
+  auto* titlebar = gtk_header_bar_new();
+  gtk_header_bar_set_title(GTK_HEADER_BAR(titlebar), APP_DISPLAY_NAME);
+  gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(titlebar), TRUE);
+  gtk_widget_set_no_show_all(titlebar, TRUE);
+  gtk_window_set_titlebar(window, titlebar);
   auto* overlay = GTK_OVERLAY(gtk_overlay_new());
   gtk_container_add(GTK_CONTAINER(overlay), GTK_WIDGET(view));
   auto* start = add_window_buttons(overlay, GTK_ALIGN_START);
@@ -319,7 +345,7 @@ static void my_application_activate(GApplication* application) {
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(overlay));
   gtk_widget_show(GTK_WIDGET(view));
   gtk_widget_show(GTK_WIDGET(overlay));
-  register_desktop_window(view, start, end);
+  register_desktop_window(view, start, end, titlebar);
 
   // Flutter 开始绘制后显示窗口；视图必须先实现，才能开始渲染。
   g_signal_connect_swapped(view, "first-frame", G_CALLBACK(first_frame_cb),

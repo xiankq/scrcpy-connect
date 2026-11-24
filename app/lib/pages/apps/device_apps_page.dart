@@ -25,30 +25,15 @@ class DeviceAppsPage extends HookConsumerWidget {
     final provider = installedDeviceAppsProvider(device.id);
     final result = ref.watch(provider);
     void refresh() => ref.invalidate(provider);
-    final searchBar = SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.all(DesignTokens.spacingMd),
-        child: TextField(
-          controller: query,
-          decoration: const InputDecoration(
-            hintText: '搜索应用',
-            prefixIcon: Icon(
-              AppIcons.search,
-              size: DesignTokens.componentIconActionSize,
-            ),
-          ),
-        ),
-      ),
-    );
     return PageFrame(
       title: '全部应用',
+      search: (controller: query, hint: '搜索应用'),
       child: AsyncContent(
         loading: result.isLoading,
         data: result.value,
         loadingPlaceholder: CustomScrollView(
           slivers: [
             const PageChromeSliver(),
-            searchBar,
             const SliverPadding(
               padding: EdgeInsets.symmetric(
                 horizontal: DesignTokens.spacingMd,
@@ -84,7 +69,6 @@ class DeviceAppsPage extends HookConsumerWidget {
           return CustomScrollView(
             slivers: [
               const PageChromeSliver(),
-              searchBar,
               if (apps.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
@@ -128,24 +112,6 @@ class DeviceAppsPage extends HookConsumerWidget {
                           ),
                           title: Text(app.name),
                           onTap: () => openPhoneApp(context, ref, device, app),
-                          onLongPress: () => openPhoneApp(
-                            context,
-                            ref,
-                            device,
-                            app,
-                            changeMode: true,
-                          ),
-                          trailing: IconButton(
-                            tooltip: '更改打开方式',
-                            icon: const Icon(AppIcons.more),
-                            onPressed: () => openPhoneApp(
-                              context,
-                              ref,
-                              device,
-                              app,
-                              changeMode: true,
-                            ),
-                          ),
                         ),
                       );
                     },

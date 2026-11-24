@@ -8,34 +8,26 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/control/app_open_claims_provider.dart';
 import 'package:scrcpy_connect/core/media/media_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
-import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
-import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/media/video_sessions.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/router/remote_windows.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/dialogs.dart';
+import 'package:scrcpy_connect/widgets/dialogs.dart' show feedback;
 import 'package:scrcpy_connect/widgets/overlays.dart';
 
 Future<void> openPhoneApp(
   BuildContext context,
   WidgetRef ref,
   DeviceSnapshot device,
-  DeviceApp app, {
-  bool changeMode = false,
-  bool existingTask = false,
-}) async {
+  DeviceApp app,
+) async {
   final deviceId = device.id;
   final package = app.packageName;
   final videos = ref.read(videoSessionsProvider);
-  final settings = ref.read(settingsManagementProvider);
   final claims = ref.read(appOpenClaimsProvider);
   bool ownsScope() =>
-      context.mounted &&
-      !claims.closed &&
-      identical(ref.read(videoSessionsProvider), videos) &&
-      identical(ref.read(settingsManagementProvider), settings);
+      !claims.closed && identical(ref.read(videoSessionsProvider), videos);
   final release = claims.claim(deviceId, package);
   if (release == null) return;
   try {
@@ -66,7 +58,7 @@ Future<void> openPhoneApp(
       appName: app.name,
     );
 
-    var list = await sessions();
+    final list = await sessions();
     if (!context.mounted || !ownsScope()) return;
     final unknown = pending(list);
     if (unknown != null) {
@@ -74,62 +66,29 @@ Future<void> openPhoneApp(
       return;
     }
     final active = retained(list);
-    if (active != null && !changeMode) {
-      await openRecord(active);
-      return;
-    }
-    final api = int.tryParse(
-      ((ref
-                      .read(deviceListProvider)
-                      .devices
-                      .where((item) => item.id == device.id)
-                      .firstOrNull ??
-                  device)
-              .apiLevel
-              ?.toString() ??
-          ''),
+    final api =
+        ref
+            .read(deviceListProvider)
+            .devices
+            .where((item) => item.id == deviceId)
+            .firstOrNull
+            ?.apiLevel ??
+        device.apiLevel;
+    final mode = await _chooseMode(
+      context,
+      app,
+      hasIndependentWindow: active != null,
+      windowAvailable: active != null || api == null || api >= 29,
     );
-    var mode = ref
-        .read(preferencesProvider)
-        .values
-        .appOpenModes[deviceId]?[package];
-    final choose =
-        changeMode ||
-        mode == null ||
-        mode == AppOpenMode.window && (api == null || api < 29);
-    if (choose) {
-      mode = await _chooseMode(
-        context,
-        app,
-        windowAvailable: api == null || api >= 29,
-      );
-      if (mode == null || !context.mounted || !ownsScope()) return;
-      list = await sessions();
-      if (!context.mounted || !ownsScope()) return;
-      final unknown = pending(list);
-      if (unknown != null) {
-        await openRecord(unknown);
-        return;
-      }
-    }
-    final current = retained(list);
-    if ((current != null && mode == AppOpenMode.phone ||
-            mode == AppOpenMode.window && existingTask && current == null) &&
-        !await confirm(
-          context,
-          '切换应用打开方式？',
-          '这可能移动手机上已有的应用任务，原画面可能随之改变。',
-          action: '继续打开',
-        )) {
+    if (mode == null || !context.mounted || !ownsScope()) return;
+    final latest = await sessions();
+    if (!context.mounted || !ownsScope()) return;
+    final unverified = pending(latest);
+    if (unverified != null) {
+      await openRecord(unverified);
       return;
     }
-    if (!context.mounted || !ownsScope()) return;
-    if (choose) {
-      await ref
-          .read(preferencesProvider.notifier)
-          .rememberAppOpenMode(deviceId, package, mode);
-      if (!context.mounted || !ownsScope()) return;
-    }
+    final current = retained(latest);
     if (current != null && mode == AppOpenMode.window) {
       await openRecord(current);
       return;
@@ -141,7 +100,7 @@ Future<void> openPhoneApp(
         packageName: package,
       ));
       if (pane?.close case final close?) {
-        if (!await close()) return;
+        if (!await close(movingToPhone: true)) return;
       } else {
         await videos.stopVideo(ControlTarget(sessionId: current.sessionId));
         if (pane != null && windows?.mounted == true) windows!.remove(pane);
@@ -170,6 +129,7 @@ Future<void> openPhoneApp(
 Future<AppOpenMode?> _chooseMode(
   BuildContext context,
   DeviceApp app, {
+  required bool hasIndependentWindow,
   required bool windowAvailable,
 }) => showAppModalSheet<AppOpenMode>(
   context: context,
@@ -186,7 +146,7 @@ Future<AppOpenMode?> _chooseMode(
             const SizedBox(height: DesignTokens.spacingSm),
             FilledButton(
               onPressed: () => Navigator.pop(context, AppOpenMode.phone),
-              child: const Text('在手机屏幕打开'),
+              child: Text(hasIndependentWindow ? '移回手机屏幕' : '在手机屏幕中打开'),
             ),
             const SizedBox(height: DesignTokens.spacingSm),
             Tooltip(
@@ -195,7 +155,7 @@ Future<AppOpenMode?> _chooseMode(
                 onPressed: windowAvailable
                     ? () => Navigator.pop(context, AppOpenMode.window)
                     : null,
-                child: const Text('打开独立应用画面'),
+                child: Text(hasIndependentWindow ? '切回独立应用' : '打开独立应用画面'),
               ),
             ),
             const SizedBox(height: DesignTokens.spacingXs),

@@ -29,6 +29,7 @@ class ClipboardSyncNotifier extends _$ClipboardSyncNotifier {
   late _ClipboardCoordinator _coordinator;
   bool _foreground = false;
   bool _focused = true;
+  Object? _focusedWindow;
 
   @override
   ClipboardSyncState build() {
@@ -117,7 +118,7 @@ class ClipboardSyncNotifier extends _$ClipboardSyncNotifier {
     ref.onDispose(coordinator.dispose);
     scheduleMicrotask(() {
       if (current()) {
-        coordinator.setVisibility(foreground: _foreground, focused: _focused);
+        _applyVisibility();
       }
     });
     return const ClipboardSyncState();
@@ -126,8 +127,23 @@ class ClipboardSyncNotifier extends _$ClipboardSyncNotifier {
   void setVisibility({bool? foreground, bool? focused}) {
     if (foreground != null) _foreground = foreground;
     if (focused != null) _focused = focused;
-    _coordinator.setVisibility(foreground: foreground, focused: focused);
+    _applyVisibility();
   }
+
+  void setIndependentWindowFocus(Object window, bool focused) {
+    if (!ref.mounted) return;
+    if (focused) {
+      _focusedWindow = window;
+    } else if (_focusedWindow == window) {
+      _focusedWindow = null;
+    }
+    _applyVisibility();
+  }
+
+  void _applyVisibility() => _coordinator.setVisibility(
+    foreground: _foreground || _focusedWindow != null,
+    focused: _focused || _focusedWindow != null,
+  );
 }
 
 enum _ClipboardOperation { read, write, send }

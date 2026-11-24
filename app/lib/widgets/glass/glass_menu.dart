@@ -8,6 +8,7 @@ import 'package:scrcpy_connect/widgets/glass/glass_action_bar.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_press_feedback.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 
 /// 独立圆键使用自己的采样层，保留控件轮廓与按压高光。
 class GlassToolbarIconButton extends StatelessWidget {
@@ -16,6 +17,7 @@ class GlassToolbarIconButton extends StatelessWidget {
     required this.icon,
     required this.onPressed,
     required this.semanticLabel,
+    this.focusNode,
     this.variant = GlassVariant.regular,
     this.size = DesignTokens.componentIconButtonSize,
     this.iconSize = DesignTokens.componentIconSize,
@@ -24,6 +26,7 @@ class GlassToolbarIconButton extends StatelessWidget {
   final Widget icon;
   final VoidCallback? onPressed;
   final String semanticLabel;
+  final FocusNode? focusNode;
   final GlassVariant variant;
   final double size;
   final double iconSize;
@@ -31,8 +34,9 @@ class GlassToolbarIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final reduceMotion = GlassMaterial.reduceMotion(context);
-    return liquid.GlassIconButton(
+    final opaque = opaqueGlass(context);
+    final animate = !GlassMaterial.reduceMotion(context) && !opaque;
+    return liquid.GlassButton(
       icon: IconTheme(
         data: IconThemeData(
           color: onPressed == null
@@ -42,17 +46,23 @@ class GlassToolbarIconButton extends StatelessWidget {
         ),
         child: icon,
       ),
-      onPressed: onPressed,
-      semanticLabel: semanticLabel,
-      size: size,
+      onTap: onPressed ?? () {},
+      enabled: onPressed != null,
+      label: semanticLabel,
+      focusNode: focusNode,
+      width: size,
+      height: size,
       iconSize: iconSize,
-      settings: GlassMaterial.settings(context, variant: variant),
-      quality: GlassMaterial.quality(context),
+      settings: !opaque && variant == GlassVariant.clear
+          ? GlassMaterial.settings(context, variant: variant)
+          : null,
+      quality: opaque ? null : GlassMaterial.quality(context),
       useOwnLayer: true,
-      interactionScale: reduceMotion
-          ? 1
-          : DesignTokens.componentGlassInteractionScale,
-      anchorStretch: !reduceMotion,
+      interactionScale: animate ? null : 1,
+      stretch: animate ? .5 : 0,
+      anchorStretch: animate,
+      surfaceStyle: opaque ? liquid.GlassSurfaceStyle.solid : null,
+      color: opaque ? theme.colorScheme.surface : null,
       persistPressOnDrag: false,
     );
   }
@@ -145,6 +155,7 @@ class GlassMenuButton extends StatelessWidget {
     };
     if (label != null ||
         reducedMotion ||
+        opaqueGlass(context) ||
         !ImageFilter.isShaderFilterSupported) {
       // 后端的“瞬时”形变仍使用空间弹簧。
       // 减少动态效果或不支持形变时保留框架菜单生命周期，材料仍交给自适应玻璃后端。
@@ -236,11 +247,10 @@ class GlassMenuButton extends StatelessWidget {
         menuPadding: const EdgeInsets.all(DesignTokens.spacingMd),
         menuBorderRadius: DesignTokens.roundedLg,
         itemBorderRadius: DesignTokens.roundedMd,
-        settings: GlassMaterial.settings(context, variant: variant),
+        settings: variant == GlassVariant.clear
+            ? GlassMaterial.settings(context, variant: variant)
+            : null,
         quality: GlassMaterial.quality(context),
-        stretch: reducedMotion
-            ? 0
-            : DesignTokens.componentGlassInteractionStretch,
         triggerBuilder: (context, toggle) => trigger(toggle),
         items: [
           for (final action in actions)

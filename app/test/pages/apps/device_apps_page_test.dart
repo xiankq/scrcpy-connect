@@ -30,7 +30,8 @@ void main() {
       ),
     );
 
-    expect(find.byType(TextField), findsOneWidget);
+    expect(find.byType(EditableText), findsNothing);
+    expect(find.byKey(const ValueKey('page-search-open')), findsOneWidget);
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.byType(SkeletonBlock), findsNothing);
     result.complete([]);
@@ -77,7 +78,9 @@ void main() {
       expect(find.bySemanticsLabel('正在读取'), findsOneWidget);
       expect(find.text('没有可显示的应用'), findsNothing);
 
-      await tester.enterText(find.byType(TextField), '相机');
+      await tester.tap(find.byKey(const ValueKey('page-search-open')));
+      await tester.pump();
+      await tester.enterText(find.byType(EditableText), '相机');
       result.complete([]);
       await tester.pumpAndSettle();
 

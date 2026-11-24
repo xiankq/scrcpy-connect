@@ -459,7 +459,7 @@ $VideoQualityCopyWith<$Res>? get quality {
 /// @nodoc
 mixin _$VideoSessionPlan {
 
- String get deviceId; String? get sessionId; String? get name; String? get packageName; VideoDisplaySize? get displaySize; bool get displayAuto;
+ String get deviceId; String? get sessionId; String? get name; String? get packageName; bool get moveForegroundApp; VideoDisplaySize? get displaySize; bool get displayAuto;
 /// Create a copy of VideoSessionPlan
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -471,20 +471,20 @@ $VideoSessionPlanCopyWith<VideoSessionPlan> get copyWith => _$VideoSessionPlanCo
 @override
 bool operator ==(Object other) {
   final _this = this as VideoSessionPlan;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is VideoSessionPlan&&(identical(other.deviceId, _this.deviceId) || other.deviceId == _this.deviceId)&&(identical(other.sessionId, _this.sessionId) || other.sessionId == _this.sessionId)&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.packageName, _this.packageName) || other.packageName == _this.packageName)&&(identical(other.displaySize, _this.displaySize) || other.displaySize == _this.displaySize)&&(identical(other.displayAuto, _this.displayAuto) || other.displayAuto == _this.displayAuto));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is VideoSessionPlan&&(identical(other.deviceId, _this.deviceId) || other.deviceId == _this.deviceId)&&(identical(other.sessionId, _this.sessionId) || other.sessionId == _this.sessionId)&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.packageName, _this.packageName) || other.packageName == _this.packageName)&&(identical(other.moveForegroundApp, _this.moveForegroundApp) || other.moveForegroundApp == _this.moveForegroundApp)&&(identical(other.displaySize, _this.displaySize) || other.displaySize == _this.displaySize)&&(identical(other.displayAuto, _this.displayAuto) || other.displayAuto == _this.displayAuto));
 }
 
 
 @override
 int get hashCode {
   final _this = this as VideoSessionPlan;
-  return Object.hash(runtimeType,_this.deviceId,_this.sessionId,_this.name,_this.packageName,_this.displaySize,_this.displayAuto);
+  return Object.hash(runtimeType,_this.deviceId,_this.sessionId,_this.name,_this.packageName,_this.moveForegroundApp,_this.displaySize,_this.displayAuto);
 }
 
 @override
 String toString() {
   final _this = this as VideoSessionPlan;
-  return 'VideoSessionPlan(deviceId: ${_this.deviceId}, sessionId: ${_this.sessionId}, name: ${_this.name}, packageName: ${_this.packageName}, displaySize: ${_this.displaySize}, displayAuto: ${_this.displayAuto})';
+  return 'VideoSessionPlan(deviceId: ${_this.deviceId}, sessionId: ${_this.sessionId}, name: ${_this.name}, packageName: ${_this.packageName}, moveForegroundApp: ${_this.moveForegroundApp}, displaySize: ${_this.displaySize}, displayAuto: ${_this.displayAuto})';
 }
 
 
@@ -495,7 +495,7 @@ abstract mixin class $VideoSessionPlanCopyWith<$Res>  {
   factory $VideoSessionPlanCopyWith(VideoSessionPlan value, $Res Function(VideoSessionPlan) _then) = _$VideoSessionPlanCopyWithImpl;
 @useResult
 $Res call({
- String deviceId, String? sessionId, String? name, String? packageName, VideoDisplaySize? displaySize, bool displayAuto
+ String deviceId, String? sessionId, String? name, String? packageName, bool moveForegroundApp, VideoDisplaySize? displaySize, bool displayAuto
 });
 
 
@@ -512,13 +512,14 @@ class _$VideoSessionPlanCopyWithImpl<$Res>
 
 /// Create a copy of VideoSessionPlan
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? deviceId = null,Object? sessionId = freezed,Object? name = freezed,Object? packageName = freezed,Object? displaySize = freezed,Object? displayAuto = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? deviceId = null,Object? sessionId = freezed,Object? name = freezed,Object? packageName = freezed,Object? moveForegroundApp = null,Object? displaySize = freezed,Object? displayAuto = null,}) {
   return _then(VideoSessionPlan(
 deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
 as String,sessionId: freezed == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
 as String?,name: freezed == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String?,packageName: freezed == packageName ? _self.packageName : packageName // ignore: cast_nullable_to_non_nullable
-as String?,displaySize: freezed == displaySize ? _self.displaySize : displaySize // ignore: cast_nullable_to_non_nullable
+as String?,moveForegroundApp: null == moveForegroundApp ? _self.moveForegroundApp : moveForegroundApp // ignore: cast_nullable_to_non_nullable
+as bool,displaySize: freezed == displaySize ? _self.displaySize : displaySize // ignore: cast_nullable_to_non_nullable
 as VideoDisplaySize?,displayAuto: null == displayAuto ? _self.displayAuto : displayAuto // ignore: cast_nullable_to_non_nullable
 as bool,
   ));
@@ -605,10 +606,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String deviceId,  String? sessionId,  String? name,  String? packageName,  VideoDisplaySize? displaySize,  bool displayAuto)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String deviceId,  String? sessionId,  String? name,  String? packageName,  bool moveForegroundApp,  VideoDisplaySize? displaySize,  bool displayAuto)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _VideoSessionPlan() when $default != null:
-return $default(_that.deviceId,_that.sessionId,_that.name,_that.packageName,_that.displaySize,_that.displayAuto);case _:
+return $default(_that.deviceId,_that.sessionId,_that.name,_that.packageName,_that.moveForegroundApp,_that.displaySize,_that.displayAuto);case _:
   return orElse();
 
 }
@@ -626,10 +627,10 @@ return $default(_that.deviceId,_that.sessionId,_that.name,_that.packageName,_tha
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String deviceId,  String? sessionId,  String? name,  String? packageName,  VideoDisplaySize? displaySize,  bool displayAuto)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String deviceId,  String? sessionId,  String? name,  String? packageName,  bool moveForegroundApp,  VideoDisplaySize? displaySize,  bool displayAuto)  $default,) {final _that = this;
 switch (_that) {
 case _VideoSessionPlan():
-return $default(_that.deviceId,_that.sessionId,_that.name,_that.packageName,_that.displaySize,_that.displayAuto);case _:
+return $default(_that.deviceId,_that.sessionId,_that.name,_that.packageName,_that.moveForegroundApp,_that.displaySize,_that.displayAuto);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -646,10 +647,10 @@ return $default(_that.deviceId,_that.sessionId,_that.name,_that.packageName,_tha
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String deviceId,  String? sessionId,  String? name,  String? packageName,  VideoDisplaySize? displaySize,  bool displayAuto)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String deviceId,  String? sessionId,  String? name,  String? packageName,  bool moveForegroundApp,  VideoDisplaySize? displaySize,  bool displayAuto)?  $default,) {final _that = this;
 switch (_that) {
 case _VideoSessionPlan() when $default != null:
-return $default(_that.deviceId,_that.sessionId,_that.name,_that.packageName,_that.displaySize,_that.displayAuto);case _:
+return $default(_that.deviceId,_that.sessionId,_that.name,_that.packageName,_that.moveForegroundApp,_that.displaySize,_that.displayAuto);case _:
   return null;
 
 }
@@ -661,13 +662,14 @@ return $default(_that.deviceId,_that.sessionId,_that.name,_that.packageName,_tha
 
 
 class _VideoSessionPlan implements VideoSessionPlan {
-  const _VideoSessionPlan({required this.deviceId, this.sessionId, this.name, this.packageName, this.displaySize, this.displayAuto = false});
+  const _VideoSessionPlan({required this.deviceId, this.sessionId, this.name, this.packageName, this.moveForegroundApp = false, this.displaySize, this.displayAuto = false});
   
 
 @override final  String deviceId;
 @override final  String? sessionId;
 @override final  String? name;
 @override final  String? packageName;
+@override@JsonKey() final  bool moveForegroundApp;
 @override final  VideoDisplaySize? displaySize;
 @override@JsonKey() final  bool displayAuto;
 
@@ -681,18 +683,18 @@ _$VideoSessionPlanCopyWith<_VideoSessionPlan> get copyWith => __$VideoSessionPla
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _VideoSessionPlan&&(identical(other.deviceId, deviceId) || other.deviceId == deviceId)&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.name, name) || other.name == name)&&(identical(other.packageName, packageName) || other.packageName == packageName)&&(identical(other.displaySize, displaySize) || other.displaySize == displaySize)&&(identical(other.displayAuto, displayAuto) || other.displayAuto == displayAuto));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _VideoSessionPlan&&(identical(other.deviceId, deviceId) || other.deviceId == deviceId)&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.name, name) || other.name == name)&&(identical(other.packageName, packageName) || other.packageName == packageName)&&(identical(other.moveForegroundApp, moveForegroundApp) || other.moveForegroundApp == moveForegroundApp)&&(identical(other.displaySize, displaySize) || other.displaySize == displaySize)&&(identical(other.displayAuto, displayAuto) || other.displayAuto == displayAuto));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,deviceId,sessionId,name,packageName,displaySize,displayAuto);
+    return Object.hash(runtimeType,deviceId,sessionId,name,packageName,moveForegroundApp,displaySize,displayAuto);
 }
 
 @override
 String toString() {
-    return 'VideoSessionPlan(deviceId: $deviceId, sessionId: $sessionId, name: $name, packageName: $packageName, displaySize: $displaySize, displayAuto: $displayAuto)';
+    return 'VideoSessionPlan(deviceId: $deviceId, sessionId: $sessionId, name: $name, packageName: $packageName, moveForegroundApp: $moveForegroundApp, displaySize: $displaySize, displayAuto: $displayAuto)';
 }
 
 
@@ -703,7 +705,7 @@ abstract mixin class _$VideoSessionPlanCopyWith<$Res> implements $VideoSessionPl
   factory _$VideoSessionPlanCopyWith(_VideoSessionPlan value, $Res Function(_VideoSessionPlan) _then) = __$VideoSessionPlanCopyWithImpl;
 @override @useResult
 $Res call({
- String deviceId, String? sessionId, String? name, String? packageName, VideoDisplaySize? displaySize, bool displayAuto
+ String deviceId, String? sessionId, String? name, String? packageName, bool moveForegroundApp, VideoDisplaySize? displaySize, bool displayAuto
 });
 
 
@@ -720,13 +722,14 @@ class __$VideoSessionPlanCopyWithImpl<$Res>
 
 /// Create a copy of VideoSessionPlan
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? deviceId = null,Object? sessionId = freezed,Object? name = freezed,Object? packageName = freezed,Object? displaySize = freezed,Object? displayAuto = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? deviceId = null,Object? sessionId = freezed,Object? name = freezed,Object? packageName = freezed,Object? moveForegroundApp = null,Object? displaySize = freezed,Object? displayAuto = null,}) {
   return _then(_VideoSessionPlan(
 deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
 as String,sessionId: freezed == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
 as String?,name: freezed == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String?,packageName: freezed == packageName ? _self.packageName : packageName // ignore: cast_nullable_to_non_nullable
-as String?,displaySize: freezed == displaySize ? _self.displaySize : displaySize // ignore: cast_nullable_to_non_nullable
+as String?,moveForegroundApp: null == moveForegroundApp ? _self.moveForegroundApp : moveForegroundApp // ignore: cast_nullable_to_non_nullable
+as bool,displaySize: freezed == displaySize ? _self.displaySize : displaySize // ignore: cast_nullable_to_non_nullable
 as VideoDisplaySize?,displayAuto: null == displayAuto ? _self.displayAuto : displayAuto // ignore: cast_nullable_to_non_nullable
 as bool,
   ));

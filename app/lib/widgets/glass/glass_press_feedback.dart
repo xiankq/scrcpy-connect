@@ -79,11 +79,11 @@ class _GlassPressFeedbackState extends State<GlassPressFeedback>
 
   @override
   Widget build(BuildContext context) {
-    final fallback =
-        opaqueGlass(context) || !ImageFilter.isShaderFilterSupported;
+    final opaque = opaqueGlass(context);
+    final fallback = opaque || !ImageFilter.isShaderFilterSupported;
     final pressed = widget.enabled && _pointers.isNotEmpty;
-    final reducedMotion = liquid.GlassAccessibilityData.of(context)
-        .reduceMotion;
+    final reducedMotion =
+        opaque || liquid.GlassAccessibilityData.of(context).reduceMotion;
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(widget.radius),
     );

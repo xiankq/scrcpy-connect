@@ -4,6 +4,8 @@ part 'preferences.freezed.dart';
 
 enum Appearance { light, dark, system }
 
+enum GlassEffects { automatic, premium, standard, off }
+
 enum FileViewMode { grid, list }
 
 enum FileSortKey { name, size, modified, type }
@@ -103,6 +105,7 @@ class DevicePreferences with _$DevicePreferences {
 class Preferences with _$Preferences {
   Preferences({
     this.appearance = Appearance.light,
+    this.glassEffects = GlassEffects.automatic,
     this.backgroundKeepAlive = true,
     this.notificationAlerts = false,
     this.callAlerts = false,
@@ -122,6 +125,7 @@ class Preferences with _$Preferences {
        deviceQuality = Map.unmodifiable(deviceQuality);
 
   final Appearance appearance;
+  final GlassEffects glassEffects;
   final bool backgroundKeepAlive;
   final bool notificationAlerts;
   final bool callAlerts;
@@ -136,6 +140,7 @@ class Preferences with _$Preferences {
 
   Preferences apply(PreferenceChanges patch) => copyWith(
     appearance: patch.appearance ?? appearance,
+    glassEffects: patch.glassEffects ?? glassEffects,
     backgroundKeepAlive: patch.backgroundKeepAlive ?? backgroundKeepAlive,
     notificationAlerts: patch.notificationAlerts ?? notificationAlerts,
     callAlerts: patch.callAlerts ?? callAlerts,
@@ -155,6 +160,7 @@ class Preferences with _$Preferences {
 class PreferenceChanges with _$PreferenceChanges {
   PreferenceChanges({
     this.appearance,
+    this.glassEffects,
     this.backgroundKeepAlive,
     this.notificationAlerts,
     this.callAlerts,
@@ -180,6 +186,7 @@ class PreferenceChanges with _$PreferenceChanges {
            : Map.unmodifiable(deviceQuality);
 
   final Appearance? appearance;
+  final GlassEffects? glassEffects;
   final bool? backgroundKeepAlive;
   final bool? notificationAlerts;
   final bool? callAlerts;

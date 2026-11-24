@@ -321,6 +321,7 @@ abstract final class DesignTokens {
   static const componentDangerPanelDarkBackgroundColor = Color(0xff332021);
   static const componentDangerPanelDarkTextColor = Color(0xffffffff);
   static const componentDangerPanelTextColor = Color(0xff000000);
+  static const componentDesktopHeaderPadding = 12.0;
   static const componentDesktopHeight = 960.0;
   static const componentDesktopWidth = 1440.0;
   static const componentDeviceDetailSectionGap = 26.0;

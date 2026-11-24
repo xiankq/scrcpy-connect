@@ -144,6 +144,7 @@ abstract class VideoSessionPlan with _$VideoSessionPlan {
     String? sessionId,
     String? name,
     String? packageName,
+    @Default(false) bool moveForegroundApp,
     VideoDisplaySize? displaySize,
     @Default(false) bool displayAuto,
   }) = _VideoSessionPlan;

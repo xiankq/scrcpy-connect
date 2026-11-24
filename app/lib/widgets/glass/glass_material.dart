@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
-import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
@@ -40,42 +39,19 @@ abstract final class GlassMaterial {
   static bool reduceMotion(BuildContext context) =>
       liquid.GlassAccessibilityData.of(context).reduceMotion;
 
-  static liquid.GlassThemeData theme(BuildContext context) {
-    final theme = liquid.GlassThemeData.of(context);
-    return theme.copyWith(
-      interaction: theme.interaction.copyWith(
-        stretch: reduceMotion(context)
-            ? 0
-            : DesignTokens.componentGlassInteractionStretch,
-      ),
-    );
-  }
-
-  static liquid.GlassQuality quality(BuildContext context) {
-    if (opaqueGlass(context)) return liquid.GlassQuality.minimal;
-    // Premium is the package's Impeller path and matches Apple's iOS 27
-    // preset. Other platforms use the documented standard approximation so
-    // desktop/Android do not pretend to have the same native material or
-    // spend a premium shader budget on every local action group.
-    final apple = switch (defaultTargetPlatform) {
-      TargetPlatform.iOS || TargetPlatform.macOS => true,
-      _ => false,
-    };
-    return apple && ImageFilter.isShaderFilterSupported
-        ? liquid.GlassQuality.premium
-        : liquid.GlassQuality.standard;
-  }
+  static liquid.GlassQuality quality(BuildContext context) =>
+      opaqueGlass(context)
+      ? liquid.GlassQuality.minimal
+      : GlassPreferences.qualityFor(GlassPreferences.effectsOf(context));
 
   static liquid.LiquidGlassSettings settings(
     BuildContext context, {
     GlassVariant variant = GlassVariant.regular,
-    bool includeShadow = false,
   }) {
     final theme = Theme.of(context);
     final settings = Glass.optics(
       brightness: theme.brightness,
       variant: variant,
-      includeShadow: includeShadow,
     );
     return quality(context) == liquid.GlassQuality.minimal
         ? settings.copyWith(
@@ -100,19 +76,12 @@ abstract final class GlassMaterial {
     );
   }
 
-  /// 标签栏指示器的局部 clear 材质，与 regular 玻璃轨道分开。
-  static liquid.LiquidGlassSettings navigationIndicatorSettings(
+  /// 实体导航保留指示器和几何，玻璃档位沿用库的镜片材质。
+  static liquid.LiquidGlassSettings? navigationIndicatorSettings(
     BuildContext context,
   ) => opaqueGlass(context)
       ? settings(context).copyWith(glassColor: DesignTokens.colorTransparent)
-      : liquid.AnimatedGlassIndicator.baseIndicatorSettings;
-
-  /// The package-owned navigation track and indicator share one optical layer.
-  /// Keeping the shadow on that same settings object avoids a second overlay
-  /// that can be clipped or disappear while the official indicator settles.
-  static liquid.LiquidGlassSettings navigationTrackSettings(
-    BuildContext context,
-  ) => settings(context, includeShadow: !opaqueGlass(context));
+      : null;
 
   /// 向后端注册 Material 明暗模式和系统辅助偏好。
   /// 背景采样组只属于局部控件组，不能放在根 Navigator。
@@ -225,37 +194,16 @@ class Glass extends StatefulWidget {
   @override
   State<Glass> createState() => _GlassState();
 
-  /// 后端配置采用项目光学深度、色调和光照 token。
-  /// 旧后端的折射带宽度不等同于厚度。
+  /// 普通材质沿用库预设，媒体透明材质保留自己的透光条件。
   static liquid.LiquidGlassSettings optics({
     required Brightness brightness,
     GlassVariant variant = GlassVariant.regular,
-    bool includeShadow = false,
   }) {
     final dark = brightness == Brightness.dark;
     final clear = variant == GlassVariant.clear;
-    final base = switch (defaultTargetPlatform) {
-      // The package preset tracks Apple's current regular material (including
-      // frost, rim shade and paraxial lens terms). Keep the app's clear
-      // media variant explicit, but do not replace the regular system optics
-      // with a hand-tuned approximation on Apple platforms.
-      TargetPlatform.iOS || TargetPlatform.macOS =>
-        dark
-            ? liquid.LiquidGlassSettings.ios27Dark
-            : liquid.LiquidGlassSettings.ios27Light,
-      _ => liquid.LiquidGlassSettings(
-        thickness: DesignTokens.componentGlassOpticalDepth,
-        refractiveIndex: ConnectTokens.glassRefractionIndex,
-        chromaticAberration: ConnectTokens.glassDispersion,
-        saturation: ConnectTokens.glassSaturation,
-        blur: ConnectTokens.glassBlur,
-        bodyMode: liquid.GlassBodyMode.adaptive,
-        glassColor: dark ? ConnectTokens.glassDark : ConnectTokens.glass,
-        lightAngle: DesignTokens.componentGlassAngle * math.pi / 180,
-        lightIntensity: DesignTokens.componentGlassSpecularIntensity,
-        glowIntensity: DesignTokens.componentGlassGlowIntensity,
-      ),
-    };
+    final base = dark
+        ? liquid.LiquidGlassSettings.ios27Dark
+        : liquid.LiquidGlassSettings.ios27Light;
     final resolved = base.copyWith(
       blur: clear ? DesignTokens.componentGlassClearBlur : null,
       frost: clear ? 0 : null,
@@ -264,7 +212,7 @@ class Glass extends StatefulWidget {
       bodyMode: clear ? liquid.GlassBodyMode.clear : null,
       glassColor: clear ? DesignTokens.colorGlassClear : null,
     );
-    return includeShadow ? resolved : resolved.copyWith(shadow: const []);
+    return resolved.copyWith(shadow: const []);
   }
 
   Widget _build(BuildContext context, GlobalKey contentKey) {

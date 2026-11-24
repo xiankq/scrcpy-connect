@@ -1,4 +1,5 @@
 import 'package:adb/adb.dart' show AdbCancellation;
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
@@ -30,6 +31,7 @@ import 'package:scrcpy_connect/pages/session_pending/session_content.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/app_session_scope.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
@@ -109,10 +111,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 150));
     final skeleton = find.byType(SkeletonRows);
     expect(skeleton, findsOneWidget);
-    expect(
-      tester.getTopLeft(skeleton).dx,
-      tester.getTopLeft(find.byType(TextField)).dx,
-    );
+    expect(find.byType(EditableText), findsNothing);
+    expect(find.byKey(const ValueKey('page-search-open')), findsOneWidget);
     expect(find.byType(ContentLoadingIndicator), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -134,7 +134,6 @@ void main() {
       devices: [_phone, _offline, _tablet, _failed],
       connections: connections,
     );
-    final search = find.byType(TextField);
     final first = find.byType(DeviceCard).first;
     final second = find.byType(DeviceCard).at(1);
     final add = find.byWidgetPredicate(
@@ -144,8 +143,7 @@ void main() {
     expect(tester.widget<Glass>(addSurface).circular, isTrue);
     expect(tester.getSize(addSurface), const Size.square(44));
     expect(tester.getCenter(addSurface), tester.getCenter(add));
-    expect(tester.getTopRight(addSurface).dx, tester.getTopRight(search).dx);
-    expect(tester.getTopLeft(first).dx, tester.getTopLeft(search).dx);
+    expect(tester.getTopRight(addSurface).dx, tester.getTopRight(first).dx);
     expect(tester.getSize(first).height, 108);
     expect(tester.getTopLeft(second).dy - tester.getBottomLeft(first).dy, 12);
     expect(find.text('打开屏幕'), findsNWidgets(2));
@@ -158,6 +156,47 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('连接配置'), findsOneWidget);
     expect(find.text('移除此设备'), findsOneWidget);
+  });
+
+  testWidgets('页头搜索取得焦点，关闭后恢复标题、完整列表和同一滚动区', (tester) async {
+    await _show(tester, const DevicesPage(), devices: [_phone, _offline]);
+    final scroll = tester.state<ScrollableState>(find.byType(Scrollable).first);
+    expect(find.text('设备'), findsOneWidget);
+    expect(find.byType(EditableText), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('page-search-open')));
+    await tester.pumpAndSettle();
+    final editor = find.byType(EditableText);
+    expect(find.text('设备'), findsNothing);
+    expect(tester.widget<EditableText>(editor).focusNode.hasFocus, isTrue);
+    await tester.enterText(editor, 'Redmi');
+    await tester.pumpAndSettle();
+    expect(find.byType(DeviceCard), findsOneWidget);
+    expect(find.text('Redmi Note 13'), findsOneWidget);
+
+    final semantics = tester.ensureSemantics();
+    try {
+      await tester.pump();
+      await tester.tap(find.bySemanticsLabel('关闭搜索'));
+    } finally {
+      semantics.dispose();
+    }
+    await tester.pumpAndSettle();
+    expect(find.text('设备'), findsOneWidget);
+    expect(find.byType(DeviceCard), findsNWidgets(2));
+    expect(
+      tester.state<ScrollableState>(find.byType(Scrollable).first),
+      same(scroll),
+    );
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(tester.widget<EditableText>(editor).focusNode.hasFocus, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(editor, findsNothing);
   });
 
   testWidgets('首次添加在设备页显示完整靠近插画及通栏动作', (tester) async {
@@ -173,6 +212,30 @@ void main() {
     );
     expect(find.byType(TextField), findsNothing);
     expect(find.widgetWithText(AppBar, '设备'), findsOneWidget);
+  });
+
+  testWidgets('桌面页头在切换搜索时连续过渡并保留输入焦点', (tester) async {
+    await _show(
+      tester,
+      const DesktopWindowInsets(
+        left: 69,
+        right: 0,
+        top: 23,
+        child: DevicesPage(),
+      ),
+      devices: [_phone],
+      reducedMotion: false,
+    );
+    await tester.tap(find.byKey(const ValueKey('page-search-open')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    final finder = find.byType(EditableText);
+    expect(find.text('设备'), findsOneWidget);
+    final editor = tester.state<EditableTextState>(finder);
+    await tester.pumpAndSettle();
+    expect(find.text('设备'), findsNothing);
+    expect(tester.state<EditableTextState>(finder), same(editor));
+    expect(tester.widget<EditableText>(finder).focusNode.hasFocus, isTrue);
   });
 
   testWidgets('首次添加靠近动效停在减少动态时的同一构图', (tester) async {

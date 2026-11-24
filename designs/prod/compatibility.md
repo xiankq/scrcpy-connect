@@ -8,16 +8,16 @@
 
 | 平台 | 窗口与姿态来源 |
 | --- | --- |
-| Android | WindowManager 提供尺寸和折叠特征。分割窗格依据 `FoldingFeature.isSeparating`。原生目标复用 `FlutterEngineGroup` 和 Activity document task，每个最近任务标记设备和画面。 |
-| iOS 与 iPadOS | 窗口尺寸和安全区来自 Scene。原生目标在 `supportsMultipleScenes` 为真时使用 UIKit 场景和 `FlutterEngineGroup`，以原会话恢复场景。iPhone Duo 通过 `foldable` 取得外屏、内屏和折叠保留区。 |
-| macOS、Windows、Linux | 桌面窗口操作由宿主提供，应用页头避让原生控件。现有 `desktop_multi_window` 适配器为独立引擎提供窗口能力。各端布局见[桌面沉浸式窗口](../design.md#桌面沉浸式窗口)。 |
+| Android | WindowManager 提供尺寸和折叠特征。分割窗格依据 `FoldingFeature.isSeparating`。每个画面打开为独立 Activity，并以设备和画面名出现在系统最近任务。平板由系统桌面窗口模式决定能否出浮窗，并按手机画面比例请求初始尺寸。系统以全屏呈现时，使用同一个独立 Activity。 |
+| iOS 与 iPadOS | 窗口尺寸和安全区来自 Scene。iPad 支持通过 UIKit Scene 开独立窗口，由系统决定窗口呈现与尺寸。iPhone 及无法创建独立 Scene 的 iPad 使用应用内全屏控制页。iPhone Duo 通过 `foldable` 取得外屏、内屏和折叠保留区。 |
+| macOS、Windows、Linux | 远控子窗口使用 Flutter 3.50 的实验性单引擎桌面窗口能力。宿主不支持时使用应用内窗口切换。macOS 开启读屏时，现有远控画面回到应用内，保留原会话。各端布局见[桌面沉浸式窗口](../design.md#桌面沉浸式窗口)。 |
 | HarmonyOS | 具备 Flutter 布局契约。原生宿主待接入，适配时由 `windowSizeChange` 更新尺寸、`windowStatusChange` 更新模式、`foldStatusChange` 触发姿态重查。API 12+ 可使用 `FoldSplitContainer`。 |
 
 宿主将可用边界、安全区、保留区、姿态和模式投影为 `WindowEnvironment`。半折的安全窗格见[iPhone Duo 专项](../design.md#iphone-duo-专项)。
 
-当前交付在主控应用内保留并切换远控窗口。原生子窗口开放条件是主窗口与子窗口共用一个连接及会话所有者，子窗口按实际引擎注册自己的画面输出，并且每路输入、暂停与关闭只作用于所属会话。旧的多引擎启动参数会提示回主窗口继续，避免整套应用恢复流程接管连接。
+Android Activity 和 iPad Scene 共用工作台的设备连接与控制会话，各自持有画面输出。系统拒绝开窗时使用应用内控制页。宽屏及展开的折叠屏在安全宽度足够时可并排两路。系统恢复窗口时只接续仍有效的会话。
 
-窗口验收覆盖两台设备同时控制、同一设备的整机与独立应用并行、重复打开聚焦原窗口、尺寸和折叠变化、后台和恢复、关闭单窗，以及活动中的 USB 连接保留。原生系统恢复以设备和会话身份接续，失效时提供关闭入口。 [Flutter 多引擎](https://docs.flutter.dev/add-to-app/multiple-flutters) · [Android 最近任务](https://developer.android.com/guide/components/activities/recents) · [UIKit 多场景](https://developer.apple.com/documentation/uikit/uiapplication/supportsmultiplescenes) · [桌面窗口库](https://pub.dev/packages/desktop_multi_window) · [HarmonyOS Window API](https://developer.huawei.com/consumer/en/doc/harmonyos-references/arkts-apis-window-window/)
+窗口验收覆盖两台设备同时控制、同一设备的整机与独立应用并行、重复打开聚焦原窗口、尺寸和折叠变化、后台和恢复、关闭单窗，以及活动中的 USB 连接保留。原生系统恢复以设备和会话身份接续，失效时提供关闭入口。 [Flutter 多引擎](https://docs.flutter.dev/add-to-app/multiple-flutters) · [Android 最近任务](https://developer.android.com/guide/components/activities/recents) · [UIKit 多场景](https://developer.apple.com/documentation/uikit/uiapplication/supportsmultiplescenes) · [Flutter 桌面窗口](https://flutter.dev/blog/desktop-windowing-apis) · [HarmonyOS Window API](https://developer.huawei.com/consumer/en/doc/harmonyos-references/arkts-apis-window-window/)
 
 ## 功能条件与替代路径
 
@@ -55,7 +55,7 @@
 - 视频详情显示可用的取回与分享。直接在手机中打开视频需要能够定位并交付原件的手机侧入口。
 - 本机暂存预算为 512 MiB，准入还需核对磁盘可用空间和受保护占用。释放范围见[媒体暂存](content-and-transfer.md#媒体暂存与空间准入)。
 - 当前版本读取安装信息。检查、下载与安装按[渠道](app-updates.md#渠道交付)接入。
-- 玻璃按[视觉规范](../design.md#elevation--depth)呈现。初始化、低透明度、高对比和缺少光学支持时使用实体材料。Windows 需在 Windows/Impeller 构建运行，核对涉及采样器的 shader 警告与实体回退。
+- 液态玻璃按[外观偏好](information-architecture.md#设置与本地数据)和宿主渲染能力呈现。极致模式在完整折射不可用时使用标准渲染。关闭特效、初始化期间、降低透明度或提高对比度时使用实体材料。[材质规范](../design.md#elevation--depth)
 
 ## 数据与授权保护
 

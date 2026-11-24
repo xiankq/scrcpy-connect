@@ -5,6 +5,7 @@ import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 final _defaultPreferences = Preferences();
 final preferenceDefaults = Map<String, Object?>.unmodifiable({
   'appearance': _defaultPreferences.appearance.name,
+  'glassEffects': _defaultPreferences.glassEffects.name,
   'backgroundKeepAlive': _defaultPreferences.backgroundKeepAlive,
   'notificationAlerts': _defaultPreferences.notificationAlerts,
   'callAlerts': _defaultPreferences.callAlerts,
@@ -65,6 +66,7 @@ final class PreferenceSchema {
       final key = entry.key, value = entry.value;
       final valid = switch (key) {
         'appearance' => const ['light', 'dark', 'system'].contains(value),
+        'glassEffects' => GlassEffects.values.any((mode) => mode.name == value),
         'backgroundKeepAlive' ||
         'notificationAlerts' ||
         'callAlerts' ||

@@ -5,6 +5,7 @@ import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/content/content_capabilities_provider.dart';
+import 'package:scrcpy_connect/core/platform/platform_channels.dart';
 import 'package:scrcpy_connect/hooks/use_transfer_cache_lease.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
@@ -137,10 +138,33 @@ Future<PreparedFileShareReceipt> sharePreparedFile(
   final origin = render is RenderBox && render.hasSize
       ? render.localToGlobal(Offset.zero) & render.size
       : null;
-  final result = await SharePlus.instance.share(
-    ShareParams(files: [XFile(localPath)], sharePositionOrigin: origin),
-  );
-  return switch (result.status) {
+  final ShareResultStatus status;
+  if (defaultTargetPlatform == TargetPlatform.macOS) {
+    final receipt = await const PlatformChannels().request(
+      'documents.shareFile',
+      {
+        'path': localPath,
+        'viewId': View.of(context).viewId,
+        if (origin != null) ...{
+          'x': origin.left,
+          'y': origin.top,
+          'width': origin.width,
+          'height': origin.height,
+        },
+      },
+    );
+    status = switch (receipt['selected']) {
+      true => ShareResultStatus.success,
+      false => ShareResultStatus.dismissed,
+      _ => ShareResultStatus.unavailable,
+    };
+  } else {
+    final result = await SharePlus.instance.share(
+      ShareParams(files: [XFile(localPath)], sharePositionOrigin: origin),
+    );
+    status = result.status;
+  }
+  return switch (status) {
     ShareResultStatus.success => (
       message: '文件已交给所选应用。请打开该应用查看。',
       needsRecipientCheck: true,

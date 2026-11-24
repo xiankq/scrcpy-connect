@@ -607,6 +607,14 @@ final class DeviceService
   }
 
   @override
+  Future<DeviceReading<({int width, int height})?>> readScreenSize(
+    String deviceId,
+  ) {
+    _checkOpen();
+    return _track(_details.readScreenSize(deviceId));
+  }
+
+  @override
   Future<DeviceReading<String>> readForegroundApp(
     String deviceId, {
     String? connectionId,

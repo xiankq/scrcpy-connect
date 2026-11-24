@@ -2,7 +2,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:scrcpy_connect/widgets/content_arrival.dart';
+import 'package:scrcpy_connect/widgets/tab_transition.dart';
 import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/files/file_transfers.dart';
@@ -11,6 +11,7 @@ import 'package:scrcpy_connect/pages/transfers/details/transfer_details_page.dar
 import 'package:scrcpy_connect/pages/transfers/widgets/transfer_history_row.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/motion.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
@@ -32,24 +33,30 @@ class TransfersPage extends HookConsumerWidget {
     final query = ref.watch(transferHistoryRowsProvider);
     final source = ref.watch(fileTransfersProvider);
     final finished = useState(false);
+    final ongoingScroll = useScrollController();
+    final finishedScroll = useScrollController();
     final selection = useState<String?>(null);
     final clearing = useState(false);
     Future<void> refresh() => ref
         .refresh(transferHistoryProvider.future)
         .then<void>((_) {}, onError: (Object _, StackTrace _) {});
     final rows = query.value ?? const <TransferHistoryEntry>[];
-    final visible = rows
-        .where((row) => transferHistoryFinished(row) == finished.value)
-        .toList();
-    if (finished.value) {
+    final (ongoingRows, finishedRows) = useMemoized(() {
+      final ongoing = <TransferHistoryEntry>[];
+      final completed = <TransferHistoryEntry>[];
+      for (final row in rows) {
+        (transferHistoryFinished(row) ? completed : ongoing).add(row);
+      }
       final positions = {
-        for (final (index, row) in visible.indexed) row.id: index,
+        for (final (index, row) in completed.indexed) row.id: index,
       };
-      visible.sort((a, b) {
+      completed.sort((a, b) {
         final time = (b.task.endedAt ?? 0).compareTo(a.task.endedAt ?? 0);
         return time == 0 ? positions[a.id]!.compareTo(positions[b.id]!) : time;
       });
-    }
+      return (ongoing, completed);
+    }, [rows]);
+    final visible = finished.value ? finishedRows : ongoingRows;
     final selected = rows.where((row) => row.id == selection.value).firstOrNull;
 
     Future<void> clearHistory() async {
@@ -110,161 +117,172 @@ class TransfersPage extends HookConsumerWidget {
         final representative = current == null
             ? null
             : _representative(current);
-        Widget buildList({required bool loading}) => RefreshIndicator(
-          onRefresh: refresh,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              const PageChromeSliver(),
-              SliverPadding(
-                padding: const EdgeInsets.all(DesignTokens.spacingMd),
-                sliver: SliverToBoxAdapter(
-                  child: ContentPanel(
-                    padding: const EdgeInsets.all(
-                      DesignTokens.componentConnectionTabsPadding,
-                    ),
-                    child: Row(
-                      children: [
-                        for (final (done, label) in [
-                          (false, '传输中'),
-                          (true, '已结束'),
-                        ])
-                          Expanded(
-                            child: Semantics(
-                              selected: finished.value == done,
-                              child: TextButton(
-                                style: TextButton.styleFrom(
-                                  backgroundColor: finished.value == done
-                                      ? Theme.of(context)
-                                            .colorScheme
-                                            .surfaceContainerHigh
-                                      : null,
-                                  foregroundColor: finished.value == done
-                                      ? Theme.of(context).colorScheme.onSurface
-                                      : Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                  shape: const RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.all(
-                                      Radius.circular(
-                                        DesignTokens
-                                            .componentConnectionTabSelectedRounded,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                onPressed: () {
-                                  if (finished.value == done) return;
-                                  finished.value = done;
-                                  selection.value = null;
-                                },
-                                child: Text(
-                                  label,
-                                  textAlign: TextAlign.center,
-                                  style: finished.value == done
-                                      ? const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                        )
-                                      : null,
-                                ),
+        final selector = Padding(
+          padding: const EdgeInsets.all(DesignTokens.spacingMd),
+          child: ContentPanel(
+            padding: const EdgeInsets.all(
+              DesignTokens.componentConnectionTabsPadding,
+            ),
+            child: Row(
+              children: [
+                for (final (done, label) in [(false, '传输中'), (true, '已结束')])
+                  Expanded(
+                    child: Semantics(
+                      selected: finished.value == done,
+                      child: TextButton(
+                        style: TextButton.styleFrom(
+                          animationDuration: reduceMotionOf(context)
+                              ? Duration.zero
+                              : shortTransitionDuration,
+                          backgroundColor: finished.value == done
+                              ? Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHigh
+                              : null,
+                          foregroundColor: finished.value == done
+                              ? Theme.of(context).colorScheme.onSurface
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.all(
+                              Radius.circular(
+                                DesignTokens
+                                    .componentConnectionTabSelectedRounded,
                               ),
                             ),
                           ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              ContentArrival(
-                sliver: true,
-                state: finished.value,
-                waiting: loading,
-                child: SliverMainAxisGroup(
-                  slivers: [
-                    if (loading)
-                      SliverPadding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: DesignTokens.spacingMd,
                         ),
-                        sliver: SliverToBoxAdapter(
-                          child: SkeletonRows(
-                            height:
-                                DesignTokens.componentRowLargeHeight +
-                                (finished.value
-                                    ? DesignTokens.spacingMd
-                                    : DesignTokens.spacingLg),
-                            leadingSize: DesignTokens
-                                .componentTransferCardThumbnailWidth,
-                            cardRadius: DesignTokens.roundedLg,
-                            gap: DesignTokens.spacingSm,
-                            lines: 3,
-                            trailing: true,
-                            progress: !finished.value,
-                          ),
-                        ),
-                      )
-                    else if (visible.isEmpty)
-                      SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: EmptyContent(
-                          icon: LucideIcons.arrowUpDown,
-                          title: finished.value ? '暂无已结束的传输' : '暂无正在传输的任务',
-                          message: finished.value
-                              ? '完成、失败或取消的任务会出现在这里。'
-                              : '发送和接收文件时，可在这里查看进度。',
-                        ),
-                      )
-                    else
-                      SliverPadding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: DesignTokens.spacingMd,
-                        ),
-                        sliver: SliverList.separated(
-                          itemCount: visible.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: DesignTokens.spacingSm),
-                          itemBuilder: (context, index) {
-                            final row = visible[index];
-                            return TransferHistoryRow(
-                              key: ValueKey((source, row.id)),
-                              row: row,
-                              selected: split && row.id == current?.id,
-                              refresh: refresh,
-                              onOpen: () {
-                                if (split) {
-                                  selection.value = row.id;
-                                } else {
-                                  TransferDetailsRoute(
-                                    taskId: _representative(row).id,
-                                  ).push<void>(context);
-                                }
-                              },
-                            );
-                          },
+                        onPressed: () {
+                          if (finished.value == done) return;
+                          finished.value = done;
+                          selection.value = null;
+                        },
+                        child: Text(
+                          label,
+                          textAlign: TextAlign.center,
+                          style: finished.value == done
+                              ? const TextStyle(fontWeight: FontWeight.w600)
+                              : null,
                         ),
                       ),
-                  ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+        Widget buildList({
+          required bool loading,
+          required bool done,
+          required List<TransferHistoryEntry> entries,
+        }) => RefreshIndicator(
+          onRefresh: refresh,
+          child: CustomScrollView(
+            key: PageStorageKey(('transfer-history', done)),
+            controller: done ? finishedScroll : ongoingScroll,
+            primary: false,
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              if (loading)
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: DesignTokens.spacingMd,
+                  ),
+                  sliver: SliverToBoxAdapter(
+                    child: SkeletonRows(
+                      height:
+                          DesignTokens.componentRowLargeHeight +
+                          (done
+                              ? DesignTokens.spacingMd
+                              : DesignTokens.spacingLg),
+                      leadingSize:
+                          DesignTokens.componentTransferCardThumbnailWidth,
+                      cardRadius: DesignTokens.roundedLg,
+                      gap: DesignTokens.spacingSm,
+                      lines: 3,
+                      trailing: true,
+                      progress: !done,
+                    ),
+                  ),
+                )
+              else if (entries.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: EmptyContent(
+                    icon: LucideIcons.arrowUpDown,
+                    title: done ? '暂无已结束的传输' : '暂无正在传输的任务',
+                    message: done ? '完成、失败或取消的任务会出现在这里。' : '发送和接收文件时，可在这里查看进度。',
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: DesignTokens.spacingMd,
+                  ),
+                  sliver: SliverList.separated(
+                    itemCount: entries.length,
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(height: DesignTokens.spacingSm),
+                    itemBuilder: (context, index) {
+                      final row = entries[index];
+                      return TransferHistoryRow(
+                        key: ValueKey((source, row.id)),
+                        row: row,
+                        selected: split && row.id == current?.id,
+                        refresh: refresh,
+                        onOpen: () {
+                          if (split) {
+                            selection.value = row.id;
+                          } else {
+                            TransferDetailsRoute(
+                              taskId: _representative(row).id,
+                            ).push<void>(context);
+                          }
+                        },
+                      );
+                    },
+                  ),
                 ),
-              ),
-              const PageChromeBottomSliver(),
             ],
           ),
+        );
+        Widget buildTabs({required bool loading}) => TabPaneStack(
+          index: finished.value ? 1 : 0,
+          children: [
+            buildList(loading: loading, done: false, entries: ongoingRows),
+            buildList(loading: loading, done: true, entries: finishedRows),
+          ],
         );
         return (
           list: PageFrame(
             root: embedded,
             pane: split,
             title: '传输',
+            primaryScrollController: finished.value
+                ? finishedScroll
+                : ongoingScroll,
             actions: useSideToolbar ? null : actions,
             groupHorizontalActions: finished.value,
-            child: AsyncContent<List<TransferHistoryEntry>>(
-              loading: query.isLoading,
-              data: query.value,
-              error: query.error,
-              onRefresh: refresh,
-              emptyTitle: '暂时无法读取传输任务',
-              loadingPlaceholder: buildList(loading: true),
-              builder: (context, _) => buildList(loading: false),
+            child: PageChromeBody(
+              child: Column(
+                children: [
+                  selector,
+                  Expanded(
+                    child: PageChromePadding(
+                      padding: EdgeInsets.zero,
+                      showRecovery: false,
+                      child: AsyncContent<List<TransferHistoryEntry>>(
+                        loading: query.isLoading,
+                        data: query.value,
+                        error: query.error,
+                        onRefresh: refresh,
+                        emptyTitle: '暂时无法读取传输任务',
+                        loadingPlaceholder: buildTabs(loading: true),
+                        builder: (context, _) => buildTabs(loading: false),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           detail: representative == null

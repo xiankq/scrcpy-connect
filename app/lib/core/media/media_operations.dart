@@ -11,6 +11,7 @@ import 'package:scrcpy_connect/core/media/models/video_stop_requested.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/core/media/video_screenshots.dart';
 import 'package:scrcpy_connect/core/media/video_sessions.dart';
+import 'package:scrcpy_connect/core/media/video_player.dart';
 
 /// 媒体能力入口；输出、捕获与租约继续归 MediaPlayback 和 MediaCapture。
 final class MediaOperations
@@ -25,6 +26,7 @@ final class MediaOperations
     required this._audio,
     required this._screenshots,
     required this._quality,
+    this.startWithPlayer,
     required this.resizeDisplayCapture,
     required this.onStopRequested,
     required this.isDisposed,
@@ -36,6 +38,8 @@ final class MediaOperations
   final RemoteAudio _audio;
   final VideoScreenshots _screenshots;
   final VideoQualityControl _quality;
+  final Future<VideoSessionView> Function(VideoSessionPlan, VideoPlayerFactory)?
+  startWithPlayer;
   final Future<void> Function(ControlTarget, VideoDisplaySize)
   resizeDisplayCapture;
   final void Function(VideoStopRequested) onStopRequested;
@@ -222,6 +226,17 @@ final class MediaOperations
     sessionId: plan.sessionId,
     verified: true,
   );
+  Future<VideoSessionView> startVideoInWindow(
+    VideoSessionPlan plan,
+    VideoPlayerFactory factory,
+  ) => _videoOperation(
+    'session.start',
+    plan.deviceId,
+    () => startWithPlayer!(plan, factory),
+    sessionId: plan.sessionId,
+    verified: true,
+  );
+
   @override
   Future<VideoStopReceipt> stopVideo(
     ControlTarget target, {

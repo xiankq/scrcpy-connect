@@ -4,6 +4,7 @@ import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/files/models/file_catalog_entry.dart';
 import 'package:scrcpy_connect/pages/files/widgets/file_kind_style.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/motion.dart';
 import 'package:scrcpy_connect/widgets/content/media_thumbnail.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
@@ -473,13 +474,18 @@ class _FileSelectionMark extends StatelessWidget {
             width: 1.5,
           ),
         ),
-        child: selected
-            ? Icon(
-                LucideIcons.check,
-                size: DesignTokens.roundedMd,
-                color: colors.onPrimary,
-              )
-            : null,
+        child: AnimatedScale(
+          scale: selected ? 1 : 0,
+          duration: reduceMotionOf(context)
+              ? Duration.zero
+              : shortTransitionDuration,
+          curve: shortTransitionCurve,
+          child: Icon(
+            LucideIcons.check,
+            size: DesignTokens.roundedMd,
+            color: colors.onPrimary,
+          ),
+        ),
       ),
     );
   }

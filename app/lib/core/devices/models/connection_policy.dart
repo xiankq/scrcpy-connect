@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:adb/adb.dart'
     show AdbConnectOptions, AdbTcpOptions, AdbKeepaliveOptions;
 
@@ -23,14 +25,7 @@ class ConnectionPolicy {
     this.tcpipReconnectTimeout = const Duration(seconds: 20),
     this.tcpipRetryInterval = const Duration(milliseconds: 300),
     this.tcpipAttemptTimeout = const Duration(seconds: 4),
-    this.tcp = const AdbTcpOptions(
-      keepalive: AdbKeepaliveOptions(
-        idle: Duration(seconds: 1),
-        interval: Duration(seconds: 1),
-        retries: 10,
-      ),
-      userTimeout: Duration(seconds: 11),
-    ),
+    this._tcp,
     this.healthEnabled = true,
     this.healthIdle = const Duration(seconds: 10),
     this.healthProbeTimeout = const Duration(seconds: 3),
@@ -40,6 +35,17 @@ class ConnectionPolicy {
     this.reconnectInitialDelay = const Duration(seconds: 2),
     this.reconnectMaxDelay = const Duration(seconds: 64),
   });
+
+  static final _defaultTcp = AdbTcpOptions(
+    keepalive: const AdbKeepaliveOptions(
+      idle: Duration(seconds: 1),
+      interval: Duration(seconds: 1),
+      retries: 10,
+    ),
+    userTimeout: Platform.isAndroid || Platform.isLinux
+        ? const Duration(seconds: 11)
+        : null,
+  );
 
   final Duration setupLeaseTimeout;
   final Duration setupPollInterval;
@@ -57,7 +63,8 @@ class ConnectionPolicy {
   final Duration tcpipReconnectTimeout;
   final Duration tcpipRetryInterval;
   final Duration tcpipAttemptTimeout;
-  final AdbTcpOptions tcp;
+  final AdbTcpOptions? _tcp;
+  AdbTcpOptions get tcp => _tcp ?? _defaultTcp;
   final bool healthEnabled;
   final Duration healthIdle;
   final Duration healthProbeTimeout;

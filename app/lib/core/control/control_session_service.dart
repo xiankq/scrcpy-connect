@@ -1092,12 +1092,19 @@ final class ControlSessionService implements RemoteClipboard, RemoteControl {
   ) async {
     try {
       onAudioEligibilityChanged?.call(slot.deviceId);
+      final retainedTask = plan.moveForegroundApp && plan.packageName != null
+          ? await SessionShell(
+              slot.connection,
+              policy.shellTimeout,
+            ).task(plan.packageName!, 0, slot.initial.stop)
+          : null;
       final capture = await _spawn(
         slot,
         slot.initial,
         plan.displaySize,
         quality,
         1,
+        retainedTask: retainedTask,
       );
       _check(slot, slot.initial);
       slot.current = capture;

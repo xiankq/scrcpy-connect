@@ -32,11 +32,61 @@ import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/route_resource_resolver_provider.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
+import 'package:scrcpy_connect/widgets/navigation_scaffold.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 
 void main() {
+  testWidgets('桌面侧栏展开时保留图标位置和正文滚动', (tester) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(700, 660);
+    final scroll = ScrollController();
+    addTearDown(scroll.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ConnectTokens.theme(Brightness.dark),
+        home: DesktopWindowInsets(
+          left: 72,
+          right: 0,
+          top: 28,
+          child: AppNavigationShell(
+            uri: Uri(path: '/devices'),
+            child: ListView(
+              controller: scroll,
+              children: const [SizedBox(height: 1200)],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final sidebar = find.byKey(const ValueKey('app-sidebar'));
+    final icon = find.byIcon(AppIcons.navigationDevices);
+    final position = tester.getCenter(icon);
+    expect(tester.getSize(sidebar).width, 72);
+    scroll.jumpTo(190);
+
+    tester.view.physicalSize = const Size(900, 660);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.getSize(sidebar).width, inExclusiveRange(72, 208));
+    expect(tester.getCenter(icon), position);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(sidebar).width, 208);
+    expect(scroll.offset, 190);
+
+    tester.view.physicalSize = const Size(550, 660);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(sidebar).width, 0);
+    expect(scroll.offset, 190);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'navigation and device panes retain selection at width thresholds',
     (tester) async {

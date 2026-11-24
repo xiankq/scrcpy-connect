@@ -31,6 +31,9 @@ abstract interface class DeviceInspection {
     String? connectionId,
     AdbCancellation? cancellation,
   });
+  Future<DeviceReading<({int width, int height})?>> readScreenSize(
+    String deviceId,
+  );
   Future<DeviceReading<String>> readForegroundApp(
     String deviceId, {
     String? connectionId,

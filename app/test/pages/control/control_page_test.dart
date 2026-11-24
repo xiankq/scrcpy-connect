@@ -169,11 +169,64 @@ void main() {
     );
     expect(videos.starts, 3);
 
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1040, 700);
+    await tester.pumpAndSettle();
+    final switcher = windows.showSwitcher(
+      tester.element(find.byType(ControlPage)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(
+          ValueKey<RemoteWindowTarget>((
+            deviceId: tablet.id,
+            packageName: null,
+          )),
+        ),
+        matching: find.byTooltip('与当前画面并排'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await switcher;
+    expect(find.byType(ControlPage), findsNWidgets(2));
+    expect(videos.resumes, contains(tablet.id));
+    final paired = find.byWidgetPredicate(
+      (widget) =>
+          widget is RemoteWindowScope &&
+          widget.pane.target.deviceId == tablet.id,
+    );
+    expect(tester.widget<RemoteWindowScope>(paired).focused, isFalse);
+    await tester.tapAt(const Offset(995, 30));
+    await tester.pumpAndSettle();
+    expect(tester.widget<RemoteWindowScope>(paired).focused, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(control.sent.map((call) => call.$1.sessionId), ['tablet', 'tablet']);
+    control.sent.clear();
+    tester.view.physicalSize = const Size(700, 700);
+    await tester.pumpAndSettle();
+    expect(find.byType(ControlPage), findsOneWidget);
+    expect(
+      tester.widget<ControlPage>(find.byType(ControlPage)).device.id,
+      tablet.id,
+    );
+    tester.view.physicalSize = const Size(1040, 700);
+    await tester.pumpAndSettle();
+    expect(find.byType(ControlPage), findsNWidgets(2));
+    expect(videos.starts, 3);
+
     final pane = windows.windowFor((deviceId: 'device', packageName: package))!;
     final closed = pane.close!();
     await tester.pumpAndSettle();
     expect(await closed, isTrue);
     expect(videos.stops, [package]);
+    expect(
+      tester.widget<ControlPage>(find.byType(ControlPage)).device.id,
+      tablet.id,
+    );
     await openRemoteRoute(workbench, deviceId: 'device');
     await tester.pumpAndSettle();
     expect(videos.starts, 3);
@@ -535,6 +588,11 @@ void main() {
     );
     await tester.pump();
     expect(original.starts, 1);
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(find.byType(ControlPage), findsOneWidget);
+    expect(original.stops, isEmpty);
+    expect(control.sent, isEmpty);
     container.updateOverrides([
       appSessionProvider.overrideWithValue(dependencies),
       deviceReaderProvider.overrideWithValue(dependencies.devices),

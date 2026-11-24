@@ -43,12 +43,14 @@ import 'package:scrcpy_connect/pages/transfers/details/transfer_details_page.dar
 import 'package:scrcpy_connect/pages/transfers/export/document_export_page.dart';
 import 'package:scrcpy_connect/pages/transfers/receive/receive_content_page.dart';
 import 'package:scrcpy_connect/pages/transfers/transfers_page.dart';
+import 'package:scrcpy_connect/router/mobile_remote_capabilities.dart';
 import 'package:scrcpy_connect/router/models/remote_control_intent.dart';
 import 'package:scrcpy_connect/router/models/remote_launch_intent.dart';
 import 'package:scrcpy_connect/router/route_observers.dart';
 import 'package:scrcpy_connect/router/route_resource_resolver_provider.dart';
 import 'package:scrcpy_connect/router/route_resource_view.dart';
 import 'package:scrcpy_connect/widgets/navigation_scaffold.dart';
+import 'package:scrcpy_connect/widgets/tab_transition.dart';
 import 'package:scrcpy_connect/pages/session_pending/session_content.dart';
 import 'package:scrcpy_connect/widgets/visible_device_focus.dart';
 
@@ -160,7 +162,14 @@ Widget _remoteView(
   VideoSessionView? session,
   RemoteControlIntent? action,
 }) {
-  if (session == null && intent is! RemoteLaunchIntent) {
+  final attachment = MobileRemoteScope.maybeOf(context)?.attachment;
+  // The native scene can re-report the URI without its in-memory route extra.
+  final RemoteLaunchIntent? launch = intent is RemoteLaunchIntent
+      ? intent
+      : attachment != null && attachment.location == state.uri.toString()
+      ? attachment.extra
+      : null;
+  if (session == null && launch == null) {
     return const RouteErrorPage(message: '无法恢复手机画面。请回到设备工作台，点「打开手机屏幕」。');
   }
   return ControlPage(
@@ -171,8 +180,8 @@ Widget _remoteView(
     existingSession: session,
     packageName: packageName ?? session?.session.packageName,
     requestKeyboard: keyboard,
-    initialAction:
-        action ?? (intent is RemoteLaunchIntent ? intent.action : null),
+    moveForegroundApp: launch?.moveForegroundApp ?? false,
+    initialAction: action ?? launch?.action,
   );
 }
 
@@ -203,6 +212,13 @@ class RootRoute extends GoRouteData with $RootRoute {
 )
 class HomeShellRoute extends StatefulShellRouteData {
   const HomeShellRoute();
+
+  static Widget $navigatorContainerBuilder(
+    BuildContext context,
+    StatefulNavigationShell navigationShell,
+    List<Widget> children,
+  ) => TabPaneStack(index: navigationShell.currentIndex, children: children);
+
   // 三个分支只有入口页；位置及返回链由外层路由恢复，运行中仍由 shell 保留页面。
   // go_router 18.1.4 的分支恢复不会在替换 bucket 时重新注册已有属性。
   @override

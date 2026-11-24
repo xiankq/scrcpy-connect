@@ -37,6 +37,7 @@ import 'package:scrcpy_connect/pages/control/widgets/remote_recovery_panel.dart'
 import 'package:scrcpy_connect/pages/control/widgets/remote_surface.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
+import 'package:scrcpy_connect/router/mobile_remote_capabilities.dart';
 import 'package:scrcpy_connect/router/models/remote_control_intent.dart';
 import 'package:scrcpy_connect/router/models/remote_launch_intent.dart';
 import 'package:scrcpy_connect/router/remote_windows.dart';
@@ -55,12 +56,14 @@ class ControlPage extends ConsumerStatefulWidget {
     this.packageName,
     this.existingSession,
     this.requestKeyboard = false,
+    this.moveForegroundApp = false,
     this.initialAction,
   });
   final DeviceSnapshot device;
   final String? packageName;
   final VideoSessionView? existingSession;
   final bool requestKeyboard;
+  final bool moveForegroundApp;
   final RemoteControlIntent? initialAction;
   @override
   ConsumerState<ControlPage> createState() => _ControlPageState();
@@ -73,8 +76,12 @@ class _ControlPageState extends ConsumerState<ControlPage>
   final keyboardFocus = FocusNode();
   SessionViewLease? get view => window.view;
   ModalRoute<dynamic>? observedRoute;
+  MobileRemoteClient? _mobileWindow;
+  StreamSubscription<MobileRemoteRequest>? _mobileRequests;
   RemoteWindowPane? _pane;
+  (Size, double)? _desktopScreenGeometry;
   var _windowActive = true;
+  var _windowFocused = true;
   RemoteWindowRequest? _request;
   late RemoteControlIntent? _initialAction = widget.initialAction;
   late bool _keyboardRequested = widget.requestKeyboard;
@@ -172,6 +179,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
         context,
         deviceId: widget.device.id,
         packageName: package,
+        moveForegroundApp: true,
       );
     } catch (failure) {
       if (mounted && !presentation.exiting) {
@@ -192,6 +200,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
   }
 
   bool get acceptsInput =>
+      _windowFocused &&
       _canPresent &&
       WidgetsBinding.instance.lifecycleState != AppLifecycleState.inactive;
 
@@ -231,6 +240,21 @@ class _ControlPageState extends ConsumerState<ControlPage>
   void initState() {
     super.initState();
     _events = ref.read(runtimeEventsProvider);
+    _mobileWindow = ref.read(mobileRemoteClientProvider);
+    if (_mobileWindow?.attachment?.request case final request?) {
+      _initialAction = request.action ?? _initialAction;
+      if (request.keyboard) _keyboardRequested = true;
+    }
+    _mobileRequests = _mobileWindow?.requests.listen((request) {
+      if (!_sourcesCurrent || presentation.exiting) return;
+      if (request.keyboard) _keyboardRequested = true;
+      if (request.action != null) {
+        _initialAction = request.action;
+        presentation.allowInitialAction();
+        unawaited(applyPendingInitialAction());
+      }
+      if (_keyboardRequested) showKeyboard();
+    });
     _videos = ref.read(videoSessionsProvider);
     _clipboardFocus = ref
         .read(clipboardFocusProvider.notifier)
@@ -308,7 +332,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
       window: window,
       packageName: widget.packageName,
       existingSession: widget.existingSession,
-      foreground: () => acceptsInput,
+      foreground: () => _canPresent,
       routeCurrent: () => ModalRoute.of(context)?.isCurrent != false,
       reconciliationPending: () =>
           ref.read(recoveryStateProvider).reconciliationPending,
@@ -350,6 +374,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
         return VideoSessionPlan(
           deviceId: widget.device.id,
           packageName: widget.packageName,
+          moveForegroundApp: widget.moveForegroundApp,
           displaySize: dimensions,
           displayAuto: dimensions != null && displaySettings.mode == 'auto',
         );
@@ -449,17 +474,38 @@ class _ControlPageState extends ConsumerState<ControlPage>
     final package = widget.packageName;
     if (package == null ||
         presentation.appLaunchUnknown ||
-        presentation.stateUnverified ||
-        !await confirm(context, '在手机屏幕继续？', '将在手机屏幕继续此应用。', action: '继续打开') ||
-        !mounted ||
-        presentation.appLaunchUnknown ||
         presentation.stateUnverified) {
       return;
     }
     final windows = RemoteWindows.maybeOf(context);
+    if (_mobileWindow case final mobile?) {
+      final deviceId = widget.device.id;
+      final cleanup = await window.close(releaseInputs, movingToPhone: true);
+      if (!mounted) return;
+      if (cleanup.closeFailure case final failure?) {
+        setState(() => presentation.phoneMoveFailed(remoteFailure(failure)));
+        return;
+      }
+      await mobile.open((
+        deviceId: deviceId,
+        sessionId: null,
+        packageName: package,
+        appName: null,
+        onPhoneScreen: true,
+        moveForegroundApp: false,
+        keyboard: false,
+        action: null,
+      ));
+      await mobile.close(returnToWorkbench: false);
+      return;
+    }
     if (_pane == null) {
-      final result = await window.close(releaseInputs);
-      if (!mounted || result.closeFailure != null) return;
+      final result = await window.close(releaseInputs, movingToPhone: true);
+      if (!mounted) return;
+      if (result.closeFailure case final failure?) {
+        setState(() => presentation.phoneMoveFailed(remoteFailure(failure)));
+        return;
+      }
       RemoteRoute(
         deviceId: widget.device.id,
         $extra: RemoteLaunchIntent(
@@ -469,7 +515,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
       return;
     }
     final deviceId = widget.device.id;
-    if (!await leave() || windows?.mounted != true) return;
+    if (!await leave(movingToPhone: true) || windows?.mounted != true) return;
     final workbench = windows?.workbenchContext;
     if (workbench == null || !workbench.mounted) return;
     await openRemoteRoute(
@@ -523,11 +569,22 @@ class _ControlPageState extends ConsumerState<ControlPage>
     super.didChangeDependencies();
     final scope = RemoteWindowScope.of(context);
     _pane = scope?.pane;
-    _pane?.deviceLabel = deviceName(widget.device);
-    _pane?.close = leave;
+    if (_pane case final pane?) {
+      final label = deviceName(widget.device);
+      if (pane.deviceLabel != label) {
+        pane.deviceLabel = label;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) pane.desktop?.setTitle(pane.title);
+        });
+      }
+      pane.close = leave;
+    }
     final active = scope?.active ?? RemoteWindows.isVisible(context);
-    final changed = active != _windowActive;
+    final focused = scope?.focused ?? active;
+    final visibilityChanged = active != _windowActive;
+    final focusChanged = focused != _windowFocused;
     _windowActive = active;
+    _windowFocused = focused;
     final request = scope?.request;
     final newRequest = request != null && request != _request;
     if (newRequest) {
@@ -545,19 +602,26 @@ class _ControlPageState extends ConsumerState<ControlPage>
       observedRoute = route;
       if (route != null) observer.subscribe(this, route);
     }
-    if (changed || newRequest) {
+    if (visibilityChanged || focusChanged || newRequest) {
       presentation.cover(!active || route?.isCurrent == false);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!_sourcesCurrent ||
             _windowActive != active ||
+            _windowFocused != focused ||
             presentation.exiting) {
           return;
         }
-        if (changed && !active) {
+        if (visibilityChanged && !active) {
           unawaited(pauseView());
-        } else if (changed && !presentation.covered) {
+        } else if (visibilityChanged && !presentation.covered) {
           didPopNext();
-        } else if (newRequest) {
+        } else if (focusChanged && !focused) {
+          updateClipboardFocus(sessionId, false);
+          inputFocus.unfocus();
+          unawaited(releaseInputs());
+        } else if (newRequest || focusChanged) {
+          focusVisibleDevice();
+          displaySizing.reconsider();
           unawaited(applyPendingInitialAction());
         }
         if (_keyboardRequested) showKeyboard();
@@ -636,6 +700,9 @@ class _ControlPageState extends ConsumerState<ControlPage>
         return;
       }
       _clipboardFocus.focus(sessionId, focused);
+      if (_mobileWindow case final mobile?) {
+        unawaited(mobile.focus(sessionId, focused));
+      }
       if (selectDevice && _sourcesCurrent) {
         unawaited(
           ref.read(currentDeviceProvider.notifier).focus(widget.device.id),
@@ -723,7 +790,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
     unawaited(send(ControlAction.key(code, action: .up)));
   }
 
-  Future<bool> leave() async {
+  Future<bool> leave({bool movingToPhone = false}) async {
     if (presentation.exiting) return false;
     displaySizing.cancel();
     final pane = _pane;
@@ -732,7 +799,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
         windows?.workbenchMessenger ?? ScaffoldMessenger.maybeOf(context);
     final left = Completer<void>();
     final id = sessionId;
-    final cleanup = window.close(releaseInputs);
+    final cleanup = window.close(releaseInputs, movingToPhone: movingToPhone);
     setState(() {});
     unawaited(
       cleanup.then((result) async {
@@ -762,6 +829,28 @@ class _ControlPageState extends ConsumerState<ControlPage>
       }),
     );
     await WidgetsBinding.instance.endOfFrame;
+    if (_mobileWindow case final mobile?) {
+      final result = await cleanup;
+      left.complete();
+      if (result.closeFailure case final failure?) {
+        if (mounted) {
+          setState(() => presentation.phoneMoveFailed(remoteFailure(failure)));
+        }
+        return false;
+      }
+      await mobile.close();
+      return true;
+    }
+    if (movingToPhone) {
+      final failure = (await cleanup).closeFailure;
+      if (failure != null) {
+        if (mounted) {
+          setState(() => presentation.phoneMoveFailed(remoteFailure(failure)));
+        }
+        left.complete();
+        return false;
+      }
+    }
     if (pane != null && windows != null) {
       await cleanup;
       if (windows.mounted) windows.remove(pane);
@@ -788,6 +877,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
     (_pane?.observer ?? sessionRouteObserver).unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     eventSubscription?.cancel();
+    unawaited(_mobileRequests?.cancel());
     inputFocus.removeListener(inputFocusChanged);
     inputFocus.dispose();
     keyboardFocus.dispose();
@@ -800,7 +890,10 @@ class _ControlPageState extends ConsumerState<ControlPage>
   @override
   Widget build(BuildContext context) {
     final windows = RemoteWindows.maybeOf(context);
-    final switchWindows = _pane != null && windows != null
+    final mobile = _mobileWindow;
+    final switchWindows = mobile != null
+        ? () => showMobileRemoteSwitcher(context, mobile)
+        : _pane != null && windows != null
         ? () => windows.showSwitcher(context)
         : null;
     ref.listen(runtimeEventsProvider, (_, _) => _checkSources());
@@ -857,17 +950,33 @@ class _ControlPageState extends ConsumerState<ControlPage>
             false,
       ),
     );
+    final desktop = _pane?.desktop;
+    if (desktop != null &&
+        widget.packageName == null &&
+        !loadingBackdrop &&
+        valid &&
+        !ime &&
+        presentation.imageGeometryReady) {
+      final size = Size(presentation.imageWidth, presentation.imageHeight);
+      final navigationHeight = showNavigationBar
+          ? DesignTokens.componentRemoteNavigationHeight
+          : 0.0;
+      final geometry = (size, navigationHeight);
+      if (_desktopScreenGeometry != geometry) {
+        _desktopScreenGeometry = geometry;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _pane?.desktop == desktop) {
+            desktop.updateScreenGeometry(size, navigationHeight);
+          }
+        });
+      }
+    }
     return ScaffoldMessenger(
       key: notices.messengerKey,
       child: PopScope(
         canPop: presentation.exiting,
         onPopInvokedWithResult: (popped, _) {
-          if (popped) return;
-          if (loadingBackdrop) {
-            unawaited(leave());
-          } else {
-            pressNavigationKey(4);
-          }
+          if (!popped) pressNavigationKey(4);
         },
         child: Focus(
           autofocus: true,
@@ -920,6 +1029,9 @@ class _ControlPageState extends ConsumerState<ControlPage>
                   key: const ValueKey('remote-exit-handle'),
                   onExit: leave,
                   onSwitchWindow: switchWindows,
+                  onMoveToPhone: widget.packageName != null && canSendInput
+                      ? continueOnPhoneScreen
+                      : null,
                   independent: widget.packageName != null,
                   onSleep: canSendInput ? () => pressNavigationKey(223) : null,
                   onConvert:

@@ -89,6 +89,7 @@ mixin $RootRoute on GoRouteData {
 }
 
 RouteBase get $homeShellRoute => StatefulShellRouteData.$route(
+  navigatorContainerBuilder: HomeShellRoute.$navigatorContainerBuilder,
   factory: $HomeShellRouteExtension._fromState,
   branches: [
     StatefulShellBranchData.$branch(

@@ -51,7 +51,7 @@ class RemoteRecoveryPanel extends StatelessWidget {
           !presentation.qualityRetryable &&
           !presentation.appLaunchUnknown &&
           !presentation.stateUnverified)
-        action('在手机屏幕继续', onContinueOnPhoneScreen),
+        action('移回手机屏幕', onContinueOnPhoneScreen),
       if (presentation.appLaunchUnknown)
         action('关闭本次打开记录', onCloseUnknownAppLaunch),
       if (onRetry != null)
@@ -72,7 +72,7 @@ class RemoteRecoveryPanel extends StatelessWidget {
           onRetry!,
         ),
       if (waitingForFirstFrame && onReturn != null)
-        TextButton(onPressed: onReturn, child: const Text('返回')),
+        TextButton(onPressed: onReturn, child: const Text('关闭')),
     ];
     final message = presentation.error ?? '连接恢复后，手机画面会继续显示。';
 

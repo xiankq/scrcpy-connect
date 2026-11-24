@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/widgets/content_arrival.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
@@ -53,44 +52,6 @@ class DevicesPage extends HookConsumerWidget {
           ),
         )
         .toList();
-    final searchField = TextField(
-      controller: query,
-      style: Theme.of(context).textTheme.bodyMedium,
-      decoration: InputDecoration(
-        isDense: true,
-        constraints: const BoxConstraints(
-          minHeight: DesignTokens.componentDeviceListSearchHeight,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(
-            DesignTokens.componentDeviceListSearchRounded,
-          ),
-          borderSide: BorderSide.none,
-        ),
-        prefixIconConstraints: const BoxConstraints(
-          minWidth: DesignTokens.componentIconButtonSize,
-          minHeight: DesignTokens.componentDeviceListSearchHeight,
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          vertical: DesignTokens.spacingSm,
-        ),
-        hintText: '搜索设备名称或型号',
-        prefixIcon: const Icon(
-          AppIcons.search,
-          size: DesignTokens.componentIconActionSize,
-        ),
-        suffixIcon: query.text.isEmpty
-            ? null
-            : GlassActionIcon(
-                tooltip: '清除搜索',
-                onPressed: query.clear,
-                icon: const Icon(
-                  AppIcons.close,
-                  size: DesignTokens.componentIconActionSize,
-                ),
-              ),
-      ),
-    );
     final addButton = GlassActionIcon(
       onPressed: () => AddDeviceRoute().push<void>(context),
       tooltip: '添加设备',
@@ -115,18 +76,7 @@ class DevicesPage extends HookConsumerWidget {
           headerHeight: compactHeader || split
               ? DesignTokens.componentPageHeaderHeight
               : DesignTokens.componentDeviceListHeaderHeight,
-          titleContent:
-              showSearch &&
-                  compactHeader &&
-                  liquid.GlassVerticalBar.maybeOf(context) == null
-              ? Row(
-                  children: [
-                    Text('设备', style: Theme.of(context).textTheme.titleLarge),
-                    const SizedBox(width: DesignTokens.spacingSm),
-                    Expanded(child: searchField),
-                  ],
-                )
-              : null,
+          search: showSearch ? (controller: query, hint: '搜索设备名称或型号') : null,
           actions: useSideToolbar
               ? null
               : [
@@ -227,14 +177,6 @@ class DevicesPage extends HookConsumerWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                if (showSearch &&
-                                    (!compactHeader ||
-                                        liquid.GlassVerticalBar.maybeOf(
-                                              context,
-                                            ) !=
-                                            null)) ...[
-                                  searchField,
-                                ],
                                 if (appDeviceError != null)
                                   StateNote(
                                     appDeviceError,
@@ -339,9 +281,9 @@ class DevicesPage extends HookConsumerWidget {
 
     return WorkspacePanes(
       onCloseDetail: selected == null ? null : closeDetail,
-      hasContent: devices.isNotEmpty || selected != null,
+      hasContent: appDevices.isNotEmpty || selected != null,
       builder: (context, split, useSideToolbar) {
-        final detail = selected ?? (split ? devices.firstOrNull : null);
+        final detail = selected ?? (split ? appDevices.firstOrNull : null);
         final manageButton = detail == null
             ? null
             : GlassActionIcon(

@@ -25,6 +25,7 @@ import 'package:scrcpy_connect/core/media/models/video_output.dart';
 import 'package:scrcpy_connect/core/media/remote_audio.dart';
 import 'package:scrcpy_connect/core/media/video_output_service.dart';
 import 'package:scrcpy_connect/core/media/video_playback_service.dart';
+import 'package:scrcpy_connect/core/media/video_player.dart';
 import 'package:scrcpy_connect/core/media/video_quality_service.dart';
 import 'package:scrcpy_connect/core/media/video_recovery.dart';
 import 'package:scrcpy_connect/core/media/video_screenshots.dart';
@@ -350,7 +351,10 @@ final class MediaPlayback
   }
 
   @override
-  Future<VideoSessionView> startVideo(VideoSessionPlan plan) async {
+  Future<VideoSessionView> startVideo(
+    VideoSessionPlan plan, {
+    VideoPlayerFactory? playerFactory,
+  }) async {
     _checkVideoOpen(verified: true);
     final intent = _mediaIntents.begin(plan.deviceId, audio: false);
     try {
@@ -359,7 +363,11 @@ final class MediaPlayback
         await _ensureVideoDecoder(plan.deviceId);
         _checkVideoOpen(intent: intent);
         final capture = await captures.startVideo(plan);
-        final playback = await _startVideoOutput(capture, intent);
+        final playback = await _startVideoOutput(
+          capture,
+          intent,
+          playerFactory: playerFactory,
+        );
         return VideoSessionView(
           session: playback.session,
           output: playback.output,
@@ -488,8 +496,9 @@ final class MediaPlayback
 
   Future<VideoPlaybackReceipt> _startVideoOutput(
     VideoSessionSnapshot result,
-    MediaIntent? intent,
-  ) async {
+    MediaIntent? intent, {
+    VideoPlayerFactory? playerFactory,
+  }) async {
     final id = result.sessionId;
     intent?.bind(id);
     if (_disposed || intent?.cancelled == true) {
@@ -503,6 +512,7 @@ final class MediaPlayback
       final texture = await _videoOutputs.start(
         result.capture,
         cancelled: () => _disposed || intent?.cancelled == true,
+        playerFactory: playerFactory,
       );
       if (_disposed || intent?.cancelled == true) {
         throw const RequestFailure('cancelled', '已停止本次画面，不会重新启动。');
