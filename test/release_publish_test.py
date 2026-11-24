@@ -82,6 +82,7 @@ elif args[:2] == ["release", "edit"] and "--draft=false" in args:
                 )
                 if corrupt:
                     self.assertIn("ERROR [GitHub release/verify remote checksums]", details)
+                    self.assertIn("Missing or mismatched: replace.apk", details)
 
 
 if __name__ == "__main__":
