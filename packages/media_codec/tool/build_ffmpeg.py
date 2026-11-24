@@ -18,6 +18,7 @@ import sys
 import subprocess
 import tarfile
 import tempfile
+import time
 import urllib.request
 
 PACKAGE = Path(__file__).resolve().parents[1]
@@ -457,8 +458,11 @@ def main():
         parser.error("--jobs must be positive")
     cache = WORKSPACE / ".dart_tool/media_codec"
     prefix = (args.prefix or cache / "ffmpeg" / f"{args.platform}-{args.arch}").resolve()
+    start = time.monotonic()
     with prefix_lock(prefix):
         build(args, cache, prefix)
+    print(f"INFO [FFmpeg and dav1d/{args.platform}-{args.arch}] Completed in {time.monotonic() - start:.2f}s",
+          flush=True)
 
 
 if __name__ == "__main__":

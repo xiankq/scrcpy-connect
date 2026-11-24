@@ -442,6 +442,12 @@ Future<void> main(List<String> arguments) async {
         'update-feed',
         help: 'Public HTTPS update feed for this package.',
       )
+      ..addFlag(
+        'verbose',
+        abbr: 'v',
+        negatable: false,
+        help: 'Show Flutter build details.',
+      )
       ..addFlag('help', abbr: 'h', negatable: false);
     final args = parser.parse(arguments);
     if (args['help'] as bool) {
@@ -507,6 +513,7 @@ Future<void> main(List<String> arguments) async {
         await streamTool(
           [
             executable('flutter') ?? 'flutter',
+            if (args.flag('verbose')) '--verbose',
             'build',
             platform,
             if (simulator) ...['--simulator', '--debug'] else '--release',

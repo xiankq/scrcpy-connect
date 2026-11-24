@@ -27,3 +27,5 @@ Android 和桌面构建都接受 `--update-feed <HTTPS 地址>`，给应用配�
 `release.dart` 读取应用版本和变更记录，检查标签，再把通过验证的包整理成 GitHub Release 附件。`release_media_source.py` 收集按锁文件校验过的媒体源码、补丁和构建工具。CI、试打包与正式发布方式见[发布说明](../docs/releasing.md)。
 
 桌面打包可用 `--verify-only` 复用已构建的同架构应用。Linux 发布格式需要 `dpkg-deb`、`rpmbuild`、`file`、`desktop-file-validate`、`appstreamcli` 和 `squashfs-tools`。Windows 安装器由 Inno Setup 的 `ISCC.exe` 生成。macOS 试打包直接生成 DMG。
+
+排查编译耗时时可用 `build_host.dart windows --verbose` 查看 Flutter、CMake、FFmpeg 和媒体 Rust 的原生构建日志。
