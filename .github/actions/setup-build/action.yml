@@ -30,9 +30,9 @@ runs:
         ANDROID_BUILD: ${{ inputs.android }}
       run: |
         if [[ "$RUNNER_ARCH" == X64 ]]; then
-          sudo sed -i -E 's@https?://[[:alnum:].-]+\.ec2\.archive\.ubuntu\.com/ubuntu@https://archive.ubuntu.com/ubuntu@g' /etc/apt/sources.list.d/ubuntu.sources
+          sudo sed -i -E 's@mirror\+file:/etc/apt/apt-mirrors\.txt|https?://[[:alnum:].-]+\.ec2\.archive\.ubuntu\.com/ubuntu@https://archive.ubuntu.com/ubuntu@g' /etc/apt/sources.list.d/ubuntu.sources
         fi
-        printf '%s\n' 'Acquire::Retries "2";' 'Acquire::http::Timeout "15";' 'Acquire::https::Timeout "15";' \
+        printf '%s\n' 'Acquire::Retries "2";' 'Acquire::http::Timeout "15";' 'Acquire::https::Timeout "15";' 'Acquire::Languages "none";' \
           | sudo tee /etc/apt/apt.conf.d/99-interconnect-ci >/dev/null
         packages=(build-essential nasm pkg-config)
         if [[ "$ANDROID_BUILD" != true ]]; then
@@ -114,4 +114,4 @@ runs:
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ inputs.media-cache-path }}
-        key: media-${{ runner.os }}-${{ runner.arch }}-${{ inputs.media-profile }}-${{ steps.image.outputs.version }}-${{ hashFiles('packages/media_codec/third_party/**', 'packages/media_codec/tool/**', 'packages/media_codec/darwin/build_native.sh', '.github/actions/setup-build/action.yml', '.github/workflows/package.yml') }}
+        key: media-${{ runner.os }}-${{ runner.arch }}-${{ inputs.media-profile }}-${{ steps.image.outputs.version }}-${{ hashFiles('packages/media_codec/third_party/**', 'packages/media_codec/tool/**', 'packages/media_codec/darwin/build_native.sh') }}

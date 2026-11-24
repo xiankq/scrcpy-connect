@@ -18,7 +18,7 @@ preview="${PREVIEW:?Missing release channel}"
 notes="$2"
 cd "$1"
 sha256sum --check --strict SHA256SUMS
-expected="$({ cat SHA256SUMS; sha256sum SHA256SUMS; } | jq -Rn '
+expected="$({ cat SHA256SUMS; sha256sum SHA256SUMS; } | jq -Rnc '
   [inputs | capture("^(?<hash>[a-f0-9]{64})  (?<name>[a-zA-Z0-9._-]+)$")
     | {name, digest: ("sha256:" + .hash)}] | sort_by(.name)')"
 
@@ -54,8 +54,15 @@ if [[ -n "$pending" ]]; then
 fi
 
 begin 'verify remote checksums'
-gh api "$assets_endpoint" | jq -e --argjson expected "$expected" '
-  map(select(.state == "uploaded") | {name, digest}) | sort_by(.name) == $expected' >/dev/null
+verified="$(gh api "$assets_endpoint" | jq -c '
+  map(select(.state == "uploaded") | {name, digest}) | sort_by(.name)')"
+if [[ "$verified" != "$expected" ]]; then
+  jq -nr --argjson expected "$expected" --argjson verified "$verified" '
+    ($expected - $verified)[] | "Missing or mismatched: \(.name)"' >&2
+  jq -nr --argjson expected "$expected" --argjson verified "$verified" '
+    ($verified - $expected)[] | "Unexpected upload or digest: \(.name)"' >&2
+  exit 1
+fi
 
 begin publish
 if [[ "$preview" == true ]]; then
