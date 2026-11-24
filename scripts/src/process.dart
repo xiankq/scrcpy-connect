@@ -19,14 +19,20 @@ Future<void> runStreamingProcess(
     mode: ProcessStartMode.inheritStdio,
     runInShell: _needsShell(executable),
   );
+  final int code;
   try {
-    final code = await process.exitCode.timeout(timeout);
-    if (code != 0) {
-      throw ProcessException(executable, arguments, 'Command failed', code);
-    }
-  } on Object {
+    code = await process.exitCode.timeout(timeout);
+  } on TimeoutException {
     await _terminate(process, executable, arguments);
-    rethrow;
+    throw ProcessException(
+      executable,
+      arguments,
+      'Timed out after ${timeout.inSeconds}s',
+      124,
+    );
+  }
+  if (code != 0) {
+    throw ProcessException(executable, arguments, 'Command failed', code);
   }
 }
 

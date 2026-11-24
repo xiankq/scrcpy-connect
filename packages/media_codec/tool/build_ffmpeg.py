@@ -119,29 +119,43 @@ def prefix_lock(prefix):
                 fcntl.flock(handle, fcntl.LOCK_UN)
 
 
-def source_archive(name, lock, cache):
-    with prefix_lock(cache / "source" / name):
-        return extract_source_archive(name, lock, cache)
-
-
-def extract_source_archive(name, lock, cache):
+def verified_source_archive(name, lock, cache):
     archives = cache / "source"
     archives.mkdir(parents=True, exist_ok=True)
     archive = archives / f"{name}-{lock['revision']}.tar.gz"
-    if not archive.is_file():
-        temporary = archive.with_suffix(f".{os.getpid()}.download")
-        try:
-            urllib.request.urlretrieve(lock["url"], temporary)
-            if hashlib.sha256(temporary.read_bytes()).hexdigest() != lock["sha256"]:
-                raise RuntimeError(f"Pinned {name} source SHA-256 mismatch")
-            temporary.replace(archive)
-        finally:
-            temporary.unlink(missing_ok=True)
-    if hashlib.sha256(archive.read_bytes()).hexdigest() != lock["sha256"]:
-        raise RuntimeError(f"Pinned {name} source SHA-256 mismatch")
-    directory = archives / f"{name}-{lock['revision']}"
+    with prefix_lock(archive):
+        digest = hashlib.sha256()
+        if archive.is_file():
+            with archive.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            if digest.hexdigest() != lock["sha256"]:
+                raise RuntimeError(f"Pinned {name} source SHA-256 mismatch: {archive}")
+        else:
+            temporary = archive.with_suffix(f".{os.getpid()}.download")
+            try:
+                with urllib.request.urlopen(lock["url"], timeout=60) as response, temporary.open("wb") as stream:
+                    for chunk in iter(lambda: response.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                        stream.write(chunk)
+                if digest.hexdigest() != lock["sha256"]:
+                    raise RuntimeError(f"Pinned {name} source SHA-256 mismatch: {lock['url']}")
+                temporary.replace(archive)
+            finally:
+                temporary.unlink(missing_ok=True)
+    return archive
+
+
+def source_archive(name, lock, cache):
+    archive = verified_source_archive(name, lock, cache)
+    directory = archive.parent / f"{name}-{lock['revision']}"
+    with prefix_lock(directory):
+        return extract_source_archive(archive, directory)
+
+
+def extract_source_archive(archive, directory):
     if not directory.is_dir():
-        temporary = archives / f"extract-{name}-{os.getpid()}"
+        temporary = directory.with_name(f"extract-{directory.name}-{os.getpid()}")
         temporary.mkdir()
         try:
             with tarfile.open(archive) as compressed:
@@ -155,7 +169,7 @@ def extract_source_archive(name, lock, cache):
                     compressed.extractall(temporary)
             extracted = list(temporary.iterdir())
             if len(extracted) != 1 or not extracted[0].is_dir():
-                raise RuntimeError(f"Unexpected {name} archive layout")
+                raise RuntimeError(f"Unexpected source archive layout: {archive}")
             extracted[0].rename(directory)
         finally:
             shutil.rmtree(temporary, ignore_errors=True)

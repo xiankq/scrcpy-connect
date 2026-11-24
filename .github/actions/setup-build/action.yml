@@ -4,6 +4,18 @@ inputs:
   native:
     description: Also install tools for compiling native code
     default: 'true'
+  android:
+    description: Install Android host tools in place of Linux desktop libraries
+    default: 'false'
+  media-profile:
+    description: Platform, SDK and architecture of the pinned media build
+    default: ''
+  media-cache-path:
+    description: Directory containing the compiled media libraries and their receipts
+    default: .dart_tool/media_codec/ffmpeg
+  resolve-packages:
+    description: Restore the locked Dart and Flutter dependencies
+    default: 'true'
 runs:
   using: composite
   steps:
@@ -11,11 +23,23 @@ runs:
       uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
       with:
         python-version: '3.12'
-    - if: inputs.native == 'true' && runner.os == 'Linux'
+    - name: Install Ubuntu build dependencies
+      if: inputs.native == 'true' && runner.os == 'Linux'
       shell: bash
+      env:
+        ANDROID_BUILD: ${{ inputs.android }}
       run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential clang cmake libclang-dev libdrm-dev libepoxy-dev libgtk-3-dev libva-dev nasm pkg-config
+        if [[ "$RUNNER_ARCH" == X64 ]]; then
+          sudo sed -i -E 's@https?://[[:alnum:].-]+\.ec2\.archive\.ubuntu\.com/ubuntu@https://archive.ubuntu.com/ubuntu@g' /etc/apt/sources.list.d/ubuntu.sources
+        fi
+        printf '%s\n' 'Acquire::Retries "2";' 'Acquire::http::Timeout "15";' 'Acquire::https::Timeout "15";' \
+          | sudo tee /etc/apt/apt.conf.d/99-interconnect-ci >/dev/null
+        packages=(build-essential nasm pkg-config)
+        if [[ "$ANDROID_BUILD" != true ]]; then
+          packages+=(clang cmake libclang-dev libdrm-dev libepoxy-dev libgtk-3-dev libva-dev)
+        fi
+        timeout 4m sudo apt-get update -o APT::Update::Error-Mode=any
+        timeout 4m sudo apt-get install -y --no-install-recommends "${packages[@]}"
     - if: inputs.native == 'true' && runner.os == 'macOS'
       shell: bash
       run: |
@@ -74,7 +98,20 @@ runs:
         flutter-version: '3.50.1'
         channel: stable
         cache: true
-    - shell: bash
+    - name: Restore locked workspace dependencies
+      if: inputs.resolve-packages == 'true'
+      shell: bash
       env:
         PUB_HOSTED_URL: https://pub.flutter-io.cn
       run: flutter pub get --enforce-lockfile
+    - name: Identify hosted runner image
+      id: image
+      if: inputs.media-profile != ''
+      shell: bash
+      run: printf 'version=%s\n' "$ImageVersion" >> "$GITHUB_OUTPUT"
+    - name: Cache pinned media libraries
+      if: inputs.media-profile != ''
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ inputs.media-cache-path }}
+        key: media-${{ runner.os }}-${{ runner.arch }}-${{ inputs.media-profile }}-${{ steps.image.outputs.version }}-${{ hashFiles('packages/media_codec/third_party/**', 'packages/media_codec/tool/**', 'packages/media_codec/darwin/build_native.sh', '.github/actions/setup-build/action.yml', '.github/workflows/package.yml') }}

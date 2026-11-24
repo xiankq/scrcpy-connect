@@ -2,16 +2,28 @@
 set -euo pipefail
 bundle="$1"
 image="$2"
-stage="$(mktemp -d)"
-trap 'rm -rf "$stage"' EXIT
-staged="$stage/Interconnect.app"
+stage="$(mktemp -d "$(dirname "$image")/.macos-package.XXXXXX")"
+step=stage
+started=$SECONDS
+trap 'status=$?; if (( status != 0 )); then printf "ERROR [macOS installer/%s] Failed after %ss (exit %s)\n" "$step" "$((SECONDS - started))" "$status" >&2; fi; rm -rf "$stage"' EXIT
+begin() {
+  printf 'INFO [macOS installer/%s] Completed in %ss\n' "$step" "$((SECONDS - started))"
+  step="$1"
+  started=$SECONDS
+  printf 'INFO [macOS installer/%s] Started\n' "$step"
+}
+mkdir "$stage/root"
+staged="$stage/root/Interconnect.app"
+disk="$stage/Interconnect.dmg"
 ditto "$bundle" "$staged"
-ln -s /Applications "$stage/Applications"
+ln -s /Applications "$stage/root/Applications"
 
 if [[ -n "${MACOS_SIGNING_IDENTITY:-}" ]]; then
+  begin 'sign application'
   # 从内到外更新发布签名。Flutter 编译时生成的应用身份与权限保持不变。
-  while IFS= read -r -d '' file; do
-    if file -b "$file" | grep -q 'Mach-O'; then
+  find "$staged/Contents" -type f -exec file -0 -0 {} + |
+  while IFS= read -r -d '' file && IFS= read -r -d '' type; do
+    if [[ "$type" == *Mach-O* ]]; then
       codesign --force --options runtime --timestamp --sign "$MACOS_SIGNING_IDENTITY" "$file"
     fi
   done < <(find "$staged/Contents" -type f -print0)
@@ -23,15 +35,28 @@ if [[ -n "${MACOS_SIGNING_IDENTITY:-}" ]]; then
   codesign --verify --deep --strict "$staged"
 fi
 
-hdiutil create -ov -format UDZO -volname Interconnect -srcfolder "$stage" "$image"
-hdiutil verify "$image"
+begin 'create disk image'
+hdiutil create -format UDZO -volname Interconnect -srcfolder "$stage/root" "$disk"
 
 if [[ -n "${MACOS_SIGNING_IDENTITY:-}" ]]; then
-  codesign --force --timestamp --sign "$MACOS_SIGNING_IDENTITY" "$image"
-  receipt="$(xcrun notarytool submit "$image" --wait --output-format json \
-    --key "$MACOS_NOTARY_KEY_PATH" --key-id "$MACOS_NOTARY_KEY_ID" --issuer "$MACOS_NOTARY_ISSUER")"
+  begin notarize
+  codesign --force --timestamp --sign "$MACOS_SIGNING_IDENTITY" "$disk"
+  notary_args=(--key "$MACOS_NOTARY_KEY_PATH" --key-id "$MACOS_NOTARY_KEY_ID" --issuer "$MACOS_NOTARY_ISSUER")
+  if ! receipt="$(xcrun notarytool submit "$disk" --wait --timeout 20m --output-format json "${notary_args[@]}")"; then
+    printf '%s\n' "$receipt" >&2
+    exit 1
+  fi
   printf '%s\n' "$receipt"
-  [[ "$(printf '%s' "$receipt" | plutil -extract status raw -o - -)" = Accepted ]]
-  xcrun stapler staple "$image"
-  xcrun stapler validate "$image"
+  if [[ "$(printf '%s' "$receipt" | plutil -extract status raw -o - -)" != Accepted ]]; then
+    id="$(printf '%s' "$receipt" | plutil -extract id raw -o - -)"
+    xcrun notarytool log "$id" "${notary_args[@]}" >&2
+    exit 1
+  fi
+  xcrun stapler staple "$disk"
+  xcrun stapler validate "$disk"
 fi
+
+begin 'verify disk image'
+hdiutil verify "$disk"
+mv "$disk" "$image"
+printf 'INFO [macOS installer/%s] Completed in %ss\n' "$step" "$((SECONDS - started))"

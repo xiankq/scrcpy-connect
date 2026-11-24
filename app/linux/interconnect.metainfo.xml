@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>dev.scrcpyconnect.scrcpy_connect</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <developer id="com.github.xiankq">
+    <name>Interconnect contributors</name>
+  </developer>
+  <name>Interconnect</name>
+  <name xml:lang="zh-CN">邻接</name>
+  <summary>Control Android devices and transfer files</summary>
+  <summary xml:lang="zh-CN">控制安卓设备并传输文件</summary>
+  <description>
+    <p>Connect an Android device over USB or wireless debugging, open its screen or individual apps, and transfer files between devices.</p>
+    <p xml:lang="zh-CN">通过 USB 或无线调试连接安卓设备，打开手机屏幕或独立应用，并在设备之间传输文件。</p>
+  </description>
+  <launchable type="desktop-id">dev.scrcpyconnect.scrcpy_connect.desktop</launchable>
+  <url type="homepage">https://github.com/xiankq/scrcpy-connect</url>
+  <url type="bugtracker">https://github.com/xiankq/scrcpy-connect/issues</url>
+  <content_rating type="oars-1.1"/>
+</component>
