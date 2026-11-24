@@ -121,7 +121,10 @@ runs:
       with:
         flutter-version: '3.50.1'
         channel: stable
-        cache: true
+        # Windows x64 can install the pinned archive faster than Git for Windows
+        # can unpack the full SDK cache. Keep the much smaller pub cache.
+        cache: ${{ runner.os != 'Windows' }}
+        pub-cache: true
     - name: Restore locked workspace dependencies
       if: inputs.resolve-packages == 'true'
       shell: bash
