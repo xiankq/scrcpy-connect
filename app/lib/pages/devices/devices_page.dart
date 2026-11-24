@@ -77,6 +77,7 @@ class DevicesPage extends HookConsumerWidget {
               ? DesignTokens.componentPageHeaderHeight
               : DesignTokens.componentDeviceListHeaderHeight,
           search: showSearch ? (controller: query, hint: '搜索设备名称或型号') : null,
+          groupHorizontalActions: true,
           actions: useSideToolbar
               ? null
               : [

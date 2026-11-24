@@ -23,8 +23,9 @@ class ConnectSwitch extends StatelessWidget {
       toggled: value,
       enabled: onChanged != null,
       onTap: toggle,
-      child: SizedBox.square(
-        dimension: DesignTokens.componentIconButtonSize,
+      child: SizedBox(
+        width: DesignTokens.componentSwitchTrackWidth,
+        height: DesignTokens.componentIconButtonSize,
         child: InkWell(
           onTap: toggle,
           excludeFromSemantics: true,
@@ -35,16 +36,19 @@ class ConnectSwitch extends StatelessWidget {
               width: DesignTokens.componentSwitchTrackWidth,
               height: DesignTokens.componentSwitchTrackHeight,
               padding: const EdgeInsets.all(
-                (DesignTokens.componentSwitchTrackHeight -
-                        DesignTokens.componentSwitchThumbSize) /
-                    2,
+                DesignTokens.componentSwitchTrackPadding,
               ),
               decoration: BoxDecoration(
                 color: onChanged == null
-                    ? colors.outlineVariant
+                    ? colors.brightness == Brightness.dark
+                          ? DesignTokens
+                                .componentControlDisabledDarkBackgroundColor
+                          : DesignTokens.componentControlDisabledBackgroundColor
                     : value
                     ? colors.primary
-                    : colors.outlineVariant,
+                    : colors.brightness == Brightness.dark
+                    ? DesignTokens.componentSwitchTrackOffDarkBackgroundColor
+                    : DesignTokens.componentSwitchTrackOffBackgroundColor,
                 borderRadius: BorderRadius.circular(
                   DesignTokens.componentSwitchTrackRounded,
                 ),
@@ -58,11 +62,11 @@ class ConnectSwitch extends StatelessWidget {
                   dimension: DesignTokens.componentSwitchThumbSize,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: value && onChanged != null
+                      color: onChanged == null
+                          ? Theme.of(context).disabledColor
+                          : value
                           ? colors.onPrimary
-                          : colors.brightness == Brightness.dark
-                          ? colors.onSurface
-                          : colors.surface,
+                          : DesignTokens.componentSwitchThumbBackgroundColor,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -70,6 +74,86 @@ class ConnectSwitch extends StatelessWidget {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class ConnectSegmentedControl<T> extends StatelessWidget {
+  const ConnectSegmentedControl({
+    super.key,
+    required this.options,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final List<(T, String)> options;
+  final T selected;
+  final ValueChanged<T>? onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Material(
+      color: colors.surfaceContainerHighest,
+      shape: const StadiumBorder(),
+      child: Padding(
+        padding: const EdgeInsets.all(
+          DesignTokens.componentSegmentedTrackPadding,
+        ),
+        child: Row(
+          children: [
+            for (final (value, label) in options)
+              Expanded(
+                child: Semantics(
+                  selected: selected == value,
+                  child: TextButton(
+                    onPressed: onSelected == null
+                        ? null
+                        : () => onSelected!(value),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.standard,
+                      animationDuration: reduceMotionOf(context)
+                          ? Duration.zero
+                          : shortTransitionDuration,
+                      minimumSize: const Size(
+                        0,
+                        DesignTokens.componentSegmentedTrackHeight -
+                            2 * DesignTokens.componentSegmentedTrackPadding,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: DesignTokens.spacingXxs,
+                      ),
+                      backgroundColor: selected == value
+                          ? colors.primary
+                          : null,
+                      foregroundColor: selected == value
+                          ? colors.onPrimary
+                          : colors.onSurfaceVariant,
+                      disabledBackgroundColor: selected == value
+                          ? colors.surfaceContainerHigh
+                          : null,
+                      disabledForegroundColor: theme.disabledColor,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.all(
+                          Radius.circular(
+                            DesignTokens.componentSegmentedItemRounded,
+                          ),
+                        ),
+                      ),
+                      textStyle: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: selected == value
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                      ),
+                    ),
+                    child: Text(label, textAlign: TextAlign.center),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

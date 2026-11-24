@@ -20,7 +20,7 @@ class GlassToolbarIconButton extends StatelessWidget {
     this.focusNode,
     this.variant = GlassVariant.regular,
     this.size = DesignTokens.componentIconButtonSize,
-    this.iconSize = DesignTokens.componentIconSize,
+    this.iconSize = DesignTokens.componentToolGlyphSize,
   });
 
   final Widget icon;
@@ -53,16 +53,16 @@ class GlassToolbarIconButton extends StatelessWidget {
       width: size,
       height: size,
       iconSize: iconSize,
-      settings: !opaque && variant == GlassVariant.clear
-          ? GlassMaterial.settings(context, variant: variant)
-          : null,
+      settings: opaque
+          ? null
+          : GlassMaterial.settings(context, variant: variant),
       quality: opaque ? null : GlassMaterial.quality(context),
       useOwnLayer: true,
       interactionScale: animate ? null : 1,
       stretch: animate ? .5 : 0,
       anchorStretch: animate,
       surfaceStyle: opaque ? liquid.GlassSurfaceStyle.solid : null,
-      color: opaque ? theme.colorScheme.surface : null,
+      color: opaque ? theme.colorScheme.surfaceContainerHighest : null,
       persistPressOnDrag: false,
     );
   }
@@ -108,9 +108,9 @@ class GlassMenuButton extends StatelessWidget {
         .reduceMotion;
     final style = theme.textTheme.labelLarge!;
     final itemHeight = math.max(
-      DesignTokens.componentIconButtonSize,
+      DesignTokens.componentMenuItemHeight,
       MediaQuery.textScalerOf(context).scale(style.fontSize!) * style.height! +
-          2 * DesignTokens.spacingSm,
+          2 * DesignTokens.spacingXxs,
     );
     if (!enabled) {
       if (label case final label?) {
@@ -137,7 +137,7 @@ class GlassMenuButton extends StatelessWidget {
       maximumSize: const Size.square(DesignTokens.componentIconButtonSize),
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       foregroundColor: theme.colorScheme.onSurface,
-      iconSize: DesignTokens.componentIconSize,
+      iconSize: DesignTokens.componentToolGlyphSize,
     );
     Widget trigger(VoidCallback onPressed) => switch (label) {
       final label? => GlassActionBarButton(
@@ -182,13 +182,11 @@ class GlassMenuButton extends StatelessWidget {
         ),
         menuChildren: [
           GlassSurfaceGroup.isolated(
-            variant: variant,
+            variant: GlassVariant.menu,
             child: Glass(
-              variant: variant,
-              radius: DesignTokens.roundedLg,
-              padding: const EdgeInsets.symmetric(
-                vertical: DesignTokens.spacingXs,
-              ),
+              variant: GlassVariant.menu,
+              radius: DesignTokens.componentMenuRounded,
+              padding: const EdgeInsets.all(DesignTokens.componentMenuPadding),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -203,15 +201,31 @@ class GlassMenuButton extends StatelessWidget {
                           ),
                         ),
                         textStyle: WidgetStatePropertyAll(style),
+                        shape: const WidgetStatePropertyAll(
+                          RoundedSuperellipseBorder(
+                            borderRadius: BorderRadius.all(
+                              Radius.circular(
+                                DesignTokens.componentMenuItemRounded,
+                              ),
+                            ),
+                          ),
+                        ),
+                        padding: const WidgetStatePropertyAll(
+                          EdgeInsets.symmetric(
+                            horizontal: DesignTokens.componentMenuItemPadding,
+                          ),
+                        ),
                         foregroundColor: WidgetStateProperty.resolveWith(
                           (states) => states.contains(WidgetState.disabled)
                               ? theme.disabledColor
                               : action.destructive
-                              ? theme.colorScheme.error
+                              ? (theme.brightness == Brightness.dark
+                                    ? DesignTokens.colorDangerTextDark
+                                    : DesignTokens.colorDangerText)
                               : theme.colorScheme.onSurface,
                         ),
                         iconSize: const WidgetStatePropertyAll(
-                          DesignTokens.componentIconSize,
+                          DesignTokens.componentMenuItemSize,
                         ),
                       ),
                       leadingIcon: action.icon,
@@ -244,12 +258,10 @@ class GlassMenuButton extends StatelessWidget {
       reduceMotion: reducedMotion,
       child: liquid.GlassMenu(
         autoAdjustToScreen: true,
-        menuPadding: const EdgeInsets.all(DesignTokens.spacingMd),
-        menuBorderRadius: DesignTokens.roundedLg,
-        itemBorderRadius: DesignTokens.roundedMd,
-        settings: variant == GlassVariant.clear
-            ? GlassMaterial.settings(context, variant: variant)
-            : null,
+        menuPadding: const EdgeInsets.all(DesignTokens.componentMenuPadding),
+        menuBorderRadius: DesignTokens.componentMenuRounded,
+        itemBorderRadius: DesignTokens.componentMenuItemRounded,
+        settings: GlassMaterial.settings(context, variant: GlassVariant.menu),
         quality: GlassMaterial.quality(context),
         triggerBuilder: (context, toggle) => trigger(toggle),
         items: [
@@ -265,7 +277,7 @@ class GlassMenuButton extends StatelessWidget {
               iconColor: action.destructive
                   ? theme.colorScheme.error
                   : theme.colorScheme.onSurface,
-              iconSize: DesignTokens.componentIconSize,
+              iconSize: DesignTokens.componentMenuItemSize,
               enablePressScale: !reducedMotion,
             ),
         ],
@@ -291,16 +303,21 @@ class GlassToolbarGroup extends StatelessWidget {
       minimumSize: const Size.square(DesignTokens.componentIconButtonSize),
       foregroundColor: theme.colorScheme.onSurface,
       disabledForegroundColor: theme.disabledColor,
+      iconSize: DesignTokens.componentToolGlyphSize,
+      padding: EdgeInsets.zero,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.standard,
     );
+    final material = children.length > 1 && variant == GlassVariant.regular
+        ? GlassVariant.pill
+        : variant;
     return GlassSurfaceGroup(
-      variant: variant,
+      variant: material,
       child: GlassPressFeedback(
         child: Glass(
-          radius: DesignTokens.roundedFull,
+          radius: DesignTokens.componentIconButtonRounded,
           circular: children.length == 1,
-          variant: variant,
+          variant: material,
           showShadow: false,
           child: IconButtonTheme(
             data: IconButtonThemeData(
@@ -311,6 +328,7 @@ class GlassToolbarGroup extends StatelessWidget {
             child: Wrap(
               alignment: WrapAlignment.center,
               crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: DesignTokens.componentIconButtonGap,
               children: [
                 for (final action in children)
                   SizedBox.square(

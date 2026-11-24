@@ -11,9 +11,12 @@ on:
       - 'app/android/gradle/wrapper/**'
       - 'app/linux/CMakeLists.txt'
       - 'app/linux/*.xml'
+      - 'app/linux/runner/**'
       - 'app/windows/CMakeLists.txt'
+      - 'app/windows/runner/**'
       - 'packages/adb/hook/**'
       - 'packages/adb/lib/src/adb_host.dart'
+      - 'packages/adb/third_party/platform-tools.lock.json'
       - 'packages/media_codec/darwin/build_native.sh'
       - 'packages/media_codec/native/CMakeLists.txt'
       - 'packages/media_codec/tool/**'
@@ -111,13 +114,25 @@ jobs:
           $program = Join-Path $env:RUNNER_TEMP 'interconnect-install-check'
           $setup = Resolve-Path "build/verified/windows-$arch-release-setup.exe"
           $original = "app/build/windows/$arch/runner/Release/Interconnect.exe"
-          $result = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$program`"" -Wait -PassThru
+          $desktop = [Environment]::GetFolderPath('DesktopDirectory', 'DoNotVerify')
+          $shortcut = Join-Path $desktop 'Interconnect.lnk'
+          $result = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/MERGETASKS=desktopicon', "/DIR=`"$program`"" -Wait -PassThru
           if ($result.ExitCode -ne 0) { throw "Client installation failed: $($result.ExitCode)" }
           if ((Get-FileHash "$program/Interconnect.exe").Hash -ne (Get-FileHash $original).Hash) {
             throw 'Installer payload differs from the verified binary'
           }
+          $shortcutTarget = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut).TargetPath
+          if ($shortcutTarget -ne (Join-Path $program 'Interconnect.exe')) {
+            throw 'Desktop shortcut does not target the installed client'
+          }
+          $adb = "$program/platform-tools/adb.exe"
+          $adbVersion = & $adb version
+          if ($LASTEXITCODE -ne 0 -or $adbVersion[0] -notlike 'Android Debug Bridge version *') {
+            throw 'Installed ADB failed to start'
+          }
           $result = Start-Process "$program/unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
-          if ($result.ExitCode -ne 0 -or (Test-Path "$program/Interconnect.exe")) {
+          if ($result.ExitCode -ne 0 -or (Test-Path "$program/Interconnect.exe") -or
+              (Test-Path $adb) -or (Test-Path $shortcut)) {
             throw 'Client uninstall failed'
           }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

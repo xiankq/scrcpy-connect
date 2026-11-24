@@ -77,14 +77,33 @@ abstract final class ConnectTokens {
     final surface = dark
         ? DesignTokens.colorSurfaceDark
         : DesignTokens.colorSurface;
-    final container = dark ? DesignTokens.colorTintDark : tint;
+    final module = dark
+        ? DesignTokens.colorSurfaceModuleDark
+        : DesignTokens.colorSurfaceModule;
+    final inset = dark
+        ? DesignTokens.colorSurfaceInsetDark
+        : DesignTokens.colorSurfaceInset;
+    final floating = dark
+        ? DesignTokens.componentFloatingSurfaceDarkBackgroundColor
+        : DesignTokens.componentFloatingSurfaceBackgroundColor;
+    final focus = dark
+        ? DesignTokens.componentControlFocusDarkBorderColor
+        : DesignTokens.componentControlFocusBorderColor;
+    final disabled = dark
+        ? DesignTokens.componentControlDisabledDarkTextColor
+        : DesignTokens.componentControlDisabledTextColor;
+    final selection = dark
+        ? DesignTokens.colorGlassSelectedDark
+        : DesignTokens.colorGlassSelected;
     final colors = ColorScheme(
       brightness: brightness,
-      primary: dark ? DesignTokens.colorPrimaryDark : DesignTokens.colorPrimary,
+      primary: dark
+          ? DesignTokens.colorPrimaryActionDark
+          : DesignTokens.colorPrimaryAction,
       onPrimary: dark
           ? DesignTokens.colorOnPrimaryDark
           : DesignTokens.colorOnPrimary,
-      primaryContainer: container,
+      primaryContainer: inset,
       onPrimaryContainer: foreground,
       primaryFixed: tint,
       primaryFixedDim: DesignTokens.colorMuted,
@@ -94,7 +113,7 @@ abstract final class ConnectTokens {
       onSecondary: dark
           ? DesignTokens.colorOnPrimaryDark
           : DesignTokens.colorWhite,
-      secondaryContainer: container,
+      secondaryContainer: module,
       onSecondaryContainer: foreground,
       secondaryFixed: tint,
       secondaryFixedDim: DesignTokens.colorMuted,
@@ -104,7 +123,7 @@ abstract final class ConnectTokens {
       onTertiary: dark
           ? DesignTokens.colorOnPrimaryDark
           : DesignTokens.colorWhite,
-      tertiaryContainer: container,
+      tertiaryContainer: module,
       onTertiaryContainer: foreground,
       tertiaryFixed: tint,
       tertiaryFixedDim: DesignTokens.colorMuted,
@@ -133,11 +152,9 @@ abstract final class ConnectTokens {
       surfaceContainerLow: dark
           ? DesignTokens.colorSurfaceLowDark
           : DesignTokens.colorSurfaceLow,
-      surfaceContainer: dark ? DesignTokens.colorSurfaceDark : canvas,
-      surfaceContainerHigh: dark
-          ? DesignTokens.colorSurfaceHighDark
-          : DesignTokens.colorSurfaceHigh,
-      surfaceContainerHighest: container,
+      surfaceContainer: surface,
+      surfaceContainerHigh: module,
+      surfaceContainerHighest: inset,
       outline: dark ? DesignTokens.colorOutlineDark : DesignTokens.colorOutline,
       outlineVariant: dark
           ? DesignTokens.colorMutedDark
@@ -179,15 +196,14 @@ abstract final class ConnectTokens {
         },
       ),
       colorScheme: colors,
+      disabledColor: disabled,
       scaffoldBackgroundColor: dark ? DesignTokens.colorCanvasDark : canvas,
       splashFactory: NoSplash.splashFactory,
       splashColor: DesignTokens.colorTransparent,
-      highlightColor: foreground.withValues(
-        alpha: DesignTokens.componentControlFeedbackOpacity,
-      ),
-      hoverColor: foreground.withValues(
-        alpha: DesignTokens.componentControlFeedbackOpacity,
-      ),
+      highlightColor: dark
+          ? DesignTokens.componentControlPressedDarkBackgroundColor
+          : DesignTokens.componentControlPressedBackgroundColor,
+      hoverColor: selection,
       cupertinoOverrideTheme: CupertinoThemeData(
         brightness: brightness,
         primaryColor: colors.primary,
@@ -195,15 +211,27 @@ abstract final class ConnectTokens {
         barBackgroundColor: surface,
       ),
       checkboxTheme: CheckboxThemeData(
-        shape: const CircleBorder(),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(
+            Radius.circular(DesignTokens.componentCheckboxMarkRounded),
+          ),
+        ),
+        materialTapTargetSize: MaterialTapTargetSize.padded,
+        visualDensity: VisualDensity.standard,
         fillColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected)
-              ? colors.primary
-              : DesignTokens.colorTransparent,
+          (states) => !states.contains(WidgetState.selected)
+              ? DesignTokens.colorTransparent
+              : states.contains(WidgetState.disabled)
+              ? disabled
+              : colors.primary,
         ),
         checkColor: WidgetStatePropertyAll(colors.onPrimary),
-        overlayColor: const WidgetStatePropertyAll(
-          DesignTokens.colorTransparent,
+        overlayColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.focused)
+              ? focus.withValues(
+                  alpha: DesignTokens.componentControlFeedbackOpacity,
+                )
+              : selection,
         ),
         side: BorderSide(color: colors.outline),
       ),
@@ -244,18 +272,22 @@ abstract final class ConnectTokens {
         ),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: surface,
+        backgroundColor: floating,
         surfaceTintColor: DesignTokens.colorTransparent,
         elevation: DesignTokens.spacingZero,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(DesignTokens.roundedXl),
+        shape: const RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.all(
+            Radius.circular(DesignTokens.componentAlertRounded),
+          ),
         ),
       ),
       popupMenuTheme: PopupMenuThemeData(
-        color: surface,
+        color: floating,
         surfaceTintColor: DesignTokens.colorTransparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
+        shape: const RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.all(
+            Radius.circular(DesignTokens.componentMenuRounded),
+          ),
         ),
       ),
       textTheme: TextTheme(
@@ -377,13 +409,25 @@ abstract final class ConnectTokens {
         ),
       ),
       iconButtonTheme: IconButtonThemeData(
-        style: IconButton.styleFrom(
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          minimumSize: const Size(
-            DesignTokens.componentIconButtonSize,
-            DesignTokens.componentIconButtonSize,
-          ),
-        ),
+        style:
+            IconButton.styleFrom(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              iconSize: DesignTokens.componentToolGlyphSize,
+              disabledForegroundColor: disabled,
+              minimumSize: const Size(
+                DesignTokens.componentIconButtonSize,
+                DesignTokens.componentIconButtonSize,
+              ),
+            ).copyWith(
+              side: WidgetStateProperty.resolveWith(
+                (states) => states.contains(WidgetState.focused)
+                    ? BorderSide(
+                        color: focus,
+                        width: DesignTokens.componentControlFocusSize,
+                      )
+                    : null,
+              ),
+            ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
@@ -418,20 +462,29 @@ abstract final class ConnectTokens {
           minHeight: DesignTokens.componentConnectionFieldHeight,
         ),
         filled: true,
-        fillColor: colors.surface,
-        border: UnderlineInputBorder(
-          borderRadius: BorderRadius.circular(
-            DesignTokens.componentConnectionFieldRounded,
+        fillColor: inset,
+        border: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(
+            Radius.circular(DesignTokens.componentConnectionFieldRounded),
           ),
           borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: const BorderRadius.all(
+            Radius.circular(DesignTokens.componentConnectionFieldRounded),
+          ),
+          borderSide: BorderSide(
+            color: focus,
+            width: DesignTokens.componentControlFocusSize,
+          ),
         ),
         contentPadding: const EdgeInsets.all(
           DesignTokens.componentConnectionFieldPadding,
         ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: colors.surface,
-        modalBackgroundColor: colors.surface,
+        backgroundColor: floating,
+        modalBackgroundColor: floating,
         surfaceTintColor: DesignTokens.colorTransparent,
         dragHandleColor: colors.onSurfaceVariant,
         dragHandleSize: const Size(
@@ -439,7 +492,7 @@ abstract final class ConnectTokens {
           DesignTokens.componentSheetHandleHeight,
         ),
         showDragHandle: true,
-        shape: const RoundedRectangleBorder(
+        shape: const RoundedSuperellipseBorder(
           borderRadius: BorderRadius.vertical(
             top: Radius.circular(DesignTokens.componentSheetRounded),
           ),

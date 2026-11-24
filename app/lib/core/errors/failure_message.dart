@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:adb/adb.dart';
 import 'package:flutter/services.dart';
 import 'package:scrcpy/scrcpy.dart';
@@ -68,6 +70,10 @@ String failureCodeMessage(String? code, {required String fallback}) =>
       'storage_version' => '本机数据来自较新版本。更新应用后再试。',
       'expired' => '这次请求已过期。请重新开始。',
       'usb_unsupported' => '本机无法通过 USB 添加手机。请选择其他连接方式。',
+      'desktop_adb_missing' when Platform.isWindows => '找不到 ADB。请重新运行安装程序并勾选下载 Android Platform-Tools，或将解压后的 platform-tools 文件夹放到 Interconnect.exe 旁，再重试。',
+      'desktop_adb_missing' when Platform.isMacOS => '找不到 ADB。请通过 Android Studio 的 SDK Manager 安装 Platform-Tools，或运行 brew install --cask android-platform-tools，再重试。',
+      'desktop_adb_missing' when Platform.isLinux =>
+        '找不到 ADB。Debian 或 Ubuntu 请安装 adb，Fedora 请安装 android-tools，安装后再重试。',
       'desktop_adb_missing' => '请在电脑安装 Android SDK Platform-Tools（ADB），然后重启邻接。',
       'audio_focus_denied' => '声音目前无法播放。请先暂停本机正在播放的媒体。',
       'clipboard_not_text' => '剪贴板里没有可发送的文字。',

@@ -94,7 +94,7 @@ class AdbHost {
     final identities = api as AdbIdentities;
     final inspected = await identities.inspectIdentity(identity.path);
     final servers = api as NativeAdbServerApi;
-    final executable = await _installedAdb(binaryDirectory);
+    final executable = await _findAdb(binaryDirectory);
     final serverRoot = Directory(
       p.join(dataDirectory.absolute.path, 'official_adb'),
     );
@@ -273,7 +273,7 @@ class AdbHost {
     throw const AdbException('private_file_permissions_unavailable');
   }
 
-  static Future<String> _installedAdb(Directory? binaryDirectory) async {
+  static Future<String> _findAdb(Directory? binaryDirectory) async {
     final env = Platform.environment;
     final home = env['HOME'];
     final localAppData = env['LOCALAPPDATA'];
@@ -281,6 +281,8 @@ class AdbHost {
     final directories = binaryDirectory != null
         ? [binaryDirectory.absolute.path]
         : [
+            if (Platform.isWindows)
+              p.join(p.dirname(Platform.resolvedExecutable), 'platform-tools'),
             for (final name in ['ANDROID_HOME', 'ANDROID_SDK_ROOT'])
               if (env[name] case final sdk? when p.isAbsolute(sdk))
                 p.join(sdk, 'platform-tools'),

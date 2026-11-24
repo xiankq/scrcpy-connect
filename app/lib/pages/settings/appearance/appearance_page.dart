@@ -66,10 +66,8 @@ class AppearancePage extends HookConsumerWidget {
                   ),
                   title: Text(option.$2),
                   value: option.$1,
-                  groupValue: appSettings.appearance,
-                  onChanged: (v) {
-                    if (v != null) save(v);
-                  },
+                  selected: appSettings.appearance == option.$1,
+                  onChanged: save,
                 ),
             ],
           ),

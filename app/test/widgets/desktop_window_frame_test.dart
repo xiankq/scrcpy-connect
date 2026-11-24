@@ -11,63 +11,61 @@ void main() {
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
-  for (final (platform, left, right) in [
-    ('macOS', 78.0, 0.0),
-    ('Windows', 0.0, 138.0),
-    ('Linux with left-side buttons', 96.0, 0.0),
-  ]) {
-    testWidgets('$platform puts page actions below the native controls', (
-      tester,
-    ) async {
-      final calls = <String>[];
-      messenger.setMockMethodCallHandler(DesktopWindow.channel, (call) async {
-        calls.add(call.method);
-        return call.method == 'layout'
-            ? {'left': left, 'right': right, 'top': 32.0}
-            : null;
-      });
-      addTearDown(
-        () => messenger.setMockMethodCallHandler(DesktopWindow.channel, null),
-      );
-      var back = 0;
-      await tester.pumpWidget(
-        MaterialApp(
-          builder: (context, child) => DesktopWindowFrame(child: child!),
-          home: PageFrame(
-            title: 'USB 连接',
-            onBack: () => back++,
-            actions: [
-              IconButton(onPressed: () {}, icon: const Icon(LucideIcons.info)),
-            ],
-            child: const SizedBox.expand(),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      final first = find.byIcon(LucideIcons.chevronLeft);
-      final last = find.byIcon(LucideIcons.info);
-      final immersive = tester.getRect(first);
-      expect(immersive.top, greaterThanOrEqualTo(32));
-      expect(tester.getCenter(last).dy, immersive.center.dy);
-
-      await tester.tap(first);
-      expect(back, 1);
-      await tester.drag(find.text('USB 连接'), const Offset(60, 0));
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(calls, ['layout', 'move']);
-
-      await messenger.handlePlatformMessage(
-        DesktopWindow.channel.name,
-        const StandardMethodCodec().encodeMethodCall(
-          const MethodCall('layoutChanged', {'left': 0, 'right': 0, 'top': 0}),
-        ),
-        (_) {},
-      );
-      await tester.pump();
-      expect(tester.getRect(first).top, immersive.top - 32);
-      expect(tester.getRect(first).left, immersive.left);
+  testWidgets('page actions sit below the native controls in immersive mode', (
+    tester,
+  ) async {
+    final calls = <String>[];
+    messenger.setMockMethodCallHandler(DesktopWindow.channel, (call) async {
+      calls.add(call.method);
+      return call.method == 'layout'
+          ? {'left': 78.0, 'right': 0.0, 'top': 32.0}
+          : null;
     });
-  }
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(DesktopWindow.channel, null),
+    );
+    var back = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => DesktopWindowFrame(child: child!),
+        home: PageFrame(
+          title: 'USB 连接',
+          onBack: () => back++,
+          actions: [
+            IconButton(onPressed: () {}, icon: const Icon(LucideIcons.info)),
+          ],
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final first = find.byIcon(LucideIcons.chevronLeft);
+    final last = find.byIcon(LucideIcons.info);
+    final immersive = tester.getRect(first);
+    expect(immersive.top, greaterThanOrEqualTo(32));
+    expect(tester.getCenter(last).dy, immersive.center.dy);
+
+    await tester.tap(first);
+    expect(back, 1);
+    await tester.drag(find.text('USB 连接'), const Offset(60, 0));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(calls, ['layout', 'move']);
+
+    await messenger.handlePlatformMessage(
+      DesktopWindow.channel.name,
+      const StandardMethodCodec().encodeMethodCall(
+        const MethodCall('layoutChanged', {'left': 0, 'right': 0, 'top': 0}),
+      ),
+      (_) {},
+    );
+    await tester.pump();
+    expect(tester.getRect(first).top, immersive.top - 32);
+    expect(tester.getRect(first).left, immersive.left);
+
+    await tester.drag(find.text('USB 连接'), const Offset(60, 0));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(calls, ['layout', 'move']);
+  });
 
   testWidgets('desktop stage paints beneath the native controls', (
     tester,

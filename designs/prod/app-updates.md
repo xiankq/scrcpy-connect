@@ -26,6 +26,8 @@
 
 商店或系统接管更新时，弹窗提供「前往商店」或对应渠道入口，下载和安装进度由渠道显示。Google Play 的弹性更新可在取得进度回执时显示应用内下载状态，下载完成由用户确认安装或重启。App Store 分发遵循商店更新，桌面应用依实际安装渠道进入系统更新或受信任的安装程序。各渠道独立验证后才显示其支持的操作。[Google Play 弹性更新](https://developer.android.com/guide/playcore/in-app-updates/kotlin-java#flexible) · [Apple App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/) · [Windows App Installer 更新设置](https://learn.microsoft.com/en-us/windows/msix/app-installer/update-settings)
 
+Windows 安装向导分别提供桌面快捷方式和下载 Android Platform-Tools（ADB）的选项。首次安装时，桌面快捷方式默认不勾选，ADB 下载默认勾选。选择下载时，安装器从 Google 获取并校验工具，安装到应用目录。已有可用 ADB 或离线安装时可取消勾选。
+
 ## 构建渠道配置
 
 正式版通过 `--dart-define=APP_UPDATE_FEED=<HTTPS 地址>` 从 GitHub 最新 Release 下载稳定版更新清单。Android、Linux、Windows 和已启用签名渠道的 macOS 共用一份清单，用户从版本页面选择自己的平台。清单为 JSON 数组，每条提供稳定版 `version`、整数 `build`、ISO 8601 格式的 `publishedAt`、字符串数组 `notes`、HTTPS 渠道入口 `url`，可选提供安装包 `bytes`。发布渠道负责兼容性筛选与安装。公开预览和试打包构建的检查更新入口显示渠道尚未配置。开源许可页面同时提供项目许可与 FFmpeg 的署名。

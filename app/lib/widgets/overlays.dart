@@ -1,6 +1,8 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/motion.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 
 /// 承载正文和反馈的实体内容面；玻璃仅用于独立操作控件。
 class ContentSurface extends StatelessWidget {
@@ -24,59 +26,126 @@ class ContentSurface extends StatelessWidget {
   );
 }
 
-/// 对话框正文和动作保持可滚动，使用不透明的主题表面。
+/// 对话框的正文与动作共用滚动范围，确认框可选用独立玻璃材质。
 class AppAlertDialog extends StatelessWidget {
   const AppAlertDialog({
     super.key,
     this.title,
     required this.content,
     this.actions = const [],
+    this.glass = false,
   });
 
   final Widget? title;
   final Widget content;
   final List<Widget> actions;
+  final bool glass;
 
   @override
-  Widget build(BuildContext context) => Dialog(
-    backgroundColor: Theme.of(context).colorScheme.surface,
-    elevation: 0,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(DesignTokens.componentSheetRounded),
-    ),
-    clipBehavior: Clip.antiAlias,
-    child: Padding(
-      padding: const EdgeInsets.all(DesignTokens.componentSheetPadding),
-      child: SingleChildScrollView(
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final translucent = glass && !opaqueGlass(context);
+    final body = SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: DesignTokens.spacingMd),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (title != null) ...[
-              DefaultTextStyle(
-                style: Theme.of(context).textTheme.headlineMedium!,
-                child: title!,
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: DesignTokens.componentAlertPadding,
               ),
-              const SizedBox(height: DesignTokens.spacingMd),
-            ],
-            DefaultTextStyle(
-              style: Theme.of(context).textTheme.bodyLarge!,
-              child: content,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (title != null) ...[
+                    DefaultTextStyle(
+                      style: theme.textTheme.titleMedium!,
+                      child: title!,
+                    ),
+                    const SizedBox(height: DesignTokens.spacingXs),
+                  ],
+                  DefaultTextStyle(
+                    style: theme.textTheme.bodyMedium!.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    child: content,
+                  ),
+                ],
+              ),
             ),
-            if (actions.isNotEmpty) ...[
-              const SizedBox(height: DesignTokens.spacingMd),
-              OverflowBar(
-                alignment: MainAxisAlignment.end,
-                spacing: DesignTokens.spacingXs,
-                overflowSpacing: DesignTokens.spacingXs,
-                children: actions,
+            if (actions.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  DesignTokens.componentAlertActionsPadding,
+                  DesignTokens.spacingMd,
+                  DesignTokens.componentAlertActionsPadding,
+                  0,
+                ),
+                child: actions.length == 2
+                    ? LayoutBuilder(
+                        builder: (context, constraints) {
+                          const gap = DesignTokens.componentAlertActionsGap;
+                          final minimum =
+                              MediaQuery.textScalerOf(context).scale(
+                                2 * DesignTokens.componentAlertButtonHeight,
+                              ) +
+                              gap;
+                          return constraints.maxWidth < minimum
+                              ? Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  spacing: gap,
+                                  children: actions,
+                                )
+                              : Row(
+                                  spacing: gap,
+                                  children: [
+                                    for (final button in actions)
+                                      Expanded(child: button),
+                                  ],
+                                );
+                        },
+                      )
+                    : OverflowBar(
+                        alignment: MainAxisAlignment.end,
+                        spacing: DesignTokens.componentAlertActionsGap,
+                        overflowSpacing: DesignTokens.componentAlertActionsGap,
+                        children: actions,
+                      ),
               ),
-            ],
           ],
         ),
       ),
-    ),
-  );
+    );
+    return Dialog(
+      backgroundColor: translucent
+          ? DesignTokens.colorTransparent
+          : theme.dialogTheme.backgroundColor ?? theme.colorScheme.surface,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: DesignTokens.spacingMd,
+        vertical: DesignTokens.spacingLg,
+      ),
+      constraints: const BoxConstraints.tightFor(
+        width: DesignTokens.componentAlertWidth,
+      ),
+      shape: const RoundedSuperellipseBorder(
+        borderRadius: BorderRadius.all(
+          Radius.circular(DesignTokens.componentAlertRounded),
+        ),
+      ),
+      clipBehavior: translucent ? Clip.none : Clip.antiAlias,
+      child: translucent
+          ? Glass(
+              variant: GlassVariant.alert,
+              radius: DesignTokens.componentAlertRounded,
+              child: body,
+            )
+          : body,
+    );
+  }
 }
 
 Future<T?> showAppDialog<T>({
@@ -141,10 +210,12 @@ Future<T?> showAppModalSheet<T>({
   enableDrag: enableDrag,
   routeSettings: routeSettings,
   anchorPoint: anchorPoint,
-  showDragHandle: enableDrag,
-  backgroundColor: Theme.of(context).colorScheme.surface,
+  showDragHandle: false,
+  backgroundColor:
+      Theme.of(context).bottomSheetTheme.modalBackgroundColor ??
+      Theme.of(context).colorScheme.surface,
   elevation: 0,
-  shape: const RoundedRectangleBorder(
+  shape: const RoundedSuperellipseBorder(
     borderRadius: BorderRadius.vertical(
       top: Radius.circular(DesignTokens.componentSheetRounded),
     ),
@@ -156,7 +227,44 @@ Future<T?> showAppModalSheet<T>({
           duration: panelOpenDuration,
           reverseDuration: panelCloseDuration,
         ),
-  builder: builder,
+  builder: (context) => enableDrag
+      ? Stack(
+          alignment: Alignment.topCenter,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(
+                top:
+                    DesignTokens.componentSheetHandleHeight +
+                    2 * DesignTokens.componentSheetHandlePadding,
+              ),
+              child: builder(context),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(
+                top: DesignTokens.componentSheetHandlePadding,
+              ),
+              child: Semantics(
+                label: MaterialLocalizations.of(context)
+                    .modalBarrierDismissLabel,
+                button: true,
+                onTap: () => Navigator.pop(context),
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: ShapeDecoration(
+                      color: Theme.of(context).colorScheme.outline,
+                      shape: const StadiumBorder(),
+                    ),
+                    child: const SizedBox(
+                      width: DesignTokens.componentSheetHandleWidth,
+                      height: DesignTokens.componentSheetHandleHeight,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        )
+      : builder(context),
 );
 
 Color _scrim(BuildContext context) =>

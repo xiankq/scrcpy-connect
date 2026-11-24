@@ -61,7 +61,9 @@ class ContentPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: Theme.of(context).colorScheme.surface,
-    borderRadius: BorderRadius.circular(radius),
+    shape: RoundedSuperellipseBorder(
+      borderRadius: BorderRadius.circular(radius),
+    ),
     clipBehavior: Clip.antiAlias,
     child: Padding(padding: padding, child: child),
   );

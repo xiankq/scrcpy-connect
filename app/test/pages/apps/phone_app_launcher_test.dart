@@ -76,20 +76,61 @@ void main() {
     await tester.pumpAndSettle();
     expect(videos.reads, hasLength(1));
   });
+
+  testWidgets('应用入口的已有画面菜单锚定来源，可点外部取消', (tester) async {
+    final videos = _Videos();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          deviceListProvider.overrideWith(_Devices.new),
+          videoSessionsProvider.overrideWithValue(videos),
+        ],
+        child: const MaterialApp(home: _Launcher(anchored: true)),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    videos.reads.single.complete([
+      const VideoSessionView(
+        session: VideoSessionSnapshot(
+          sessionId: 'app',
+          deviceId: 'device',
+          name: 'App',
+          packageName: 'package',
+          kind: .app,
+          status: .streaming,
+        ),
+        wake: KeepAwakeSnapshot(deviceId: 'device'),
+      ),
+    ]);
+    await tester.pumpAndSettle();
+    expect(find.text('移回手机屏幕'), findsWidgets);
+    expect(find.text('切回独立应用'), findsWidgets);
+    expect(find.byType(BottomSheet), findsNothing);
+    await tester.tapAt(const Offset(760, 550));
+    await tester.pumpAndSettle();
+    expect(find.text('切回独立应用'), findsNothing);
+    expect(videos.reads, hasLength(1));
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _Launcher extends ConsumerWidget {
-  const _Launcher();
+  const _Launcher({this.anchored = false});
+  final bool anchored;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) => Scaffold(
-    body: TextButton(
-      onPressed: () => openPhoneApp(
-        context,
-        ref,
-        const DeviceSnapshot(id: 'device'),
-        const DeviceApp(packageName: 'package', name: 'App'),
+    body: Builder(
+      builder: (source) => TextButton(
+        onPressed: () => openPhoneApp(
+          context,
+          ref,
+          const DeviceSnapshot(id: 'device'),
+          const DeviceApp(packageName: 'package', name: 'App'),
+          source: anchored ? source : null,
+        ),
+        child: const Text('open'),
       ),
-      child: const Text('open'),
     ),
   );
 }

@@ -1,3 +1,5 @@
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/control/models/video_session.dart';
@@ -13,15 +15,19 @@ import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/router/remote_windows.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/adaptive_window.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart' show feedback;
+import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/overlays.dart';
 
 Future<void> openPhoneApp(
   BuildContext context,
   WidgetRef ref,
   DeviceSnapshot device,
-  DeviceApp app,
-) async {
+  DeviceApp app, {
+  BuildContext? source,
+}) async {
   final deviceId = device.id;
   final package = app.packageName;
   final videos = ref.read(videoSessionsProvider);
@@ -76,7 +82,9 @@ Future<void> openPhoneApp(
         device.apiLevel;
     final mode = await _chooseMode(
       context,
-      app,
+      app.name,
+      deviceName(device),
+      source: source,
       hasIndependentWindow: active != null,
       windowAvailable: active != null || api == null || api >= 29,
     );
@@ -128,44 +136,113 @@ Future<void> openPhoneApp(
 
 Future<AppOpenMode?> _chooseMode(
   BuildContext context,
-  DeviceApp app, {
+  String appName,
+  String device, {
   required bool hasIndependentWindow,
   required bool windowAvailable,
-}) => showAppModalSheet<AppOpenMode>(
-  context: context,
-  isScrollControlled: true,
-  builder: (context) => SafeArea(
-    child: Padding(
-      padding: const EdgeInsets.all(DesignTokens.spacingMd),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(app.name, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: DesignTokens.spacingSm),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, AppOpenMode.phone),
-              child: Text(hasIndependentWindow ? '移回手机屏幕' : '在手机屏幕中打开'),
-            ),
-            const SizedBox(height: DesignTokens.spacingSm),
-            Tooltip(
-              message: windowAvailable ? '' : '此设备当前不支持独立应用画面',
-              child: OutlinedButton(
-                onPressed: windowAvailable
-                    ? () => Navigator.pop(context, AppOpenMode.window)
-                    : null,
-                child: Text(hasIndependentWindow ? '切回独立应用' : '打开独立应用画面'),
+  BuildContext? source,
+}) {
+  final theme = Theme.of(context);
+  final phone = hasIndependentWindow ? '移回手机屏幕' : '在手机屏幕中打开';
+  final window = hasIndependentWindow ? '切回独立应用' : '打开独立应用画面';
+  final anchor = source?.mounted == true ? source!.findRenderObject() : null;
+  if (hasIndependentWindow && anchor is RenderBox && anchor.hasSize) {
+    final navigator = Navigator.of(context, rootNavigator: true);
+    return liquid.showGlassContextMenu<AppOpenMode>(
+      context: context,
+      targetRect: anchor.localToGlobal(Offset.zero) & anchor.size,
+      menuWidth: DesignTokens.componentAppContinuationMenuWidth,
+      borderRadius: DesignTokens.componentMenuRounded,
+      rowBorderRadius: DesignTokens.componentMenuItemRounded,
+      settings: GlassMaterial.settings(context, variant: GlassVariant.menu),
+      quality: GlassMaterial.quality(context),
+      barrierColor: theme.brightness == Brightness.dark
+          ? DesignTokens.componentModalScrimDarkBackgroundColor
+          : DesignTokens.componentModalScrimBackgroundColor,
+      actions: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            DesignTokens.componentMenuItemPadding,
+            DesignTokens.spacingXxs,
+            DesignTokens.componentMenuItemPadding,
+            DesignTokens.spacingXs,
+          ),
+          child: Text(appName, style: theme.textTheme.titleMedium),
+        ),
+        for (final (mode, label, icon) in [
+          (AppOpenMode.phone, phone, AppIcons.navigationDevices),
+          (AppOpenMode.window, window, LucideIcons.panelsTopLeft),
+        ])
+          liquid.GlassMenuItem(
+            title: label,
+            height: DesignTokens.componentMenuItemHeight,
+            titleStyle: theme.textTheme.labelLarge,
+            icon: Icon(icon),
+            iconColor: theme.colorScheme.onSurface,
+            iconSize: DesignTokens.componentMenuItemSize,
+            onTap: () => navigator.pop(mode),
+          ),
+      ],
+    );
+  }
+
+  Widget actions(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    spacing: DesignTokens.spacingXs,
+    children: [
+      FilledButton(
+        onPressed: () => Navigator.pop(context, AppOpenMode.phone),
+        child: Text(phone, textAlign: TextAlign.center),
+      ),
+      OutlinedButton(
+        onPressed: windowAvailable
+            ? () => Navigator.pop(context, AppOpenMode.window)
+            : null,
+        child: Text(window, textAlign: TextAlign.center),
+      ),
+      if (!windowAvailable)
+        Text('此设备当前不支持独立应用画面', style: theme.textTheme.bodySmall),
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('取消'),
+      ),
+    ],
+  );
+  final environment = windowEnvironmentOf(context);
+  final width =
+      environment.width - environment.insets.left - environment.insets.right;
+  final centered =
+      environment.isDesktopWindow ||
+      WindowEnvironment.sizeClassFor(width) != WindowSizeClass.compact;
+  return centered
+      ? showAppDialog<AppOpenMode>(
+          context: context,
+          builder: (context) => AppAlertDialog(
+            glass: true,
+            title: Text(appName),
+            content: Text(device),
+            actions: [actions(context)],
+          ),
+        )
+      : showAppModalSheet<AppOpenMode>(
+          context: context,
+          builder: (context) => SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(DesignTokens.spacingMd),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(appName, style: theme.textTheme.titleLarge),
+                  const SizedBox(height: DesignTokens.spacingXxs),
+                  Text(device, style: theme.textTheme.bodySmall),
+                  const SizedBox(height: DesignTokens.spacingMd),
+                  actions(context),
+                ],
               ),
             ),
-            const SizedBox(height: DesignTokens.spacingXs),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
-            ),
-          ],
-        ),
-      ),
-    ),
-  ),
-);
+          ),
+        );
+}

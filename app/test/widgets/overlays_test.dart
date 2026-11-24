@@ -44,7 +44,7 @@ void main() {
       final dialog = tester.widget<Dialog>(find.byType(Dialog));
       expect(
         dialog.backgroundColor,
-        ConnectTokens.theme(brightness).colorScheme.surface,
+        ConnectTokens.theme(brightness).dialogTheme.backgroundColor,
       );
       _expectSolid();
       await tester.enterText(find.byType(TextField), ' 新名称 ');
@@ -86,7 +86,7 @@ void main() {
       final sheet = tester.widget<BottomSheet>(find.byType(BottomSheet));
       expect(
         sheet.backgroundColor,
-        ConnectTokens.theme(brightness).colorScheme.surface,
+        ConnectTokens.theme(brightness).bottomSheetTheme.modalBackgroundColor,
       );
       _expectSolid();
       await tester.ensureVisible(find.text('完成'));

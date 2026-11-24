@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | scrcpy | Android 被控端使用的 scrcpy server 与许可文件 | [仓库内构建说明](servers/vendor/README.md) · [scrcpy 上游许可](https://github.com/Genymobile/scrcpy/blob/master/LICENSE) |
 | Android desugar_jdk_libs | scrcpy server 的 Android 兼容库、对应源码归档、许可与附加条款 | [保留的组件和材料](servers/vendor/) |
-| Android SDK Platform-Tools | 用户自行安装的桌面 ADB。CI 独立下载固定版本用于互通测试 | [固定版本与校验和](packages/adb/third_party/platform-tools.lock.json) · [Android SDK 条款](https://developer.android.com/studio/terms) |
+| Android SDK Platform-Tools | 桌面 ADB。Windows 安装器可从 Google 下载固定版本，其他桌面包使用系统已安装的工具。CI 下载固定版本用于互通测试 | [固定版本与校验和](packages/adb/third_party/platform-tools.lock.json) · [Android SDK 条款](https://developer.android.com/studio/terms) |
 | FFmpeg 和 dav1d | 媒体解码库、随包声明、所用版本与补丁 | [依赖、来源和补丁](packages/media_codec/third_party/) · [FFmpeg 分发说明](https://ffmpeg.org/legal.html) · [dav1d 上游](https://code.videolan.org/videolan/dav1d) |
 | nv-codec-headers / libva | Linux 媒体构建用头文件、随桌面包提供的 libva 与其声明 | [nv-codec-headers 固定版本](packages/media_codec/third_party/nv-codec-headers.lock.json) · [libva 上游](https://github.com/intel/libva) |
 | 设计素材 | 设计稿中的示例照片、Android 应用图标与 MiSans 字体 | [设计素材来源](designs/assets/README.md) · [MiSans 来源与许可](designs/assets/fonts/misans/README.md) |

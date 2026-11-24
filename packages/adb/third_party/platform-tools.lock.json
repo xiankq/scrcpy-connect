@@ -16,6 +16,7 @@
       "url": "https://dl.google.com/android/repository/platform-tools_r37.0.3-win.zip",
       "sha256": "89d108360a3bf2924d3bea837239edaccc22fd6ff5befd3787c4348a9fe4f09d",
       "archiveBytes": 8188601,
+      "extractedBytes": 17857924,
       "files": {
         "adb.exe": "bae5ce98846b19caa74a34900850caa8b21d01976932b2ad83baeb5de5651aee",
         "AdbWinApi.dll": "ed20abfb8b423029a2278d3947c1a1235774afd1b0e0e08405591e6f1d237a49",

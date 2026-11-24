@@ -179,12 +179,16 @@ class TransferHistoryRow extends HookConsumerWidget {
         ? DateTime.fromMillisecondsSinceEpoch(task.endedAt! * 1000)
         : null;
     final localizations = MaterialLocalizations.of(context);
-    final radius = BorderRadius.circular(DesignTokens.roundedLg);
+    const shape = RoundedSuperellipseBorder(
+      borderRadius: BorderRadius.all(
+        Radius.circular(DesignTokens.componentListCardRounded),
+      ),
+    );
     return Semantics(
       selected: selected,
       child: Material(
         color: selected ? colors.surfaceContainerHigh : colors.surface,
-        borderRadius: radius,
+        shape: shape,
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onOpen,

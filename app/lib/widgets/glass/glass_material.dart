@@ -8,8 +8,7 @@ import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_geometry.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 
-/// regular 区分浮动控件与内容，clear 用于媒体上方。
-enum GlassVariant { regular, clear }
+enum GlassVariant { regular, pill, menu, alert, clear }
 
 /// 在启动错误处理范围内初始化生产 shader 后端。
 abstract final class GlassMaterial {
@@ -58,7 +57,7 @@ abstract final class GlassMaterial {
             blur: 0,
             frost: 0,
             bodyShade: 0,
-            glassColor: theme.colorScheme.surface,
+            glassColor: _solidColor(theme, variant),
             bodyMode: liquid.GlassBodyMode.clear,
           )
         : settings;
@@ -68,7 +67,7 @@ abstract final class GlassMaterial {
     final label = Theme.of(context).textTheme.bodySmall!;
     return math.max(
       DesignTokens.componentNavigationHeight,
-      DesignTokens.componentIconSize +
+      DesignTokens.componentToolGlyphSize +
           DesignTokens.spacingMicro +
           MediaQuery.textScalerOf(context).scale(label.fontSize!) *
               label.height! +
@@ -194,7 +193,7 @@ class Glass extends StatefulWidget {
   @override
   State<Glass> createState() => _GlassState();
 
-  /// 普通材质沿用库预设，媒体透明材质保留自己的透光条件。
+  /// 使用库的明暗镜片和采样模型，并应用设计稿各材质的光学参数。
   static liquid.LiquidGlassSettings optics({
     required Brightness brightness,
     GlassVariant variant = GlassVariant.regular,
@@ -204,15 +203,63 @@ class Glass extends StatefulWidget {
     final base = dark
         ? liquid.LiquidGlassSettings.ios27Dark
         : liquid.LiquidGlassSettings.ios27Light;
-    final resolved = base.copyWith(
-      blur: clear ? DesignTokens.componentGlassClearBlur : null,
+    final (tint, opticalDepth, blur, refraction, light) = switch (variant) {
+      GlassVariant.regular => (
+        dark
+            ? DesignTokens.componentGlassRegularDarkBackgroundColor
+            : DesignTokens.componentGlassRegularBackgroundColor,
+        DesignTokens.componentGlassRegularOpticalDepth,
+        DesignTokens.componentGlassRegularBlur,
+        DesignTokens.componentGlassRegularRefractionIndex,
+        DesignTokens.componentGlassRegularSpecularIntensity,
+      ),
+      GlassVariant.pill => (
+        dark
+            ? DesignTokens.componentNavigationDarkBackgroundColor
+            : DesignTokens.componentNavigationBackgroundColor,
+        DesignTokens.componentGlassPillOpticalDepth,
+        DesignTokens.componentGlassPillBlur,
+        DesignTokens.componentGlassPillRefractionIndex,
+        DesignTokens.componentGlassPillSpecularIntensity,
+      ),
+      GlassVariant.menu => (
+        dark
+            ? DesignTokens.componentGlassMenuDarkBackgroundColor
+            : DesignTokens.componentGlassMenuBackgroundColor,
+        DesignTokens.componentGlassMenuOpticalDepth,
+        DesignTokens.componentGlassMenuBlur,
+        DesignTokens.componentGlassMenuRefractionIndex,
+        DesignTokens.componentGlassMenuSpecularIntensity,
+      ),
+      GlassVariant.alert => (
+        dark
+            ? DesignTokens.componentGlassAlertDarkBackgroundColor
+            : DesignTokens.componentGlassAlertBackgroundColor,
+        DesignTokens.componentGlassAlertOpticalDepth,
+        DesignTokens.componentGlassAlertBlur,
+        DesignTokens.componentGlassAlertRefractionIndex,
+        DesignTokens.componentGlassAlertSpecularIntensity,
+      ),
+      GlassVariant.clear => (
+        DesignTokens.componentGlassClearBackgroundColor,
+        DesignTokens.componentGlassClearOpticalDepth,
+        DesignTokens.componentGlassClearBlur,
+        DesignTokens.componentGlassClearRefractionIndex,
+        DesignTokens.componentGlassClearSpecularIntensity,
+      ),
+    };
+    return base.copyWith(
+      blur: blur,
+      thickness: opticalDepth,
+      refractiveIndex: refraction,
+      lightIntensity: light,
       frost: clear ? 0 : null,
       bodyShade: clear ? 0 : null,
       saturation: clear ? 1 : null,
       bodyMode: clear ? liquid.GlassBodyMode.clear : null,
-      glassColor: clear ? DesignTokens.colorGlassClear : null,
+      glassColor: tint,
+      shadow: const [],
     );
-    return resolved.copyWith(shadow: const []);
   }
 
   Widget _build(BuildContext context, GlobalKey contentKey) {
@@ -224,10 +271,12 @@ class Glass extends StatefulWidget {
       key: contentKey,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: opaque ? theme.colorScheme.surface : null,
+          color: opaque ? _solidColor(theme, variant) : null,
           shape: circular ? BoxShape.circle : BoxShape.rectangle,
           borderRadius: circular ? null : BorderRadius.circular(radius),
-          border: opaque ? Border.all(color: theme.colorScheme.outline) : null,
+          border: opaque && MediaQuery.highContrastOf(context)
+              ? Border.all(color: theme.colorScheme.outline)
+              : null,
         ),
         child: Material(
           type: MaterialType.transparency,
@@ -287,6 +336,16 @@ class Glass extends StatefulWidget {
     );
   }
 }
+
+Color _solidColor(ThemeData theme, GlassVariant variant) => switch (variant) {
+  GlassVariant.menu || GlassVariant.alert =>
+    theme.brightness == Brightness.dark
+        ? DesignTokens.componentFloatingSurfaceDarkBackgroundColor
+        : DesignTokens.componentFloatingSurfaceBackgroundColor,
+  GlassVariant.regular ||
+  GlassVariant.pill => theme.colorScheme.surfaceContainerHighest,
+  GlassVariant.clear => theme.colorScheme.surface,
+};
 
 class _GlassState extends State<Glass> {
   final _contentKey = GlobalKey();

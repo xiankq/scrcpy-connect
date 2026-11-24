@@ -10,7 +10,7 @@ import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/motion.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
 import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
@@ -255,8 +255,20 @@ class _PageFrameState extends State<PageFrame> {
       final actions = searching
           ? const <Widget>[]
           : widget.actions ?? const <Widget>[];
+      final groupSearch =
+          widget.groupHorizontalActions &&
+          actions.isNotEmpty &&
+          verticalBar == null;
       final searchButton = search == null || searching
           ? null
+          : groupSearch
+          ? GlassActionIcon(
+              key: const ValueKey('page-search-open'),
+              focusNode: _searchButtonFocus,
+              tooltip: search.hint,
+              onPressed: _openSearch,
+              icon: const Icon(AppIcons.search),
+            )
           : Tooltip(
               message: search.hint,
               excludeFromSemantics: true,
@@ -270,11 +282,15 @@ class _PageFrameState extends State<PageFrame> {
             );
       final trailingAction = searching ? null : widget.trailingAction;
       final actionGroups = [
-        ?searchButton,
-        if (widget.groupHorizontalActions && actions.length > 1)
-          GlassToolbarGroup(children: actions)
-        else
-          for (final action in actions) GlassToolbarGroup(children: [action]),
+        if (groupSearch)
+          GlassToolbarGroup(children: [?searchButton, ...actions])
+        else ...[
+          ?searchButton,
+          if (widget.groupHorizontalActions && actions.length > 1)
+            GlassToolbarGroup(children: actions)
+          else
+            for (final action in actions) GlassToolbarGroup(children: [action]),
+        ],
       ];
       final horizontalActions = actionGroups.isEmpty
           ? null
@@ -579,8 +595,15 @@ class _SearchTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     const fieldKey = ValueKey('page-search-field');
     final reduced = GlassMaterial.reduceMotion(context);
-    final scheme = Theme.of(context).colorScheme;
-    final solid = opaqueGlass(context);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final focusColor = theme.brightness == Brightness.dark
+        ? DesignTokens.componentControlFocusDarkBorderColor
+        : DesignTokens.componentControlFocusBorderColor;
+    final fieldBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(height / 2),
+      borderSide: BorderSide.none,
+    );
     final alignment = AlignmentDirectional.centerStart.resolve(
       Directionality.of(context),
     );
@@ -621,24 +644,68 @@ class _SearchTitle extends StatelessWidget {
         );
       },
       child: searching
-          ? liquid.GlassSearchBar(
+          ? Row(
               key: fieldKey,
-              controller: search.controller,
-              focusNode: focus,
-              height: height,
-              placeholder: search.hint,
-              onCancel: onClose,
-              showsCancelButton: true,
-              cancelButtonAlwaysVisible: true,
-              clearButtonSemanticLabel: '清除搜索',
-              cancelButtonSemanticLabel: '关闭搜索',
-              textStyle: Theme.of(context).textTheme.bodyMedium,
-              placeholderStyle: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: scheme.onSurfaceVariant),
-              useOwnLayer: true,
-              quality: solid ? null : GlassMaterial.quality(context),
-              surfaceStyle: solid ? liquid.GlassSurfaceStyle.solid : null,
-              color: solid ? scheme.surface : null,
+              spacing: DesignTokens.componentIconButtonGap,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: search.controller,
+                    focusNode: focus,
+                    style: theme.textTheme.bodyMedium,
+                    textInputAction: TextInputAction.search,
+                    cursorColor: focusColor,
+                    decoration: InputDecoration(
+                      hintText: search.hint,
+                      hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      isDense: true,
+                      constraints: BoxConstraints(minHeight: height),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: DesignTokens.spacingSm,
+                        vertical: DesignTokens.spacingXs,
+                      ),
+                      fillColor: scheme.surfaceContainerHighest,
+                      border: fieldBorder,
+                      focusedBorder: fieldBorder.copyWith(
+                        borderSide: BorderSide(
+                          color: focusColor,
+                          width: DesignTokens.componentControlFocusSize,
+                        ),
+                      ),
+                      prefixIcon: const Icon(
+                        AppIcons.search,
+                        size: DesignTokens.componentMenuItemSize,
+                      ),
+                      prefixIconConstraints: const BoxConstraints(
+                        minWidth: DesignTokens.componentIconButtonSize,
+                      ),
+                      suffixIcon: ValueListenableBuilder(
+                        valueListenable: search.controller,
+                        builder: (context, value, _) => value.text.isEmpty
+                            ? const SizedBox.shrink()
+                            : GlassActionIcon(
+                                icon: const Icon(AppIcons.close),
+                                tooltip: '清除搜索',
+                                iconSize: DesignTokens.componentIconSmallSize,
+                                onPressed: search.controller.clear,
+                              ),
+                      ),
+                      suffixIconConstraints: const BoxConstraints(),
+                    ),
+                  ),
+                ),
+                Tooltip(
+                  message: '关闭搜索',
+                  excludeFromSemantics: true,
+                  child: GlassToolbarIconButton(
+                    icon: const Icon(AppIcons.close),
+                    semanticLabel: '关闭搜索',
+                    onPressed: onClose,
+                  ),
+                ),
+              ],
             )
           : KeyedSubtree(key: const ValueKey('page-heading'), child: title),
     );

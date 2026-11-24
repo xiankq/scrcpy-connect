@@ -74,20 +74,18 @@ class NavigationScaffold extends HookConsumerWidget {
           horizontal: DesignTokens.componentNavigationPadding,
         ),
         iconLabelSpacing: DesignTokens.spacingMicro,
-        iconSize: DesignTokens.componentIconSize,
+        iconSize: DesignTokens.componentToolGlyphSize,
         labelFontSize: DesignTokens.typographyCaptionFontSize,
         textStyle: theme.textTheme.bodySmall,
         selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
-        selectedIconColor: theme.colorScheme.primary,
-        selectedLabelColor: theme.colorScheme.primary,
+        selectedIconColor: theme.colorScheme.onSurface,
+        selectedLabelColor: theme.colorScheme.onSurface,
         unselectedIconColor: theme.colorScheme.onSurfaceVariant,
         unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
-        indicatorColor: opaque
-            ? theme.colorScheme.surfaceContainerHigh
-            : theme.brightness == Brightness.dark
+        indicatorColor: theme.brightness == Brightness.dark
             ? DesignTokens.colorGlassSelectedDark
             : DesignTokens.colorGlassSelected,
-        settings: opaque ? GlassMaterial.settings(context) : null,
+        settings: GlassMaterial.settings(context, variant: GlassVariant.pill),
         quality: GlassMaterial.quality(context),
         indicatorSettings: GlassMaterial.navigationIndicatorSettings(context),
         pressScale: liquidMotion ? 1.04 : 1,

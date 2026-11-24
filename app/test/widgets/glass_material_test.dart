@@ -65,7 +65,11 @@ void main() {
       expect(clear.bodyShade, 0);
       expect(clear.saturation, 1);
       expect(clear.lensModel, liquid.GlassLensModel.paraxial);
-      expect(clear.refractiveIndex, regular.refractiveIndex);
+      expect(clear.refractiveIndex, greaterThan(regular.refractiveIndex));
+      final menu = Glass.optics(brightness: mode, variant: GlassVariant.menu);
+      final alert = Glass.optics(brightness: mode, variant: GlassVariant.alert);
+      expect(menu.blur, greaterThan(regular.blur));
+      expect(alert.blur, greaterThan(menu.blur));
     }
   });
 }

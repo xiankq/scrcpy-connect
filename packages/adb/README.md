@@ -12,7 +12,7 @@ final devices = await host.client.devices();
 // 先关闭设备活动，再 await host.close()。
 ```
 
-桌面先检查 SDK 环境变量和各系统常用安装位置，再检查 `PATH` 中的绝对目录。`binaryDirectory` 可指定测试使用的工具目录。`initializeNativeAdb()` 只初始化绑定；移动连接首次使用时创建持久身份，损坏的已有身份不会被覆盖。
+Windows 优先检查宿主可执行文件旁的 `platform-tools` 目录。桌面还检查 SDK 环境变量、各系统常用安装位置和 `PATH` 中的绝对目录。`binaryDirectory` 可指定测试使用的工具目录。`initializeNativeAdb()` 只初始化绑定；移动连接首次使用时创建持久身份，损坏的已有身份不会被覆盖。
 
 与 scrcpy 组合时注入其配套 ADB bindings。**不同动态库的设备、scope 与操作句柄不能混用**，初始化后不能更换库。`AdbDevice.id` 是操作权限，`connectionFacts.connectionId` 是进程内连接身份；PID、序列号、端点和磁盘配置都不授予关闭权。
 

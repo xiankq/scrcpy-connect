@@ -583,6 +583,15 @@ Future<void> main(List<String> arguments) async {
           if (iscc == null) {
             throw StateError('Install Inno Setup and add ISCC.exe to PATH.');
           }
+          final adbLock = jsonDecode(
+            File(
+              p.join(
+                root.path,
+                'packages/adb/third_party/platform-tools.lock.json',
+              ),
+            ).readAsStringSync(),
+          );
+          final adb = adbLock['platforms']['windows'];
           await streamTool([
             iscc,
             '/O${artifacts.absolute.path}',
@@ -590,6 +599,9 @@ Future<void> main(List<String> arguments) async {
             '/DBundle=${bundle.absolute.path}',
             '/DAppVersion=$version',
             '/DTargetArch=${arch == 'x64' ? 'x64os' : 'arm64'}',
+            '/DAdbUrl=${adb['url']}',
+            '/DAdbSha256=${adb['sha256']}',
+            '/DAdbExtractedBytes=${adb['extractedBytes']}',
             p.join(root.path, 'scripts/installer_windows.iss'),
           ]);
         case 'macos':

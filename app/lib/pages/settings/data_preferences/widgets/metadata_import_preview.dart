@@ -57,11 +57,6 @@ class MetadataImportPreview extends HookWidget {
                   trailing: Checkbox(
                     value: importGlobal.value,
                     onChanged: (value) => importGlobal.value = value == true,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        DesignTokens.spacingXxs,
-                      ),
-                    ),
                   ),
                 ),
               if (importGlobal.value)

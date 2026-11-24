@@ -56,6 +56,12 @@ void main() {
     expect(find.text('发现新版本'), findsOneWidget);
     expect(find.text('新增平板工作区与设备管理'), findsOneWidget);
     expect(find.text('前往发布渠道'), findsOneWidget);
+    final summary = tester.getRect(find.text('发现新版本'));
+    final notes = tester.getRect(find.text('新增平板工作区与设备管理'));
+    final action = tester.getRect(find.widgetWithText(FilledButton, '前往发布渠道'));
+    expect(summary.right, lessThan(notes.left));
+    expect(action.left, notes.left);
+    expect(action.top, greaterThan(notes.bottom));
     await tester.tap(find.text('查看更新记录'));
     await tester.pumpAndSettle();
     expect(find.text('已安装'), findsOneWidget);

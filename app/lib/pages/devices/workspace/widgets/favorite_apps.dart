@@ -69,9 +69,9 @@ class FavoriteApps extends ConsumerWidget {
             userId: app.userId,
           ),
       ],
-      onOpen: (app) {
+      onOpen: (source, app) {
         if (online) {
-          openPhoneApp(context, ref, device, app);
+          openPhoneApp(context, ref, device, app, source: source);
         } else {
           feedback(context, '无法打开，请先连接设备。');
         }

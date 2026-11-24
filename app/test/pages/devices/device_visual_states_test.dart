@@ -140,9 +140,13 @@ void main() {
       (widget) => widget is GlassActionIcon && widget.tooltip == '添加设备',
     );
     final addSurface = find.ancestor(of: add, matching: find.byType(Glass));
-    expect(tester.widget<Glass>(addSurface).circular, isTrue);
-    expect(tester.getSize(addSurface), const Size.square(44));
-    expect(tester.getCenter(addSurface), tester.getCenter(add));
+    final search = find.byKey(const ValueKey('page-search-open'));
+    expect(tester.widget<Glass>(addSurface).variant, GlassVariant.pill);
+    expect(tester.getSize(addSurface), const Size(96, 44));
+    expect(tester.getSize(add), const Size.square(44));
+    expect(tester.getSize(search), const Size.square(44));
+    expect(tester.getCenter(add).dy, tester.getCenter(search).dy);
+    expect(tester.getTopLeft(add).dx - tester.getTopRight(search).dx, 8);
     expect(tester.getTopRight(addSurface).dx, tester.getTopRight(first).dx);
     expect(tester.getSize(first).height, 108);
     expect(tester.getTopLeft(second).dy - tester.getBottomLeft(first).dy, 12);

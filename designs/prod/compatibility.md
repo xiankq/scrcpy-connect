@@ -10,7 +10,7 @@
 | --- | --- |
 | Android | WindowManager 提供尺寸和折叠特征。分割窗格依据 `FoldingFeature.isSeparating`。每个画面打开为独立 Activity，并以设备和画面名出现在系统最近任务。平板由系统桌面窗口模式决定能否出浮窗，并按手机画面比例请求初始尺寸。系统以全屏呈现时，使用同一个独立 Activity。 |
 | iOS 与 iPadOS | 窗口尺寸和安全区来自 Scene。iPad 支持通过 UIKit Scene 开独立窗口，由系统决定窗口呈现与尺寸。iPhone 及无法创建独立 Scene 的 iPad 使用应用内全屏控制页。iPhone Duo 通过 `foldable` 取得外屏、内屏和折叠保留区。 |
-| macOS、Windows、Linux | 远控子窗口使用 Flutter 3.50 的实验性单引擎桌面窗口能力。宿主不支持时使用应用内窗口切换。macOS 开启读屏时，现有远控画面回到应用内，保留原会话。各端布局见[桌面沉浸式窗口](../design.md#桌面沉浸式窗口)。 |
+| macOS、Windows、Linux | 远控子窗口使用 Flutter 3.50 的实验性单引擎桌面窗口能力。宿主不支持时使用应用内窗口切换。macOS 开启读屏时，现有远控画面回到应用内，保留原会话。各端布局见[桌面窗口标题栏](../design.md#桌面窗口标题栏)。 |
 | HarmonyOS | 具备 Flutter 布局契约。原生宿主待接入，适配时由 `windowSizeChange` 更新尺寸、`windowStatusChange` 更新模式、`foldStatusChange` 触发姿态重查。API 12+ 可使用 `FoldSplitContainer`。 |
 
 宿主将可用边界、安全区、保留区、姿态和模式投影为 `WindowEnvironment`。半折的安全窗格见[iPhone Duo 专项](../design.md#iphone-duo-专项)。
@@ -40,7 +40,7 @@ Android Activity 和 iPad Scene 共用工作台的设备连接与控制会话，
 | --- | --- |
 | Android | 无线配对、扫码、已授权 IP 和获系统许可的 USB。后台保持随服务与通知权限状态。 |
 | iOS 与 iPadOS | 无线配对、扫码与已授权 IP。连接操作在前台提供。 |
-| 桌面 | 使用应用管理的 ADB 服务和宿主可用连接能力。 |
+| 桌面 | 使用应用管理的 ADB 服务和宿主可用连接能力。Windows 优先使用应用目录下的 Platform-Tools，也支持系统已安装的 ADB。 |
 | Windows 提醒 | 应用内查看通知与电话。 |
 
 ## 远控性能验收目标

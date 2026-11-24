@@ -137,25 +137,50 @@ Future<bool> confirm(
 }) async =>
     await showAppDialog<bool>(
       context: context,
-      builder: (context) => AppAlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+      builder: (context) {
+        final theme = Theme.of(context);
+        final dark = theme.brightness == Brightness.dark;
+        const size = Size.fromHeight(DesignTokens.componentAlertButtonHeight);
+        const shape = RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(
+            Radius.circular(DesignTokens.componentAlertButtonRounded),
           ),
-          FilledButton(
-            style: danger
-                ? FilledButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.error,
-                    foregroundColor: Theme.of(context).colorScheme.onError,
-                  )
-                : null,
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(action),
-          ),
-        ],
-      ),
+        );
+        return AppAlertDialog(
+          glass: true,
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              style: TextButton.styleFrom(
+                minimumSize: size,
+                backgroundColor: theme.colorScheme.surfaceContainerHigh,
+                foregroundColor: theme.colorScheme.onSurface,
+                shape: shape,
+              ),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                minimumSize: size,
+                backgroundColor: !danger
+                    ? null
+                    : dark
+                    ? DesignTokens.componentAlertDangerDarkBackgroundColor
+                    : DesignTokens.componentAlertDangerBackgroundColor,
+                foregroundColor: !danger
+                    ? null
+                    : dark
+                    ? DesignTokens.componentAlertDangerDarkTextColor
+                    : DesignTokens.componentAlertDangerTextColor,
+                shape: shape,
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(action, textAlign: TextAlign.center),
+            ),
+          ],
+        );
+      },
     ) ??
     false;

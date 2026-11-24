@@ -22,7 +22,7 @@ class WorkspaceAppGrid extends StatelessWidget {
   final String title;
   final String deviceId;
   final List<DeviceApp> apps;
-  final ValueChanged<DeviceApp> onOpen;
+  final void Function(BuildContext source, DeviceApp app) onOpen;
   final Widget empty;
   final String? actionLabel;
   final VoidCallback? onAction;
@@ -136,27 +136,29 @@ class WorkspaceAppGrid extends StatelessWidget {
                               for (final app in apps)
                                 SizedBox(
                                   width: constraints.maxWidth / columns,
-                                  child: Tooltip(
-                                    message: app.name,
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(
-                                        DesignTokens.roundedMd,
-                                      ),
-                                      onTap: () => onOpen(app),
-                                      child: ConstrainedBox(
-                                        constraints: const BoxConstraints(
-                                          minHeight:
-                                              DesignTokens.componentAppIconSize,
+                                  child: Builder(
+                                    builder: (source) => Tooltip(
+                                      message: app.name,
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(
+                                          DesignTokens.roundedMd,
                                         ),
-                                        child: Center(
-                                          child: Opacity(
-                                            opacity: muted ? .55 : 1,
-                                            child: PhoneAppIcon(
-                                              deviceId: deviceId,
-                                              packageName: app.packageName,
-                                              userId: app.userId,
-                                              size: DesignTokens
-                                                  .componentWorkspaceAppEmptySize,
+                                        onTap: () => onOpen(source, app),
+                                        child: ConstrainedBox(
+                                          constraints: const BoxConstraints(
+                                            minHeight: DesignTokens
+                                                .componentAppIconSize,
+                                          ),
+                                          child: Center(
+                                            child: Opacity(
+                                              opacity: muted ? .55 : 1,
+                                              child: PhoneAppIcon(
+                                                deviceId: deviceId,
+                                                packageName: app.packageName,
+                                                userId: app.userId,
+                                                size: DesignTokens
+                                                    .componentWorkspaceAppEmptySize,
+                                              ),
                                             ),
                                           ),
                                         ),

@@ -209,8 +209,10 @@ class DeviceCard extends HookConsumerWidget {
       },
       child: Material(
         color: selected ? colors.surfaceContainerHigh : colors.surface,
-        borderRadius: BorderRadius.circular(
-          DesignTokens.componentDeviceListItemRounded,
+        shape: const RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.all(
+            Radius.circular(DesignTokens.componentDeviceListItemRounded),
+          ),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(

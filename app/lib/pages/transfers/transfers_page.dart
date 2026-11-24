@@ -11,10 +11,10 @@ import 'package:scrcpy_connect/pages/transfers/details/transfer_details_page.dar
 import 'package:scrcpy_connect/pages/transfers/widgets/transfer_history_row.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/styles/motion.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
+import 'package:scrcpy_connect/widgets/form_controls.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
@@ -119,55 +119,14 @@ class TransfersPage extends HookConsumerWidget {
             : _representative(current);
         final selector = Padding(
           padding: const EdgeInsets.all(DesignTokens.spacingMd),
-          child: ContentPanel(
-            padding: const EdgeInsets.all(
-              DesignTokens.componentConnectionTabsPadding,
-            ),
-            child: Row(
-              children: [
-                for (final (done, label) in [(false, '传输中'), (true, '已结束')])
-                  Expanded(
-                    child: Semantics(
-                      selected: finished.value == done,
-                      child: TextButton(
-                        style: TextButton.styleFrom(
-                          animationDuration: reduceMotionOf(context)
-                              ? Duration.zero
-                              : shortTransitionDuration,
-                          backgroundColor: finished.value == done
-                              ? Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHigh
-                              : null,
-                          foregroundColor: finished.value == done
-                              ? Theme.of(context).colorScheme.onSurface
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.all(
-                              Radius.circular(
-                                DesignTokens
-                                    .componentConnectionTabSelectedRounded,
-                              ),
-                            ),
-                          ),
-                        ),
-                        onPressed: () {
-                          if (finished.value == done) return;
-                          finished.value = done;
-                          selection.value = null;
-                        },
-                        child: Text(
-                          label,
-                          textAlign: TextAlign.center,
-                          style: finished.value == done
-                              ? const TextStyle(fontWeight: FontWeight.w600)
-                              : null,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+          child: ConnectSegmentedControl<bool>(
+            options: const [(false, '传输中'), (true, '已结束')],
+            selected: finished.value,
+            onSelected: (done) {
+              if (finished.value == done) return;
+              finished.value = done;
+              selection.value = null;
+            },
           ),
         );
         Widget buildList({

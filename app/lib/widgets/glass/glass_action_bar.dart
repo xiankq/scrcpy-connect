@@ -7,7 +7,7 @@ class GlassActionBar extends StatelessWidget {
   const GlassActionBar({
     super.key,
     required this.actions,
-    this.variant = GlassVariant.regular,
+    this.variant = GlassVariant.pill,
   });
 
   final List<Widget> actions;
@@ -20,7 +20,7 @@ class GlassActionBar extends StatelessWidget {
       padding: const EdgeInsets.all(DesignTokens.componentFileActionBarPadding),
       radius: DesignTokens.componentFileActionBarRounded,
       variant: variant,
-      showShadow: variant == GlassVariant.regular,
+      showShadow: variant != GlassVariant.clear,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [for (final action in actions) Expanded(child: action)],

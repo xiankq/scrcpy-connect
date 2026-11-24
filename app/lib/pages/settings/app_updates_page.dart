@@ -282,10 +282,10 @@ class _UpdatePrompt extends StatelessWidget {
             alignment: Alignment.center,
             children: [
               SizedBox.square(
-                dimension: 92,
+                dimension: DesignTokens.componentUpdateDialogRingSize,
                 child: CircularProgressIndicator(
                   value: 1,
-                  strokeWidth: 4,
+                  strokeWidth: DesignTokens.spacingXxs,
                   color: DesignTokens.colorDevicePanel,
                 ),
               ),
@@ -293,11 +293,14 @@ class _UpdatePrompt extends StatelessWidget {
                 top: 0,
                 child: Icon(
                   Icons.circle,
-                  size: 8,
+                  size: DesignTokens.spacingXs,
                   color: DesignTokens.colorAccentBlue,
                 ),
               ),
-              _UpdateMark(icon: AppIcons.download),
+              Icon(
+                AppIcons.download,
+                size: DesignTokens.componentUpdateDialogGlyphSize,
+              ),
             ],
           ),
         ),
@@ -308,34 +311,19 @@ class _UpdatePrompt extends StatelessWidget {
           style: theme.textTheme.headlineMedium,
         ),
         const SizedBox(height: DesignTokens.spacingMd),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: DesignTokens.spacingMd,
-              vertical: DesignTokens.spacingSm,
-            ),
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: DesignTokens.spacingSm,
-              children: [
-                Text(
-                  '${current.version}  →  ${latest.version}',
-                  style: theme.textTheme.titleMedium,
-                ),
-                if (latest.bytes case final bytes?)
-                  Text(
-                    '${(bytes / 1048576).toStringAsFixed(1)} MB',
-                    style: theme.textTheme.bodySmall,
-                  ),
-              ],
-            ),
-          ),
+        Text(
+          '${current.version}  →  ${latest.version}',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleMedium,
         ),
+        if (latest.bytes case final bytes?) ...[
+          const SizedBox(height: DesignTokens.spacingXs),
+          Text(
+            '${(bytes / 1048576).toStringAsFixed(1)} MB',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
       ],
     );
     final notes = Column(
@@ -359,104 +347,91 @@ class _UpdatePrompt extends StatelessWidget {
       ],
     );
     final media = MediaQuery.of(context);
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 1, end: 0),
-      duration: media.disableAnimations || media.reduceMotion
-          ? Duration.zero
-          : const Duration(milliseconds: 200),
-      curve: Curves.easeOutCubic,
-      builder: (_, offset, child) => Transform.translate(
-        offset: Offset(0, offset * DesignTokens.spacingSm),
-        child: child,
-      ),
-      child: Dialog(
-        insetPadding: const EdgeInsets.symmetric(
-          horizontal: DesignTokens.spacingMd,
-          vertical: DesignTokens.spacingSm,
-        ),
-        backgroundColor: theme.colorScheme.surface,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(
-            DesignTokens.componentSheetRounded,
+    final wide =
+        media.size.height - media.viewInsets.vertical <
+            DesignTokens.componentWorkspaceSplitHeight &&
+        media.size.width - media.padding.horizontal >=
+            DesignTokens.componentUpdateDialogWideWidth +
+                2 * DesignTokens.spacingMd;
+    Widget withActions(Widget content) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Flexible(child: SingleChildScrollView(child: content)),
+        const SizedBox(height: DesignTokens.spacingMd),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(
+              DesignTokens.componentAlertButtonHeight,
+            ),
           ),
+          onPressed: () => Navigator.pop(context, 'open'),
+          child: const Text('前往发布渠道'),
         ),
-        clipBehavior: Clip.antiAlias,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 504),
-          child: Padding(
-            padding: const EdgeInsets.all(DesignTokens.spacingLg),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Flexible(
-                  child: SingleChildScrollView(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        if (media.size.height <
-                                DesignTokens.componentWorkspaceSplitHeight &&
-                            constraints.maxWidth >= 410) {
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(child: summary),
-                              const SizedBox(width: DesignTokens.spacingLg),
-                              Expanded(child: notes),
-                            ],
-                          );
-                        }
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            summary,
-                            const SizedBox(height: DesignTokens.spacingMd),
-                            notes,
-                          ],
-                        );
-                      },
-                    ),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('稍后'),
+        ),
+      ],
+    );
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: DesignTokens.spacingMd,
+        vertical: DesignTokens.spacingSm,
+      ),
+      backgroundColor: theme.dialogTheme.backgroundColor,
+      elevation: 0,
+      constraints: BoxConstraints.tightFor(
+        width: wide
+            ? DesignTokens.componentUpdateDialogWideWidth
+            : DesignTokens.componentAlertWidth,
+      ),
+      shape: const RoundedSuperellipseBorder(
+        borderRadius: BorderRadius.all(
+          Radius.circular(DesignTokens.componentAlertRounded),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: EdgeInsets.all(
+          wide
+              ? DesignTokens.componentUpdateDialogWidePadding
+              : DesignTokens.spacingLg,
+        ),
+        child: wide
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: DesignTokens.spacingLg,
+                children: [
+                  SizedBox(
+                    width: DesignTokens.componentUpdateDialogSummaryWidth,
+                    child: SingleChildScrollView(child: summary),
                   ),
-                ),
-                const SizedBox(height: DesignTokens.spacingMd),
-                FilledButton(
-                  style: FilledButton.styleFrom(
-                    fixedSize: const Size.fromHeight(50),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        DesignTokens.componentButtonPrimaryRounded,
+                  Expanded(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: BorderDirectional(
+                          start: BorderSide(color: theme.dividerColor),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsetsDirectional.only(
+                          start: DesignTokens.componentUpdateDialogWidePadding,
+                        ),
+                        child: withActions(notes),
                       ),
                     ),
                   ),
-                  onPressed: () => Navigator.pop(context, 'open'),
-                  child: const Text('前往发布渠道'),
+                ],
+              )
+            : withActions(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  spacing: DesignTokens.spacingMd,
+                  children: [summary, notes],
                 ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('稍后'),
-                ),
-              ],
-            ),
-          ),
-        ),
+              ),
       ),
     );
   }
-}
-
-class _UpdateMark extends StatelessWidget {
-  const _UpdateMark({required this.icon});
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(DesignTokens.spacingSm),
-      child: Icon(icon, size: DesignTokens.componentIconLargeSize),
-    ),
-  );
 }

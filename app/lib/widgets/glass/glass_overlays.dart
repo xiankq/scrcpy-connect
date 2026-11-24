@@ -12,6 +12,7 @@ class GlassActionIcon extends StatelessWidget {
     this.padding,
     this.constraints,
     this.style,
+    this.focusNode,
   });
   final Widget icon;
   final VoidCallback? onPressed;
@@ -21,6 +22,7 @@ class GlassActionIcon extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
   final BoxConstraints? constraints;
   final ButtonStyle? style;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -28,10 +30,11 @@ class GlassActionIcon extends StatelessWidget {
       icon: icon,
       onPressed: onPressed,
       iconSize: iconSize,
-      color: color,
+      color: color ?? Theme.of(context).colorScheme.onSurface,
       padding: padding,
       constraints: constraints,
       style: style,
+      focusNode: focusNode,
     );
     final label = tooltip;
     return label == null
@@ -39,7 +42,9 @@ class GlassActionIcon extends StatelessWidget {
         : Tooltip(
             message: label,
             excludeFromSemantics: true,
-            child: Semantics(label: label, child: button),
+            child: MergeSemantics(
+              child: Semantics(label: label, child: button),
+            ),
           );
   }
 }

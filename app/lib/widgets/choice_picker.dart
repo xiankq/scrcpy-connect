@@ -2,6 +2,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
+import 'package:scrcpy_connect/widgets/choice_row.dart';
 import 'package:scrcpy_connect/widgets/overlays.dart';
 
 Future<T?> showChoicePicker<T>({
@@ -26,19 +27,15 @@ Future<T?> showChoicePicker<T>({
           : null);
   final rows = options.map((option) {
     final reason = disabledReason?.call(option);
-    final selected = isSelected(option);
     return Builder(
-      builder: (context) => ListTile(
+      builder: (context) => ChoiceRow<T>(
+        value: option,
         title: Text(label(option)),
-        subtitle: reason == null || reason.isEmpty ? null : Text(reason),
-        enabled: reason == null,
-        selected: selected,
-        selectedTileColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
-        ),
-        trailing: selected ? const Icon(LucideIcons.check) : null,
-        onTap: reason == null ? () => Navigator.pop(context, option) : null,
+        selected: isSelected(option),
+        disabledReason: reason,
+        onChanged: reason == null
+            ? (value) => Navigator.pop(context, value)
+            : null,
       ),
     );
   }).toList();
@@ -46,15 +43,18 @@ Future<T?> showChoicePicker<T>({
     top: false,
     child: ListView(
       shrinkWrap: true,
-      padding: const EdgeInsets.fromLTRB(
-        DesignTokens.spacingMd,
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        DesignTokens.componentPickerPadding,
+        DesignTokens.spacingXs,
+        DesignTokens.componentPickerPadding,
         DesignTokens.spacingSm,
-        DesignTokens.spacingMd,
-        DesignTokens.spacingMd,
       ),
       children: [
         Padding(
-          padding: const EdgeInsets.all(DesignTokens.spacingSm),
+          padding: const EdgeInsetsDirectional.only(
+            start: DesignTokens.spacingMd,
+            end: DesignTokens.spacingXxs,
+          ),
           child: Row(
             children: [
               Expanded(
@@ -80,12 +80,14 @@ Future<T?> showChoicePicker<T>({
           context: context,
           anchorPoint: position,
           builder: (context) => Dialog(
-            backgroundColor: Theme.of(context).colorScheme.surface,
+            backgroundColor: DialogTheme.of(context).backgroundColor,
             elevation: 0,
-            constraints: const BoxConstraints(maxWidth: 440),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(
-                DesignTokens.componentSheetRounded,
+            constraints: const BoxConstraints.tightFor(
+              width: DesignTokens.componentPickerWidth,
+            ),
+            shape: const RoundedSuperellipseBorder(
+              borderRadius: BorderRadius.all(
+                Radius.circular(DesignTokens.componentPickerRounded),
               ),
             ),
             clipBehavior: Clip.antiAlias,
@@ -100,7 +102,7 @@ Future<T?> showChoicePicker<T>({
 }
 
 /// The trigger stays in its form while the selection gets a modal route.
-class ChoiceField extends StatelessWidget {
+class ChoiceField extends StatefulWidget {
   const ChoiceField({
     super.key,
     required this.value,
@@ -115,29 +117,60 @@ class ChoiceField extends StatelessWidget {
   final Future<void> Function(Offset anchor)? onPressed;
 
   @override
+  State<ChoiceField> createState() => _ChoiceFieldState();
+}
+
+class _ChoiceFieldState extends State<ChoiceField> {
+  bool _focused = false;
+
+  @override
   Widget build(BuildContext context) => Semantics(
     button: true,
     child: InkWell(
-      onTap: onPressed == null
+      onFocusChange: (focused) => setState(() => _focused = focused),
+      onTap: widget.onPressed == null
           ? null
           : () {
               final box = context.findRenderObject()! as RenderBox;
-              onPressed!(box.localToGlobal(box.size.center(Offset.zero)));
+              widget.onPressed!(
+                box.localToGlobal(box.size.center(Offset.zero)),
+              );
             },
-      borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
+      borderRadius: BorderRadius.circular(
+        DesignTokens.componentSelectionFieldRounded,
+      ),
       child: InputDecorator(
+        isFocused: _focused,
         decoration: InputDecoration(
-          labelText: label,
-          errorText: errorText,
-          enabled: onPressed != null,
-          contentPadding: label == null
-              ? const EdgeInsetsDirectional.fromSTEB(
-                  DesignTokens.spacingSm,
-                  DesignTokens.spacingXs,
-                  DesignTokens.spacingXs,
-                  DesignTokens.spacingXs,
-                )
-              : null,
+          labelText: widget.label,
+          errorText: widget.errorText,
+          enabled: widget.onPressed != null,
+          constraints: const BoxConstraints(
+            minHeight: DesignTokens.componentSelectionFieldHeight,
+          ),
+          contentPadding: const EdgeInsetsDirectional.fromSTEB(
+            DesignTokens.componentSelectionFieldPadding,
+            DesignTokens.componentSelectionFieldVerticalPadding,
+            DesignTokens.spacingXs,
+            DesignTokens.componentSelectionFieldVerticalPadding,
+          ),
+          border: const OutlineInputBorder(
+            borderRadius: BorderRadius.all(
+              Radius.circular(DesignTokens.componentSelectionFieldRounded),
+            ),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: const BorderRadius.all(
+              Radius.circular(DesignTokens.componentSelectionFieldRounded),
+            ),
+            borderSide: BorderSide(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? DesignTokens.componentControlFocusDarkBorderColor
+                  : DesignTokens.componentControlFocusBorderColor,
+              width: DesignTokens.componentControlFocusSize,
+            ),
+          ),
           suffixIconConstraints: const BoxConstraints(
             minWidth: 28,
             minHeight: DesignTokens.componentIconButtonSize,
@@ -149,10 +182,12 @@ class ChoiceField extends StatelessWidget {
         ),
         isEmpty: false,
         child: Text(
-          value,
+          widget.value,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: label == null ? Theme.of(context).textTheme.labelLarge : null,
+          style: widget.label == null
+              ? Theme.of(context).textTheme.labelLarge
+              : null,
         ),
       ),
     ),

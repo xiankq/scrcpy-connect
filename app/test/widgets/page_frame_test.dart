@@ -113,7 +113,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: page));
     final surface = find.byType(Glass);
     expect(surface, findsOneWidget);
-    expect(tester.getSize(surface), const Size(88, 44));
+    expect(tester.getSize(surface), const Size(96, 44));
     expect(tester.widget<Glass>(surface).circular, isFalse);
 
     await tester.pumpWidget(

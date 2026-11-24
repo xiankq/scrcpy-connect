@@ -62,7 +62,8 @@ class FileViewMenuButton extends HookWidget {
         SizedBox(
           width: width,
           child: Glass(
-            radius: DesignTokens.roundedLg,
+            variant: GlassVariant.menu,
+            radius: DesignTokens.componentMenuRounded,
             child: ConstrainedBox(
               constraints: BoxConstraints(maxHeight: size.height * .65),
               child: SingleChildScrollView(

@@ -111,7 +111,13 @@ class DeviceAppsPage extends HookConsumerWidget {
                             packageName: app.packageName,
                           ),
                           title: Text(app.name),
-                          onTap: () => openPhoneApp(context, ref, device, app),
+                          onTap: () => openPhoneApp(
+                            context,
+                            ref,
+                            device,
+                            app,
+                            source: context,
+                          ),
                         ),
                       );
                     },
