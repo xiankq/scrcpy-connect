@@ -44,12 +44,17 @@ runs:
       shell: bash
       run: |
         command -v nasm || brew install nasm
-    - if: inputs.native == 'true' && runner.os == 'Linux' && runner.arch == 'ARM64'
+    - name: Prepare pinned Rust toolchain
+      if: inputs.native == 'true'
       shell: bash
       run: |
+        if [[ "$RUNNER_OS/$RUNNER_ARCH" != Linux/ARM64 ]]; then
+          if rustup show active-toolchain; then exit 0; fi
+          echo '::warning title=Rust toolchain::The hosted toolchain failed to initialize. Installing the pinned version in a clean directory.'
+        fi
         export RUSTUP_HOME="$RUNNER_TEMP/interconnect-rustup"
         toolchain="$(python -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')"
-        rustup toolchain install "$toolchain" --profile minimal
+        rustup toolchain install "$toolchain" --profile minimal --component rustfmt --component clippy
         printf 'RUSTUP_HOME=%s\nRUSTUP_TOOLCHAIN=%s\n' "$RUSTUP_HOME" "$toolchain" >> "$GITHUB_ENV"
     - if: inputs.native == 'true' && runner.os == 'Windows'
       id: msys2
@@ -75,9 +80,7 @@ runs:
         }
     - if: inputs.native == 'true'
       shell: bash
-      run: |
-        python -m pip install meson==1.12.1 ninja==1.13.2
-        rustup show active-toolchain
+      run: python -m pip install meson==1.12.1 ninja==1.13.2
     # Flutter 3.50.1 has native ARM64 engines and Dart SDKs on these hosts,
     # but the stable archive indexes only advertise x64 desktop bundles.
     - if: runner.arch == 'ARM64' && runner.os != 'macOS'
