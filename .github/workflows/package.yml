@@ -54,8 +54,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {platform: linux, arch: x64, runner: ubuntu-24.04}
-          - {platform: linux, arch: arm64, runner: ubuntu-24.04-arm}
           - {platform: windows, arch: x64, runner: windows-2025}
           - {platform: windows, arch: arm64, runner: windows-11-arm}
     runs-on: ${{ matrix.runner }}
@@ -66,7 +64,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-build
         with:
-          media-profile: ${{ matrix.platform }}-${{ matrix.arch }}
+          media-profile: ${{ matrix.platform }}-${{ matrix.arch }}-timing
       - if: matrix.platform == 'linux'
         name: Install Linux package tools
         run: timeout 4m sudo apt-get install -y --no-install-recommends adb appstream file rpm desktop-file-utils squashfs-tools
@@ -89,7 +87,7 @@ jobs:
           UPDATE_FEED: ${{ inputs.release && format('https://github.com/{0}/releases/latest/download/release-feed.json', github.repository) || '' }}
           PACKAGE_PLATFORM: ${{ matrix.platform }}
           PACKAGE_ARCH: ${{ matrix.arch }}
-        run: dart scripts/build_host.dart "$PACKAGE_PLATFORM" --arch "$PACKAGE_ARCH" --installers --update-feed "$UPDATE_FEED"
+        run: dart scripts/build_host.dart "$PACKAGE_PLATFORM" --arch "$PACKAGE_ARCH" --installers --verbose --update-feed "$UPDATE_FEED"
       - if: matrix.platform == 'linux'
         name: Verify DEB install and uninstall
         env:
@@ -127,7 +125,7 @@ jobs:
           compression-level: 0
 
   apple:
-    if: '!inputs.release || inputs.macos'
+    if: ${{ false }}
     strategy:
       fail-fast: false
       matrix:
@@ -177,6 +175,7 @@ jobs:
           compression-level: 0
 
   android:
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     environment: ${{ (inputs.release || inputs.preview) && 'release' || 'package-preview' }}
