@@ -18,6 +18,7 @@ on:
       - 'packages/media_codec/native/CMakeLists.txt'
       - 'packages/media_codec/tool/**'
       - 'packages/media_codec/third_party/**'
+      - 'packages/scrcpy/hook/**'
       - 'pubspec.lock'
       - 'rust-toolchain.toml'
       - 'scripts/android.dart'
