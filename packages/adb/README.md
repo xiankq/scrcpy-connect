@@ -16,6 +16,8 @@ final devices = await host.client.devices();
 
 与 scrcpy 组合时注入其配套 ADB bindings。**不同动态库的设备、scope 与操作句柄不能混用**，初始化后不能更换库。`AdbDevice.id` 是操作权限，`connectionFacts.connectionId` 是进程内连接身份；PID、序列号、端点和磁盘配置都不授予关闭权。
 
+启用 Dart 原生资产链接时，独立 ADB 库由链接钩子按应用的实际调用构建。调试构建等未启用链接的调用仍由构建钩子提供该库。
+
 ## 服务与关闭
 
 `host.client` 提供连接、配对和便捷 shell/push/pull；`client.services` 提供原始服务、双向 shell/exec、SYNC、JDWP、reverse 和 OPEN 探针。类型及参数以公开 Dart 接口为准。
