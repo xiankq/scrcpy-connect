@@ -43,11 +43,11 @@ CI 在 PR 和 `main`、`dev` 分支上运行，检查生成物、代码格式、
 
 ## 怎么选下载包
 
+Windows、Linux 和 macOS 下载包均内置 ADB。
+
 - Android 近年的真机通常选 `arm64-v8a`。不确定架构时选通用 APK。各包可按 Android 的签名和版本规则相互覆盖。
-- Windows 选与系统架构对应的安装器或便携 ZIP。安装向导默认从 Google 下载并校验 Android SDK Platform-Tools（ADB），可取消勾选，也可选建桌面快捷方式。便携版解压完整目录后运行 `Interconnect.exe`。如果系统上没有 ADB，从官网下载并解压，将 `platform-tools` 文件夹放到 `Interconnect.exe` 旁。 [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools)
-- Linux 在 Debian、Ubuntu 系列用 DEB，在 Fedora 系列用 RPM。AppImage 赋予执行权限后打开。没有 FUSE 的系统可以在命令前加 `APPIMAGE_EXTRACT_AND_RUN=1`，也可以解压 tar.gz 后运行 `bundle/interconnect`。构建基线为 Ubuntu 24.04。AppImage 与 tar.gz 依赖宿主 GTK 3 和媒体相关系统库。
-- Linux 的 DEB 和 RPM 会声明 ADB 依赖。用 AppImage 或 tar.gz 时，先安装 Debian、Ubuntu 的 `adb` 或 Fedora 的 `android-tools`。
-- macOS 用 Android Studio 的 SDK Manager 或 `brew install --cask android-platform-tools` 安装 ADB。手动下载时，将解压后的 `platform-tools` 文件夹放到 `~/Library/Android/sdk/` 下，供从访达打开的应用识别。 [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools)
+- Windows 选与系统架构对应的安装器或便携 ZIP。安装向导可选建桌面快捷方式。便携版解压完整目录后运行 `Interconnect.exe`。
+- Linux 在 Debian、Ubuntu 系列用 DEB，在 Fedora 系列用 RPM。AppImage 赋予执行权限后打开。没有 FUSE 的系统可以在命令前加 `APPIMAGE_EXTRACT_AND_RUN=1`，也可以解压 tar.gz 后运行 `bundle/interconnect`。构建基线为 Ubuntu 24.04。AppImage 与 tar.gz 依赖宿主 GTK 3 和媒体相关系统库，ARM64 另外依赖 libusb 1.0 和 zlib。USB 连接需要系统允许当前用户访问手机，可改用无线连接。
 - macOS 在「关于本机」查看芯片，Apple 芯片选 `arm64`，Intel 处理器选 `x64`。
 
 ## 出错时怎么处理

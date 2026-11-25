@@ -32,6 +32,11 @@ def download(url, destination, expected):
 
 def main(bundle, prefix, arch, version):
     machine, deb_arch = {"x64": ("x86_64", "amd64"), "arm64": ("aarch64", "arm64")}[arch]
+    adb_deb_deps = ", libusb-1.0-0, zlib1g" if arch == "arm64" else ""
+    adb_rpm_deps = (
+        "Requires: libusb-1.0.so.0()(64bit), libz.so.1()(64bit)\n"
+        if arch == "arm64" else ""
+    )
     prefix.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="interconnect-linux-", dir=prefix.parent) as temp:
         work = Path(temp)
@@ -55,7 +60,8 @@ Architecture: {deb_arch}
 Maintainer: Interconnect contributors
 Section: utils
 Priority: optional
-Depends: libc6 (>= 2.39), libgtk-3-0t64 | libgtk-3-0, libepoxy0, libdrm2, libva2, libva-drm2, libstdc++6, adb
+Depends: libc6 (>= 2.39), libgtk-3-0t64 | libgtk-3-0, libepoxy0, libdrm2, libva2, libva-drm2, libstdc++6{adb_deb_deps}
+Recommends: android-sdk-platform-tools-common
 Description: Cross-device Android control and file workspace
 """)
         deb = work / "interconnect.deb"
@@ -69,13 +75,14 @@ Description: Cross-device Android control and file workspace
         rpm_top.mkdir()
         spec = work / "interconnect.spec"
         spec.write_text(f"""%global __os_install_post %{{nil}}
+%global __provides_exclude_from ^/opt/interconnect/platform-tools/.*$
+%global __requires_exclude_from ^/opt/interconnect/platform-tools/.*$
 Name: interconnect
 Version: {version}
 Release: 1
 Summary: Cross-device Android control and file workspace
 License: See repository LICENSE
-Requires: android-tools
-%description
+{adb_rpm_deps}%description
 Control Android devices and transfer files.
 %install
 mkdir -p "%{{buildroot}}"
@@ -122,11 +129,14 @@ cp -a "{root}/." "%{{buildroot}}/"
         env = dict(os.environ, ARCH=machine, APPIMAGE_EXTRACT_AND_RUN="1")
         with stage("Linux package/AppImage"):
             subprocess.run([tool, "--runtime-file", runtime, root, image], env=env, check=True)
+            bundled_adb = "opt/interconnect/platform-tools/adb"
             subprocess.run(["unsquashfs", "-offset", str(runtime.stat().st_size),
-                            image, "AppRun"], cwd=work, stdout=subprocess.DEVNULL,
+                            image, "AppRun", bundled_adb], cwd=work, stdout=subprocess.DEVNULL,
                            check=True)
             if (work / "squashfs-root/AppRun").read_bytes() != launch.read_bytes():
                 raise ValueError("AppImage launcher does not match the package input")
+            if (work / "squashfs-root" / bundled_adb).read_bytes() != (root / bundled_adb).read_bytes():
+                raise ValueError("AppImage ADB does not match the package input")
         for output, extension in [(deb, "deb"), (rpm, "rpm"), (image, "AppImage")]:
             output.replace(f"{prefix}.{extension}")
 

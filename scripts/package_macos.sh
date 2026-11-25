@@ -26,7 +26,7 @@ if [[ -n "${MACOS_SIGNING_IDENTITY:-}" ]]; then
     if [[ "$type" == *Mach-O* ]]; then
       codesign --force --options runtime --timestamp --sign "$MACOS_SIGNING_IDENTITY" "$file"
     fi
-  done < <(find "$staged/Contents" -type f -print0)
+  done
   while IFS= read -r -d '' framework; do
     codesign --force --options runtime --timestamp --sign "$MACOS_SIGNING_IDENTITY" "$framework"
   done < <(find "$staged/Contents/Frameworks" -depth -type d -name '*.framework' -print0)

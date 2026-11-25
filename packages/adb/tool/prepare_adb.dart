@@ -1,4 +1,4 @@
-/// 为桌面应用准备固定版本的官方 ADB 分发文件。
+/// 为桌面应用准备固定版本的 ADB 分发文件。
 library;
 
 import 'dart:convert';
@@ -13,7 +13,7 @@ Future<void> main(List<String> arguments) async {
   final parser = ArgParser()
     ..addOption(
       'platform',
-      allowed: ['linux', 'windows', 'macos'],
+      allowed: ['linux', 'linux-arm64', 'windows', 'macos'],
       mandatory: true,
     )
     ..addOption('output');
@@ -25,141 +25,196 @@ Future<void> main(List<String> arguments) async {
     final lockFile = File(
       p.join(package.path, 'third_party/platform-tools.lock.json'),
     );
-    final lock =
-        jsonDecode(await lockFile.readAsString()) as Map<String, dynamic>;
+    final lockContents = await lockFile.readAsString();
+    final lock = jsonDecode(lockContents) as Map<String, dynamic>;
     final platform = args['platform'] as String;
     final config = (lock['platforms'] as Map)[platform] as Map<String, dynamic>;
-    final hashes = Map<String, String>.from(config['files'] as Map);
     final cache = Directory(p.join(workspace.path, '.dart_tool/adb'));
     final output = Directory(
       args['output'] as String? ?? p.join(cache.path, platform),
-    );
-    final expectedFiles = {...hashes.keys, 'platform-tools.lock.json'};
-
-    Future<bool> valid() async {
-      if (!await output.exists()) return false;
+    ).absolute;
+    final source = await Directory(p.join(cache.path, 'source'))
+        .create(recursive: true);
+    final hashes = config['files'] as Map<String, dynamic>?;
+    if (hashes != null && await output.exists()) {
       final entries = await output.list().toList();
-      if (entries.length != expectedFiles.length ||
-          entries.any(
-            (entry) => !expectedFiles.contains(p.basename(entry.path)),
-          )) {
-        return false;
+      final receipt = File(p.join(output.path, p.basename(lockFile.path)));
+      if (entries.length == hashes.length + 1 &&
+          await receipt.exists() &&
+          await receipt.readAsString() == lockContents &&
+          (await Future.wait([
+            for (final entry in hashes.entries)
+              hasHash(
+                File(p.join(output.path, entry.key)),
+                entry.value as String,
+              ),
+          ])).every((matches) => matches)) {
+        stdout.writeln(output.path);
+        return;
       }
-      for (final entry in hashes.entries) {
-        final file = File(p.join(output.path, entry.key));
-        if (!await file.exists() ||
-            (await sha256.bind(file.openRead()).first).toString() !=
-                entry.value) {
-          return false;
-        }
-      }
-      return await File(p.join(output.path, 'platform-tools.lock.json'))
-              .readAsString() ==
-          await lockFile.readAsString();
     }
 
-    if (await valid()) {
-      stdout.writeln(output.absolute.path);
-      return;
-    }
-    final source = Directory(p.join(cache.path, 'source'));
-    await source.create(recursive: true);
-    final suffix = platform == 'macos' ? 'darwin' : platform;
-    final archive = File(
-      p.join(
-        source.path,
-        'platform-tools_r${lock['version']}-$suffix-${config['sha256']}.zip',
-      ),
-    );
-    if (!await archive.exists()) {
-      final pending = File('${archive.path}.download.$pid');
-      try {
-        final request = await client.getUrl(Uri.parse(config['url'] as String));
-        final response = await request.close().timeout(
-          const Duration(seconds: 30),
-        );
-        if (response.statusCode != HttpStatus.ok) {
-          throw HttpException('ADB download HTTP ${response.statusCode}');
-        }
-        var received = 0;
-        final sink = pending.openWrite();
-        try {
-          await for (final chunk in response.timeout(
-            const Duration(seconds: 30),
-          )) {
-            received += chunk.length;
-            if (received > (config['archiveBytes'] as int)) {
-              throw StateError('ADB archive exceeds pinned length');
-            }
-            sink.add(chunk);
-          }
-          await sink.flush();
-        } finally {
-          await sink.close();
-        }
-        if (received != config['archiveBytes']) {
-          throw StateError('Truncated ADB archive');
-        }
-        if ((await sha256.bind(pending.openRead()).first).toString() !=
-            config['sha256']) {
-          throw StateError('Official ADB archive SHA-256 mismatch');
-        }
-        await pending.rename(archive.path);
-      } finally {
-        if (await pending.exists()) await pending.delete();
-      }
-    }
-    if ((await sha256.bind(archive.openRead()).first).toString() !=
-        config['sha256']) {
-      throw StateError('Cached official ADB archive SHA-256 mismatch');
-    }
-    final zip = ZipDecoder().decodeBytes(
-      await archive.readAsBytes(),
-      verify: true,
-    );
-    final staging = Directory('${output.path}.staging.$pid');
-    await staging.create(recursive: true);
+    final staging = await Directory('${output.path}.staging.$pid')
+        .create(recursive: true);
     try {
-      // 仅提取锁定的文件名；fastboot、文件系统工具和 sqlite 不属于 ADB 依赖，不随应用打包。
-      for (final entry in hashes.entries) {
-        if (p.basename(entry.key) != entry.key) {
-          throw StateError('Invalid lock file name');
+      if (platform == 'linux-arm64') {
+        await prepareLinuxArm64(client, config, source, staging);
+      } else {
+        final suffix = platform == 'macos' ? 'darwin' : platform;
+        final archive = await download(
+          client,
+          Uri.parse(config['url'] as String),
+          File(
+            p.join(
+              source.path,
+              'platform-tools_r${lock['version']}-$suffix-${config['sha256']}.zip',
+            ),
+          ),
+          config['sha256'] as String,
+          bytes: config['archiveBytes'] as int,
+        );
+        final zip = ZipDecoder().decodeBytes(
+          await archive.readAsBytes(),
+          verify: true,
+        );
+        // 只交付 ADB、必需的 DLL 和声明。
+        for (final entry in hashes!.entries) {
+          final item = zip.findFile('platform-tools/${entry.key}');
+          if (item == null || !item.isFile || item.size > 64 * 1024 * 1024) {
+            throw StateError('Platform-Tools archive lacks ${entry.key}');
+          }
+          final bytes = item.content;
+          if (sha256.convert(bytes).toString() != entry.value) {
+            throw StateError(
+              'Platform-Tools file SHA-256 mismatch: ${entry.key}',
+            );
+          }
+          await File(p.join(staging.path, entry.key)).writeAsBytes(bytes);
         }
-        final item = zip.findFile('platform-tools/${entry.key}');
-        if (item == null || !item.isFile || item.size > 64 * 1024 * 1024) {
-          throw StateError('Official ADB archive lacks ${entry.key}');
+        final properties = await File(p.join(staging.path, 'source.properties'))
+            .readAsLines();
+        if (!properties.contains('Pkg.Revision=${lock['version']}')) {
+          throw StateError('Platform-Tools revision differs from lock');
         }
-        final bytes = item.content;
-        if (sha256.convert(bytes).toString() != entry.value) {
-          throw StateError('Official ADB file SHA-256 mismatch: ${entry.key}');
-        }
-        await File(p.join(staging.path, entry.key)).writeAsBytes(bytes);
       }
-      final properties = await File(p.join(staging.path, 'source.properties'))
-          .readAsString();
-      if (!properties.split('\n').contains('Pkg.Revision=${lock['version']}')) {
-        throw StateError('Official ADB revision differs from lock');
-      }
-      await lockFile.copy(p.join(staging.path, 'platform-tools.lock.json'));
+      await lockFile.copy(p.join(staging.path, p.basename(lockFile.path)));
       if (!Platform.isWindows && platform != 'windows') {
-        final result = await Process.run('chmod', [
-          '755',
-          p.join(staging.path, 'adb'),
-        ]);
-        if (result.exitCode != 0) {
-          throw StateError('Cannot mark ADB executable');
-        }
+        await run('chmod', ['755', p.join(staging.path, 'adb')]);
       }
       if (await output.exists()) await output.delete(recursive: true);
       await staging.rename(output.path);
     } finally {
       if (await staging.exists()) await staging.delete(recursive: true);
     }
-    stdout.writeln(output.absolute.path);
+    stdout.writeln(output.path);
   } catch (error) {
     stderr.writeln(error);
     exitCode = 1;
   } finally {
     client.close(force: true);
+  }
+}
+
+Future<bool> hasHash(File file, String expected) async =>
+    await file.exists() &&
+    (await sha256.bind(file.openRead()).first).toString() == expected;
+
+Future<File> download(
+  HttpClient client,
+  Uri url,
+  File archive,
+  String hash, {
+  int? bytes,
+}) async {
+  if (await archive.exists()) {
+    if (await hasHash(archive, hash)) return archive;
+    throw StateError('Cached ADB input SHA-256 mismatch: ${archive.path}');
+  }
+  final pending = File('${archive.path}.download.$pid');
+  try {
+    final request = await client.getUrl(url);
+    final response = await request.close().timeout(const Duration(seconds: 30));
+    if (response.statusCode != HttpStatus.ok) {
+      throw HttpException('ADB download HTTP ${response.statusCode}', uri: url);
+    }
+    var received = 0;
+    final sink = pending.openWrite();
+    try {
+      await for (final chunk in response.timeout(const Duration(seconds: 30))) {
+        received += chunk.length;
+        if (bytes != null && received > bytes) {
+          throw StateError('ADB archive exceeds pinned length');
+        }
+        sink.add(chunk);
+      }
+      await sink.flush();
+    } finally {
+      await sink.close();
+    }
+    if (bytes != null && received != bytes) {
+      throw StateError('Truncated ADB archive');
+    }
+    if (!await hasHash(pending, hash)) {
+      throw StateError('ADB input SHA-256 mismatch: $url');
+    }
+    return await pending.rename(archive.path);
+  } finally {
+    if (await pending.exists()) await pending.delete();
+  }
+}
+
+Future<void> prepareLinuxArm64(
+  HttpClient client,
+  Map<String, dynamic> config,
+  Directory source,
+  Directory staging,
+) async {
+  final unpacked = Directory(p.join(staging.path, 'unpacked'));
+  for (final entry in (config['packages'] as Map<String, dynamic>).entries) {
+    final url = Uri.parse(config['baseUrl'] as String).resolve(entry.key);
+    final archive = await download(
+      client,
+      url,
+      File(p.join(source.path, p.basename(entry.key))),
+      entry.value as String,
+    );
+    await run('dpkg-deb', ['--extract', archive.path, unpacked.path]);
+  }
+  final adb = p.join(staging.path, 'adb');
+  await File(p.join(unpacked.path, 'usr/lib/android-sdk/platform-tools/adb'))
+      .copy(adb);
+  final privateLibs = await Directory(p.join(staging.path, 'lib')).create();
+  for (final library in (config['libraries'] as List).cast<String>()) {
+    await File(p.join(unpacked.path, 'usr/lib/aarch64-linux-gnu', library))
+        .copy(p.join(privateLibs.path, p.basename(library)));
+  }
+  // Ubuntu 的 ADB 安装到系统 SDK 目录。改为随应用迁移的私有依赖路径。
+  await run('patchelf', ['--force-rpath', '--set-rpath', r'$ORIGIN/lib', adb]);
+  final docs = Directory(p.join(unpacked.path, 'usr/share/doc'));
+  await File(p.join(docs.path, 'adb/copyright'))
+      .copy(p.join(staging.path, 'NOTICE.txt'));
+  final notices = await Directory(p.join(staging.path, 'licenses')).create();
+  for (final path in [
+    'android-libboringssl',
+    'libbrotli1',
+    'liblz4-1',
+    'libprotobuf32t64',
+    'libzstd1',
+  ]) {
+    await File(p.join(docs.path, path, 'copyright'))
+        .copy(p.join(notices.path, '$path.txt'));
+  }
+  await unpacked.delete(recursive: true);
+}
+
+Future<void> run(String executable, List<String> arguments) async {
+  final result = await Process.run(executable, arguments);
+  if (result.exitCode != 0) {
+    throw ProcessException(
+      executable,
+      arguments,
+      result.stderr as String,
+      result.exitCode,
+    );
   }
 }

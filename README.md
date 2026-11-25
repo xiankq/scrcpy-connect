@@ -14,7 +14,7 @@
 - **macOS** 按 Apple Silicon 或 Intel 选择 DMG，将邻接拖入「应用程序」。预览版 DMG 未经 Apple 公证。
 - **iOS 和 iPadOS** 可在 Apple 芯片 Mac 上用模拟器体验预览版。真机编译归档需要 Apple 签名才能安装。
 
-Windows 安装器可下载并安装 ADB。各桌面下载包的 ADB 安装方法见[下载包说明](docs/releasing.md#怎么选下载包)。
+桌面版自带 ADB，安装或解压后即可使用。各平台的包见[下载包说明](docs/releasing.md#怎么选下载包)。
 
 首次连接时，在 Android 被控设备上打开开发者选项，按连接方式启用 USB 或无线调试，只授权自己信任的主控。连接、配对和重连的区别见[设备连接](designs/prod/README.md)。
 

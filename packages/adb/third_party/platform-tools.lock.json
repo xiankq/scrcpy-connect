@@ -12,11 +12,40 @@
         "source.properties": "360a713f5700c3a1b2d5bbb8ed01c6d1ade768c3f7971df668b7234c057561a9"
       }
     },
+    "linux-arm64": {
+      "version": "34.0.4-debian",
+      "baseUrl": "https://snapshot.ubuntu.com/ubuntu/20261124T000000Z/",
+      "packages": {
+        "pool/universe/a/android-platform-tools/adb_34.0.4-1build3_arm64.deb": "17433097fd151c47a95de2f7b45c3b683cde0a14d2b1e21251744075e71a1bcd",
+        "pool/universe/a/android-platform-tools/android-libbase_34.0.4-1build3_arm64.deb": "0d764f726449e35b4a861b056d661da6526ef8b7d3403fc8d11836e63a9ac6d6",
+        "pool/universe/a/android-platform-tools/android-libcutils_34.0.4-1build3_arm64.deb": "6888e9ed1722b63e1c8dd4656927da299b291ad83d141451f6e6394f9d7b0071",
+        "pool/universe/a/android-platform-tools/android-liblog_34.0.4-1build3_arm64.deb": "81e9bcec0986b8111f63617fc226d3690ed90cca61af27b57750fd1ec65e994b",
+        "pool/universe/a/android-platform-tools/android-libziparchive_34.0.4-1build3_arm64.deb": "c924e3e4fd363cb0889ce977d2f1716c63532b17bc5f55f8a78d20496b4014a6",
+        "pool/universe/a/android-platform-external-boringssl/android-libboringssl_14.0.0+r11-4build1_arm64.deb": "ebf7531fe6347a2c802b8f861872d7a2d0322d3102ea7fadf06977f66ae2653a",
+        "pool/main/b/brotli/libbrotli1_1.1.0-2ubuntu0.1_arm64.deb": "911411fb6fdfb4ab91dd4242f5a0a5e1f47b38e003a25c8dc7730238cb323e18",
+        "pool/main/l/lz4/liblz4-1_1.9.4-1build1.1_arm64.deb": "65ab8cfe4aeb8205ef4f980500d2c8cb397cb49901ef12efad59f4ed7685cbe0",
+        "pool/main/p/protobuf/libprotobuf32t64_3.21.12-8.2ubuntu0.4_arm64.deb": "ff59200db84971b2499b8d80dbaa09ea83ea7e2647dc7025a327a1ab9f6fcb2c",
+        "pool/main/libz/libzstd/libzstd1_1.5.5+dfsg2-2build1.1_arm64.deb": "ea7d6e9fde577ea14dbf07fdfb74d6287eb09c6cba4a9d63abdcb87b0ec54bcc"
+      },
+      "libraries": [
+        "android/libbase.so.0",
+        "android/libcrypto.so.0",
+        "android/libcutils.so.0",
+        "android/liblog.so.0",
+        "android/libssl.so.0",
+        "android/libziparchive.so.0",
+        "libbrotlicommon.so.1",
+        "libbrotlidec.so.1",
+        "libbrotlienc.so.1",
+        "liblz4.so.1",
+        "libprotobuf.so.32",
+        "libzstd.so.1"
+      ]
+    },
     "windows": {
       "url": "https://dl.google.com/android/repository/platform-tools_r37.0.3-win.zip",
       "sha256": "89d108360a3bf2924d3bea837239edaccc22fd6ff5befd3787c4348a9fe4f09d",
       "archiveBytes": 8188601,
-      "extractedBytes": 17857924,
       "files": {
         "adb.exe": "bae5ce98846b19caa74a34900850caa8b21d01976932b2ad83baeb5de5651aee",
         "AdbWinApi.dll": "ed20abfb8b423029a2278d3947c1a1235774afd1b0e0e08405591e6f1d237a49",

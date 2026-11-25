@@ -102,18 +102,6 @@ void verifyWindows(Directory bundle, String arch) {
 
 void verifyMedia(List<File> files) {
   if (files.any(
-    (file) => const {
-      'adb',
-      'adb.exe',
-      'adbwinapi.dll',
-      'adbwinusbapi.dll',
-    }.contains(p.basename(file.path).toLowerCase()),
-  )) {
-    throw StateError(
-      'Remove bundled SDK Platform-Tools and rebuild from a clean bundle.',
-    );
-  }
-  if (files.any(
     (file) => RegExp(
       r'(^|lib)(mdk|fvp)|avformat|ffmpeg-\d',
       caseSensitive: false,
@@ -144,11 +132,54 @@ void verifyMedia(List<File> files) {
   }
 }
 
+Future<void> verifyBundledAdb(
+  Directory bundle,
+  String platform,
+  String arch,
+) async {
+  final tools = platform == 'macos'
+      ? p.join(bundle.path, 'Contents/Resources/platform-tools')
+      : p.join(bundle.path, 'platform-tools');
+  final adb = switch (platform) {
+    'macos' => p.join(bundle.path, 'Contents/Helpers/adb'),
+    'windows' => p.join(tools, 'adb.exe'),
+    _ => p.join(tools, 'adb'),
+  };
+  for (final name in [
+    'NOTICE.txt',
+    'platform-tools.lock.json',
+    if (platform == 'windows') ...['AdbWinApi.dll', 'AdbWinUsbApi.dll'],
+  ]) {
+    if (!File(p.join(tools, name)).existsSync()) {
+      throw StateError('Bundled ADB lacks $name');
+    }
+  }
+  if (platform == 'macos') {
+    await runTool([
+      'xcrun',
+      'lipo',
+      adb,
+      '-verify_arch',
+      if (arch != 'x64') 'arm64',
+      if (arch != 'arm64') 'x86_64',
+    ]);
+  }
+  final version = await runTool(
+    [adb, 'version'],
+    quiet: true,
+    environment: const {'PATH': '', 'LD_LIBRARY_PATH': ''},
+  );
+  if (!(version.stdout as String).startsWith('Android Debug Bridge version ')) {
+    throw StateError('Bundled ADB version check failed: $adb');
+  }
+}
+
 Future<void> verifyLinux(Directory bundle, String arch) async {
   final files = bundleFiles(bundle).toList();
   _rejectApplicationBridge(files);
   for (final name in [
     linuxExecutable,
+    'adb',
     'libflutter_linux_gtk.so',
     'libinterop_scrcpy_bridge.so',
     'libmedia_codec_plugin.so',
@@ -200,6 +231,7 @@ Future<void> verifyLinux(Directory bundle, String arch) async {
   }
   final entries = [
     File(p.join(bundle.path, linuxExecutable)),
+    File(p.join(bundle.path, 'platform-tools/adb')),
     ...files.where((file) => p.basename(file.path).contains('.so')),
   ];
   final resolved = <String>{};
@@ -542,6 +574,7 @@ Future<void> main(List<String> arguments) async {
       throw StateError('Missing final application at ${bundle.path}');
     }
     if (!verifyOnly) installMediaNotices(bundle, platform, arch);
+    if (platform != 'ios') await verifyBundledAdb(bundle, platform, arch);
     switch (platform) {
       case 'windows':
         verifyWindows(bundle, arch);
@@ -583,15 +616,6 @@ Future<void> main(List<String> arguments) async {
           if (iscc == null) {
             throw StateError('Install Inno Setup and add ISCC.exe to PATH.');
           }
-          final adbLock = jsonDecode(
-            File(
-              p.join(
-                root.path,
-                'packages/adb/third_party/platform-tools.lock.json',
-              ),
-            ).readAsStringSync(),
-          );
-          final adb = adbLock['platforms']['windows'];
           await streamTool([
             iscc,
             '/O${artifacts.absolute.path}',
@@ -599,9 +623,6 @@ Future<void> main(List<String> arguments) async {
             '/DBundle=${bundle.absolute.path}',
             '/DAppVersion=$version',
             '/DTargetArch=${arch == 'x64' ? 'x64os' : 'arm64'}',
-            '/DAdbUrl=${adb['url']}',
-            '/DAdbSha256=${adb['sha256']}',
-            '/DAdbExtractedBytes=${adb['extractedBytes']}',
             p.join(root.path, 'scripts/installer_windows.iss'),
           ]);
         case 'macos':
@@ -618,7 +639,8 @@ Future<void> main(List<String> arguments) async {
     }
     log.done();
     stdout.writeln(
-      'PASS: final $platform application, Flutter engine, Rust and trimmed media codec',
+      'PASS: final $platform application, Flutter engine, Rust, '
+      'trimmed media codec${platform == 'ios' ? '' : ' and bundled ADB'}',
     );
   } on Object catch (error) {
     log.fail(error);

@@ -103,9 +103,13 @@ class AdbHost {
     final root = await serverRoot.createTemp('scope-');
     AdbServerInfo? registered;
     try {
-      final home = await Directory(p.join(root.path, 'global')).create();
+      final home = await Directory(
+        p.join(root.path, Platform.isLinux ? '.android' : 'global'),
+      ).create();
       final environment = <String, String>{
         'ANDROID_USER_HOME': home.path,
+        // Linux ARM64 的 ADB 34 从 HOME/.android 读取主控身份。
+        if (Platform.isLinux) 'HOME': root.path,
         'ADB_VENDOR_KEYS': identity.path,
         'ADB_MDNS_AUTO_CONNECT': '0',
         'ADB_LIBUSB': '1',
@@ -274,37 +278,15 @@ class AdbHost {
   }
 
   static Future<String> _findAdb(Directory? binaryDirectory) async {
-    final env = Platform.environment;
-    final home = env['HOME'];
-    final localAppData = env['LOCALAPPDATA'];
+    final runner = p.dirname(Platform.resolvedExecutable);
+    final directory =
+        binaryDirectory?.absolute.path ??
+        (Platform.isMacOS
+            ? p.join(p.dirname(runner), 'Helpers')
+            : p.join(runner, 'platform-tools'));
     final executable = Platform.isWindows ? 'adb.exe' : 'adb';
-    final directories = binaryDirectory != null
-        ? [binaryDirectory.absolute.path]
-        : [
-            if (Platform.isWindows)
-              p.join(p.dirname(Platform.resolvedExecutable), 'platform-tools'),
-            for (final name in ['ANDROID_HOME', 'ANDROID_SDK_ROOT'])
-              if (env[name] case final sdk? when p.isAbsolute(sdk))
-                p.join(sdk, 'platform-tools'),
-            if (Platform.isWindows && localAppData != null)
-              p.join(localAppData, 'Android', 'Sdk', 'platform-tools'),
-            if (Platform.isMacOS) ...[
-              if (home != null)
-                p.join(home, 'Library', 'Android', 'sdk', 'platform-tools'),
-              '/opt/homebrew/bin',
-              '/usr/local/bin',
-            ],
-            if (Platform.isLinux) ...[
-              '/usr/bin',
-              if (home != null)
-                p.join(home, 'Android', 'Sdk', 'platform-tools'),
-            ],
-            ...?env['PATH']?.split(Platform.isWindows ? ';' : ':'),
-          ];
-    for (final directory in directories.where(p.isAbsolute)) {
-      final adb = File(p.join(directory, executable));
-      if (await adb.exists()) return adb.resolveSymbolicLinks();
-    }
+    final adb = File(p.join(directory, executable));
+    if (await adb.exists()) return adb.resolveSymbolicLinks();
     throw const AdbException('desktop_adb_missing');
   }
 

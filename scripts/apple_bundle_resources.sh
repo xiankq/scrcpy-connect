@@ -16,3 +16,14 @@ for ab_arch in $ARCHS; do
   cp -R "$ab_prefix/share/media_codec/." "$ab_destination/"
   cp "$ab_prefix/media-codec-build.json" "$ab_destination/"
 done
+
+if [ "$PLATFORM_NAME" = macosx ]; then
+  ab_adb="$("$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart" \
+    "$PROJECT_DIR/../../packages/adb/tool/prepare_adb.dart" --platform macos)"
+  ab_helpers="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers"
+  ab_adb_notices="$ab_resources/platform-tools"
+  mkdir -p "$ab_helpers" "$ab_adb_notices"
+  install -m 755 "$ab_adb/adb" "$ab_helpers/adb"
+  cp "$ab_adb/NOTICE.txt" "$ab_adb/source.properties" \
+    "$ab_adb/platform-tools.lock.json" "$ab_adb_notices/"
+fi

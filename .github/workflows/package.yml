@@ -17,6 +17,7 @@ on:
       - 'packages/adb/hook/**'
       - 'packages/adb/lib/src/adb_host.dart'
       - 'packages/adb/third_party/platform-tools.lock.json'
+      - 'packages/adb/tool/**'
       - 'packages/media_codec/darwin/build_native.sh'
       - 'packages/media_codec/native/CMakeLists.txt'
       - 'packages/media_codec/tool/**'
@@ -73,7 +74,12 @@ jobs:
           media-profile: ${{ matrix.platform }}-${{ matrix.arch }}
       - if: matrix.platform == 'linux'
         name: Install Linux package tools
-        run: timeout 4m sudo apt-get install -y --no-install-recommends adb appstream file rpm desktop-file-utils squashfs-tools
+        env:
+          PACKAGE_ARCH: ${{ matrix.arch }}
+        run: |
+          tools=(appstream file rpm desktop-file-utils squashfs-tools)
+          if [[ "$PACKAGE_ARCH" == arm64 ]]; then tools+=(patchelf libusb-1.0-0); fi
+          timeout 4m sudo apt-get install -y --no-install-recommends "${tools[@]}"
       - if: matrix.platform == 'windows'
         name: Install the pinned Inno Setup compiler
         shell: pwsh
@@ -102,8 +108,12 @@ jobs:
           prefix="build/verified/linux-$PACKAGE_ARCH-release"
           sudo dpkg --install "$prefix.deb"
           cmp /usr/bin/interconnect "app/build/linux/$PACKAGE_ARCH/release/bundle/interconnect"
+          adb=/opt/interconnect/platform-tools/adb
+          cmp "$adb" "app/build/linux/$PACKAGE_ARCH/release/bundle/platform-tools/adb"
+          env PATH= "$adb" version
           sudo dpkg --remove interconnect
           test ! -e /usr/bin/interconnect
+          test ! -e "$adb"
       - if: matrix.platform == 'windows'
         name: Verify silent install and uninstall
         shell: pwsh

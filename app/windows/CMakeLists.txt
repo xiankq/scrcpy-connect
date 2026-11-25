@@ -64,6 +64,7 @@ set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../packages/adb/tool/bundle_adb.cmake")
 
 # 安装器和便携包都在程序旁携带目标架构的 Visual C++ 运行库。
 set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION "${INSTALL_BUNDLE_LIB_DIR}")

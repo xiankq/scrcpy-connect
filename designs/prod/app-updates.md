@@ -26,7 +26,7 @@
 
 商店或系统接管更新时，弹窗提供「前往商店」或对应渠道入口，下载和安装进度由渠道显示。Google Play 的弹性更新可在取得进度回执时显示应用内下载状态，下载完成由用户确认安装或重启。App Store 分发遵循商店更新，桌面应用依实际安装渠道进入系统更新或受信任的安装程序。各渠道独立验证后才显示其支持的操作。[Google Play 弹性更新](https://developer.android.com/guide/playcore/in-app-updates/kotlin-java#flexible) · [Apple App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/) · [Windows App Installer 更新设置](https://learn.microsoft.com/en-us/windows/msix/app-installer/update-settings)
 
-Windows 安装向导分别提供桌面快捷方式和下载 Android Platform-Tools（ADB）的选项。首次安装时，桌面快捷方式默认不勾选，ADB 下载默认勾选。选择下载时，安装器从 Google 获取并校验工具，安装到应用目录。已有可用 ADB 或离线安装时可取消勾选。
+Windows 安装向导随应用安装内置 ADB，支持离线安装。首次安装时，桌面快捷方式默认不勾选。
 
 ## 构建渠道配置
 
