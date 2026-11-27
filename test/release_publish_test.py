@@ -8,10 +8,52 @@ import unittest
 
 
 PUBLISH = Path(__file__).resolve().parents[1] / "scripts/publish_release.sh"
+MAIN_CI = PUBLISH.with_name("wait_for_main_ci.sh")
 TAG = "v0.1.0-preview.2"
 
 
 class ReleasePublishTest(unittest.TestCase):
+    def test_release_gate_waits_for_the_tagged_main_push(self):
+        for results, accepted in (
+            (["completed\tsuccess"], True),
+            (["queued\t-", "in_progress\t-", "completed\tsuccess"], True),
+            (["completed\tfailure"], False),
+            (["completed\tcancelled"], False),
+            (["missing\t-"], False),
+        ):
+            with self.subTest(results=results), tempfile.TemporaryDirectory() as temp:
+                folder = Path(temp)
+                (folder / "results").write_text("\n".join(results) + "\n")
+                gh = folder / "gh"
+                gh.write_text("""#!/usr/bin/env python3
+from pathlib import Path
+import sys
+
+expected = {
+    'repos/test/interconnect/actions/workflows/ci.yml/runs',
+    'branch=main', 'event=push', 'head_sha=' + 'a' * 40,
+}
+assert expected <= set(sys.argv[1:])
+fixture = Path("results")
+result, *remaining = fixture.read_text().splitlines()
+fixture.write_text("\\n".join(remaining))
+print(result + "\\thttps://example.com/actions/runs/1")
+""")
+                sleep = folder / "sleep"
+                sleep.write_text("#!/bin/sh\nexit 0\n")
+                for command in (gh, sleep):
+                    command.chmod(0o755)
+                result = subprocess.run(
+                    ["bash", MAIN_CI, "test/interconnect", "a" * 40],
+                    cwd=folder,
+                    env={**os.environ, "PATH": f"{folder}{os.pathsep}{os.environ['PATH']}"},
+                    capture_output=True, text=True, timeout=10,
+                )
+                self.assertEqual(result.returncode == 0, accepted, result.stderr)
+                self.assertEqual((folder / "results").read_text(), "")
+                if accepted:
+                    self.assertIn("Verified main CI", result.stdout)
+
     def test_retry_reuses_matching_asset_and_checks_uploaded_digests(self):
         for corrupt in (False, True):
             with self.subTest(corrupt=corrupt), tempfile.TemporaryDirectory() as temp:

@@ -57,7 +57,7 @@
 1. 将工作流合入 `main` 后，在 **Settings → Actions → General** 确认允许仓库使用工作流中的 Actions。保留默认只读权限，发布任务会单独申请写入 Releases 所需的权限。
 2. 在 **Settings → Environments** 建立 `release`。在 **Deployment branches and tags** 里选择只允许 `v*` 标签部署。有权限时配置审核人和禁止自己审批。根据仓库套餐，在 **Settings → Rules → Rulesets** 限制谁可以创建或移动 `v*` 标签。 [GitHub 环境配置](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)
 3. 先在 **Actions → Packages** 试打包，下载每个平台产物。Android 用真机试装，Windows 与 Linux 在 x64、ARM64 的干净系统试装，macOS 试开两种 DMG，iOS 检查编译归档。记录测试版本、架构和结果。
-4. 按[发布说明](releasing.md)开启对应渠道，从通过 CI 的 `main` 提交创建标签。发布后确认未登录的用户能下载对应平台附件。 [GitHub 发布管理](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)
+4. 按[发布说明](releasing.md)开启对应渠道，从已合入 `main` 的提交创建标签。该提交的推送 CI 和各平台打包均成功后才公开发布。发布后确认未登录的用户能下载对应平台附件。 [GitHub 发布管理](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)
 
 **需要你给出** 仓库公开时点、发布审批人、首次发布分支与版本，以及首发包验证结果。
 

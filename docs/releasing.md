@@ -24,7 +24,7 @@ CI 在 PR 和 `main`、`dev` 分支上运行，检查生成物、代码格式、
 
 1. 完成[发布前补充清单](release-owner-checklist.md)中首次公开所需的事项，再开启自动发布。
 2. 更新 `app/pubspec.yaml`，例如 `0.2.0+2`，并在 [CHANGELOG.md](../CHANGELOG.md) 添加 `## 0.2.0`。每次公开新构建递增构建号，Android 用它判断能否覆盖升级。
-3. 等改动合入 `main` 且该提交的推送 CI 通过。公开预览需设置仓库变量 `PUBLIC_PREVIEWS_ENABLED=true` 并推送 `v0.2.0-preview.1`。正式发布需设置 `PUBLIC_RELEASES_ENABLED=true` 并推送 `v0.2.0`。发布工作流核对标签对应提交的 CI 记录，再并行打包各平台。两个标签都使用同一份应用基础版本和发布签名。
+3. 改动合入 `main` 后即可推送发布标签。公开预览需设置仓库变量 `PUBLIC_PREVIEWS_ENABLED=true` 并推送 `v0.2.0-preview.1`。正式发布需设置 `PUBLIC_RELEASES_ENABLED=true` 并推送 `v0.2.0`。各平台打包与该提交的 `main` 推送 CI 并行，公开发布须等两者成功。两个标签都使用同一份应用基础版本和发布签名。
 4. 如果 **Release** 出现审核请求，核对标签和签名来源后批准。工作流先把附件上传到草稿，核对 GitHub 返回的完整附件清单和 SHA-256，再公开。预览标记为 **Pre-release**，正式版标记为 **Latest** 并提供应用更新清单。
 5. 从 Releases 下载文件验证。Android 用已发布的前一版本做一次覆盖安装。Windows 验证安装、卸载及便携启动。Linux 验证安装包和 AppImage。macOS 从下载的 DMG 拖入「应用程序」并启动。
 
