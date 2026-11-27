@@ -32,6 +32,15 @@ on:
       - 'scripts/src/packaging*'
       - 'scripts/package_*'
   workflow_dispatch:
+    inputs:
+      windows_timing:
+        description: Run a Windows package timing check
+        type: choice
+        default: 'off'
+        options:
+          - 'off'
+          - x64
+          - x64-and-arm64
   workflow_call:
     inputs:
       release:
@@ -50,7 +59,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: packages-${{ github.workflow }}-${{ github.ref }}
+  group: packages-${{ github.workflow }}-${{ github.ref }}${{ inputs.windows_timing && inputs.windows_timing != 'off' && format('-timing-{0}', inputs.windows_timing) || '' }}
   cancel-in-progress: ${{ github.ref_type == 'branch' }}
 
 jobs:
@@ -58,11 +67,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - {platform: linux, arch: x64, runner: ubuntu-24.04}
-          - {platform: linux, arch: arm64, runner: ubuntu-24.04-arm}
-          - {platform: windows, arch: x64, runner: windows-2025}
-          - {platform: windows, arch: arm64, runner: windows-11-arm}
+        include: >-
+          ${{ fromJSON(
+            inputs.windows_timing == 'x64' && '[{"platform":"windows","arch":"x64","runner":"windows-2025"}]' ||
+            inputs.windows_timing == 'x64-and-arm64' && '[{"platform":"windows","arch":"x64","runner":"windows-2025"},{"platform":"windows","arch":"arm64","runner":"windows-11-arm"}]' ||
+            '[{"platform":"linux","arch":"x64","runner":"ubuntu-24.04"},{"platform":"linux","arch":"arm64","runner":"ubuntu-24.04-arm"},{"platform":"windows","arch":"x64","runner":"windows-2025"},{"platform":"windows","arch":"arm64","runner":"windows-11-arm"}]'
+          ) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     steps:
@@ -71,7 +81,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-build
         with:
-          media-profile: ${{ matrix.platform }}-${{ matrix.arch }}
+          media-profile: ${{ matrix.platform }}-${{ matrix.arch }}${{ inputs.windows_timing == 'x64-and-arm64' && '-timing' || '' }}
       - if: matrix.platform == 'linux'
         name: Install Linux package tools
         env:
@@ -99,7 +109,11 @@ jobs:
           UPDATE_FEED: ${{ inputs.release && format('https://github.com/{0}/releases/latest/download/release-feed.json', github.repository) || '' }}
           PACKAGE_PLATFORM: ${{ matrix.platform }}
           PACKAGE_ARCH: ${{ matrix.arch }}
-        run: dart scripts/build_host.dart "$PACKAGE_PLATFORM" --arch "$PACKAGE_ARCH" --installers --update-feed "$UPDATE_FEED"
+          WINDOWS_TIMING: ${{ inputs.windows_timing && inputs.windows_timing != 'off' }}
+        run: |
+          flags=()
+          if [[ "$WINDOWS_TIMING" == true ]]; then flags+=(--verbose); fi
+          dart scripts/build_host.dart "$PACKAGE_PLATFORM" --arch "$PACKAGE_ARCH" --installers "${flags[@]}" --update-feed "$UPDATE_FEED"
       - if: matrix.platform == 'linux'
         name: Verify DEB install and uninstall
         env:
@@ -153,7 +167,7 @@ jobs:
           compression-level: 0
 
   apple:
-    if: '!inputs.release || inputs.macos'
+    if: ${{ (!inputs.windows_timing || inputs.windows_timing == 'off') && (!inputs.release || inputs.macos) }}
     strategy:
       fail-fast: false
       matrix:
@@ -203,6 +217,7 @@ jobs:
           compression-level: 0
 
   android:
+    if: ${{ !inputs.windows_timing || inputs.windows_timing == 'off' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     environment: ${{ (inputs.release || inputs.preview) && 'release' || 'package-preview' }}

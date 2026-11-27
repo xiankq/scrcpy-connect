@@ -4,6 +4,8 @@
 
 构建配置、打包工具或依赖锁文件合入 `main` 后会自动启动试打包，并为后续发版准备依赖缓存。任何分支都可在 **Actions → Packages → Run workflow** 手动试打包。完成后，在此次运行的 **Artifacts** 下载结果。
 
+手动试打包时，`windows_timing` 可选 `x64` 或 `x64-and-arm64`，只构建选定的 Windows 架构并输出详细编译日志。`x64-and-arm64` 使用独立的媒体缓存，可重复运行比较冷构建和缓存命中后的耗时。默认 `off` 运行完整的试打包矩阵。
+
 | 平台 | 架构 | Actions 试打包 | GitHub 公开预览 | 正式发布 |
 | --- | --- | --- | --- | --- |
 | Android | arm64-v8a、armeabi-v7a、x86_64、通用 | 调试 APK | 4 个同签名、同构建号的 APK | 沿用发布签名 |
