@@ -74,6 +74,20 @@ void main() {
     expect(controls.calls, ['toggleMaximized']);
   });
 
+  // 标题栏挂在页面导航之上，没有 Material 祖先时标题曾带调试用的黄色下划线。
+  testWidgets('title outside any page keeps the normal text style', (
+    tester,
+  ) async {
+    await pumpBar(tester);
+    final title = tester.widget<RichText>(
+      find.descendant(
+        of: find.byType(DesktopTitleBar),
+        matching: find.byType(RichText),
+      ),
+    );
+    expect(title.text.style?.decoration, anyOf(isNull, TextDecoration.none));
+  });
+
   testWidgets('maximized window shows the restore key', (tester) async {
     await pumpBar(tester);
     expect(find.bySemanticsLabel('最大化'), findsOneWidget);

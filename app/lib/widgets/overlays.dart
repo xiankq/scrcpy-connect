@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/motion.dart';
@@ -19,8 +21,15 @@ const _alertTitleGap = 6.0;
 /// 抽屉把手距顶 6（design.md「菜单、确认框与抽屉」，Ardot 37:1380）。
 const _sheetHandleTop = 6.0;
 
-/// 抽屉最高停靠点 0.9 屏高（interaction-motion「导航与覆盖层」）。
+/// 抽屉停靠在 9/16 与 0.9 屏高（interaction-motion「导航与覆盖层」）。
+const _sheetCompactHeightFactor = 9 / 16;
 const _sheetMaxHeightFactor = .9;
+
+/// 松手时超过这个速度（逻辑像素/秒）按甩动方向停靠或关闭。
+const _sheetFlingVelocity = 700.0;
+
+/// 从低停靠点继续下拉超过低停靠高度的这一比例时关闭抽屉。
+const _sheetDismissFraction = .25;
 
 /// 承载正文和反馈的实体内容面；玻璃仅用于独立操作控件。
 class ContentSurface extends StatelessWidget {
@@ -286,7 +295,7 @@ Future<T?> showAppDialog<T>({
   );
 }
 
-/// 抽屉 `sheet`：底为 `page`、顶角 28，把手 28×4 距顶 6；最高 0.9 屏高。
+/// 抽屉 `sheet`：底为 `page`、顶角 28，把手 28×4 距顶 6；可拖动时停靠在 9/16 与 0.9 屏高。
 ///
 /// Flutter 持有模态路由、结果与拖动；内容抽屉始终使用实体面。内容顶部用 [SheetHeader]。
 Future<T?> showAppModalSheet<T>({
@@ -331,21 +340,24 @@ Future<T?> showAppModalSheet<T>({
             curve: enterCurve,
           ),
     builder: (context) => enableDrag
-        ? Stack(
-            alignment: Alignment.topCenter,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(
-                  top:
-                      _sheetHandleTop + DesignTokens.componentSheetHandleHeight,
+        ? _SheetDetents(
+            child: Stack(
+              alignment: Alignment.topCenter,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(
+                    top:
+                        _sheetHandleTop +
+                        DesignTokens.componentSheetHandleHeight,
+                  ),
+                  child: builder(context),
                 ),
-                child: builder(context),
-              ),
-              const Padding(
-                padding: EdgeInsets.only(top: _sheetHandleTop),
-                child: SheetHandle(),
-              ),
-            ],
+                const Padding(
+                  padding: EdgeInsets.only(top: _sheetHandleTop),
+                  child: SheetHandle(),
+                ),
+              ],
+            ),
           )
         : Padding(
             padding: const EdgeInsets.only(
@@ -354,6 +366,99 @@ Future<T?> showAppModalSheet<T>({
             child: builder(context),
           ),
   );
+}
+
+/// 可拖动抽屉的两个停靠点：内容高于 9/16 屏高时先停在 9/16，拖动把手和标题栏可升到 0.9；
+/// 在低停靠点继续下拉或向下甩动则关闭。内容本身的滚动不改变停靠点。
+class _SheetDetents extends StatefulWidget {
+  const _SheetDetents({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_SheetDetents> createState() => _SheetDetentsState();
+}
+
+class _SheetDetentsState extends State<_SheetDetents> {
+  bool _expanded = false;
+  bool _dragging = false;
+
+  /// 本次拖动累计位移，向下为正。
+  double _drag = 0;
+
+  static const _dragStripHeight =
+      _sheetHandleTop +
+      DesignTokens.componentSheetHandleHeight +
+      SheetHeader.height;
+
+  void _end(DragEndDetails details, double compact, double full) {
+    final velocity = details.primaryVelocity ?? 0;
+    final height = (_expanded ? full : compact) - _drag;
+    final belowCompact = compact - height;
+    if (belowCompact > compact * _sheetDismissFraction ||
+        (velocity > _sheetFlingVelocity && height <= compact + 1)) {
+      Navigator.maybePop(context);
+      setState(() => _dragging = false);
+      return;
+    }
+    setState(() {
+      _dragging = false;
+      _expanded = velocity < -_sheetFlingVelocity
+          ? true
+          : velocity > _sheetFlingVelocity
+          ? false
+          : height > (compact + full) / 2;
+      _drag = 0;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context).height;
+    final animate = !_dragging && !reduceMotionOf(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final full = math.min(
+          constraints.maxHeight,
+          screen * _sheetMaxHeightFactor,
+        );
+        final compact = math.min(full, screen * _sheetCompactHeightFactor);
+        final height = (_expanded ? full : compact) - _drag;
+        return AnimatedContainer(
+          duration: animate ? panelOpenDuration : Duration.zero,
+          curve: enterCurve,
+          constraints: BoxConstraints(maxHeight: height.clamp(compact, full)),
+          transform: Matrix4.translationValues(
+            0,
+            math.max(0, compact - height),
+            0,
+          ),
+          child: Stack(
+            children: [
+              widget.child,
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: _dragStripHeight,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onVerticalDragStart: (_) => setState(() => _dragging = true),
+                  onVerticalDragUpdate: (details) =>
+                      setState(() => _drag += details.primaryDelta ?? 0),
+                  onVerticalDragEnd: (details) => _end(details, compact, full),
+                  onVerticalDragCancel: () => setState(() {
+                    _dragging = false;
+                    _drag = 0;
+                  }),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
 
 /// 抽屉把手 28×4，`outline` 胶囊；读屏可用它关闭抽屉。

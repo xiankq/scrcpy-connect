@@ -63,6 +63,47 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('长内容抽屉先停在低处，拖动标题栏升高，继续下拉关闭', (tester) async {
+    await tester.pumpWidget(
+      _host((context) {
+        showAppModalSheet<void>(
+          context: context,
+          builder: (context) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SheetHeader(title: '选择'),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [for (var i = 0; i < 40; i++) Text('选项 $i')],
+                ),
+              ),
+            ],
+          ),
+        );
+      }),
+    );
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+    final compact = tester.getSize(find.byType(BottomSheet)).height;
+
+    await tester.drag(find.text('选择'), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byType(BottomSheet)).height,
+      greaterThan(compact),
+    );
+
+    await tester.drag(find.text('选择'), const Offset(0, 300));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(BottomSheet)).height, compact);
+
+    await tester.drag(find.text('选择'), const Offset(0, 400));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('文字反馈和 Tooltip 显示提示文字', (tester) async {
     await tester.pumpWidget(
       _host((context) {

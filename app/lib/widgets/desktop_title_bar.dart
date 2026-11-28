@@ -39,7 +39,8 @@ class DesktopTitleBar extends StatelessWidget {
     final colors = AppColors.of(context);
     final style = AppTypography.of(context).footnote
         .copyWith(fontWeight: FontWeight.w600);
-    return ColoredBox(
+    // 标题栏挂在页面导航之上；Material 提供正常的默认文字样式，避免调试下划线。
+    return Material(
       color: colors.card,
       child: SizedBox(
         height: DesktopTitleBarMetrics.height,
