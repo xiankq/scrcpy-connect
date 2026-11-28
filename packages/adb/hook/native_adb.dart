@@ -18,6 +18,12 @@ Future<({List<CodeAsset> assets, Iterable<Uri> dependencies})> buildNativeAdb(
   await FlutterRustBridgeNativeAssetsBuilder(
     cratePath: '../../rust/adb/bridge',
     assetName: 'src/native/generated/frb_generated.io.dart',
+    // 各构建配置共用仓库 Cargo 目标目录；默认每个配置各占约 1 GB 的独立目录且不回收。
+    extraCargoEnvironmentVariables: {
+      'CARGO_TARGET_DIR': input.packageRoot
+          .resolve('../../target')
+          .toFilePath(),
+    },
   ).run(input: input, output: output);
   final built = output.build();
   return (

@@ -49,7 +49,13 @@ function componentRules(state) {
 export function lintDesign(markdown) {
   // Only extend the official unknown-property check; every other official rule
   // still sees the complete model, including colors referenced by extensions.
+  // `<role>-dark` is the night value of the same role, so it counts as referenced
+  // when its day role is referenced; components describe roles, not modes.
   const rules = DEFAULT_RULES.map(rule => state => rule(state).filter(finding => {
+    const dark = /^colors\.(.+)-dark$/.exec(finding.path ?? '');
+    if (dark && /never referenced/.test(finding.message)) {
+      return rule(state).some(other => other.path === `colors.${dark[1]}` && /never referenced/.test(other.message));
+    }
     if (finding.rule !== 'broken-ref' || finding.severity !== 'warning') return true;
     const match = /^components\.([^.]+)\.([^.]+)$/.exec(finding.path ?? '');
     if (!match) return true;

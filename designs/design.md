@@ -1,1408 +1,902 @@
 ---
-version: alpha
+version: beta
 name: 邻接 Interconnect
-description: 近场工作台以设备、画面、通话和文件组织操作，中性界面承载内容，颜色和液态玻璃用于识别功能与操作。
+description: 近场工作台。以 Prism UI 的分层实体面、连续圆角与液态玻璃为基础，品牌钴蓝标记主操作，功能色帮助识别入口。
 colors:
-  primary: '#000000'
-  primary-dark: '#FFFFFF'
-  primary-action: '{colors.text}'
-  primary-action-dark: '{colors.text-dark}'
+  primary: '#2657D5'
+  primary-dark: '#436EEC'
   on-primary: '#FFFFFF'
-  on-primary-dark: '{colors.text}'
-  canvas: '#F6F7F8'
-  canvas-dark: '#000000'
-  canvas-label: '#808080'
-  surface: '#FFFFFF'
-  surface-dark: '#262626'
-  surface-module: '#F0F1F3'
-  surface-module-dark: '#343436'
-  surface-inset: '#E7E8EC'
-  surface-inset-dark: '#424245'
-  surface-floating: '{colors.surface}'
-  surface-floating-dark: '{colors.surface-module-dark}'
-  device-panel: '#E9EFF1'
-  device-panel-dark: '#232A2D'
-  skeleton-graphic-dark: '#39434A'
-  text: '#171719'
-  text-dark: '#F7F7F8'
-  secondary: '#5D5E65'
-  secondary-dark: '#B6B6BD'
-  device-detail-value: '#545B61'
-  muted: '#DEDEDE'
-  muted-dark: '#404040'
-  tint: '#E5E5EA'
-  tint-dark: '#2C2C2E'
-  glass: '#FDFDFD79'
-  glass-dark: '#38383E7A'
-  glass-pill: '#F4F4F47A'
-  glass-pill-dark: '#34343873'
-  glass-menu: '#FFFFFF7A'
-  glass-menu-dark: '#3A3A407A'
-  glass-alert: '#FFFFFF7A'
-  glass-alert-dark: '#3E3E437A'
-  glass-clear: '#FFFFFF13'
-  glass-toolbar-tint: '#FFFFFF2B'
-  glass-toolbar-tint-dark: '#FFFFFF17'
-  glass-edge: '#FFFFFF99'
-  glass-edge-dark: '#FFFFFF47'
-  glass-low-edge: '#75757A42'
-  glass-low-edge-dark: '#000000A3'
-  glass-shine: '#FFFFFF66'
-  glass-shine-dark: '#FFFFFF1F'
-  shadow: '#00000014'
-  shadow-dark: '#00000066'
-  success: '#00A34A'
-  success-dark: '#32E875'
-  warning: '#FFB020'
-  warning-dark: '#FFC247'
-  diagnostic-warning: '#D47700'
-  diagnostic-checking: '#2674ED'
-  diagnostic-checking-dark: '#82B8FF'
-  danger: '#FF3B30'
-  danger-dark: '#FF534A'
-  danger-text: '#BA2429'
-  danger-text-dark: '#FF827E'
-  danger-action: '#FCE8E8'
-  danger-action-dark: '#553137'
-  on-warning: '{colors.text}'
-  scrim: '#14141952'
-  scrim-dark: '#00000080'
-  white: '#FFFFFF'
-  transparent: '#00000000'
-  media-ink: '#111114'
+  on-primary-dark: '#FFFFFF'
+  primary-container: '#DCE1FF'
+  primary-container-dark: '#264190'
+  on-primary-container: '#264190'
+  on-primary-container-dark: '#DCE1FF'
+  page: '#F0EDF0'
+  page-dark: '#131315'
+  card: '#FCF8F9'
+  card-dark: '#262528'
+  block: '#F0EDF0'
+  block-dark: '#323235'
+  inset: '#E4E2E5'
+  inset-dark: '#404042'
+  text: '#191B23'
+  text-dark: '#F6F5FF'
+  text-secondary: '#434654'
+  text-secondary-dark: '#C4C5D6'
+  separator: '#191B2324'
+  separator-dark: '#F6F5FF24'
+  outline: '#747686'
+  outline-dark: '#8D90A0'
+  disabled: '#191B2361'
+  disabled-dark: '#F6F5FF61'
+  disabled-container: '#191B231F'
+  disabled-container-dark: '#F6F5FF1F'
+  pressed: '#BCBCBC66'
+  pressed-dark: '#CCCCCC40'
+  scrim: '#00000033'
+  scrim-dark: '#0000007A'
+  error: '#BA1A1A'
+  error-dark: '#FFB4AB'
+  error-container: '#FFDAD6'
+  error-container-dark: '#93000A'
+  on-error-container: '#93000A'
+  on-error-container-dark: '#FFDAD6'
+  destructive: '#FF383C'
+  destructive-dark: '#FF4245'
+  success: '#006E1C'
+  success-dark: '#78DC77'
+  success-container: '#D5E8CF'
+  success-container-dark: '#3B4B38'
+  on-success-container: '#005313'
+  on-success-container-dark: '#94F990'
+  warning: '#8B5000'
+  warning-dark: '#FFB870'
+  warning-container: '#FFDCBE'
+  warning-container-dark: '#59422C'
+  on-warning-container: '#693C00'
+  on-warning-container-dark: '#FFDCBE'
+  glass-regular: '#FDFDFD8A'
+  glass-regular-dark: '#3534379E'
+  glass-pill: '#F4F4F494'
+  glass-pill-dark: '#3534377A'
+  glass-menu: '#FCF8F98C'
+  glass-menu-dark: '#353437A1'
+  glass-clear: '#FFFFFF1F'
+  glass-fill: '#00000021'
+  glass-fill-dark: '#FFFFFF21'
+  glass-rim: '#FFFFFF'
+  dock-platter: '#DCE1FFD9'
+  dock-platter-dark: '#000A31D9'
+  shadow: '#0000001E'
+  shadow-dark: '#0000002D'
+  shadow-dock: '#00000014'
+  shadow-dock-dark: '#0000003D'
+  media-scrim: '#00000099'
+  on-media: '#FFFFFF'
+  viewport: '#000000'
+  accent-blue: '{colors.primary}'
+  accent-green: '#20C451'
+  accent-indigo: '#596FF1'
+  accent-teal: '#00ADC1'
+  accent-orange: '#F57529'
+  accent-red: '#F3483F'
+  accent-amber: '#F7B418'
+  accent-purple: '#9266E5'
+  accent-gray: '#8799AC'
   device-screen: '#171F27'
-  device-screen-rim: '#36414B'
-  device-shortcut-disabled: '#72767C'
-  media-shade: '#00000099'
-  media-thumbnail-shade: '#00000061'
-  connection-nearby: '#0099A7'
-  connection-pairing: '#009447'
-  connection-qr: '#8057F1'
-  connection-usb: '#CC6700'
-  connection-ip: '#347EF5'
-  accent-blue: '{colors.list-icon-blue}'
-  accent-blue-dark: '{colors.list-icon-blue}'
-  accent-blue-soft: '#E6F2FF'
-  accent-blue-soft-dark: '#1A2635'
-  accent-coral: '{colors.list-icon-coral}'
-  accent-coral-dark: '{colors.list-icon-coral}'
-  accent-coral-soft: '#FFEBEA'
-  accent-coral-soft-dark: '#332021'
-  accent-amber: '{colors.list-icon-amber}'
-  accent-amber-dark: '{colors.list-icon-amber}'
-  accent-amber-soft: '#FFF4E6'
-  accent-amber-soft-dark: '#33291C'
-  accent-mint: '{colors.list-icon-mint}'
-  accent-mint-dark: '{colors.list-icon-mint}'
-  accent-mint-soft: '#EBF9EE'
-  accent-mint-soft-dark: '#1E2E24'
-  on-accent: '#FFFFFF'
-  list-icon-blue: '#347EF5F5'
-  list-icon-amber: '#F7B418F5'
-  list-icon-mint: '#20C451F5'
-  list-icon-coral: '#F3483FF5'
-  list-icon-slate: '#00ADC1F5'
-  list-icon-purple: '#9266E5F5'
-  list-icon-document: '#596FF1F5'
-  list-icon-transfer: '#F57529F5'
-  list-icon-utility: '#8799ACF5'
-  loading-warm: '#FFBEB87A'
-  loading-blue: '#7EBBFF70'
-  loading-mint: '#81E8CE61'
-  loading-violet: '#B8A4F56B'
-  glass-selected: '#14141B14'
-  glass-selected-dark: '#FFFFFF24'
-  focus: '#1B66CB'
-  focus-dark: '#89B8FF'
-  switch-off: '#777982'
-  switch-off-dark: '#6E7079'
-  control-disabled: '#65666D'
-  control-disabled-dark: '#B1B1BA'
-  control-disabled-track: '{colors.surface-inset}'
-  control-disabled-track-dark: '#39393D'
-  control-pressed: '#14141B1F'
-  control-pressed-dark: '#FFFFFF26'
-  glass-action: '{colors.primary-action}'
-  glass-action-dark: '{colors.primary-action-dark}'
-  glass-action-shine: '#FFFFFF14'
-  glass-action-shine-dark: '#FFFFFF1F'
-  black: '#000000'
-  on-danger: '{colors.text}'
-  on-danger-dark: '{colors.text}'
-  danger-container: '#FFEBEA'
-  danger-container-dark: '#332021'
-  on-danger-container: '#000000'
-  on-danger-container-dark: '#FFFFFF'
-  surface-low: '{colors.canvas}'
-  surface-low-dark: '{colors.surface-dark}'
-  outline: '#8E8F98'
-  outline-dark: '#7B7C86'
-  connection-path: '#E8EEF5'
-  connection-path-dark: '#181C24'
-  connection-signal: '#347EF5'
-  connection-signal-dark: '#64A2FF'
-  connection-track-line: '#BBCADB'
-  connection-track-line-dark: '#36516F'
-  connection-track-arc: '#2C6199'
-  connection-track-arc-dark: '#A5CEFB'
-  device-list-open: '#23588A'
-  device-glyph-frame: '#294454'
-  device-glyph-screen: '#A7C8E8'
-  device-glyph-idle-screen: '#DCE6EC'
-  device-glyph-idle-mark: '#64757D'
-  intro-signal-near: '#8FBFFF'
-  intro-signal-middle: '#6099EE'
-  workspace-empty-icon: '#F0F1F2'
-  file-tile: '#F2F1F6'
-  file-folder: '#FFB443'
-  file-current-directory: '#FFF1D8'
-  file-current-directory-dark: '#352818'
-  file-current-directory-text: '#845017'
   call-stage: '#141D32'
-  call-dock: '#202D47'
-  call-key: '#344764'
-  call-muted: '#B8C6E2'
-  call-avatar: '#C6D3F8'
-  call-ring: '#445D8E'
+  call-key: '#2B3A57'
+  call-text-secondary: '#B8C6E2'
 typography:
-  display:
+  large-title:
+    fontFamily: MiSans
+    fontSize: 34px
+    fontWeight: 700
+    lineHeight: 41px
+  title1:
     fontFamily: MiSans
     fontSize: 28px
     fontWeight: 700
-    lineHeight: '1.15'
-    letterSpacing: -0.6px
-  title:
+    lineHeight: 34px
+  page-title:
     fontFamily: MiSans
-    fontSize: 22px
+    fontSize: 24px
     fontWeight: 600
-    lineHeight: '1.25'
-    letterSpacing: 0px
-  heading:
+    lineHeight: 30px
+  title3:
+    fontFamily: MiSans
+    fontSize: 20px
+    fontWeight: 600
+    lineHeight: 25px
+  headline:
     fontFamily: MiSans
     fontSize: 17px
     fontWeight: 600
-    lineHeight: '1.35'
-    letterSpacing: 0px
+    lineHeight: 22px
   body:
     fontFamily: MiSans
     fontSize: 17px
     fontWeight: 400
-    lineHeight: '1.45'
-    letterSpacing: 0px
-  body-emphasis:
-    fontFamily: MiSans
-    fontSize: 17px
-    fontWeight: 600
-    lineHeight: '1.45'
-    letterSpacing: 0px
-  body-compact:
+    lineHeight: 22px
+  subheadline:
     fontFamily: MiSans
     fontSize: 15px
     fontWeight: 400
-    lineHeight: '1.4'
-    letterSpacing: 0px
+    lineHeight: 20px
   label:
     fontFamily: MiSans
     fontSize: 15px
-    fontWeight: 500
-    lineHeight: '1.4'
-    letterSpacing: 0px
-  device-detail-heading:
-    fontFamily: MiSans
-    fontSize: 18px
-    fontWeight: 500
-    lineHeight: '1.4'
-    letterSpacing: 0px
-  device-detail-value:
-    fontFamily: MiSans
-    fontSize: 14px
-    fontWeight: 500
-    lineHeight: '1.4'
-    letterSpacing: 0px
-  caption:
+    fontWeight: 600
+    lineHeight: 20px
+  footnote:
     fontFamily: MiSans
     fontSize: 13px
     fontWeight: 400
-    lineHeight: '1.4'
-    letterSpacing: 0px
-  action-caption:
+    lineHeight: 18px
+  caption:
     fontFamily: MiSans
-    fontSize: 13px
-    fontWeight: 500
-    lineHeight: '1.4'
-    letterSpacing: 0px
-  file-option-label:
+    fontSize: 12px
+    fontWeight: 400
+    lineHeight: 16px
+  caption-emphasis:
     fontFamily: MiSans
-    fontSize: 14px
-    fontWeight: 500
-    lineHeight: '1.4'
-    letterSpacing: 0px
-  micro:
+    fontSize: 12px
+    fontWeight: 600
+    lineHeight: 16px
+  caption2:
+    fontFamily: MiSans
+    fontSize: 11px
+    fontWeight: 600
+    lineHeight: 13px
+  tab-label:
     fontFamily: MiSans
     fontSize: 11px
     fontWeight: 500
-    lineHeight: '1.3'
-    letterSpacing: 0px
-  numeric:
-    fontFamily: MiSans
-    fontSize: 17px
-    fontWeight: 600
-    lineHeight: '1.3'
-    letterSpacing: 0px
-  clock:
-    fontFamily: MiSans
-    fontSize: 48px
-    fontWeight: 600
-    lineHeight: '1.1'
-    letterSpacing: -1px
-  caller-name:
-    fontFamily: MiSans
-    fontSize: 42px
-    fontWeight: 700
-    lineHeight: '1.2'
-    letterSpacing: 0px
-  connection-title:
-    fontFamily: MiSans
-    fontSize: 36px
-    fontWeight: 700
-    lineHeight: '1.2'
-    letterSpacing: 0px
-  call-elapsed:
-    fontFamily: MiSans
-    fontSize: 27px
-    fontWeight: 500
-    lineHeight: '1.25'
-    letterSpacing: 0px
+    lineHeight: 14px
 rounded:
-  sm: 10px
-  md: 14px
-  item: 16px
+  xs: 4px
+  sm: 8px
+  md: 16px
   lg: 20px
-  action: 25px
-  xl: 28px
-  phone: 38px
+  xl: 24px
+  xxl: 28px
+  alert: 34px
   full: 999px
 spacing:
-  zero: 0px
   hairline: 1px
-  micro: 2px
-  xxs: 4px
-  tight: 6px
-  xs: 8px
-  sm: 12px
-  md: 16px
-  lg: 24px
-  section-title: 28px
-  xl: 32px
-  xxl: 40px
+  xxs: 2px
+  xs: 4px
+  sm: 8px
+  md: 12px
+  lg: 16px
+  xl: 20px
+  xxl: 24px
+  xxxl: 32px
+  jumbo: 40px
   section: 48px
   board: 80px
-  group: 144px
+  group: 160px
 components:
   phone:
     width: 402px
     height: 874px
-    padding: '{spacing.md}'
-    backgroundColor: '{colors.canvas}'
-    textColor: '{colors.text}'
-  phone-dark:
-    backgroundColor: '{colors.canvas-dark}'
-    textColor: '{colors.text-dark}'
+  safe-area:
+    height: 62px
+    verticalPadding: 34px
   tablet:
     width: 1194px
     height: 834px
   desktop:
     width: 1440px
     height: 960px
-  sidebar:
-    width: 208px
-    backgroundColor: '{colors.surface}'
+  page:
+    backgroundColor: '{colors.page}'
     textColor: '{colors.text}'
-  sidebar-compact:
-    width: 72px
-  workspace-pane:
-    width: 360px
-  workspace-duo-pane:
-    width: 280px
-  workspace-split:
-    width: 1080px
-    height: 480px
-  status-bar:
-    height: 54px
-  page-header:
-    height: 56px
-  desktop-header:
-    padding: 12px
-  device-list-header:
-    height: 76px
-  remote-navigation:
-    height: 56px
-    padding: 67.5px
-  page-body:
-    height: 632px
-  page-content:
+    padding: 16px
     maxWidth: 720px
-  button-primary:
-    height: 50px
-    rounded: '{rounded.action}'
-    backgroundColor: '{colors.primary-action}'
+  page-bar:
+    height: 72px
+    padding: 4px
+    gap: 4px
+    typography: '{typography.title3}'
+  page-bar-root:
+    typography: '{typography.page-title}'
+  bar-button:
+    size: 44px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.glass-regular}'
+  bar-glyph:
+    size: 24px
+  section-button:
+    size: 36px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.block}'
+    textColor: '{colors.text}'
+  section-glyph:
+    size: 20px
+  compact-button:
+    size: 32px
+  button-filled:
+    height: 48px
+    padding: 24px
+    gap: 8px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.primary}'
     textColor: '{colors.on-primary}'
     typography: '{typography.label}'
-  button-secondary:
-    height: 50px
-    rounded: '{rounded.action}'
-    backgroundColor: '{colors.surface-module}'
+  button-tonal:
+    height: 48px
+    padding: 24px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.block}'
     textColor: '{colors.text}'
     typography: '{typography.label}'
-  button-secondary-dark:
-    backgroundColor: '{colors.surface-module-dark}'
-    textColor: '{colors.text-dark}'
-  button-primary-dark:
-    backgroundColor: '{colors.primary-action-dark}'
-    textColor: '{colors.on-primary-dark}'
-  icon-button:
-    size: 44px
-    rounded: 22px
-    gap: '{spacing.xs}'
-  tool-glyph:
-    size: 24px
+  button-destructive:
+    backgroundColor: '{colors.block}'
+    textColor: '{colors.error}'
+    typography: '{typography.label}'
+  button-text:
+    height: 40px
+    padding: 12px
+    textColor: '{colors.primary}'
+    typography: '{typography.label}'
+  button-disabled:
+    backgroundColor: '{colors.disabled-container}'
+  disabled-label:
+    textColor: '{colors.disabled}'
+  destructive-filled:
+    backgroundColor: '{colors.destructive}'
   control-focus:
     size: 2px
-    borderColor: '{colors.focus}'
-  control-focus-dark:
-    borderColor: '{colors.focus-dark}'
-  control-disabled:
-    backgroundColor: '{colors.control-disabled-track}'
-    textColor: '{colors.control-disabled}'
-  control-disabled-dark:
-    backgroundColor: '{colors.control-disabled-track-dark}'
-    textColor: '{colors.control-disabled-dark}'
-  control-pressed:
-    backgroundColor: '{colors.control-pressed}'
-  control-pressed-dark:
-    backgroundColor: '{colors.control-pressed-dark}'
+    borderColor: '{colors.primary}'
+  list-group:
+    rounded: '{rounded.xl}'
+    backgroundColor: '{colors.card}'
+    textColor: '{colors.text}'
+  list-row:
+    height: 56px
+    padding: 16px
+    verticalPadding: 10px
+    gap: 16px
+    typography: '{typography.body}'
+  list-row-pressed:
+    backgroundColor: '{colors.pressed}'
+  list-row-subtitle:
+    textColor: '{colors.text-secondary}'
+    typography: '{typography.subheadline}'
+  list-header:
+    height: 36px
+    padding: 16px
+    textColor: '{colors.text-secondary}'
+    typography: '{typography.headline}'
+  list-footer:
+    textColor: '{colors.text-secondary}'
+    typography: '{typography.footnote}'
+  list-section:
+    gap: 24px
+  separator:
+    height: 1px
+    backgroundColor: '{colors.separator}'
+  chevron:
+    size: 18px
+    textColor: '{colors.outline}'
+  icon-tile:
+    size: 30px
+    rounded: '{rounded.sm}'
+    textColor: '{colors.on-media}'
+  icon-tile-glyph:
+    size: 18px
+  icon-tile-device:
+    backgroundColor: '{colors.accent-blue}'
+  icon-tile-connection:
+    backgroundColor: '{colors.accent-green}'
+  icon-tile-file:
+    backgroundColor: '{colors.accent-indigo}'
+  icon-tile-media:
+    backgroundColor: '{colors.accent-teal}'
+  icon-tile-transfer:
+    backgroundColor: '{colors.accent-orange}'
+  icon-tile-notification:
+    backgroundColor: '{colors.accent-red}'
+  icon-tile-display:
+    backgroundColor: '{colors.accent-amber}'
+  icon-tile-archive:
+    backgroundColor: '{colors.accent-purple}'
+  icon-tile-utility:
+    backgroundColor: '{colors.accent-gray}'
+  card:
+    rounded: '{rounded.md}'
+    padding: 16px
+    backgroundColor: '{colors.card}'
+    textColor: '{colors.text}'
+  hero-card:
+    rounded: '{rounded.xxl}'
+    padding: 20px
+    backgroundColor: '{colors.card}'
+    textColor: '{colors.text}'
+  device-tile:
+    size: 52px
+    rounded: '{rounded.md}'
+    backgroundColor: '{colors.primary-container}'
+    textColor: '{colors.on-primary-container}'
+  device-screen:
+    backgroundColor: '{colors.device-screen}'
+  status-dot:
+    size: 12px
+    backgroundColor: '{colors.success}'
+  input:
+    height: 48px
+    padding: 12px
+    rounded: '{rounded.md}'
+    backgroundColor: '{colors.inset}'
+    textColor: '{colors.text}'
+    typography: '{typography.body}'
+  input-error:
+    textColor: '{colors.error}'
+    typography: '{typography.footnote}'
+  search-field:
+    height: 44px
+    padding: 12px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.inset}'
+    textColor: '{colors.text}'
+    typography: '{typography.body}'
+  chip:
+    height: 36px
+    padding: 16px
+    gap: 6px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.card}'
+    textColor: '{colors.text}'
+    typography: '{typography.label}'
+  chip-selected:
+    backgroundColor: '{colors.primary}'
+    textColor: '{colors.on-primary}'
+  tag:
+    padding: 6px
+    rounded: '{rounded.sm}'
+    backgroundColor: '{colors.block}'
+    textColor: '{colors.text-secondary}'
+    typography: '{typography.caption-emphasis}'
+  tag-success:
+    backgroundColor: '{colors.success-container}'
+    textColor: '{colors.on-success-container}'
+  tag-warning:
+    backgroundColor: '{colors.warning-container}'
+    textColor: '{colors.on-warning-container}'
+  tag-error:
+    backgroundColor: '{colors.error-container}'
+    textColor: '{colors.on-error-container}'
+  segmented:
+    height: 44px
+    padding: 4px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.block}'
+    textColor: '{colors.text-secondary}'
+    typography: '{typography.subheadline}'
+  segmented-thumb:
+    backgroundColor: '{colors.primary}'
+    textColor: '{colors.on-primary}'
+    typography: '{typography.label}'
+  switch:
+    width: 52px
+    height: 32px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.primary}'
+  switch-off:
+    backgroundColor: '{colors.inset}'
+  switch-thumb:
+    size: 24px
+    backgroundColor: '{colors.on-primary}'
+  switch-thumb-off:
+    backgroundColor: '{colors.outline}'
+  selection-mark:
+    size: 22px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.primary}'
+    textColor: '{colors.on-primary}'
+  progress:
+    height: 3px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.primary}'
+  navigation-dock:
+    width: 274px
+    height: 62px
+    padding: 4px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.glass-pill}'
+  dock-item:
+    width: 86px
+    size: 28px
+    gap: 2px
+    textColor: '{colors.text-secondary}'
+    typography: '{typography.tab-label}'
+  dock-platter:
+    backgroundColor: '{colors.dock-platter}'
+    textColor: '{colors.primary}'
+  navigation-rail:
+    width: 72px
+  sidebar:
+    width: 220px
+    rounded: 10px
+    height: 40px
+    backgroundColor: '{colors.card}'
+  foot-bar:
+    height: 64px
+    padding: 8px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.glass-pill}'
+    typography: '{typography.caption-emphasis}'
+  glass-regular:
+    backgroundColor: '{colors.glass-regular}'
+    borderColor: '{colors.glass-rim}'
+    blur: 2.5px
+    saturation: 2.08
+    opticalDepth: 60px
+    refractionWidth: 20px
+    specularIntensity: 0.28
+    specularThickness: 1.2px
+  glass-pill:
+    backgroundColor: '{colors.glass-pill}'
+    blur: 15.6px
+    saturation: 2.1
+    opticalDepth: 60px
+    refractionWidth: 20px
+    specularIntensity: 0.6
+    specularThickness: 1.3px
+    shadowBlur: 24px
+    shadowOffset: 8px
+  glass-menu:
+    backgroundColor: '{colors.glass-menu}'
+    blur: 12px
+    saturation: 2.0
+    opticalDepth: 60px
+    refractionWidth: 20px
+    specularIntensity: 0.16
+    shadowBlur: 29px
+    shadowOffset: 8px
+  glass-alert:
+    backgroundColor: '{colors.glass-menu}'
+    blur: 16px
+    saturation: 2.0
+    opticalDepth: 60px
+    refractionWidth: 20px
+    specularIntensity: 0.16
+    shadowBlur: 29px
+    shadowOffset: 8px
+  glass-clear:
+    backgroundColor: '{colors.glass-clear}'
+    blur: 1px
+    opticalDepth: 60px
+    refractionWidth: 20px
+    specularIntensity: 0.4
+  glass-on-glass:
+    backgroundColor: '{colors.glass-fill}'
   glass-interaction:
-    scale: 1.05
+    scale: 1.16
     stretch: 0.5
-  glass-materialize:
-    scale: 1.15
+    glowIntensity: 0.16
+  floating-shadow:
+    backgroundColor: '{colors.shadow}'
+    shadowBlur: 29px
+    shadowOffset: 8px
+  dock-shadow:
+    backgroundColor: '{colors.shadow-dock}'
+    shadowBlur: 24px
+    shadowOffset: 8px
+  menu:
+    width: 240px
+    padding: 8px
+    rounded: '{rounded.xl}'
+    backgroundColor: '{colors.card}'
+    textColor: '{colors.text}'
+  menu-item:
+    height: 44px
+    padding: 12px
+    size: 20px
+    rounded: '{rounded.md}'
+    typography: '{typography.subheadline}'
+  alert:
+    width: 348px
+    padding: 30px
+    rounded: '{rounded.alert}'
+    backgroundColor: '{colors.card}'
+    textColor: '{colors.text}'
+  alert-actions:
+    height: 48px
+    padding: 16px
+    gap: 8px
+  modal-scrim:
+    backgroundColor: '{colors.scrim}'
+  sheet:
+    padding: 16px
+    rounded: '{rounded.xxl}'
+    backgroundColor: '{colors.page}'
+    textColor: '{colors.text}'
   sheet-handle:
     width: 28px
     height: 4px
-    padding: 8px
-  scroll-edge:
-    opacity: 0.9
-  small-button:
-    size: 36px
-  icon:
-    size: 22px
-  icon-small:
-    size: 16px
-  icon-action:
-    size: 19px
-  icon-feature:
-    size: 23px
-  icon-large:
-    size: 32px
-  app-icon:
-    size: 52px
-    rounded: '{rounded.md}'
-    backgroundColor: '{colors.tint}'
-    textColor: '{colors.text}'
-  app-icon-dark:
-    backgroundColor: '{colors.tint-dark}'
-    textColor: '{colors.text-dark}'
-  device-icon:
-    width: 108px
-    height: 208px
-    rounded: '{rounded.lg}'
-  device-hero:
-    height: 258px
-    padding: 18px
-    gap: 18px
-    rounded: '{rounded.xl}'
-    backgroundColor: '{colors.device-panel}'
-    textColor: '{colors.text}'
-  device-hero-dark:
-    backgroundColor: '{colors.device-panel-dark}'
-    textColor: '{colors.text-dark}'
-  navigation:
-    width: 284px
-    height: 62px
-    rounded: 31px
-    backgroundColor: '{colors.glass-pill}'
-    padding: '{spacing.xxs}'
-  navigation-dark:
-    backgroundColor: '{colors.glass-pill-dark}'
-    textColor: '{colors.text-dark}'
-  glass:
-    backgroundColor: '{colors.glass}'
-    borderColor: '{colors.glass-edge}'
-    blur: 12px
-    shadowBlur: 16px
-    shadowOffset: 4px
-    angle: 45
-    refractionIndex: 1.1
-    refractionWidth: 16px
-    opticalDepth: 70px
-    dispersion: 0
-    magnification: 1
-    saturation: 1
-    specularThickness: 2px
-    specularSharpness: 0.5
-    specularSpread: 0.9
-    specularIntensity: 0.75
-    specularOppositeIntensity: 0.65
-    glowThickness: 6px
-    glowAngle: 90
-    glowSpread: 0.5
-    glowIntensity: 0.25
-    glowOppositeIntensity: 0.5
-  glass-clear:
-    backgroundColor: '{colors.glass-clear}'
-    blur: 0px
-    opticalDepth: 21px
-    refractionIndex: 1.132
-    specularIntensity: 0.65
-  glass-regular:
-    backgroundColor: '{colors.glass}'
-    opticalDepth: 20px
-    blur: 2.5px
-    refractionIndex: 1.104
-    specularIntensity: 0.54
-  glass-regular-dark:
-    backgroundColor: '{colors.glass-dark}'
-  glass-pill:
-    opticalDepth: 23px
-    blur: 5.5px
-    refractionIndex: 1.1
-    specularIntensity: 0.5
-  glass-menu:
-    backgroundColor: '{colors.glass-menu}'
-    opticalDepth: 16px
-    blur: 12px
-    refractionIndex: 1.054
-    specularIntensity: 0.48
-  glass-menu-dark:
-    backgroundColor: '{colors.glass-menu-dark}'
-  glass-alert:
-    backgroundColor: '{colors.glass-alert}'
-    opticalDepth: 18px
-    blur: 16px
-    refractionIndex: 1.046
-    specularIntensity: 0.46
-  glass-alert-dark:
-    backgroundColor: '{colors.glass-alert-dark}'
-  glass-toolbar-material:
-    backgroundColor: '{colors.glass-toolbar-tint}'
-    rounded: 22px
-  glass-toolbar-material-dark:
-    backgroundColor: '{colors.glass-toolbar-tint-dark}'
-  glass-edge-dark:
-    backgroundColor: '{colors.glass-edge-dark}'
-  glass-low-edge:
-    backgroundColor: '{colors.glass-low-edge}'
-  glass-low-edge-dark:
-    backgroundColor: '{colors.glass-low-edge-dark}'
-  glass-highlight:
-    backgroundColor: '{colors.glass-shine}'
-  glass-highlight-dark:
-    backgroundColor: '{colors.glass-shine-dark}'
-  glass-shadow:
-    backgroundColor: '{colors.shadow}'
-  glass-shadow-dark:
-    backgroundColor: '{colors.shadow-dark}'
-  modal-scrim:
-    backgroundColor: '{colors.scrim}'
-  modal-scrim-dark:
-    backgroundColor: '{colors.scrim-dark}'
-  chip:
-    height: 32px
-    rounded: '{rounded.full}'
-    padding: '{spacing.sm}'
-  row:
-    height: 56px
-    gap: '{spacing.sm}'
-    verticalPadding: '{spacing.xs}'
-    padding: '{spacing.md}'
-  settings-row:
-    height: 50px
-  device-detail-section:
-    height: 36px
-    gap: 26px
-    typography: '{typography.device-detail-heading}'
-  device-detail-value:
-    textColor: '{colors.device-detail-value}'
-    typography: '{typography.device-detail-value}'
-  usb-status-card:
-    height: 136px
-  empty-device-intro:
-    padding: 17px
+    backgroundColor: '{colors.text-secondary}'
+  form-sheet:
     width: 440px
-    height: 270px
+    rounded: '{rounded.alert}'
+  banner:
+    height: 52px
+    padding: 18px
     rounded: '{rounded.xl}'
-  intro-signal-near:
-    backgroundColor: '{colors.intro-signal-near}'
-  intro-signal-middle:
-    backgroundColor: '{colors.intro-signal-middle}'
-  device-list-search:
-    height: 46px
-    rounded: '{rounded.item}'
-  device-list-action:
-    width: 79px
-    height: 44px
+    backgroundColor: '{colors.card}'
+    textColor: '{colors.text}'
+    typography: '{typography.label}'
+  empty-state:
+    width: 320px
+    padding: 32px
+    size: 160px
+  skeleton:
     rounded: '{rounded.full}'
-  device-list-open:
-    textColor: '{colors.device-list-open}'
-  workspace-app-panel:
-    height: 110px
-    rounded: 24px
-  workspace-app-header:
-    height: 44px
-  workspace-section:
-    gap: 14px
-  workspace-primary-action:
-    height: 48px
-  workspace-app-empty:
-    size: 42px
-    rounded: 12px
-    backgroundColor: '{colors.workspace-empty-icon}'
-  workspace-running-empty:
-    size: 20px
-    gap: 11px
-  workspace-shortcut:
-    size: 48px
-    rounded: 16px
-  workspace-shortcuts:
-    rounded: 22px
-  workspace-phone:
-    width: 96px
-    height: 156px
-    rounded: 24px
-    padding: 3px
-  workspace-phone-screen:
-    rounded: 22px
-  row-large:
-    height: 64px
-  notification-card:
-    height: 190px
-  notification-list-item:
-    height: 92px
-    rounded: '{rounded.lg}'
-    padding: '{spacing.md}'
-    gap: 10px
-    backgroundColor: '{colors.surface}'
-  notification-app-icon:
-    size: 36px
-  notification-dismiss:
-    size: 26px
-    rounded: '{rounded.full}'
-    textColor: '{colors.secondary}'
-  switch-track:
-    width: 52px
-    height: 32px
-    rounded: 16px
-    padding: '{spacing.xxs}'
-    backgroundColor: '{colors.primary-action}'
-  switch-track-off:
-    backgroundColor: '{colors.switch-off}'
-  switch-track-off-dark:
-    backgroundColor: '{colors.switch-off-dark}'
-  switch-thumb:
-    size: 24px
-    rounded: 12px
-    backgroundColor: '{colors.white}'
-  checkbox-mark:
-    size: 18px
-    rounded: 2px
-  checkbox-target:
-    size: 48px
-  segmented-track:
-    height: 44px
-    rounded: 22px
-    padding: '{spacing.xxs}'
-  segmented-item:
-    rounded: 18px
-  appearance-selector:
-    width: 168px
-  separator:
-    backgroundColor: '{colors.muted}'
-  separator-dark:
-    backgroundColor: '{colors.muted-dark}'
-  text-action:
-    backgroundColor: '{colors.transparent}'
-  file-icon:
-    size: 44px
-  file-document-preview:
-    width: 42px
-    height: 54px
-    rounded: 5px
+    backgroundColor: '{colors.inset}'
   thumbnail:
-    size: 112px
-    height: 112px
     rounded: '{rounded.sm}'
-  media-thumbnail-selection:
-    backgroundColor: '{colors.media-thumbnail-shade}'
-  skeleton-graphic:
-    backgroundColor: '{colors.device-panel}'
-  skeleton-graphic-dark:
-    backgroundColor: '{colors.skeleton-graphic-dark}'
-  skeleton-line:
-    backgroundColor: '{colors.tint}'
-  skeleton-highlight:
-    backgroundColor: '{colors.surface}'
-  skeleton-highlight-dark:
-    backgroundColor: '{colors.device-detail-value}'
-  skeleton-line-dark:
-    backgroundColor: '{colors.muted-dark}'
-  file-browser-tile:
-    rounded: '{rounded.md}'
-    backgroundColor: '{colors.file-tile}'
-  file-browser-tile-dark:
-    backgroundColor: '{colors.surface-dark}'
-  file-folder-badge:
-    size: 30px
-    rounded: 9px
-    backgroundColor: '{colors.file-folder}'
-  file-folder-glyph:
-    textColor: '{colors.file-folder}'
-  file-current-directory:
-    height: 32px
-    rounded: '{rounded.full}'
-    backgroundColor: '{colors.file-current-directory}'
-    textColor: '{colors.file-current-directory-text}'
-  file-current-directory-dark:
-    backgroundColor: '{colors.file-current-directory-dark}'
-    textColor: '{colors.file-folder}'
-  file-action-bar:
-    height: 64px
-    padding: '{spacing.xs}'
-    rounded: '{rounded.full}'
-    backgroundColor: '{colors.glass-pill}'
-    textColor: '{colors.text}'
-    typography: '{typography.action-caption}'
-  file-action-bar-dark:
-    backgroundColor: '{colors.glass-pill-dark}'
-  file-view-popover:
-    width: 342px
-    typography: '{typography.file-option-label}'
-  media-preview-bar:
-    width: 342px
-    textColor: '{colors.text-dark}'
-  remote-screen:
-    height: 492px
-    rounded: '{rounded.lg}'
-    backgroundColor: '{colors.media-ink}'
-  app-screen:
-    height: 424px
-    rounded: '{rounded.lg}'
-  sheet-short:
-    height: 304px
-  sheet-medium:
-    height: 448px
-  sheet-long:
-    height: 580px
-  call-avatar:
-    size: 112px
-    backgroundColor: '{colors.call-avatar}'
-    textColor: '{colors.call-stage}'
-  call-stage:
-    backgroundColor: '{colors.call-stage}'
-    textColor: '{colors.text-dark}'
-  call-stage-secondary:
-    textColor: '{colors.call-muted}'
-  call-orbit:
-    backgroundColor: '{colors.call-ring}'
-  call-dock:
-    rounded: 34px
-    backgroundColor: '{colors.call-dock}'
-    textColor: '{colors.text-dark}'
-  call-utility-key:
-    size: 64px
-    rounded: '{rounded.full}'
-    backgroundColor: '{colors.call-key}'
-    textColor: '{colors.text-dark}'
-  call-accept-key:
-    size: 72px
-    rounded: '{rounded.full}'
-    backgroundColor: '{colors.success-dark}'
-    textColor: '{colors.call-stage}'
-  call-end-key:
-    size: 72px
-    rounded: '{rounded.full}'
-    backgroundColor: '{colors.danger-dark}'
-    textColor: '{colors.call-stage}'
-  call-banner:
-    height: 96px
-    rounded: 24px
-    backgroundColor: '{colors.call-stage}'
-    textColor: '{colors.text-dark}'
-  control-cell:
-    height: 64px
-  type-cell:
-    height: 60px
-  sheet:
-    rounded: '{rounded.xl}'
-    padding: '{spacing.lg}'
-  floating-surface:
-    backgroundColor: '{colors.surface-floating}'
-    textColor: '{colors.text}'
-  floating-surface-dark:
-    backgroundColor: '{colors.surface-floating-dark}'
-    textColor: '{colors.text-dark}'
-  alert:
-    width: 348px
-    rounded: 34px
-    padding: 30px
-  alert-actions:
-    padding: '{spacing.md}'
-    gap: '{spacing.xs}'
-  alert-button:
-    height: 48px
-    rounded: 24px
-  alert-danger:
-    backgroundColor: '{colors.danger-action}'
-    textColor: '{colors.danger-text}'
-  alert-danger-dark:
-    backgroundColor: '{colors.danger-action-dark}'
-    textColor: '{colors.danger-text-dark}'
-  update-dialog-wide:
-    width: 628px
-    padding: 28px
-  update-dialog-summary:
-    width: 192px
-  update-dialog-ring:
-    size: 72px
-  update-dialog-glyph:
-    size: 28px
-  menu:
-    rounded: 24px
-    padding: '{spacing.xs}'
-  menu-item:
-    height: 44px
-    rounded: '{rounded.item}'
-    padding: '{spacing.sm}'
-    size: 20px
-  app-continuation-menu:
-    width: 273px
-  picker:
-    width: 358px
-    rounded: 34px
-    padding: '{spacing.xs}'
-  picker-option:
-    height: 48px
-    rounded: '{rounded.item}'
-    padding: '{spacing.sm}'
-    size: 20px
-  content-panel:
-    backgroundColor: '{colors.surface}'
-    textColor: '{colors.text}'
-    rounded: '{rounded.item}'
-  content-panel-dark:
-    backgroundColor: '{colors.surface-dark}'
-    textColor: '{colors.text-dark}'
-  content-panel-low:
-    backgroundColor: '{colors.surface-low}'
-    textColor: '{colors.text}'
-  content-panel-low-dark:
-    backgroundColor: '{colors.surface-low-dark}'
-    textColor: '{colors.text-dark}'
-  danger-panel:
-    backgroundColor: '{colors.danger-container}'
-    textColor: '{colors.on-danger-container}'
-  danger-panel-dark:
-    backgroundColor: '{colors.danger-container-dark}'
-    textColor: '{colors.on-danger-container-dark}'
-  button-danger:
-    backgroundColor: '{colors.danger}'
-    textColor: '{colors.on-danger}'
-  button-danger-dark:
-    backgroundColor: '{colors.danger-dark}'
-    textColor: '{colors.on-danger-dark}'
-  text-danger:
-    textColor: '{colors.danger-text}'
-  text-danger-dark:
-    textColor: '{colors.danger-text-dark}'
-  secondary-label:
-    textColor: '{colors.secondary}'
-  secondary-label-dark:
-    textColor: '{colors.secondary-dark}'
-  status-connected:
-    textColor: '{colors.text}'
-  status-connected-dark:
-    textColor: '{colors.text-dark}'
-  status-warning:
-    textColor: '{colors.text}'
-  status-warning-dark:
-    textColor: '{colors.text-dark}'
-  status-danger:
-    textColor: '{colors.text}'
-  status-danger-dark:
-    textColor: '{colors.text-dark}'
-  status-symbol-connected:
-    textColor: '{colors.success}'
-  status-symbol-connected-dark:
-    textColor: '{colors.success-dark}'
-  status-symbol-warning:
-    backgroundColor: '{colors.warning}'
-    textColor: '{colors.on-warning}'
-  status-symbol-warning-dark:
-    backgroundColor: '{colors.warning-dark}'
-    textColor: '{colors.on-warning}'
-  canvas-heading:
-    height: 96px
-    textColor: '{colors.canvas-label}'
-  app-cell:
-    width: 78px
-    height: 84px
-  hero-action:
-    width: 160px
-  remote-clock:
-    height: 108px
-  hero-label:
-    width: 176px
-  floating-action:
-    width: 196px
-  accent-coral:
-    backgroundColor: '{colors.accent-coral-soft}'
-    textColor: '{colors.text}'
-  accent-coral-dark:
-    backgroundColor: '{colors.accent-coral-soft-dark}'
-    textColor: '{colors.text-dark}'
-  accent-amber:
-    backgroundColor: '{colors.accent-amber-soft}'
-    textColor: '{colors.text}'
-  accent-amber-dark:
-    backgroundColor: '{colors.accent-amber-soft-dark}'
-    textColor: '{colors.text-dark}'
-  accent-mint:
-    backgroundColor: '{colors.accent-mint-soft}'
-    textColor: '{colors.text}'
-  accent-mint-dark:
-    backgroundColor: '{colors.accent-mint-soft-dark}'
-    textColor: '{colors.text-dark}'
-  glass-selection:
-    backgroundColor: '{colors.glass-selected}'
-  glass-selection-dark:
-    backgroundColor: '{colors.glass-selected-dark}'
-  glass-selection-label:
-    textColor: '{colors.text}'
-  glass-selection-label-dark:
-    textColor: '{colors.text-dark}'
-  glass-action:
-    backgroundColor: '{colors.glass-action}'
-    textColor: '{colors.on-primary}'
-  glass-action-dark:
-    backgroundColor: '{colors.glass-action-dark}'
-    textColor: '{colors.on-primary-dark}'
-  glass-action-highlight:
-    backgroundColor: '{colors.glass-action-shine}'
-  glass-action-highlight-dark:
-    backgroundColor: '{colors.glass-action-shine-dark}'
-  icon-blue:
-    textColor: '{colors.accent-blue}'
-  icon-blue-dark:
-    textColor: '{colors.accent-blue-dark}'
-  accent-blue:
-    backgroundColor: '{colors.accent-blue-soft}'
-    textColor: '{colors.text}'
-  accent-blue-dark:
-    backgroundColor: '{colors.accent-blue-soft-dark}'
-    textColor: '{colors.text-dark}'
-  icon-coral:
-    textColor: '{colors.accent-coral}'
-  icon-coral-dark:
-    textColor: '{colors.accent-coral-dark}'
-  icon-amber:
-    textColor: '{colors.accent-amber}'
-  icon-amber-dark:
-    textColor: '{colors.accent-amber-dark}'
-  icon-mint:
-    textColor: '{colors.accent-mint}'
-  icon-mint-dark:
-    textColor: '{colors.accent-mint-dark}'
-  remote-exit:
-    size: 52px
-    padding: '{spacing.sm}'
-    rounded: '{rounded.full}'
-    backgroundColor: '{colors.glass}'
-    textColor: '{colors.text}'
-  remote-exit-peek:
-    width: 12px
-    height: 52px
-    rounded: '{rounded.full}'
-    backgroundColor: '{colors.glass}'
-    textColor: '{colors.text}'
-  remote-exit-handle:
-    width: 2px
-    height: 24px
-    rounded: '{rounded.full}'
-  remote-exit-hit:
-    width: 44px
-    height: 52px
-  remote-tool-panel:
-    width: 272px
-    height: 329px
-  device-identity:
-    width: 58px
-    height: 58px
-    rounded: 17px
-    backgroundColor: '{colors.device-panel}'
-  device-identity-status:
-    size: 17px
-  device-glyph:
-    backgroundColor: '{colors.device-glyph-screen}'
-    borderColor: '{colors.device-glyph-frame}'
-  device-glyph-idle:
-    backgroundColor: '{colors.device-glyph-idle-screen}'
-    borderColor: '{colors.device-glyph-idle-mark}'
-  device-identity-showcase:
-    width: 84px
-    height: 144px
-    backgroundColor: '{colors.device-screen}'
-  device-identity-rim:
-    backgroundColor: '{colors.device-screen-rim}'
-  device-shortcut-disabled:
-    backgroundColor: '{colors.device-shortcut-disabled}'
-    textColor: '{colors.white}'
-  device-identity-pane:
-    width: 64px
-    height: 92px
-  workspace-sidebar:
-    backgroundColor: '{colors.device-panel}'
-  device-identity-compact:
-    height: 44px
-  device-list-item-compact:
-    height: 96px
-  device-list-item:
-    height: 108px
-    rounded: '{rounded.item}'
-    padding: '{spacing.md}'
-    backgroundColor: '{colors.surface}'
-    textColor: '{colors.text}'
-  connection-icon-nearby:
-    textColor: '{colors.connection-nearby}'
-  connection-icon-pairing:
-    textColor: '{colors.connection-pairing}'
-  connection-icon-qr:
-    textColor: '{colors.connection-qr}'
-  connection-icon-usb:
-    textColor: '{colors.connection-usb}'
-  connection-icon-ip:
-    textColor: '{colors.connection-ip}'
-  connection-field:
-    height: 52px
-    rounded: '{rounded.item}'
-    padding: '{spacing.md}'
-    backgroundColor: '{colors.surface}'
-    textColor: '{colors.text}'
-  connection-field-outline-dark:
-    backgroundColor: '{colors.outline-dark}'
-  connection-nearby-entry:
-    height: 54px
-    rounded: 18px
-    padding: '{spacing.md}'
-    backgroundColor: '{colors.surface}'
-    textColor: '{colors.text}'
-  connection-tabs:
-    height: 74px
-    rounded: 18px
-    padding: '{spacing.xxs}'
-    backgroundColor: '{colors.surface}'
-    textColor: '{colors.secondary}'
-  connection-tab-selected:
-    rounded: '{rounded.md}'
-    backgroundColor: '{colors.tint}'
-    textColor: '{colors.text}'
-  connection-path:
-    height: 44px
-    rounded: '{rounded.full}'
-    backgroundColor: '{colors.connection-path}'
-  connection-path-dark:
-    backgroundColor: '{colors.connection-path-dark}'
-  connection-track:
-    backgroundColor: '{colors.connection-track-line}'
-  connection-track-dark:
-    backgroundColor: '{colors.connection-track-line-dark}'
-  connection-arc:
-    backgroundColor: '{colors.connection-track-arc}'
-  connection-arc-dark:
-    backgroundColor: '{colors.connection-track-arc-dark}'
-  connection-signal:
-    width: 23px
-    height: 4px
-    rounded: '{rounded.full}'
-    backgroundColor: '{colors.connection-signal}'
-  connection-signal-dark:
-    backgroundColor: '{colors.connection-signal-dark}'
-  selection-field:
-    height: 44px
-    padding: '{spacing.md}'
-    verticalPadding: '{spacing.xs}'
-    rounded: 22px
-    backgroundColor: '{colors.surface-inset}'
-  selection-field-dark:
-    backgroundColor: '{colors.surface-inset-dark}'
-  list-card:
-    rounded: 16px
-    padding: '{spacing.md}'
-  field-block:
-    height: 104px
-  control-feedback:
-    opacity: 0.12
+    backgroundColor: '{colors.block}'
   media-protection:
     height: 64px
-    backgroundColor: '{colors.media-shade}'
-  feature-icon:
-    size: 40px
-    rounded: '{rounded.md}'
-    opacity: 0.1
-  list-icon:
-    size: 30px
-    rounded: 9px
-    textColor: '{colors.on-accent}'
-  list-icon-glyph:
-    size: 18px
-  list-icon-compact:
-    size: 26px
-    rounded: 8px
-    textColor: '{colors.on-accent}'
-  list-icon-glyph-compact:
-    size: 16px
-  list-icon-blue:
-    backgroundColor: '{colors.list-icon-blue}'
-  list-icon-amber:
-    backgroundColor: '{colors.list-icon-amber}'
-  list-icon-mint:
-    backgroundColor: '{colors.list-icon-mint}'
-  list-icon-coral:
-    backgroundColor: '{colors.list-icon-coral}'
-  list-icon-slate:
-    backgroundColor: '{colors.list-icon-slate}'
-  list-icon-purple:
-    backgroundColor: '{colors.list-icon-purple}'
-  list-icon-document:
-    backgroundColor: '{colors.list-icon-document}'
-  list-icon-transfer:
-    backgroundColor: '{colors.list-icon-transfer}'
-  list-icon-utility:
-    backgroundColor: '{colors.list-icon-utility}'
-  diagnostic-warning:
-    textColor: '{colors.diagnostic-warning}'
-  diagnostic-checking:
-    textColor: '{colors.diagnostic-checking}'
-  diagnostic-checking-dark:
-    textColor: '{colors.diagnostic-checking-dark}'
-  transfer-card-thumbnail:
-    width: 48px
-  transfer-progress:
-    height: 4px
-    rounded: '{spacing.micro}'
-    backgroundColor: '{colors.muted}'
-    textColor: '{colors.text}'
-  transfer-progress-dark:
-    backgroundColor: '{colors.muted-dark}'
-    textColor: '{colors.text-dark}'
-  loading-flow-warm:
-    backgroundColor: '{colors.loading-warm}'
-  loading-flow-blue:
-    backgroundColor: '{colors.loading-blue}'
-  loading-flow-mint:
-    backgroundColor: '{colors.loading-mint}'
-  loading-flow-violet:
-    backgroundColor: '{colors.loading-violet}'
-  loading-orb:
-    opacity: 0.32
-  empty-content:
-    width: 380px
-    padding: '{spacing.md}'
-    verticalPadding: '{spacing.xxl}'
-    gap: '{spacing.lg}'
-  empty-content-icon:
+    backgroundColor: '{colors.media-scrim}'
+  remote-viewport:
+    backgroundColor: '{colors.viewport}'
+  remote-navigation:
+    height: 48px
+  remote-handle:
+    width: 12px
+    height: 52px
+  call-stage:
+    backgroundColor: '{colors.call-stage}'
+    textColor: '{colors.on-media}'
+  call-stage-secondary:
+    textColor: '{colors.call-text-secondary}'
+  call-key:
+    size: 64px
+    backgroundColor: '{colors.call-key}'
+  call-primary-key:
     size: 72px
-  empty-content-message-gap:
-    height: 10px
-  pairing-qr:
-    size: 204px
-    backgroundColor: '{colors.surface}'
-    textColor: '{colors.black}'
+  canvas-label:
+    textColor: '{colors.outline}'
+    typography: '{typography.footnote}'
 ---
 
-# 邻接 · 近场工作台设计规范
+# 邻接 · 设计规范
 
-## Overview
-
-邻接以当前设备、文件、来电或画面为视觉焦点。操作层共用中性实体面与液态玻璃。行为见[产品规格](prod/README.md)，过渡见[页面交互与动效](interaction-motion.md)，视觉稿见 [Ardot《邻接 · 近场工作台》](https://ardot.tencent.com/file/749360133997361?node_id=2%3A14)。
+邻接以当前设备、文件、来电或画面为焦点。界面沿用 [Prism UI 0.1.3](https://github.com/chen08209/prism_ui/tree/v0.1.3) 的视觉语言：灰色页面上的白色内容面、连续圆角、所有控件为胶囊，液态玻璃只用于浮在内容上的操作层。行为见[产品规格](prod/README.md)，过渡与触点反馈见[页面交互与动效](interaction-motion.md)，画板见 [Ardot《邻接 · 近场工作台》](https://ardot.tencent.com/file/749360133997361?node_id=2%3A14)。
 
 ## 设计系统
 
-| 对象 | 修改入口 | 使用方式 |
+| 对象 | 唯一来源 | 使用方式 |
 | --- | --- | --- |
-| 颜色、尺寸、透明度、字号 | 本文 frontmatter | Flutter 生成 `DesignTokens`，明暗界面通过主题取色。Ardot 绑定日夜变量或明确的固定色变量 |
-| 跨页图标 | [图标角色登记表](icons.json) | Flutter 使用生成的 `AppIcons`。Ardot 从 [G13 图标库](https://ardot.tencent.com/file/749360133997361?node_id=17%3A567) 插入同名角色实例。角色保留操作语义，登记表决定 Lucide 图形 |
-| 布局、状态、材质 | 共享控件及 Ardot 母组件 | 页面提供动作、标签和当前状态。母组件提供尺寸、材质、间距和交互。页头圆键按 regular、clear、实体回退复用同一变体的操作面 |
+| 颜色、字号、圆角、间距、组件尺寸、玻璃参数 | 本文 frontmatter | Flutter 生成 `DesignTokens`；Ardot 由 [ardot.mjs](../scripts/design_tokens/ardot.mjs) 导出「邻接 · 主题」「邻接 · 固定色」「邻接 · 尺寸」三个变量集合 |
+| 界面图标 | [图标角色登记表](icons.json) | 全部使用 Lucide。Flutter 生成 `AppIcons`；Ardot 图标库按 Lucide 名称命名（`图标 / chevron-left`），角色到图形的对照以登记表为准 |
+| 控件外形、状态与材质 | Ardot 母组件集及 Flutter 共享控件 | 页面只提供文案、图标角色和状态，尺寸、材质、间距和交互由母组件决定 |
 
-一个图标可用于多个操作角色。例如，主导航设置与当前设备管理分别维护各自的角色。徽标和状态颜色由功能或状态选择，换图形时颜色继续跟随原角色。原应用图标、远端内容、Android 系统三键和桌面原生控件沿用其来源。
+- `-dark` 后缀是同一角色的夜间值，无此后缀的颜色在明暗主题下相同。
+- 页面不直接写色值，也不直接写尺寸。Ardot 中每个填充、描边、文字色都绑定变量；固定媒体色和功能色绑定「邻接 · 固定色」。
+- 同步步骤见[生成与同步](../scripts/design_tokens/README.md)。
 
-变量、图标与母组件的同步步骤见[生成与同步](../scripts/design_tokens/README.md)。
+## 颜色
 
-### Prism UI 视觉稿
+主色由品牌钴蓝 `#2657D5` 按 Prism `vivid` 风格生成。表面、文字和分隔线都取自同一套 Prism 色调，品牌主色只用于主操作、选中和进度。若改用黑白主题，把 `primary` 与 `on-primary` 换成 Prism `monochrome` 的值即可，其他角色不变。
 
-Ardot 以 Prism UI 0.1.3 的中性层级、连续圆角和触点反馈为参照。光学参数用于 Ardot 的预览。设备功能色、传输方向、状态色和原应用内容沿用邻接的语义。稿件继续使用 MiSans。 [Prism UI 0.1.3](https://github.com/chen08209/prism_ui/tree/v0.1.3)
+### 表面层级
 
-| 视觉角色 | Ardot 规则 |
-| --- | --- |
-| 页面、卡片、模块、内嵌 | 绑定「邻接 Prism 材质」的 `表面` 层级。夜间从黑色页面依次抬升到 `#262626`、`#343436`、`#424245`，浮层采用模块层。正文、次要文字及边界各有主题变量 |
-| 按钮和工具栏 | 页头单个工具面为 44 点，24 点图形与命中区同心。相邻工具可共享胶囊，保留每项独立命中。文字按钮使用胶囊，危险确认用低饱和危险底与危险文字。键盘焦点为 2 点环 |
-| 菜单、下拉、抽屉 | 锚点菜单用 24 点外角、8 点外内边距、16 点项目角、12 点项目内距与 20 点图形。选项的文字和尾部状态共用中心线，保留至少 44 点行高。抽屉顶部圆角 28 点，28×4 点把手居中 |
-| 确认框 | 首选宽 348 点、连续圆角 34 点，正文水平内距 30 点，动作区内距 16 点。按钮高 48 点，双按钮间距 8 点。长文可滚动，大字或动作放不下时纵向排列 |
-| 开关、分段和复选 | 开关轨道 52×32 点，24 点滑块距边 4 点。分段轨道高 44 点，4 点内距，项目等宽。复选可见面 18 点，留足独立命中区，选中以勾号确认 |
-| 面与玻璃 | `regular` 用于独立工具，`pill` 用于共用胶囊和导航。菜单 `menu` 与确认 `alert` 各用更厚的采样面，媒体使用 `clear` 和局部对比保护。关闭玻璃、降低透明度及高对比变体沿用同一几何 |
-
-布局参数绑定「邻接 Prism 尺寸」。Flutter 与 Ardot 共用本规范中的颜色和几何 token，运行时使用宿主系统字体。日夜模式设置在共同祖先，固定媒体前景和状态色按语义绑定。主导航沿 62 点轨道布置单个选中镜片，标签为 13 点。共享图形、背景和文字保留独立层级，图形与触点同心，文字与尾槽居中对齐。 [组件和尺寸源码](https://github.com/chen08209/prism_ui/tree/v0.1.3/lib)
-
-## 设计依据与原则
-
-在对象或触点旁呈现来源、阶段和可用动作。可整组阅读或操作的内容共用容器。
-
-### 应用图标
-
-邻接的标记由两道错位的实色弧组成。两端朝相反方向偏转，为中间的工作区留出开口。浅蓝底、钴蓝与橘红为默认外观，两道形状在 16–32 像素下仍靠轮廓和留白区分。系统单色外观沿用完整轮廓。启动器外观和应用内主题各由相应的系统及应用设置决定。
-
-iOS 与 iPadOS 使用出血方形，由系统施加遮罩，提供默认、深色和灰度着色外观资源。Android 把前景、底色和主题单色分开，前景置于 108 dp 画板的中央安全区。macOS Dock 使用带外缘留白的版本。Windows 用多分辨率 ICO，Linux 的应用菜单与窗口共用同一 SVG 图标。日常工具栏和通知继续使用各自的语义图标。主标记和遮罩见[图标源文件](assets/app-icon.svg)与 [Ardot 标识稿](https://ardot.tencent.com/file/749360133997361?node_id=12%3A985)。[Apple 图标规范](https://developer.apple.com/design/human-interface-guidelines/app-icons/) · [Android 自适应图标规范](https://developer.android.com/develop/ui/compose/system/icon_design_adaptive)
-
-## Colors
-
-浅色用 `canvas` 浅灰与白色内容面，深色用纯黑与中性深灰内容面。正文用 `text`，元数据用 `secondary`。主动作浅色黑底白字、深色白底黑字。次要动作使用中性实体面，单行文字动作跟随同级正文。
-
-| 功能 | 图标底 token |
-| --- | --- |
-| 设备、远控 | `list-icon-blue` |
-| 连接、授权、电话 | `list-icon-mint` |
-| 文件与目录 | `list-icon-document` |
-| 照片、视频与媒体 | `list-icon-slate` |
-| 传输与交付 | `list-icon-transfer` |
-| 通知 | `list-icon-coral` |
-| 显示与外观 | `list-icon-amber` |
-| 归档与备份 | `list-icon-purple` |
-| 通用设置、诊断入口与辅助入口 | `list-icon-utility` |
-
-明暗主题共用约 96% 不透明度的功能色底与白色 Lucide 图形，名称写在色块外。同一文件在列表和宫格沿用类别色，进入传输中心后用任务类型表达取回或发送。大面积内容和进度条采用中性色，设备与应用原图、真实媒体保留原色。
-
-“画面与控制”中，清晰度和帧率上限用媒体色 `list-icon-slate`，窗口比例和导航键用远控色 `list-icon-blue`，点亮和熄屏用显示色 `list-icon-amber`，保持唤醒用辅助色 `list-icon-utility`。
-
-| 状态 | 浅色 | 深色 | 用法 |
+| 层级 | 浅色 | 深色 | 用于 |
 | --- | --- | --- | --- |
-| 成功 | `success` | `success-dark` | 绿色勾或连接指示，图标单独出现时带读屏名称 |
-| 警告 | `warning` | `warning-dark` | 琥珀色实体标记配深色图形，旁边用正文色指出需授权、受限或需设置 |
-| 危险 | `danger` | `danger-dark` | 红色危险状态图形和实色危险按钮，按钮文字用 `on-danger`；文字动作使用 `danger-text` 对应主题值 |
+| `page` | `#F0EDF0` | `#131315` | 页面底、抽屉底 |
+| `card` | `#FCF8F9` | `#262528` | 分组列表、卡片、浮层的实体回退 |
+| `block` | `#F0EDF0` | `#323235` | 卡片上的次要按钮、分段轨道、缩略占位 |
+| `inset` | `#E4E2E5` | `#404042` | 输入框、搜索框、关闭的开关轨道、骨架 |
 
-选用鲜明的状态色来传达结果，图形、短状态和原因保留各自信息。断开和停止按实际影响确定权重。
+层级只靠色调区分，页面内的卡片不加阴影。每升一层就用下一级颜色：页面上的卡片用 `card`，卡片里的按钮用 `block`。浅色模式下 `block` 与 `page` 同色。深色模式只会越往上越亮。浮层的实体回退在浅色下用 `card`，深色下用 `block`。
 
-连接诊断与 G5 状态组件使用 18 点无底线形图标。左侧功能图标用中性前景，右侧状态图标直接着色，状态文字沿用正文色。可用用主题成功色对勾，不可用用主题危险色叉。需授权、受限和需设置用 `diagnostic-warning` 或夜间的 `warning-dark`，检查中用 `diagnostic-checking` 或夜间的 `diagnostic-checking-dark`。待检查、已停止和待核验用中性图标。文字和图标共用一行中心线，状态槽在各行右侧对齐。
+### 文字与状态
 
-`list-icon` 定义尺寸与白色图形，`list-icon-blue` 等定义独立底色层。这里的 textColor 指图形前景。底栏以 `glass-selection` 为选中镜片着色，浅色叠加 4% 黑，深色叠加 12% 白。选中图标和标签使用当前主题正文前景，未选中项使用次要前景。在合成后的玻璃背景上核对实际对比度。
+- 文字只分两级：正文 `text`，次要信息、组头和图标用 `text-secondary`。不再设第三级灰。
+- 分隔线是 `separator`（正文色 14%）。禁用前景为正文色 38%，禁用底为正文色 12%。行按压用 `pressed` 覆盖整行。
+- `primary` 用于主按钮、分段选中、开关打开、选择标记、进度、文字按钮和导航选中的图形与标签。同一屏只放一个主按钮。
+- 状态色各有容器色，用于标签和横幅：成功 `success`，警告 `warning`，错误 `error`。`destructive` 只用于不可逆动作的图形和实色确认按钮。危险动作的文字用 `error`，以保证 4.5:1 对比。
+- 状态图形单独出现时必须有读屏名称；状态文字沿用正文色，旁边的图形负责着色。
 
-## Typography
+### 功能色
 
-设计稿使用 MiSans，字体资源及许可随稿件保存。App 使用各宿主当前的系统界面字族及中文回退，并监听系统字体设置变化；稿件字体不作为运行字体。Apple 系统字体按最终字号选择光学角色，不打包 SF 字体。生成字体家族元数据仅描述稿件。
+功能入口用 30 点圆角方块加白色 Lucide 图形，名称写在色块外。明暗主题共用同一组功能色。
 
-手机普通正文与输入为 17 点，紧凑辅助正文与动作标签 15 点，元数据 13 点，11 点仅用于非关键微型标注；导航短标签可用 13 点，关键状态用正常正文。大标题 28 点，页面／面板标题 22 点，紧凑页头 17 点。信息密集时使用换行、折叠和滚动。中文正文沿用系统字距。
+| 功能 | 组件 | 颜色 |
+| --- | --- | --- |
+| 设备、远控、窗口比例、导航键 | `icon-tile-device` | `accent-blue`（品牌主色） |
+| 连接、授权、电话 | `icon-tile-connection` | `accent-green` |
+| 文件与目录 | `icon-tile-file` | `accent-indigo` |
+| 照片、视频、清晰度、帧率 | `icon-tile-media` | `accent-teal` |
+| 传输与交付 | `icon-tile-transfer` | `accent-orange` |
+| 通知、清空与重置类入口 | `icon-tile-notification` | `accent-red` |
+| 显示、外观、点亮与熄屏 | `icon-tile-display` | `accent-amber` |
+| 归档、记录与恢复 | `icon-tile-archive` | `accent-purple` |
+| 通用设置、日志、诊断、关于、保持唤醒 | `icon-tile-utility` | `accent-gray` |
 
-普通文字对比至少 4.5:1，大字与有意义图形至少 3:1；玻璃在实际采样背景上测量对比。支持至少 200% 文字放大：行、按钮、菜单、页头随内容增高，横排可堆叠，网格减少列数；关键动作与来源不截断。普通触控目标采用至少 44×44 点，视觉图形可以更小。
+- 色块上的图形一律为白色 `on-media`，任何主题都不随正文色变化。
+- 文件格式沿用同一组色：文件夹和压缩包 `accent-amber`，PDF `accent-red`，文档 `accent-indigo`，图片和视频 `accent-purple`，音频 `accent-teal`。列表、宫格、搜索结果和传输缩略占位使用同一格式色。
+- 添加设备的五种方式使用彩色线形图标，不加色块：附近 `accent-teal`，配对码 `accent-green`，扫码 `accent-purple`，USB `accent-orange`，IP `accent-blue`。
 
-页头保留任务标题与必要操作。容量、来源、路径和状态随所属数据或控制项呈现，去掉重复标题和入口说明。跨设备操作就近标明来源与目标，并提供可读屏的名称。长值可换行或查看全文。
+## 文字
 
-### 错误与操作反馈
+设计稿使用 MiSans（Regular、Medium、Semibold、Bold）。App 使用宿主系统字体及中文回退，并跟随系统字号；稿件字体不打包。字号沿用 iOS Dynamic Type 的默认档，字距为 0。
 
-用用户正在使用的功能名称说明发生了什么，再给一个可以执行的下一步。表单就地指出要改的内容，页面读取失败在原处提供重试。错误原因不明时，用当前操作的名称和可执行的建议说明。系统错误原文、代码和内部路径不出现在普通提示中。
+| 角色 | 字号／行高 | 字重 | 用于 |
+| --- | --- | --- | --- |
+| `large-title` | 34/41 | 700 | 来电姓名、连接过程标题 |
+| `title1` | 28/34 | 700 | 工作台设备名、通话计时 |
+| `page-title` | 24/30 | 600 | 根页（设备、传输、设置）页头标题 |
+| `title3` | 20/25 | 600 | 子页页头、抽屉和表单标题 |
+| `headline` | 17/22 | 600 | 列表组头、卡片标题、确认框标题、空态标题 |
+| `body` | 17/22 | 400 | 列表行标题、输入、搜索、确认框按钮 |
+| `subheadline` | 15/20 | 400 | 行副标题、行尾值、菜单项、说明正文 |
+| `label` | 15/20 | 600 | 所有带文字的按钮、chip、分段选中项、横幅 |
+| `footnote` | 13/18 | 400 | 列表脚注、字段说明、错误提示、时间 |
+| `caption` / `caption-emphasis` | 12/16 | 400 / 600 | 元数据；状态标签与底栏标签用 600 |
+| `caption2` | 11/13 | 600 | 角标、计数 |
+| `tab-label` | 11/14 | 500 | 底部导航标签 |
 
-用不同文案区分失败和待核对，复用[提交反馈](prod/interaction-rules.md#内容保护与提交反馈)的下一步。仍显示旧内容时注明时效。窄屏和大字下可读全文。
+- 强调只用 600；700 只出现在 28 点及以上。
+- 正文与背景对比至少 4.5:1，大字及有意义图形至少 3:1，玻璃上的对比在实际采样背景上测量。
+- 支持 200% 文字：行、按钮和页头随内容增高，横排可改为纵排，网格减少列数，关键动作和来源不截断。普通触控目标至少 44×44 点。
 
-## Layout
+## 形状与间距
 
-- 远控三键栏贴齐全屏视口底边，沿用 `remote-navigation.height` 与 `remote-navigation.padding`。三个 `icon-button` 命中区等距排列，全屏时底部无需额外安全区留白。返回为朝左的闭合圆角空心三角形，主屏幕为空心圆，最近任务为圆角空心方形。整机、独立应用、熄屏及暂停共用这组符号。
-- 画面工具在拖动时使用圆形 `remote-exit`。吸附后切换为 12×52 点的 `remote-exit-peek` 竖长条，外侧贴齐当前窗口的安全侧边，中央只绘制 2×24 点的 `remote-exit-handle` 握条。44×52 点的 `remote-exit-hit` 命中区从边缘向内延伸，不改变画面布局。左、右吸附复用同一几何。拖动仅移动工具，松手重新吸附。点按长条展开画面内侧的常规液态玻璃面板。面板中图标在上、标签在下，关闭画面按钮独占底行。
-- 启动进度和重试位于目标页的内容区。玻璃准备期间使用同尺寸实体面。
-- 设备首屏按记录顺序显示单一列表。搜索按钮位于页头，点按后用胶囊形输入框和关闭按钮替换页标题及原操作。全部应用使用相同模式。常规行使用 `device-list-item`，狭窄纵向列表使用 `device-list-item-compact`。设备名称用正文强调字重，状态与连接方式或最近在线时间置于其下。手机和平板使用各自的实体轮廓与浅色屏面。连接标记嵌在轮廓右下，停靠位置固定。已连接用绿色实点，离线用中性空环，连接中用线弧，需处理与失败用警告、危险色。同步提供短文字与读屏状态。 [页头搜索与液态玻璃画板](https://ardot.tencent.com/file/749360133997361?node_id=24%3A207)
-- 设备行尾保留独立命中与焦点。浅色稿的「打开屏幕」使用 `accent-blue-soft`，连接和重试使用中性底。长名称、大字或窄窗时行可增高，操作移到正文下方。分栏突出当前设备。
-- 首次添加使用 `empty-device-intro`，依次显示设备靠近插画、「添加第一台设备」与通栏主动作。 [首次添加画板](https://ardot.tencent.com/file/749360133997361?node_id=2%3A808)
-- 工作台四种连接状态共用 `device-hero` 和页面布局。左侧依次是设备名、型号或系统版本、电量图标和百分比、调试方式图标和名称。电池轮廓与百分比位置固定，正常时显示电芯，实际充电时在同一位置显示绿色闪电。没有实时电量时百分比位置显示“—”，充电状态也未知时显示空轮廓。读屏提供电量与充电状态。
-- 右侧手机轮廓由完整的圆角外框和内缩 3 点的深色屏面组成，两层独立绘制。中心只显示连接状态图标。已连接用成功色对勾，未连接用中性空环，连接中用通用旋转线弧，连接失败用危险色叉。减少动态时保留静态线弧，各状态通过读屏播报。 [手机轮廓母组件](https://ardot.tencent.com/file/749360133997361?node_id=9%3A935)
-- 概览下方左侧是主操作槽，右侧是居中的「设备详情」文字动作。右上设备管理使用 regular 液态玻璃圆键。窄屏和大字允许信息与动作换行或堆叠。各状态及动作见[设备工作台](prod/device-connection.md#设备工作台)。
-- 顶层标题由 display 随滚动收至 heading，栏高不跳；短横屏直接紧凑。分组用 caption/secondary 与留白，普通行用 body，不逐行加粗或画底线。
-- 动态列表逐项构建；固定设置和同组任务共用 `content-panel`，`row` 提供内距及最小高度。左侧图标、中间名称、右侧短值或操作共用纵向中心，组内用留白分隔。普通行的图标底为 30 点、图形 18 点。组头在容器外，适用时只用标题和分组留白。
-- 文件列表使用 24 点固定尾槽，16 点箭头与 20 点选择框在槽内居中，选中对勾为 14 点。宫格在缩略区正中叠放同尺寸选择框。未选用中性实体面与轮廓，选中用 `primary-action` 与 `on-primary`。选择态保持[原内容几何](prod/content-and-transfer.md#文件选择与批量操作)，底栏只增加滚动末尾的避让。
-- 选择态沿用 `page-header`。关闭、所选数量与全选分别在左、中、右。全选与取消全选共用 22 点图形和 44 点圆形命中区。
-- 传输页顶部提供“传输中”和“已结束”两个文字 Tab，选中使用中性底色和加粗标签。每个任务使用独立圆角背景，条目间留 12 点间隔。左侧 48 点方形区域使用实际图片缩略图或文件格式图标，中间是文件名／批次名，下一行用方向图标及“本机 → 设备名”或“设备名 → 本机”标出来源和目标。
-- 任务卡使用 `transfer-progress`，数值贴近进度条，待处理原因占同一位置。结束时间和结果在右侧，成功与失败用状态色。双栏沿用相同任务卡。展示条件及清空记录见[传输列表](prod/content-and-transfer.md#传输列表)。
-- 工作台快捷区使用文件、相册、通知、电话四个等宽图标入口。快捷区下方的“常用应用”和“正在运行”使用独立实体卡，卡内展示应用原图标，图标下方留白。两张卡对齐列中心，每格命中至少 44 点，按可用宽度调整列数。各图标提供读屏名称，键盘焦点和指针悬停可显示名称。真实来电出现在概览与快捷区之间。
-- 应用空态沿用卡片的宽度和位置。常用应用用独立色底加号，「正在运行」用活动图标。管理页拖动把手在行尾，勾选项共用固定尾槽。打开菜单贴近应用图标，窄屏或大字时使用可滚动实体面。 [应用空态画板](https://ardot.tencent.com/file/749360133997361?node_id=9%3A1457)
-- 设备详情从「设备与系统」开始，系统、电池、显示、网络与存储分组在同一列连续滚动。分组使用实体内容面，参数沿用紧凑设置行高，项目左对齐、值右对齐，长文本随行换行。局部失败紧随所属分组，离线快照时效在参数前标明，在线更新时间在参数末尾。连接诊断平铺检查项。 [设备详情画板](https://ardot.tencent.com/file/749360133997361?node_id=2%3A615) · [产品规格](prod/device-connection.md#设备详情)
-- 文件详情页首使用彩色格式图标、完整文件名和类型。属性按组排列，长文件名与路径可换行。预览与详情的分流见[文件与目录边界](prod/content-and-transfer.md#文件与目录边界)。
+- 所有圆角都是连续圆角（Ardot `cornerSmoothing` 0.6）。圆角取 `xs 4`、`sm 8`、`md 16`、`lg 20`、`xl 24`、`xxl 28`、`alert 34`、`full`，不使用其他值。
+- 按钮、chip、搜索框、分段、导航、底栏和页头按钮一律为胶囊。
+- 嵌套圆角同心：外角 = 内角 + 内距（菜单 24 = 项 16 + 8）。小元素取不超过短边三分之一的最大档：30 点色块为 8，52 点设备块为 16。
+- 分组列表和内容卡片用 `xl 24`，小卡片和输入框用 `md 16`，工作台概览卡用 `xxl 28`，缩略图用 `sm 8`。
+- 间距只用 2、4、8、12、16、20、24、32、40、48。页面左右边距 16；组与组之间 24；卡片内距 16；同组元素间 8 或 12。
+
+## 材质
+
+### 实体与玻璃的分工
+
+| 对象 | 材质 |
+| --- | --- |
+| 页面、卡片、分组列表、表单、抽屉、侧栏、设备概览 | 实体 |
+| 页头的图标按钮与按钮组、远控画面工具、远控把手 | `glass-regular` |
+| 底部导航、文件与相册底栏 | `glass-pill` |
+| 锚点菜单、弹出选项 | `glass-menu` |
+| 确认框 | `glass-alert` |
+| 照片与视频预览上的返回和底栏 | `glass-clear`，配亮色图形，按画面亮度加 `media-protection` |
+| 页面底部的通栏主按钮 | 实体 `button-filled` |
+
+玻璃关闭、降低透明度或提高对比度时，所有玻璃回退为实体浮层面（浅色 `card`，深色 `block`）加 `dock-shadow`，尺寸、位置、焦点不变。设计稿为每个玻璃组件同时提供玻璃与实体两种外观。
+
+### 玻璃配方
+
+Prism 的玻璃之所以“活”，靠的是以下五层叠加，单独提高透明度做不到：
+
+1. **边缘折射带**：宽约 min(20, 高/4) 的边缘把背后内容向内压缩、镜像。内容滚到玻璃下方才看得出，所以设计稿中的列表、照片必须延伸到页头和底栏下方。
+2. **上下高光**：1.2–1.3 点的白色内高光只出现在上下边缘，到圆端逐渐消失。没有光源方向，也不随手势转动。
+3. **两侧深色细线**：0.67 点外缘线，左右两侧约 22% 黑，上下约 4–7%，用来勾出形状。
+4. **饱和度提升**：背后内容饱和度提高 100–180%。
+5. **底色**：浅色接近白，深色为 `#353437`。
+
+| 预设 | 底色（浅／深） | 模糊 σ | 高光强度／宽度 | 阴影 |
+| --- | --- | --- | --- | --- |
+| `glass-regular` | 白 54% ／ `#353437` 62% | 2.5 | 0.28 / 1.2 | 无 |
+| `glass-pill` | `#F4F4F4` 58% ／ `#353437` 48% | 15.6（雾化 72%） | 0.6 / 1.3 | 8% blur 24 y8 + 4% blur 3 y1 |
+| `glass-menu` | 卡片色 55% ／ `#353437` 63% | 12 | 顶部内光 16% | 11.8% blur 29 y8 |
+| `glass-alert` | 同 menu | 16 | 同 menu，两侧细线 35% | 同 menu |
+| `glass-clear` | 白 12% | 1 | 0.4 / 1.2 | 无 |
+
+玻璃上的二级填充（例如确认框里的非主按钮）用 `glass-on-glass`：浅色黑 13%，深色白 13%。
+
+### Ardot 中的表达
+
+Ardot 的 `GLASS` 效果配合描边可以还原以上五层。所有玻璃母组件使用同一结构，只换参数：
+
+| 预设 | 填充 | GLASS（lightIntensity / lightAngle / refraction / depth / dispersion / radius / splay） | 描边 |
+| --- | --- | --- | --- |
+| regular | `邻接 · 主题/glass-regular` | 0.6 / 90 / 0.9 / min(20, 高/4) / 0.05 / 5 / 0.2 | 高光 + 细线 |
+| pill | `glass-pill` | 0.7 / 90 / 0.9 / 20 / 0.05 / 14 / 0.2 | 高光 |
+| menu、alert | `glass-menu` | 0.5 / 90 / 0.6 / 20 / 0 / 24（alert 32）/ 0.15 | 高光 + 细线 |
+| clear | `邻接 · 固定色/glass-clear` | 0.8 / 90 / 0.9 / min(20, 高/4) / 0.1 / 2 / 0.25 | 高光 |
+
+- 高光描边：内描边 1.2，纵向线性渐变，白色 70% → 0（30%）→ 0（70%）→ 70%。
+- 细线描边：内描边，横向线性渐变，黑 22% → 4%（15%）→ 4%（85%）→ 22%。
+- 阴影按上表加在同一节点。媒体上的 clear 不加阴影。
+
+### 底部导航
+
+- 胶囊高 62，内距 4，每项宽 86，三项总宽 274。底边距取 21 与底部安全区中的较大值，水平居中。
+- 图形 28、标签 `tab-label`，未选中为 `text-secondary`。
+- 选中项是宽 ≥ 84 的实色托盘：浅色 `#DCE1FF` 85%，深色 `#000A31` 85%，图形和标签为 `primary`。
+- 按住时托盘化为透明放大镜：各边外扩 8，内容放大 1.16 倍，边缘有约 3 点红蓝色散，阴影 5.5% blur 5 y8。设计稿在分镜中表达这一帧。
+
+## 控件
+
+### 按钮
+
+按钮的填充表示它的角色，尺寸由所在位置决定。同一种角色在任何页面都长一样。
+
+| 角色 | 填充 | 前景 | 用于 |
+| --- | --- | --- | --- |
+| 主要 `button-filled` | `primary` | `on-primary` | 每屏唯一的主动作：页面底部提交、确认框最后一项、工作台「打开手机屏幕」 |
+| 次要 `button-tonal` | 所在面的下一层（页面上 `card`，卡片上 `block`） | `text` | 与主动作并列的动作、行尾动作、卡片内动作 |
+| 危险 `button-destructive` | 同次要 | `error` | 断开、移除、删除、清空。确认框中危险动作放在主位置时用 `destructive` 实色、白字 |
+| 文字 `button-text` | 无 | `primary` | 帮助、编辑、全部应用、查看更多等轻量入口 |
+| 图标按钮（页头） | `glass-regular` | `text` | 返回、关闭、搜索、添加、更多、设置 |
+| 图标按钮（卡片内） | `block` | `text` | 卡片标题行尾的操作 |
+
+| 尺寸 | 高度 | 图形 | 位置 |
+| --- | --- | --- | --- |
+| 停靠 | 48 | 24 | 页面底部、确认框、工作台主次按钮 |
+| 页头 | 44 | 24 | 页头与 Duo 竖栏 |
+| 区块 | 36 | 20 | 列表行尾、卡片标题行、组头 |
+| 紧凑 | 32 | 20 | 密集工具、宫格角落 |
+
+- 所有带文字的按钮用 `label`（15/20 600），图标在文字前，间距 8。
+- 页头相邻的两个及以上图标按钮合成一个玻璃胶囊（按钮组），每项保留独立命中区，组内间距 0、项宽 44。单个按钮是 44 点正圆。
+- 返回一律是页头起始侧的 44 点玻璃圆键加 `back` 图标。照片与视频预览上改用 `glass-clear`。没有裸箭头返回。
+- 行尾文字导航（如「配对码帮助」）是 `button-text`，不加箭头。可点进入下一页的整行用列表行加 `chevron`。
+- 按压：实体按钮浅色降到 75% 不透明，深色叠加 20% 白；玻璃按钮放大最多 16 点并在手指处出现 16% 白色辉光。任何按钮按下都不缩小。
+- 禁用：前景 `disabled`，底 `disabled-container`；确认框中的禁用动作保留原填充。焦点环为 2 点 `primary`，在实色或玻璃上外移 1 点。
+
+### 列表
+
+- 分组列表是一张 `list-group`：外圈圆角 24，行与行之间不留间隙，用 `separator` 分隔。分隔线从标题文字的起点开始，到右缘前 14 结束；最后一行、按压行及其相邻行下方不画分隔线。
+- 行最小高 56，左右内距 16，上下至少 10，前导与标题间距 16。标题 `body`，副标题 `subheadline` + `text-secondary`。行尾值用 `subheadline` + `text-secondary`，导航行尾加 18 点 `chevron`。
+- 前导可以是功能色块（30 点）、设备块（52 点）、文件格式图标或应用原图标，同一组内前导类型一致。
+- 组头在卡片外，`headline` + `text-secondary`，内距左右 16、上 24、下 8；组脚用 `footnote`。根页标题下的第一组省略上 24。
+- 动态列表（设备、文件、通知、传输任务）同样用分组卡片。只有当条目带有独立操作区或缩略图时，才拆成彼此相隔 12 的独立 `card`（圆角 24）。
+- 选择态在行尾用 22 点圆形 `selection-mark`：未选为 `outline` 1.5 点空心圆，选中为 `primary` 实心加白色对勾。宫格的选择标记叠在缩略图右上角，距边 6。
+
+### 输入与选择
+
+- 输入框 `input`：高 48，圆角 16，`inset` 底，无描边；聚焦时加 2 点 `primary` 内描边。标签在框上方，用 `footnote` + `text-secondary`，间距 8；错误提示在框下方，用 `footnote` + `error`。
+- 搜索框 `search-field`：高 44 胶囊，`inset` 底，起始 20 点搜索图形，尾部清除按钮。
+- 开关 52×32：打开为 `primary` 轨道和白色滑块，关闭为 `inset` 轨道和 `outline` 滑块，滑块 24。命中区覆盖整行。
+- 分段 `segmented`：高 44，轨道为所在面的下一层，内距 4，选中项是 `primary` 胶囊加 `on-primary` 600 标签，其他项 `text-secondary`。设置的外观、传输的「传输中／已结束」、添加设备的连接方式都用这一个组件。添加设备的分段项是图标在上、标签在下的高 64 变体。
+- chip：高 36 胶囊，未选 `card` 底，选中 `primary` 底。筛选与范围一律用 chip，同一行 chip 的样式必须一致；带下拉的 chip 在尾部加 16 点向下箭头。
+- 状态标签 `tag`：圆角 8，`caption-emphasis`，成功、警告、错误各用对应容器色。
+- 单选弹层：每项为列表行，当前项行尾为 `primary` 对勾，不另加底色。
+
+### 菜单、确认框与抽屉
+
+- 锚点菜单 `menu`：宽 160–280，外角 24、内距 8，项高 44、项角 16、项内距 12，图形 20 在文字前、间距 12。危险项用 `error`。菜单最多显示 7 项，多出时露出半项提示滚动。
+- 确认框 `alert`：宽 348，圆角 34。标题 `headline`，内距 30/21/30/0；正文 `subheadline` + `text-secondary`，内距 30/6/30/20。动作区内距 16/0/16/16，按钮高 48、间距 8：横排放得下时并排，主动作在右；放不下时纵排，取消在最下。遮罩浅色黑 20%，深色黑 48%。
+- 抽屉 `sheet`：底为 `page`，顶角 28，把手 28×4 居中距顶 6，标题栏高 48。宽窗改用居中的 `form-sheet`（宽 440，圆角 34）。
+- 横幅 `banner`：最小高 52，圆角 24，内距 18/12，`label` 字，最多 3 行。信息用浮层面或玻璃，成功、警告、错误用容器色。
+
+### 空态、加载与进度
+
+- 空态：居中略偏上（纵向 40%），最宽 320。插图 160：`primary-container` 柔形底（圆、波浪圆或超椭圆）上放 64 点 `primary` 线形图形；下方 16 为 `headline` 标题，8 为 `subheadline` 说明，24 为主按钮。
+- 整页加载：三枚 `primary` 形状（圆、12 波浪圆、超椭圆）各 20 点，间距 52，依次跳起 30 点，地面为 44×6 的 `primary-container` 胶囊，一轮 1.2 秒。等待超过 400 毫秒才出现。
+- 骨架：`inset` 胶囊，沿真实内容的几何排列；占位不接收焦点，每个加载区域提供一个读屏状态。
+- 进度条：高 3 胶囊，`primary` 前景，`primary-container` 轨道。页头下方的整页进度贴住页头底边。不定进度用 24 点 `primary` 环形指示器。
+
+## 页面结构
+
+- 手机画板 402×874，顶部安全区 62，底部 34。状态栏和 Home 指示条用「系统 / 状态栏」「系统 / Home 指示条」组件，明暗各一。
+- 页头 `page-bar`：安全区下高 72，背景透明，底部有一段页面色 90% → 0 的渐隐，延伸到页头下 16。正文从页头下 12 开始，并能滚到页头和底部导航下方。
+- 根页（设备、传输、设置）：无返回，标题 `page-title` 起始距边 16，尾部为页头按钮或按钮组，距边 8。
+- 子页：起始为 44 点玻璃返回键，距边 8；标题 `title3` 紧跟其后，间距 8；尾部操作同上。标题过长时单行截断，完整标题由读屏提供。
+- 选择态复用同一页头：起始为关闭，中间是所选数量（`title3`），尾部为全选或取消全选。
+- 底部固定动作：通栏 `button-filled`，左右 16，底边留出安全区和 8 点。正文最后一项可滚到按钮上方。与底部导航同时出现时，固定动作在导航上方。
+- 文件与相册底栏 `foot-bar`：高 64 胶囊，左右 16，各项等宽，24 点图形在上、`caption-emphasis` 标签在下。菜单从动作向上展开。
+- 远控画面铺满视口，三键导航栏高 48、背景为 `viewport`；返回为朝左的圆角空心三角，主屏幕为空心圆，最近任务为圆角空心方形。
+- 远控把手吸附时是 12×52 的玻璃竖条，外侧贴齐当前窗口的安全侧边，中央画一条 2×24 的握条；命中区从边缘向内 44×52，不挤压画面。点按后从同侧展开 `glass-regular` 工具面板：图形在上、标签在下，三列等宽；「关闭画面」是面板底部通栏的 `button-destructive`，底色取玻璃上的 `glass-on-glass`。
+
+## 页面模式
+
+### 设备与工作台
+
+- 设备列表是一张分组卡片。每行：52 点 `device-tile`（手机或平板线形图形）+ 12 点 `status-dot` 叠在设备块右下，外圈 2 点 `card` 描边；标题为设备名，副标题为状态 · 连接方式或最近在线时间。行尾为区块尺寸的 `button-tonal`（打开屏幕、连接、重试），所有设备行的行尾按钮样式相同。
+- 状态点：已连接 `success`，离线为 `outline` 空心环，连接中为 `primary` 线弧，需要处理用 `warning`，失败用 `destructive`。同时提供状态文字和读屏状态。
+- 搜索：点按页头搜索后，标题和页头按钮原位替换为 `search-field` 加关闭按钮。
+- 首次添加：空态插图为设备靠近的线稿（`primary` 与 `primary-container`），标题「添加第一台设备」，下方 `button-filled`。
+- 工作台概览 `hero-card`：左侧设备名（`title1`）、系统版本、电量与连接方式；右侧手机轮廓（外框 `outline`，屏面 `device-screen`）中央显示连接状态。下方「打开手机屏幕」`button-filled` 与「设备详情」`button-tonal` 等宽并排。连接中、未连接、失败共用同一布局，只换主按钮文案与状态图形。
+- 快捷入口：文件、相册、通知、电话四个 52 点功能色块（圆角 16）加下方 `footnote` 标签，放在一张卡片内等宽排列。未连接时色块保留功能色，降到 38% 不透明并禁用。
+- 「常用应用」「正在运行」各一张卡片：标题行为 `headline` 加尾部 `button-text`（编辑、全部应用），内容为应用原图标宫格，图标 48、标签 `caption`。
+
+### 添加设备与连接
+
+- 「附近设备」是页面顶部的单行列表卡片，下方是连接方式分段（图标在上的 64 高变体）。
+- 表单字段沿 16 点边距排列，底部通栏主按钮。帮助入口为左对齐的 `button-text`。
+- USB 状态卡居中显示线缆、状态槽和手机，状态槽用状态点规则。
+- 连接过程全屏、无页头，中央为本机与手机的连线，下方 `large-title` 标题和 `subheadline` 阶段文字，底部为「取消连接」`button-tonal`。失败时连线断开，原位置显示原因和恢复动作。
+
+### 手机屏幕与应用
+
+- 首帧等待：画面区为 `page`，中央是整页加载形状，下方为 `subheadline` 阶段文字；页头起始侧为关闭按钮。失败时形状停止，原位显示原因与「重试」`button-filled`。
+- 熄屏：黑色视口中央为 `glass-clear` 的「点亮屏幕」胶囊按钮。暂停提示用横幅，位于最后一帧上方安全区。
+- 画面与控制、应用接续等设置页沿用分组列表；选择类设置在行尾显示当前值和 `chevron`，点按打开单选弹层。
 
 ### 文件与相册
 
-- 文件页以 `surface` 为底。共享存储首页按两列排列类型入口，目录宫格按可用宽度调整列数。类型入口和宫格缩略区使用中性底。列表文件夹用暖黄色底和白色图形，宫格用暖黄色文件夹轮廓。路径中以暖色标记当前目录。列表沿用 `row`，宫格名称和元数据居中。
-- 文件列表、宫格、搜索与传输缩略占位使用同一格式色。PDF 红色，其他文档和压缩包暖黄，图片和视频紫色，音频青色。文件详情使用格式图标，可用 `file-tile` 作为浅色页底。
-- 相册按日期分组，缩略图列数随窗口宽度调整。媒体填满缩略格，视频保留类型标识。缩略读取失败在对应位置反馈。
-- 文件和相册共用 regular 胶囊 `file-action-bar`。各动作等宽，22 点图标上置、`action-caption` 下置，合用至少 44 点命中区。标准栏高 64 点，大字可增高。菜单从动作向上展开。 [底栏组件](https://ardot.tencent.com/file/749360133997361?node_id=9%3A620)
-- 文件首页的可用空间与存储总量和目录网格标题同排，仅呈现已核实的容量。目录名已在标题栏显示时，目录搜索和上级路径入口同行，路径入口显示可去的上级。相册的数量和检查范围入口在操作栏上方，媒体列表从日期分组直接开始。
-- 「视图与排序」从底栏展开 `file-view-popover`，依次显示排序、顺序和布局。每组使用并列选项，窄窗大字时换行。
-- 文件详情与图片预览共用底栏标签层级和安全边距。媒体页头和底栏使用 clear，按画面亮度增加局部对比。正文末项预留可滚动空间。系统交付见[原件取回与系统交付](prod/content-and-transfer.md#原件取回与系统交付)。
-- 文件搜索的范围与类型并排，大字可换行增高。结果独立成卡并单独滚动，固定主动作避让键盘和安全区。字段及结果见[名称搜索](prod/content-and-transfer.md#名称搜索)。
-- 发送的来源、目标和路径使用实体分组。目标目录页将设备与路径放在子目录列表和底部主动作之间。发送、取回交付和系统保存使用独立实体主按钮。
-- 删除确认使用实体弹窗，项数与来源就近呈现，取消在左，危险主动作在右。
+- 文件首页：类型入口为两列小卡片（功能色块 + 名称），下方是目录宫格。宫格缩略区为 `block` 底的 `card`，文件夹为 `accent-amber` 线形图形。
+- 目录列表用分组卡片，行前导为文件格式色块，副标题为日期与大小，行尾 `chevron`；选择态把 `chevron` 换成 `selection-mark`，行不位移。
+- 路径与搜索：搜索框在上，路径用 chip 行，当前目录 chip 选中。
+- 相册按日期分组，缩略图三列（手机）、间距 2、圆角 0，视频右下角叠时长标签。
+- 预览页为黑色媒体底，返回和底栏用 `glass-clear`，顶部、底部按亮度加 `media-protection` 渐变。
 
-### 首次授权与连接
+### 传输
 
-- 「附近设备」独立放在 `connection-tabs` 上方。方式选择等宽排列，图标在上、标签在下。选中用 `connection-tab-selected` 与加粗标签，并提供读屏状态。
-- 添加设备入口和 Tab 用彩色线形图标。附近扫描使用雷达与 `connection-nearby`，配对授权使用密钥与 `connection-pairing`，扫码使用扫描框与 `connection-qr`，USB 使用 `connection-usb`，IP 连接使用 Wi‑Fi 与 `connection-ip`。颜色仅用于图形，选中和未选中沿用同一色彩。图标和标签沿垂直中轴对齐，选中态由整个 Tab 的中性底色和标签字重表达。
-- 四种方式、发现与帮助共用 `page-content` 阅读列。方式正文从同一基线开始，字段和步骤起始对齐，二维码与扫码说明居中。二维码保留白底和静区。 [USB 宽窗画板](https://ardot.tencent.com/file/749360133997361?node_id=17%3A144)
-- USB Tab 用一张实体状态卡呈现线缆、手机、当前阶段和下一步。图示、状态标题和说明沿卡片的同一中轴水平居中。图示在线缆和手机之间留固定状态槽。引导接线与未检出时用中性空环，检查时用中性进度指示，实际检出设备后才点亮连线与成功色对勾。系统弹窗授权提示随检查状态出现。错误和主控受限分别用危险色与警告色符号。减少动态时保留静态进度指示，状态标题和说明可换行并由读屏播报。可选设备列在卡片下方。
-- `button-primary` 撑满内容列，左右沿用 `spacing.lg`，独立于滚动正文并避让键盘和安全区。正文最后一项可完整滚至按钮上方。标签无法在四列完整显示时改为两列，图文和读屏顺序一致；大字放大字号与行高，字段和按钮随内容增高。
-- [连接过程](prod/device-connection.md#连接过程)共用无顶栏全屏布局。中间为 `connection-path`，下方为 `connection-title` 和阶段文字，底部固定当前动作。失败时将路径改为断开，原位置留给原因及恢复动作。
-
-### 等待与动效
-
-过渡和触点反馈见[页面交互与动效](interaction-motion.md)。连接、USB 检查和诊断在固定槽内显示不定进度，已知比例使用实测进度。减少动态时保留静态标记和读屏状态。
-
-#### 加载、刷新与反馈
-
-页头、路径、页签和导航先出现，骨架放在受影响的列表或网格。应用启动和整页等待的指示位于安全内容区中央，媒体解码的指示位于预览区中央。延迟和淡入见[等待与状态切换](interaction-motion.md#等待与状态切换)。
-
-骨架沿用卡片、缩略格、分组和文字基线的几何，按当前宽度和字号排版。设备详情保留分组标题和参数标签，骨架块对齐右侧的值列。浅色使用 `device-panel` 与 `tint`，深色使用 `skeleton-graphic-dark` 与 `muted-dark`。占位不接收焦点或点击，每个加载区域提供一个读屏状态。 [设备详情值占位](https://ardot.tencent.com/file/749360133997361?node_id=12%3A109)
-
-进度与失败靠近受影响的条目、分区或触点。列表的刷新、位置恢复和选择遵循所属[产品规格](prod/README.md)。
-
-[骨架与局部占位](https://ardot.tencent.com/file/749360133997361?node_id=12%3A75) · [目录读取、选择与删除](https://ardot.tencent.com/file/749360133997361?node_id=12%3A124) · [通知、传输、媒体与电话等待](https://ardot.tencent.com/file/749360133997361?node_id=12%3A261)
-
-手机屏幕与独立应用的首帧等待共用全屏渐变和三球。暖粉至雾蓝的纵向渐变、薄荷和浅紫的径向渐变叠在当前主题的画布上。三球依次使用薄荷绿、珊瑚和紫色，透明度统一为 `loading-orb.opacity`，边缘平整。球群中心在视口横向 50%、纵向 45.3% 处。关闭键位于页头起始侧或 Duo 竖栏，读屏提供阶段和设备来源。 [等待首帧画板](https://ardot.tencent.com/file/749360133997361?node_id=2%3A1065)
-
-等待失败时保留背景构图，在原视口显示原因和动作，关闭键仍可达。确认熄屏时在黑色视口中心用 `glass-clear` 和太阳图标呈现「点亮屏幕」。暂停提示显示在最后确认帧上方的安全区。状态条件见[呈现与启动](prod/interaction-rules.md#呈现与启动)。 [打开失败画板](https://ardot.tencent.com/file/749360133997361?node_id=9%3A858)
+- 根页标题下方为「传输中／已结束」分段。
+- 每个任务一张 `card`（圆角 24，间距 12）：左侧 48 点缩略或格式图标，中间文件名、方向与来源 → 目标（`footnote`），下方 `progress` 与已传／总量；右上角显示百分比或状态 `tag`。
+- 待处理、失败用 `tag-warning` / `tag-error`，完成用 `tag-success`。
 
 ### 通知与电话
 
-专用电话页的状态稿随[电话接力能力验证](prod/calls.md#交付与验证门槛)启用。
+- 通知按日期分组，每条为独立 `card`：36 点应用原图标、标题一行、正文最多两行，右上时间，右下 32 点紧凑清除按钮（`block` 底）。页头尾部为「清除全部」图标按钮。
+- 电话页为 `call-stage` 深蓝实体面：联系人居中，头像 112，姓名 `large-title`，阶段 `subheadline` + `call-text-secondary`。底部动作区：拒接（`destructive`）与接听（`accent-green`）为 72 点圆键，静音与声音为 64 点 `call-key` 圆键，图形白色，下方 `footnote` 标签。
 
-- 通知列表按日期分段，日期下每条使用独立 `notification-list-item` 实体圆角背景，条目之间留间隔。左侧只显示 36 点原应用图标，中间标题一行、正文最多两行，溢出统一显示尾部省略号。右侧时间在上，单条清除图标在下。单条图标可见底为 26 点，命中为 44 点，与条目打开区域独立。右上角清除全部图标提供 44 点命中区。夜间卡片使用 `surface-dark`，等待反馈贴近对应行或页头。
-- 电话接力页用 `call-stage` 的深蓝实体面，联系人和通话阶段居中。已核验头像优先，缺失时用姓名首字；身份未知时使用中性人形符号。姓名用 `caller-name`，响铃用 `call-orbit` 环线，接通及待核对时环线收为低对比静态轮廓。接通保留联系人位置，实际计时用 `call-elapsed`。专用电话页、紧凑来电入口和声音选择器沿用同一组色值。
-- 底部 `call-dock` 保留稳定的动作区。响铃左侧为红色拒接键、右侧为绿色接听键，图标下有文字，手机画面接听另列。通话中麦克风和声音各有圆形控制和状态标签，红色挂断置于两者下方。只能接续手机画面时入口显示具体去向，状态待核对时操作区显示原因及检查动作。
-- 大字时通知卡可增高，时间与清除保留独立命中；读屏可读应用名与完整文本。电话控件可换行或纵向滚动，状态变化可读屏，焦点保留在触发按钮或核对结果。行为见[实时通知](prod/notifications.md)与[电话接力](prod/calls.md)。
+### 设置
 
-### Flexible 布局
+- 根页「设置」分为「使用偏好」和「本机数据」两组，每行功能色块 + 标题；即时生效的偏好在行尾直接放开关或分段，其余为导航行。外观分段在窄窗或大字下移到行内下一行。
+- 「关于与更新」行尾显示版本号。更新弹窗沿用 `alert` 结构，宽而矮的窗口左右排列版本信息和更新说明。
 
-依据父容器约束重排。普通页面及底部动作居中于 `page-content` 阅读列，列宽含原左右边距。远控和媒体按源内容及可用视口布局。窄屏、低高度、键盘及大字可换行、堆叠或滚动，末项保持可达。[窗口状态与能力边界](prod/compatibility.md)
+## 文案与反馈
 
-正文可滚入页头与浮动导航背后，首屏避让放滚动内容内；可读性优先，系统玻璃外观或辅助偏好改变后，材料可加厚至实体，不强制始终透明。顶部保护只覆盖安全区及实际栏高，末段以 spacing.lg 渐退，在工具栏底部透明；位于玻璃采样前，不加实体 AppBar。底部避让导航／键盘，遮挡区阻止误点且将纵向拖动交回正文。远控等叠加内容单独定位。
+- 用用户正在使用的功能名称说明发生了什么，再给一个可执行的下一步。表单在字段旁指出要改的内容，页面读取失败在原处提供重试。系统错误原文、代码和内部路径不出现在普通提示中。
+- 失败与待核对用不同文案，复用[提交反馈](prod/interaction-rules.md#内容保护与提交反馈)中的下一步。仍显示旧内容时注明时效。
+- 页头只保留任务标题与必要操作。容量、来源、路径和状态跟随所属数据呈现；跨设备操作就近标明来源与目标。
+- 进度和失败靠近受影响的条目、分区或触点。先出现页头、路径、页签和导航，骨架只放在受影响的列表或网格。
 
-Ardot 入口下按业务流程自上而下浏览，规范、母组件、组件示例和图标库放在左侧。区内从左到右按操作顺序排完整页面，每行最多八张。确认、恢复和交付随所属任务，局部反馈、主题、字号和分镜紧邻主稿；共用窗口与辅助偏好放在末区。画布与图层树沿用相同流程。移动画板保留节点 ID 与尺寸。
+## 自适应窗口与形态
 
-不同操作、布局或恢复路径各有示例。同页仅文案或数据不同的状态共用状态板，说明只写触发条件或有意义的差异。共享母组件保留唯一原件。局部示例与标注的数量一致，200% 字号样例同时放大行高，`scroll-viewport` 保留完整内容。说明用 `canvas-label`，规范底板用 `canvas`。
+以当前窗口的安全可用矩形为准：先扣除宿主窗口边框、安全区和系统保留区，再测量宽 W、高 H。W 在分配应用自己的导航和窗格之前测量；铰链把视口分成多块时，分别测量每块。[Apple 布局指南](https://developer.apple.com/design/human-interface-guidelines/layout)
 
-## Adaptive Windows & Form Factors
-
-### 通用宽高阈值
-
-以当前窗口或系统分屏的安全可用矩形为准。先排除宿主窗口边框、实际安全区与系统保留区，再测量可用宽度 W 和高度 H。W 在分配应用自己的导航栏和窗格前测量。若铰链把视口分成多块，分别测量实际可用窗格。以下逻辑点数为邻接的设计阈值。 [Apple 布局指南](https://developer.apple.com/design/human-interface-guidelines/layout)
-
-| 窗口状态 | 页面结构 | 交互与材料 |
+| 窗口 | 结构 | 说明 |
 | --- | --- | --- |
-| W < 600 | 单列与底部导航，列表点入详情 | 桌面使用独立的系统标题栏，应用页头在其下方 |
-| 600 ≤ W < 840 | 约 72 点图标导航轨道加单一内容窗格 | 详情原位替换内容窗格，返回恢复列表 |
-| 840 ≤ W < 1080 | 约 208 点带文字侧栏加单一内容窗格 | 普通表单和详情沿用 `page-content` 阅读列，媒体与目录网格随窗格宽度变化 |
-| W ≥ 1080 | 带文字侧栏加列表／详情双栏 | 两个业务窗格均至少 360 点，并各自滚动。设备列表与工作台、传输列表与任务详情用该结构。没有对应详情的页面占用完整内容区 |
-| H < 480 或键盘占据操作区 | 优先保证可滚动正文与固定动作 | 宽而矮的更新弹窗左右排列版本信息和更新说明，操作区固定。窄横屏可用紧凑侧导航，常规选项弹层按剩余高度滚动 |
+| W < 600 | 单列 + 底部导航 | 列表点入详情。桌面使用独立的系统标题栏，应用页头在其下方 |
+| 600 ≤ W < 840 | 72 点图标导航轨道 + 单窗格 | 详情原位替换窗格，返回恢复列表 |
+| 840 ≤ W < 1080 | 220 点文字侧栏 + 单窗格 | 表单与详情居中在 720 阅读列内，宫格随宽度变化 |
+| W ≥ 1080 | 文字侧栏 + 列表／详情双栏 | 两窗格各至少 360 点、各自滚动。设备与工作台、传输与任务详情用此结构 |
+| H < 480 或键盘占据操作区 | 优先保证正文可滚动、固定动作可达 | 更新弹窗左右排列；弹层按剩余高度滚动 |
 
-跨越阈值保留当前设备、选中项、任务、输入草稿、正在编辑的弹层、焦点和各窗格的滚动锚点。双栏收为单栏时保留用户当前关注的详情，返回可回到原列表位置。展开时，用同一个选中项恢复详情。独立控制窗口重排时保留当前控制会话与源比例。 [响应式画板](https://ardot.tencent.com/file/749360133997361?node_id=9%3A1779)
+- 侧栏：实体 `card` 底，项高 40、圆角 10、项间距 4，图形 24 + `subheadline` 标签；选中项为正文色 8% 底加 3×16 的 `primary` 指示条。
+- 跨越阈值时保留当前设备、选中项、任务、草稿、弹层、焦点和各窗格的滚动位置。双栏收为单栏时保留当前详情，返回回到原列表位置。[响应式画板](https://ardot.tencent.com/file/749360133997361?node_id=9%3A1779)
 
 ### 远控窗口
 
-设备页和工作台标题区有「远控窗口」入口，画面等待与悬浮工具提供「切换窗口」。实体弹层内为按设备分组的可滚动宫格，宽度用 `component-app-cell-width` 分配。手机屏幕位于本组首格并用手机图标，独立应用显示被控设备的应用图标和名称，当前画面用选中底色。由画面进入时，标题下方提供工作台图标和「返回工作台」。关闭画面在画面工具中操作。窄屏、大字和横屏下保留安全区，宫格在弹层内滚动。
-
-桌面远控子窗口由系统提供标题栏，以「设备名 · 手机屏幕」或「设备名 · 应用名」识别。手机屏幕窗口依据打开时的源比例设置画面区，三键导航和系统标题栏分别计入各自的空间。旋转后调整画面窗口比例，系统限制尺寸时完整容纳画面。
-
-普通屏的应用内窗口在 W ≥ 840 且两侧安全宽度均至少 360 点时可并排，使用 `spacing-xs` 间隔。分隔式折叠屏将铰链留空，按两侧实测安全宽度判断。列表在可并排时为其他画面显示「与当前画面并排」，也可选「仅显示当前画面」。 [远控窗口画板](https://ardot.tencent.com/file/749360133997361?node_id=19%3A1) · [两路并排画板](https://ardot.tencent.com/file/749360133997361?node_id=20%3A1)
+- 设备页和工作台提供「远控窗口」入口，画面工具提供「切换窗口」。弹层内按设备分组的宫格：手机屏幕在本组首格，独立应用显示应用原图标和名称，当前画面用 `primary-container` 底。由画面进入时，标题下方提供「返回工作台」。
+- 桌面远控子窗口使用系统标题栏，标题为「设备名 · 手机屏幕」或「设备名 · 应用名」；按打开时的源比例设置画面区，旋转后调整比例。
+- 普通屏的应用内窗口在 W ≥ 840 且两侧安全宽度均至少 360 点时可并排，间隔 8。折叠屏把铰链留空，按两侧实测宽度判断。[远控窗口画板](https://ardot.tencent.com/file/749360133997361?node_id=19%3A1) · [两路并排画板](https://ardot.tencent.com/file/749360133997361?node_id=20%3A1)
 
 ### 桌面窗口标题栏
 
-Windows 和 Linux 主窗口在各宽度下均显示带应用名的原生标题栏，应用页头和侧栏占用其下的内容区。Windows 使用系统窗口按钮，Linux 使用 GTK 主题按钮，位置和顺序跟随桌面设置。macOS 主窗口达到 600 点时，页面和侧栏底色延伸到窗口顶边并保留左上的 AppKit 交通灯，缩到 600 点以下时显示独立标题栏。全屏时平台自行处理窗口按钮。
-
-沉浸状态下，页标题与操作在原生按钮占用高度下方另留 `desktop-header.padding`，实体侧栏也从同一水平线放置导航。标准标题栏下应用只加同一份内边距。桌面正文维持原来的阅读宽度，标题和页面操作对齐。返回和页面动作延用 regular 玻璃。沉浸状态的页名及空白区可拖动，边缘由系统缩放。主窗口中的连接等待和远控画面铺到内容区顶边，沉浸状态在顶部留透明拖动区。远控子窗口使用各平台原生标题栏与边框。 [macOS 窗口画板](https://ardot.tencent.com/file/749360133997361?node_id=24%3A2) · [窗口按钮母组件](https://ardot.tencent.com/file/749360133997361?node_id=12%3A1047)
+Windows 和 Linux 主窗口始终显示带应用名的原生标题栏，按钮位置和顺序跟随系统与 GTK 主题。macOS 主窗口宽度 ≥ 600 时，页面与侧栏延伸到窗口顶边，保留左上交通灯；页头和侧栏在原生按钮高度下再留 12。宽度 < 600 时显示独立标题栏。沉浸状态的页名和空白处可拖动窗口。远控子窗口使用各平台原生标题栏和边框。[macOS 窗口画板](https://ardot.tencent.com/file/749360133997361?node_id=24%3A2)
 
 ### iPhone Duo 专项
 
-以 iOS 27.1 SDK 及以上的全显示区域和竖向栏行为为目标。外屏竖向、外屏横向及内屏横向，工具栏与主导航沿系统指定外缘纵排。内屏竖向回到上下横栏。系统分屏时，两侧窗口各用自己的外缘，左侧窗口使用左缘。控件的主次顺序、任务和选择在旋转与开合时保持连续。 [Preparing your app for iPhone Duo](https://developer.apple.com/iphone-duo/prepare/) · [Designing for iPhone Duo](https://developer.apple.com/design/human-interface-guidelines/designing-for-iphone-duo)
+以 iOS 27.1 SDK 及以上的全显示区域和竖向栏行为为目标。外屏（竖、横）与内屏横向时，页头按钮和主导航沿系统指定外缘纵向排列；内屏竖向回到上下横栏。系统分屏时两侧窗口各用自己的外缘。[Designing for iPhone Duo](https://developer.apple.com/design/human-interface-guidelines/designing-for-iphone-duo)
 
-| 姿态 | 邻接布局 |
+| 姿态 | 布局 |
 | --- | --- |
-| 外屏竖向与横向 | 单窗格。竖向控制区域由系统相机／状态、页面工具、主导航从上到下组成。 |
-| 内屏横向全展开 | 竖向栏。设备列表与工作台在宽度均达到 280 点的两个安全窗格内并列；宽度不足时显示当前窗格 |
-| 内屏竖向全展开 | 横向页头和底部导航。内容量小的工作台使用居中阅读列，与外屏保持同一设备和任务 |
-| 书本半折 | 列表与详情可分别留在铰链两侧。相机启用时只调整会与新增保留区相交的内容 |
-| 桌面半折 | 邻接远控可将源画面放进上部安全窗格，控制工具放到下部安全窗格。可用空间仅能容纳一个窗格时保留画面及工具入口 |
-| 系统分屏与内屏弹层 | 分屏按各窗口的实际可用宽度分配窗格，竖向栏按系统外缘排列。内屏选项弹层优先在可用区域居中，遇折叠分隔时落在当前操作的安全窗格内 |
+| 外屏竖向与横向 | 单窗格。竖栏从上到下为系统相机区、页头按钮、主导航 |
+| 内屏横向全展开 | 竖向栏。设备列表与工作台在两个各至少 280 点的安全窗格内并排，不足时只显示当前窗格 |
+| 内屏竖向全展开 | 横向页头和底部导航；工作台用居中阅读列 |
+| 书本半折 | 列表与详情分列铰链两侧；相机启用时只调整与保留区相交的内容 |
+| 桌面半折 | 远控画面放上部安全窗格，画面工具放下部；只能容纳一个窗格时保留画面和工具入口 |
+| 系统分屏与内屏弹层 | 按各窗口实际宽度分配窗格；弹层落在当前操作的安全窗格内 |
 
-外屏相机区域持续预留，动态岛扩展时跟随系统更新。内屏相机启用时才增加保留区，半折同时避开折叠区。定制垂直玻璃栏使用宿主提供的物理边缘和实际布局位置。画稿采用 24 点外边距表达项目的视觉尺寸，正文按完整侧边安全区留白，玻璃栏本身只应用一次定位。工具栏优先使用图标，读屏保留动作名称；紧凑时优先露出返回、关闭和当前任务动作。 [Raise the bar with iPhone Duo](https://developer.apple.com/videos/play/tech-talks/111462/) · [Duo 专项画板](https://ardot.tencent.com/file/749360133997361?node_id=9%3A1786)
+竖栏使用与页头相同的 44 点玻璃按钮，按钮组改为纵向胶囊；返回与关闭在顶部，读屏保留动作名称。阈值验证覆盖 599/600、839/840、1079/1080、479/480 两侧，以及开合、分屏、键盘、明暗、200% 字号、减少动态和降低透明度。[Duo 专项画板](https://ardot.tencent.com/file/749360133997361?node_id=9%3A1786)
 
-阈值验证覆盖 599/600、839/840、1079/1080 和 479/480 的两侧，同时核对实际开合、分屏、键盘、浅深主题、200% 字体、减少动态和降低透明度。Ardot 的 Duo 尺寸用于演示，保留区与栏的位置最终按模拟器及真机宿主输出核验。
+## 应用图标
 
-## Elevation & Depth
+邻接的标记是两道错位的实色弧，两端朝相反方向偏转，在中间留出工作区。默认外观为浅蓝渐变底、钴蓝 `#2657D5` 与朱红 `#D7512B` 两道弧，16–32 像素下仍靠轮廓和留白区分；单色外观沿用完整轮廓。
 
-液态玻璃用于浮在内容上方的导航和操作。轮廓附近折射真实背景，中心按背景复杂度散射并调节明度，边缘高光随形状和交互变化。Apple 在 27 系列加强了复杂背景的散射，并用暗侧边缘与更亮的镜面高光提升层次。Ardot 以浅底、深底和实际照片表达这些视觉目标。[Apple 材料指南](https://developer.apple.com/design/human-interface-guidelines/materials) · [Meet Liquid Glass](https://developer.apple.com/videos/play/wwdc2025/219/) · [WWDC26 材料调整](https://developer.apple.com/videos/play/wwdc2026/102/?id=206)
+iOS 与 iPadOS 使用出血方形，由系统加遮罩，提供默认、深色和着色外观。Android 分离前景、底色和单色层，前景放在 108 dp 画板的安全区中央。macOS Dock 使用带外缘留白的版本，Windows 使用多分辨率 ICO，Linux 应用菜单与窗口共用同一 SVG。[图标源文件](assets/app-icon.svg) · [Ardot 标识稿](https://ardot.tencent.com/file/749360133997361?node_id=12%3A985)
 
-| 对象 | 材料 |
-| --- | --- |
-| 标题栏独立动作、远控工具及退出 | regular |
-| 底部导航、成组的标题栏动作及批量操作栏 | pill |
-| 锚点菜单 | menu |
-| 决策确认框 | alert，关闭玻璃时使用实体浮层 |
-| 照片或视频预览上的紧凑控件 | clear，配亮色前景，按画面亮度加局部保护 |
-| 正文、列表、设备卡、表单、输入／帮助弹窗、侧栏和内容抽屉 | 中性实体内容面 |
-| 主要按钮 | primary-action 实色 |
+## Ardot 画布约定
 
-页面底部的单个通栏主按钮直接显示 `primary-action` 实体表面。文件、相册等浮动工具栏由工具栏自身绘制材料面。页框统一底部操作的宽度、边距、安全区和键盘避让。
-
-标题栏和 Duo 竖栏的独立图标按钮使用 44×44 点正圆玻璃，页边距和按钮间距留在圆面外。返回或关闭在竖栏顶部，其他图标依次排列。文字动作保留在横向页头。设计稿指定的同组动作共用胶囊，例如「传输 · 已结束」的清空和刷新。正文行内和实体内容卡中的操作随所属内容面呈现。顶部工作区与媒体预览以光学边缘区分层次。浅底用深前景，深底与媒体用亮前景。 [设备列表](https://ardot.tencent.com/file/749360133997361?node_id=2%3A426) · [已结束的传输](https://ardot.tencent.com/file/749360133997361?node_id=9%3A1329)
-
-每组操作共用一张玻璃面，菜单项保留独立点击区。浮动菜单从触点展开，远控由贴边把手打开工具面。触点、拖动与打断反馈见[页面交互与动效](interaction-motion.md)。 [Apple 新设计系统](https://developer.apple.com/videos/play/wwdc2025/356/?time=348) · [SwiftUI 自定义玻璃](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views)
-
-Ardot 的设备、传输和设置在同一个 284×62 点的 `pill` 轨道内等宽排列，四周内距 4 点。每项图标在上、文字在下，沿项目中心线布置。窄窗可缩窄轨道，大字时增加栏高。选中镜片标记实际目的地，图标和文字保持原位。点按或横拖时镜片沿轨道移动，释放后落在切换成功的目的地。
-
-媒体 clear 保留画面细节，轮廓折射勾勒形状，局部暗化保护亮色前景。预览返回与底部操作同用 clear。Duo 竖栏下，返回沿系统外缘，标题和文字动作留在横向区域。 [Duo 照片预览](https://ardot.tencent.com/file/749360133997361?node_id=17%3A200) · [Apple Clear 材质指南](https://developer.apple.com/design/human-interface-guidelines/materials#Liquid-Glass)
-
-原生控件在平台提供时使用系统材料。SwiftUI 的 `glassEffect` 作用于按键外形，`GlassEffectContainer` 共同渲染相邻形状，`interactive` 提供响应触控和指针的反馈。Flutter 普通浮动控件采用液态玻璃库的明暗材质和交互预设。项目保留媒体透明材质、几何与采样边界。极致和标准映射到库的完整折射与轻量渲染，关闭时使用实体色及常规焦点反馈。降低透明度或需要实体面提高对比时保留原尺寸、动作与焦点。减少动态时保留按压与选中反馈，收敛形变和回弹。
-
-复核时用干净浅底、深底、细线与密集文件名、明亮及暗色照片分别观察玻璃内外的分层和前景对比。Ardot 的 G1 材料对照与 F2/W8 的列表遮挡表达材质和相对层级。连续采样、按压、拖动打断和系统辅助偏好的实际表现需要真机验证。[G1 材料对照](https://ardot.tencent.com/file/749360133997361?node_id=2%3A3144) · [平台与能力](prod/compatibility.md)
-
-## Shapes
-
-内容面、面板、控制与缩略图用各自语义圆角，内外形状同心；胶囊用于导航／操作。图标图形与命中区域分别使用 token。
-
-## Components
-
-### 应用更新弹窗
-
-「关于与更新」把当前版本、构建号和更新入口放在同一组，项目通过行内留白区分。更新记录按版本卡片排布。发现新版本后使用有遮罩的居中实体弹窗。版本对照、更新摘要与底部操作在各状态保持同一位置。完整发布说明通过「更新记录」进入，窄窗和大字时正文可滚动，操作始终可达。 [关于与更新画板](https://ardot.tencent.com/file/749360133997361?node_id=2%3A2203)
-
-宽而矮时版本信息与更新说明可并排。状态及操作见[应用版本与更新](prod/app-updates.md)，过渡见[动效规范](interaction-motion.md#等待与状态切换)。
-
-### 共享控件
-
-共享卡片、页头、行、开关、动作、导航和侧栏使用母组件实例。输入用 `connection-field`，带标签及当前值的选择用 `selection-field`。开关命中独立于轨道，选中及主要动作用黑白，次动作用中性实体，文字动作透明，普通动作使用 label；危险动作使用风险色并说明影响，取消保持普通样式。图标统一 Lucide，应用原图不改绘。
-
-选择弹层用带遮罩的实体面，提供简短标题、取消和可滚动选项。当前值用对勾或中性选中底，整行可点且至少 44 点高。关闭后焦点回到原控件。窄、宽窗的打开方式与提交规则见[选项弹层](prod/interaction-rules.md#选项弹层)。
-
-设置中即时生效的偏好在行尾直接操作，布尔偏好用开关，有限互斥值用分段选择。需请求权限时由点按触发，确认生效后更新选中态。配对、导入与连接配置保留明确提交，失败信息放在受影响的字段旁，保留其他已输入值。紧凑设置行使用 `list-icon-compact` 与 `list-icon-glyph-compact`，控件命中仍遵循通用尺寸。
-
-设置的分组见[信息架构](prod/information-architecture.md#设置与本地数据)。外观分段在极窄窗口或大字设置下移到同一行组的下一行。
-
-“画面与控制”的帧率上限紧邻清晰度。两行行尾显示当前档位与向下箭头，沿用同一单选弹层样式，并以中性底和对勾突出当前项。帧率档位以 FPS 显示。紧凑宽度可将当前值移到行内下一行。窗口比例共用同一选项样式，点“自定义”在弹层内进入输入。 [画面与控制画板](https://ardot.tencent.com/file/749360133997361?node_id=2%3A1252) · [帧率弹层](https://ardot.tencent.com/file/749360133997361?node_id=18%3A35) · [屏幕偏好](prod/interaction-rules.md#比例清晰度与屏幕偏好)
-
-远控状态叠放在原视口，工具和退出保持可达。打开方式弹层显示应用名，主次动作纵排，间隔 12 点。可用选项见[输入与应用接续](prod/interaction-rules.md#输入与应用接续)。
+- 文件分两页：「规范与组件」放变量说明、母组件集和图标库；「产品画板」按业务流程自上而下分区，区内从左到右按操作顺序排列，每行最多八张。
+- 画板命名「编号  页面 · 状态」，同页状态、就地面板、深色、200% 字号和分镜紧跟主稿，命名为「编号 · 类型  说明」。移动或重做画板时保留节点 ID，以免文档链接失效。
+- 母组件都是组件集，用变体表达尺寸、状态和明暗（例如「按钮」：角色 × 尺寸 × 状态）。同一控件只保留一个组件集；页面只放实例，不脱离组件。
+- 所有容器使用自动布局。只有叠放关系（状态点、玻璃浮层、媒体保护）使用绝对定位。
+- 明暗主题通过在画板上切换「邻接 · 主题」的日间／夜间模式实现，不复制一套深色组件。
+- 说明文字用 `canvas-label`，放在画板外；画板内只放真实界面。
 
 ## 改稿验收
 
-从完整页面核对母组件、主题和辅助偏好。光学效果在实际渲染中验证。token 和图标注册表按[生成与同步](../scripts/design_tokens/README.md)核对，平台能力见[兼容性规格](prod/compatibility.md)。
-
-依据：[iOS 27 官方设计更新](https://www.apple.com/os/ios/)、[Principles of great design · WWDC26](https://developer.apple.com/videos/play/wwdc2026/250/)、[Communicate your brand identity on iOS · WWDC26](https://developer.apple.com/videos/play/wwdc2026/251/)、[Apple 无障碍指南](https://developer.apple.com/design/human-interface-guidelines/accessibility)、[Apple 字体指南](https://developer.apple.com/design/human-interface-guidelines/typography)、[Apple 材料指南](https://developer.apple.com/design/human-interface-guidelines/materials)、[Meet Liquid Glass](https://developer.apple.com/videos/play/wwdc2025/219/)、[Get to know the new design system](https://developer.apple.com/videos/play/wwdc2025/356/)。
+- 用完整页面核对母组件、明暗主题、200% 字号和降低透明度。玻璃效果在实际渲染中核对，内容必须延伸到玻璃下方。
+- 运行 `npm run lint --prefix scripts/design_tokens` 检查本文，Ardot 变量用 `node scripts/design_tokens/ardot.mjs --check` 核对，步骤见[生成与同步](../scripts/design_tokens/README.md)。
+- 依据：[Prism UI 0.1.3](https://github.com/chen08209/prism_ui/tree/v0.1.3)、[Apple 材料指南](https://developer.apple.com/design/human-interface-guidelines/materials)、[Apple 无障碍指南](https://developer.apple.com/design/human-interface-guidelines/accessibility)、[Apple 字体指南](https://developer.apple.com/design/human-interface-guidelines/typography)、[Meet Liquid Glass](https://developer.apple.com/videos/play/wwdc2025/219/)。

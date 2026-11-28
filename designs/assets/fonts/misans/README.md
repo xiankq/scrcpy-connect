@@ -13,4 +13,4 @@ Ardot 工作稿使用 MiSans；协作者需在本机安装对应字重，或由�
 
 [LICENSE.pdf](LICENSE.pdf) 为小米发布的[字体知识产权许可协议](https://hyperos.mi.com/font-download/MiSans字体知识产权许可协议.pdf)，须随字体及设计稿保留相对目录，无需系统安装。
 
-仅供设计稿，应用继承默认字体，见[视觉规范](../../../design.md#typography)。
+仅供设计稿，应用继承默认字体，见[视觉规范](../../../design.md#文字)。

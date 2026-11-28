@@ -36,4 +36,4 @@
 
 ## 设计稿字体
 
-MiSans 仅供设计稿，来源、字重、摘要及许可见[字体说明](fonts/misans/README.md)；运行字体见[视觉规范](../design.md#typography)。
+MiSans 仅供设计稿，来源、字重、摘要及许可见[字体说明](fonts/misans/README.md)；运行字体见[视觉规范](../design.md#文字)。
