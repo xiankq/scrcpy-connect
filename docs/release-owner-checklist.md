@@ -1,22 +1,22 @@
 # 发布前需要维护者补充的事项
 
-这份清单分为首次公开必须完成的事项，以及开启其他发布渠道时才需要办理的事项。签名密钥和密码直接填入密钥管理器或 GitHub Secrets。
+这份清单分两部分：首次公开前必须完成的事项，以及开启其他发布渠道时才需要办的事项。签名密钥和密码只填进密钥管理器或 GitHub Secrets，不要写进仓库或文档。
 
 ## 首次公开前
 
 ### 1. 核对项目和第三方许可
 
-**为什么需要** 公开仓库以后，用户仍需要明确的授权才能复制、修改和再分发项目代码。第三方组件已有的许可证只适用于各自组件。
+**现状** 项目代码已使用 [MIT 许可证](../LICENSE)，著作权署名 `xiankq`。外部组件和素材见[第三方组件](../THIRD_PARTY_NOTICES.md)。发布脚本（`scripts/release.dart`）在根目录缺少 `LICENSE` 时拒绝发布。
 
-**怎么做** 确认原创代码和设计的权利归属，以及希望开放的范围。选定许可证和版权署名后，把许可证原文作为仓库根目录的 `LICENSE` 提交。多人或公司参与的部分也请确认授权。遇到混合许可时，保留各组件原有的声明，并标明各自适用范围。发布流水线会检查根目录是否有 `LICENSE`。 [GitHub 许可证说明](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository)
+**为什么还要核对** 用户需要明确的授权才能复制、修改和再分发项目代码；第三方组件的许可证只覆盖各自的组件。
 
-项目代码使用 [MIT 许可证](../LICENSE)，著作权署名 `xiankq`。外部组件及素材见 [第三方组件](../THIRD_PARTY_NOTICES.md)。
+**怎么做** 确认原创代码和设计的权利属于谁。有多人或公司参与的部分，确认他们同意以 MIT 授权。存在混合许可时，保留各组件原有的声明，并写明各自适用的范围。[GitHub 许可证说明](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository)
 
 ### 2. 确认静态链接的媒体库如何交付
 
 **为什么需要** 应用会把裁剪后的 FFmpeg 和 dav1d 链接进原生模块。正式发布附件已有对应上游源码、补丁和构建脚本。FFmpeg 的 LGPL 义务还涉及用户替换库后重新链接，源码附件是一部分材料。
 
-**怎么做** 发布时在同一页面提供对应媒体源码和项目源码。按[替换 FFmpeg 的步骤](releasing.md#替换-ffmpeg-后重新构建)验证修改后的库可重新链接。 [FFmpeg 分发说明](https://ffmpeg.org/legal.html)
+**怎么做** 在同一个 Release 页面同时提供对应的媒体源码和项目源码（发布工作流已自动附上媒体源码）。按[替换 FFmpeg 的步骤](releasing.md#替换-ffmpeg-后重新构建)实际操作一次，确认改过的库能重新链接进应用。 [FFmpeg 分发说明](https://ffmpeg.org/legal.html)
 
 ### 3. 清点要一并公开的设计素材和 Git 历史
 
@@ -24,7 +24,7 @@
 
 **怎么做** 按[素材来源表](../designs/assets/README.md)逐项确认图片、字体、应用名称与截图能否按现有形式公开。无法确认的内容先替换成可公开的素材。核对将要公开的分支、标签和历史，重点看签名文件、ADB 身份、账号、设备地址、配置和截图。
 
-本地用 `gitleaks git --log-opts='--all' --redact=100` 扫描了历史。校验和与测试数据可以从代码确认。旧版 `designs/mobile.pen` 还有两个形如 UUID 的 `fileToken`，出现在 `95b734ced8` 和 `f18c1506b5`。请用原设计平台确认它们是否仅为文件编号。如果其中任一个可授权访问，先撤销或轮换，再决定公开历史的处理方式。
+已在本地用 `gitleaks git --log-opts='--all' --redact=100` 扫描过全部历史。命中的校验和与测试数据对照代码确认不是密钥。剩下一处待确认：旧版 `designs/mobile.pen` 还有两个形如 UUID 的 `fileToken`，出现在 `95b734ced8` 和 `f18c1506b5`。请到原设计平台确认它们只是文件编号。如果其中任何一个能用来获得访问权限，先撤销或轮换，再决定如何处理要公开的历史。
 
 **需要你给出** 已确认的素材范围、需要替换的条目、旧设计编号的确认结果，以及是否需要保留既有 Git 历史。
 

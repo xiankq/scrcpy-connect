@@ -1,31 +1,66 @@
 # 仓库脚本
 
-仓库根使用 `dart --disable-dart-dev scripts/<entry>.dart`。
+在仓库根目录运行，格式为 `dart --disable-dart-dev scripts/<脚本>.dart`。各脚本加 `--help` 查看全部参数。`src/` 里是脚本共用的实现，不要直接运行。
 
-| 任务 | 入口 |
+## 常用命令
+
+| 要做的事 | 命令 |
 | --- | --- |
-| Android 构建与交付校验 | `android.dart build` / `android.dart verify <APK> [--abis ...]`。用 `--abi all` 一次构建三个 ABI 包和同构建号的通用包，单独构建通用包用 `--abi universal` |
-| 桌面/Apple 构建 | `build_host.dart <平台> --arch <架构> --installers`。iOS 真机编译归档用 `build_host.dart ios`，模拟器包用 `build_host.dart ios --simulator` |
-| 生成及漂移检查 | `generate.dart` / `generate.dart --check` |
-| 完整门禁 | `check.sh`；`--android` 默认仅 arm64 调试包 |
-| 设计 token | [design_tokens](design_tokens/README.md) |
-| 应用图标导出与漂移检查 | `npm run generate --prefix scripts/app_icons` / `npm run check --prefix scripts/app_icons` |
+| 构建 Android APK | `android.dart build`。`--abi all` 构建三个 ABI 包和一个通用包，构建号相同；`--abi universal` 只构建通用包 |
+| 校验已构建的 APK | `android.dart verify <APK> [--abis ...]`，检查签名、ABI、manifest 和共享资源，和 `build` 结束时的检查相同 |
+| 构建桌面或 Apple 安装包 | `build_host.dart <平台> --arch <架构> --installers` |
+| 构建 iOS | 真机编译归档：`build_host.dart ios`；模拟器包：`build_host.dart ios --simulator` |
+| 更新生成文件和共享资源 | `generate.dart`；只检查是否过期：`generate.dart --check` |
+| 完整检查（提交前） | `./scripts/check.sh`；加 `--android` 额外构建并校验一个调试 APK（默认 arm64，用环境变量 `ANDROID_TARGET_PLATFORM` 换 ABI） |
+| 更新设计 token | 见 [design_tokens](design_tokens/README.md) |
+| 导出应用图标 | `npm run generate --prefix scripts/app_icons`；检查：`npm run check --prefix scripts/app_icons` |
 
-构建入口会核验最终产物；Android 的独立 `verify` 复用同一签名、ABI、manifest 与共享资源检查。`generate` 负责生成物和共享资源同步，设备端源码及产物构建统一由 `servers/build.dart` 处理。`src/` 仅放公共实现，不作为命令入口。
+- 构建命令结束时会自动校验最终产物。
+- 被控手机上的程序（scrcpy server、companion、helpers）不在这里构建，统一用 `servers/build.dart`，见[被控程序构建](../servers/README.md)。
+- 测试的选择和运行见[测试说明](../test/README.md)。
 
-应用图标从 [SVG 主稿](../designs/assets/app-icon.svg)导出。修改后用 Node 20.9+ 执行 `npm ci --ignore-scripts --prefix scripts/app_icons`，再运行图标生成与检查。平台构建直接使用已提交的资源。
+## 应用图标
 
+图标从 [SVG 主稿](../designs/assets/app-icon.svg)导出。改了主稿后，用 Node 20.9 及以上运行：
 
-测试选择与运行见[测试说明](../test/README.md)；受控产物及来源保留规则见[执行端约束](../servers/AGENTS.md)。
+```sh
+npm ci --ignore-scripts --prefix scripts/app_icons
+npm run generate --prefix scripts/app_icons
+npm run check --prefix scripts/app_icons
+```
 
-## 试打包和正式发布
+平台构建直接使用已提交的图标文件，不会重新导出。
 
-Android 和桌面构建都接受 `--update-feed <HTTPS 地址>`，给应用配置更新渠道。Android 构建和独立校验都可加 `--signer-sha256 <证书指纹>`，防止使用错误的签名证书。
+## 打包选项
 
-本地 Android 签名沿用 `app/android/key.properties`。CI 使用 `ANDROID_SIGNING_STORE_FILE`、`ANDROID_SIGNING_STORE_PASSWORD`、`ANDROID_SIGNING_KEY_ALIAS` 和 `ANDROID_SIGNING_KEY_PASSWORD` 一组环境输入。使用这些变量时需提供齐全。
+- 更新渠道：Android 和桌面构建都接受 `--update-feed <HTTPS 地址>`，写入应用检查更新时使用的地址。
+- 签名指纹：`android.dart build` 和 `verify` 都接受 `--signer-sha256 <证书指纹>`，签名证书不符时失败，防止用错密钥。
+- 本地 Android 签名读取 `app/android/key.properties`（可用 `android.dart init-signing` 生成）。CI 改用四个环境变量：`ANDROID_SIGNING_STORE_FILE`、`ANDROID_SIGNING_STORE_PASSWORD`、`ANDROID_SIGNING_KEY_ALIAS`、`ANDROID_SIGNING_KEY_PASSWORD`，必须四个都设置。
+- 桌面打包加 `--verify-only` 时不重新构建，直接校验并打包已构建好的同架构应用。
+- Linux 打包需要 `dpkg-deb`、`rpmbuild`、`file`、`desktop-file-validate`、`appstreamcli` 和 `squashfs-tools`。
+- Windows 安装器由 Inno Setup 的 `ISCC.exe` 生成。
+- macOS 试打包直接生成 DMG。
+- 排查编译慢：`build_host.dart windows --verbose` 输出 Flutter、CMake、FFmpeg 和媒体 Rust 的原生构建日志。
 
-`release.dart` 读取应用版本和变更记录，检查标签，再把通过验证的包整理成 GitHub Release 附件。`release_media_source.py` 收集按锁文件校验过的媒体源码、补丁和构建工具。CI、试打包与正式发布方式见[发布说明](../docs/releasing.md)。
+## 发布
 
-桌面打包可用 `--verify-only` 复用已构建的同架构应用。Linux 发布格式需要 `dpkg-deb`、`rpmbuild`、`file`、`desktop-file-validate`、`appstreamcli` 和 `squashfs-tools`。Windows 安装器由 Inno Setup 的 `ISCC.exe` 生成。macOS 试打包直接生成 DMG。
+- `release.dart`：读取应用版本和 [CHANGELOG](../CHANGELOG.md)，检查标签，把通过校验的包整理成 GitHub Release 附件。
+- `release_media_source.py`：收集按锁文件校验过的媒体库源码、补丁和构建工具，生成媒体源码归档。
+- CI、试打包和正式发布流程见[发布说明](../docs/releasing.md)。
 
-排查编译耗时时可用 `build_host.dart windows --verbose` 查看 Flutter、CMake、FFmpeg 和媒体 Rust 的原生构建日志。
+## 清理构建缓存
+
+下面的目录不会自动清理，磁盘紧张时可以直接删除。代价是下次构建要从头编译 Rust 和 Flutter，耗时明显变长；不影响源码和已提交的文件。
+
+| 目录 | 内容 |
+| --- | --- |
+| `target/` | Rust（Cargo）编译产物。`packages/adb` 和 `packages/scrcpy` 的构建钩子把 `CARGO_TARGET_DIR` 设为这里，所有构建配置共用一份 |
+| `app/build/` | Flutter 构建输出（APK、桌面包等） |
+| `.dart_tool/hooks_runner/` | Dart 原生资产钩子的工作目录 |
+| `app/.dart_tool/flutter_build/` | Flutter 的增量构建缓存 |
+
+```sh
+rm -rf target app/build .dart_tool/hooks_runner app/.dart_tool/flutter_build
+```
+
+不要顺手删除 `.dart_tool/media_codec/`：里面是编译好的 FFmpeg 和源码归档，重建很慢。
