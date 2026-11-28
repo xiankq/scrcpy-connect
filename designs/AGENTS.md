@@ -1,6 +1,23 @@
-# 视觉设计
+# 设计规则
 
-- 产品行为从[产品规格](prod/README.md)修改。颜色、尺寸、材质和图标角色按[设计系统](design.md#设计系统)维护，生成 Flutter 输出并同步 Ardot 变量。
-- 当前工作稿使用 [Ardot《邻接 · 近场工作台》](https://ardot.tencent.com/file/749360133997361?node_id=2%3A14)。共享改动更新母组件及受影响实例。画板和图层顺序遵循[画布布局](design.md#flexible-布局)。
-- 窗口、折叠和多窗口改动按[适配规范](design.md#adaptive-windows--form-factors)核对。视觉验证覆盖明暗主题、窄窗、大字和辅助偏好，动效及光学材料以实际渲染验证。
-- 预览放在系统临时目录。仓库保留规范、实际引用素材及其[来源许可](assets/README.md)。稿件字体见 [MiSans](assets/fonts/misans/README.md)。
+- 产品行为在[产品规格](prod/README.md)里改，不写在设计稿或本目录。
+- 颜色、尺寸、材质和图标角色只在[设计系统](design.md#设计系统)里改。改完重新生成 Flutter 代码并同步 Ardot 变量，步骤见[生成与同步](../scripts/design_tokens/README.md)。
+
+## Ardot 设计稿
+
+- 当前设计稿：[Ardot《邻接 · 近场工作台》](https://ardot.tencent.com/file/749360133997361?node_id=2%3A14)。
+- 母组件、图标和变量说明在「规范与组件」页；产品画板在「邻接 · 产品设计」页。
+- 改共享样式时只改母组件，页面上只放实例。改完核对母组件和所有受影响的实例。
+- 画板的排列、命名和布局规则见[画布约定](design.md#ardot-画布约定)。
+
+## 验证
+
+- 改窗口尺寸、折叠屏或多窗口相关的界面时，对照[适配规范](design.md#自适应窗口与形态)逐项核对。
+- 改视觉或共享控件后，在运行中的应用里检查：明暗两种主题、窄窗口、大字号、安全区、系统辅助偏好（如降低透明度）。
+- 动效、玻璃等光学材质和 GPU 效果只能用实际渲染结果（截图或录屏）确认，不以代码或设计稿推断。
+
+## 文件
+
+- 预览图导出到系统临时目录（如 `/tmp`），不提交。`designs/previews/` 已被 `.gitignore` 忽略。
+- 仓库只保留规范文档、实际被引用的素材和它们的[来源与许可](assets/README.md)。
+- 设计稿用的字体见 [MiSans](assets/fonts/misans/README.md)。

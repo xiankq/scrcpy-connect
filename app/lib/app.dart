@@ -124,7 +124,7 @@ class ConnectApp extends HookConsumerWidget {
           ),
         );
         return desktopWindow
-            ? DesktopWindowFrame(child: application)
+            ? DesktopWindowFrame(title: '邻接', child: application)
             : application;
       },
     );

@@ -7,11 +7,12 @@ import 'package:scrcpy_connect/core/control/models/keep_awake_snapshot.dart';
 import 'package:scrcpy_connect/core/control/models/video_session.dart';
 import 'package:scrcpy_connect/core/devices/device_apps.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
-import 'package:scrcpy_connect/core/devices/models/device_list_state.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/media/media_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/media/video_sessions.dart';
 import 'package:scrcpy_connect/pages/apps/phone_app_launcher.dart';
+
+import '../../support/fixed_state.dart';
 
 void main() {
   testWidgets('同一应用不重复打开，换源及离页后的旧核验不继续导航', (tester) async {
@@ -44,75 +45,51 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
-  testWidgets('应用已有独立画面时先选择移回或切回', (tester) async {
-    final videos = _Videos();
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          deviceListProvider.overrideWith(_Devices.new),
-          videoSessionsProvider.overrideWithValue(videos),
-        ],
-        child: const MaterialApp(home: _Launcher()),
-      ),
-    );
-    await tester.tap(find.text('open'));
-    videos.reads.single.complete([
-      const VideoSessionView(
-        session: VideoSessionSnapshot(
-          sessionId: 'app',
-          deviceId: 'device',
-          name: 'App',
-          packageName: 'package',
-          kind: .app,
-          status: .streaming,
-        ),
-        wake: KeepAwakeSnapshot(deviceId: 'device'),
-      ),
-    ]);
-    await tester.pumpAndSettle();
-    expect(find.text('移回手机屏幕'), findsOneWidget);
-    expect(find.text('切回独立应用'), findsOneWidget);
-    await tester.tap(find.text('取消'));
-    await tester.pumpAndSettle();
-    expect(videos.reads, hasLength(1));
-  });
 
-  testWidgets('应用入口的已有画面菜单锚定来源，可点外部取消', (tester) async {
-    final videos = _Videos();
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          deviceListProvider.overrideWith(_Devices.new),
-          videoSessionsProvider.overrideWithValue(videos),
-        ],
-        child: const MaterialApp(home: _Launcher(anchored: true)),
-      ),
-    );
-    await tester.tap(find.text('open'));
-    videos.reads.single.complete([
-      const VideoSessionView(
-        session: VideoSessionSnapshot(
-          sessionId: 'app',
-          deviceId: 'device',
-          name: 'App',
-          packageName: 'package',
-          kind: .app,
-          status: .streaming,
+  for (final anchored in [false, true]) {
+    testWidgets('应用已有独立画面时先选择移回或切回，取消后不再核验（${anchored ? '锚定菜单' : '底部面板'}）', (
+      tester,
+    ) async {
+      final videos = _Videos();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            deviceListProvider.overrideWith(FixedDeviceList.new),
+            videoSessionsProvider.overrideWithValue(videos),
+          ],
+          child: MaterialApp(home: _Launcher(anchored: anchored)),
         ),
-        wake: KeepAwakeSnapshot(deviceId: 'device'),
-      ),
-    ]);
-    await tester.pumpAndSettle();
-    expect(find.text('移回手机屏幕'), findsWidgets);
-    expect(find.text('切回独立应用'), findsWidgets);
-    expect(find.byType(BottomSheet), findsNothing);
-    await tester.tapAt(const Offset(760, 550));
-    await tester.pumpAndSettle();
-    expect(find.text('切回独立应用'), findsNothing);
-    expect(videos.reads, hasLength(1));
-    expect(tester.takeException(), isNull);
-  });
+      );
+      await tester.tap(find.text('open'));
+      videos.reads.single.complete([_appView]);
+      await tester.pumpAndSettle();
+      expect(find.text('移回手机屏幕'), findsWidgets);
+      expect(find.text('切回独立应用'), findsWidgets);
+      if (anchored) {
+        expect(find.byType(BottomSheet), findsNothing);
+        await tester.tapAt(const Offset(760, 550));
+      } else {
+        await tester.tap(find.text('取消'));
+      }
+      await tester.pumpAndSettle();
+      expect(find.text('切回独立应用'), findsNothing);
+      expect(videos.reads, hasLength(1));
+      expect(tester.takeException(), isNull);
+    });
+  }
 }
+
+const _appView = VideoSessionView(
+  session: VideoSessionSnapshot(
+    sessionId: 'app',
+    deviceId: 'device',
+    name: 'App',
+    packageName: 'package',
+    kind: .app,
+    status: .streaming,
+  ),
+  wake: KeepAwakeSnapshot(deviceId: 'device'),
+);
 
 class _Launcher extends ConsumerWidget {
   const _Launcher({this.anchored = false});
@@ -146,9 +123,4 @@ class _Videos implements VideoSessions {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _Devices extends DeviceListNotifier {
-  @override
-  DeviceListState build() => DeviceListState(loading: false);
 }

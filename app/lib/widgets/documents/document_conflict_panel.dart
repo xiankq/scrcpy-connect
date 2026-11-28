@@ -9,6 +9,7 @@ import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/core/files/models/document_event.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
@@ -186,15 +187,20 @@ class _ConflictViewState extends State<_ConflictView> {
       return _error == null ? const SizedBox.shrink() : StateNote(_error!);
     }
     final busy = _resolving != null;
+    final colors = AppColors.of(context);
+    final type = AppTypography.of(context);
     return ContentPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('存在同名项目', style: Theme.of(context).textTheme.titleLarge),
+          Text('存在同名项目', style: type.headline),
+          const SizedBox(height: DesignTokens.spacingSm),
+          Text(pending.name, style: type.body),
           const SizedBox(height: DesignTokens.spacingXs),
-          Text(pending.name),
-          const SizedBox(height: DesignTokens.spacingXs),
-          const Text('保留两份时会为本次文件生成新名称。'),
+          Text(
+            '保留两份时会为本次文件生成新名称。',
+            style: type.subheadline.copyWith(color: colors.textSecondary),
+          ),
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
             value: _applyToRemaining,
@@ -206,7 +212,7 @@ class _ConflictViewState extends State<_ConflictView> {
           if (_error != null) StateNote(_error!),
           Wrap(
             spacing: DesignTokens.spacingSm,
-            runSpacing: DesignTokens.spacingXs,
+            runSpacing: DesignTokens.spacingSm,
             children: [
               FilledButton(
                 onPressed: busy ? null : () => _resolve(.keepBoth),

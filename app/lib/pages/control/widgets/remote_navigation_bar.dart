@@ -1,8 +1,8 @@
-import 'dart:math' as math;
-
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 
+/// 远控三键栏（Ardot「远控 / 三键栏」37:1097）：`viewport` 底、高 48，
+/// 三键均分宽度，图形 24、2 点 `on-media` 描边。
 class RemoteNavigationBar extends StatelessWidget {
   const RemoteNavigationBar({
     super.key,
@@ -17,138 +17,102 @@ class RemoteNavigationBar extends StatelessWidget {
   final VoidCallback onHome;
   final VoidCallback onRecent;
 
+  /// 媒体上的禁用前景，与 `disabled` 同为 38%。
+  static const _disabledOpacity = .38;
+
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final iconColor = enabled
-        ? colors.onSurface
-        : colors.onSurface.withValues(alpha: 0.38);
+    const foreground = DesignTokens.colorOnMedia;
+    final color = enabled
+        ? foreground
+        : foreground.withValues(alpha: _disabledOpacity);
     return ColoredBox(
-      color: colors.surface,
+      color: DesignTokens.componentRemoteViewportBackgroundColor,
       child: SafeArea(
         top: false,
         bottom: false,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(
-                color: colors.outlineVariant,
-                width: DesignTokens.spacingHairline,
-              ),
-            ),
-          ),
-          child: SizedBox(
-            height: DesignTokens.componentRemoteNavigationHeight,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                const buttonWidth = DesignTokens.componentIconButtonSize;
-                final edgePadding = math
-                    .min(
-                      DesignTokens.componentRemoteNavigationPadding,
-                      math.max(0, (constraints.maxWidth - buttonWidth * 3) / 4),
-                    )
-                    .toDouble();
-                return Padding(
-                  padding: EdgeInsets.symmetric(horizontal: edgePadding),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _button(
-                        tooltip: '返回',
-                        enabled: enabled,
-                        onPressed: onBack,
-                        glyph: _RemoteNavigationGlyph.back,
-                        color: iconColor,
+        child: SizedBox(
+          height: DesignTokens.componentRemoteNavigationHeight,
+          child: Row(
+            children: [
+              for (final (tooltip, glyph, callback) in [
+                ('返回', _RemoteNavigationGlyph.back, onBack),
+                ('主屏幕', _RemoteNavigationGlyph.home, onHome),
+                ('最近任务', _RemoteNavigationGlyph.recent, onRecent),
+              ])
+                Expanded(
+                  child: IconButton(
+                    tooltip: tooltip,
+                    onPressed: enabled ? callback : null,
+                    iconSize: DesignTokens.componentBarGlyphSize,
+                    constraints: const BoxConstraints.expand(),
+                    padding: EdgeInsets.zero,
+                    style: IconButton.styleFrom(
+                      shape: const RoundedSuperellipseBorder(),
+                      highlightColor: foreground.withValues(
+                        alpha:
+                            DesignTokens.componentGlassInteractionGlowIntensity,
                       ),
-                      _button(
-                        tooltip: '主屏幕',
-                        enabled: enabled,
-                        onPressed: onHome,
-                        glyph: _RemoteNavigationGlyph.home,
-                        color: iconColor,
+                    ),
+                    icon: CustomPaint(
+                      size: const Size.square(
+                        DesignTokens.componentBarGlyphSize,
                       ),
-                      _button(
-                        tooltip: '最近任务',
-                        enabled: enabled,
-                        onPressed: onRecent,
-                        glyph: _RemoteNavigationGlyph.recent,
-                        color: iconColor,
-                      ),
-                    ],
+                      painter: _RemoteNavigationGlyphPainter(glyph, color),
+                    ),
                   ),
-                );
-              },
-            ),
+                ),
+            ],
           ),
         ),
       ),
     );
   }
-
-  Widget _button({
-    required String tooltip,
-    required bool enabled,
-    required VoidCallback onPressed,
-    required _RemoteNavigationGlyph glyph,
-    required Color color,
-  }) => SizedBox(
-    width: DesignTokens.componentIconButtonSize,
-    height: DesignTokens.componentIconButtonSize,
-    child: IconButton(
-      tooltip: tooltip,
-      onPressed: enabled ? onPressed : null,
-      iconSize: DesignTokens.componentIconSize,
-      icon: CustomPaint(
-        size: const Size.square(DesignTokens.componentIconSize),
-        painter: _RemoteNavigationGlyphPainter(glyph, color),
-      ),
-    ),
-  );
 }
 
 enum _RemoteNavigationGlyph { back, home, recent }
 
+/// 几何取自 Ardot 37:1100（返回三角 9×13 于 7,5.5）、37:1103（主屏幕圆 15 于 4.5）、
+/// 37:1106（最近任务方块 13 于 5.5，圆角 3），画布 24。
 class _RemoteNavigationGlyphPainter extends CustomPainter {
   const _RemoteNavigationGlyphPainter(this.glyph, this.color);
 
   final _RemoteNavigationGlyph glyph;
   final Color color;
 
+  static const _canvas = DesignTokens.componentBarGlyphSize;
+  static const _strokeWidth = 2.0;
+  static const _recentRadius = 3.0;
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
+      ..strokeWidth = _strokeWidth
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
     canvas.save();
-    if (glyph == _RemoteNavigationGlyph.back) {
-      canvas.scale(size.width / 20, size.height / 20);
-      final triangle = Path()
-        ..moveTo(5, 8.6)
-        ..lineTo(14.6, 3.2)
-        ..cubicTo(16.13, 2.33, 16.9, 2.77, 16.9, 4.5)
-        ..lineTo(16.9, 15.5)
-        ..cubicTo(16.9, 17.23, 16.13, 17.67, 14.6, 16.8)
-        ..lineTo(5, 11.4)
-        ..cubicTo(3.33, 10.47, 3.33, 9.53, 5, 8.6)
-        ..close();
-      canvas.drawPath(triangle, paint..strokeWidth = 1.8);
-    } else {
-      canvas.scale(size.width / 22, size.height / 22);
-      if (glyph == _RemoteNavigationGlyph.home) {
-        canvas.drawOval(Rect.fromLTWH(1.833, 1.833, 18.334, 18.334), paint);
-      } else {
+    canvas.scale(size.width / _canvas, size.height / _canvas);
+    switch (glyph) {
+      case _RemoteNavigationGlyph.back:
+        final triangle = Path()
+          ..moveTo(16, 5.5)
+          ..lineTo(16, 18.5)
+          ..lineTo(7, 12)
+          ..close();
+        canvas.drawPath(triangle, paint);
+      case _RemoteNavigationGlyph.home:
+        canvas.drawOval(const Rect.fromLTWH(4.5, 4.5, 15, 15), paint);
+      case _RemoteNavigationGlyph.recent:
         canvas.drawRRect(
           RRect.fromRectAndRadius(
-            const Rect.fromLTWH(2.75, 2.75, 16.5, 16.5),
-            Radius.circular(DesignTokens.spacingMicro),
+            const Rect.fromLTWH(5.5, 5.5, 13, 13),
+            const Radius.circular(_recentRadius),
           ),
           paint,
         );
-      }
     }
     canvas.restore();
   }

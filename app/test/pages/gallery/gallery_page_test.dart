@@ -6,12 +6,13 @@ import 'package:scrcpy_connect/core/files/models/file_catalog_entry.dart';
 import 'package:scrcpy_connect/core/gallery/gallery_scanner.dart';
 import 'package:scrcpy_connect/core/gallery/models/gallery_scan_state.dart';
 import 'package:scrcpy_connect/core/gallery/gallery_scanner_provider.dart';
-import 'package:scrcpy_connect/core/recovery/models/recovery_state.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
 import 'package:scrcpy_connect/pages/gallery/gallery_page.dart';
 import 'package:scrcpy_connect/pages/gallery/widgets/gallery_media_tile.dart';
 import 'package:scrcpy_connect/pages/gallery/widgets/gallery_scan_summary.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
+
+import '../../support/fixed_state.dart';
 
 const _device = DeviceSnapshot(id: 'phone', guid: 'guid');
 
@@ -56,7 +57,7 @@ void main() {
         ProviderScope(
           overrides: [
             galleryScannerProvider.overrideWithValue(scanner),
-            recoveryStateProvider.overrideWith(_Recovery.new),
+            recoveryStateProvider.overrideWith(FixedRecovery.new),
           ],
           child: MaterialApp(
             theme: ConnectTokens.theme(Brightness.light),
@@ -167,9 +168,4 @@ class _Scanner implements GalleryScanner {
         scanId: target.scanId,
         status: .cancelled,
       );
-}
-
-class _Recovery extends RecoveryStateNotifier {
-  @override
-  RecoveryState build() => RecoveryState();
 }

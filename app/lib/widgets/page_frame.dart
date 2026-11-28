@@ -8,6 +8,7 @@ import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:go_router/go_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/motion.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
@@ -16,6 +17,12 @@ import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 
 typedef PageSearch = ({TextEditingController controller, String hint});
+
+/// 页头（Ardot 页头 37:795）：安全区下高 72，背景透明，身后是顶部渐隐。
+///
+/// - 根页：`page-title` 标题起始距边 16，尾部玻璃按钮或按钮组距边 8。
+/// - 子页：起始为 44 点玻璃返回键，距边 8；`title3` 标题紧跟其后，间距 8。
+/// - 选择：起始为关闭（[leading]），所选数量居中，尾部为全选或取消全选。
 
 class PageFrame extends StatefulWidget {
   const PageFrame({
@@ -28,9 +35,9 @@ class PageFrame extends StatefulWidget {
     this.search,
     this.primaryScrollController,
     this.titleStyle,
-    this.headerHeight = DesignTokens.componentPageHeaderHeight,
+    this.headerHeight = DesignTokens.componentPageBarHeight,
     this.actions,
-    this.groupHorizontalActions = false,
+    this.groupHorizontalActions = true,
     this.trailingAction,
     this.bottom,
     this.onBack,
@@ -48,7 +55,8 @@ class PageFrame extends StatefulWidget {
   final double headerHeight;
   final List<Widget>? actions;
 
-  /// 仅为设计稿中的横向动作组共用表面。竖栏始终逐个摆放。
+  /// 页头相邻的两个及以上图标按钮（含搜索）合成一个玻璃胶囊（design.md「按钮」）。
+  /// 为假时逐个摆放。竖栏始终逐个摆放。
   final bool groupHorizontalActions;
   final Widget? trailingAction;
 
@@ -63,7 +71,6 @@ class PageFrame extends StatefulWidget {
 }
 
 class _PageFrameState extends State<PageFrame> {
-  bool _scrolled = false;
   bool _searchOpen = false;
   final _searchFocus = FocusNode(debugLabel: '页头搜索');
   final _searchButtonFocus = FocusNode(debugLabel: '打开搜索');
@@ -85,11 +92,6 @@ class _PageFrameState extends State<PageFrame> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.primaryScrollController != widget.primaryScrollController) {
       _headerDrag?.cancel();
-      final position = _contentPosition;
-      _scrolled =
-          position != null &&
-          position.hasContentDimensions &&
-          position.extentBefore > DesignTokens.spacingLg;
     }
   }
 
@@ -125,16 +127,14 @@ class _PageFrameState extends State<PageFrame> {
       ? 1
       : 2;
 
-  TextStyle? _titleStyle(BuildContext context, {bool measuring = false}) {
+  TextStyle _titleStyle(BuildContext context) {
     if (widget.titleStyle case final style?) return style;
-    final text = Theme.of(context).textTheme;
+    final type = AppTypography.of(context);
     final compact =
         MediaQuery.sizeOf(context).height -
             MediaQuery.viewInsetsOf(context).bottom <
         400;
-    return widget.root && !compact && (measuring || !_scrolled)
-        ? text.displaySmall
-        : text.titleLarge;
+    return widget.root && !compact ? type.pageTitle : type.title3;
   }
 
   double _toolbarHeight(
@@ -143,20 +143,14 @@ class _PageFrameState extends State<PageFrame> {
     bool includeActions = true,
   }) {
     final width =
-        (constraints.maxWidth.clamp(
-                  0,
-                  DesignTokens.componentPageContentMaxWidth,
-                ) -
-                DesignTokens.componentIconButtonSize *
+        (constraints.maxWidth.clamp(0, DesignTokens.componentPageMaxWidth) -
+                DesignTokens.componentBarButtonSize *
                     ((includeActions ? (widget.actions?.length ?? 0) : 0) +
                         (widget.trailingAction == null ? 0 : 1) +
                         2))
             .clamp(1.0, double.infinity);
     final painter = TextPainter(
-      text: TextSpan(
-        text: widget.title,
-        style: _titleStyle(context, measuring: true),
-      ),
+      text: TextSpan(text: widget.title, style: _titleStyle(context)),
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
       maxLines: _headerLines(context, constraints),
@@ -193,12 +187,12 @@ class _PageFrameState extends State<PageFrame> {
       final verticalBar = workspaceToolbar ? null : platformBar;
       final search = widget.search;
       final searching = search != null && _searchOpen;
-      final bodyStyle = Theme.of(context).textTheme.bodyMedium!;
+      final bodyStyle = AppTypography.of(context).body;
       final searchHeight = math.max(
-        DesignTokens.componentIconButtonSize,
+        DesignTokens.componentSearchFieldHeight,
         MediaQuery.textScalerOf(context).scale(bodyStyle.fontSize!) *
                 (bodyStyle.height ?? 1) +
-            2 * DesignTokens.spacingSm,
+            2 * DesignTokens.spacingMd,
       );
       final toolbarHeight = math.max(
         _toolbarHeight(
@@ -296,35 +290,32 @@ class _PageFrameState extends State<PageFrame> {
           ? null
           : Row(
               mainAxisSize: MainAxisSize.min,
-              spacing: DesignTokens.spacingXs,
+              spacing: DesignTokens.componentPageBarGap,
               children: actionGroups,
             );
-      final actionMargin = widget.root && actions.isNotEmpty
-          ? DesignTokens.spacingLg
-          : DesignTokens.spacingMd;
+      // 尾部按钮距边 8（Ardot 页头 37:784/37:787 右内距）。
+      const actionMargin = DesignTokens.spacingSm;
+      final clear = AppColors.of(context).page.withAlpha(0);
+      final selection = widget.leading != null && !searching;
       final appBar = AppBar(
         toolbarHeight: toolbarHeight,
-        backgroundColor: DesignTokens.colorTransparent,
-        surfaceTintColor: DesignTokens.colorTransparent,
+        backgroundColor: clear,
+        surfaceTintColor: clear,
         elevation: 0,
         scrolledUnderElevation: 0,
         forceMaterialTransparency: true,
         automaticallyImplyLeading: false,
-        centerTitle: false,
+        centerTitle: selection,
         leadingWidth:
-            DesignTokens.spacingMd + DesignTokens.componentIconButtonSize,
-        titleSpacing: searching
-            ? DesignTokens.spacingMd
-            : hasBack
+            DesignTokens.spacingSm + DesignTokens.componentBarButtonSize,
+        titleSpacing: hasBack && !searching
             ? DesignTokens.spacingSm
-            : widget.root
-            ? DesignTokens.spacingLg
-            : DesignTokens.spacingMd,
+            : DesignTokens.spacingLg,
         leading: searching || verticalBar != null || !hasBack
             ? null
             : Padding(
                 padding: const EdgeInsetsDirectional.only(
-                  start: DesignTokens.spacingMd,
+                  start: DesignTokens.spacingSm,
                 ),
                 child: Center(
                   child:
@@ -346,8 +337,8 @@ class _PageFrameState extends State<PageFrame> {
             Padding(
               padding: EdgeInsets.only(
                 right: trailingAction == null
-                    ? DesignTokens.spacingZero
-                    : DesignTokens.spacingXs,
+                    ? 0
+                    : DesignTokens.componentPageBarGap,
               ),
               child: Center(child: horizontalActions),
             ),
@@ -383,7 +374,7 @@ class _PageFrameState extends State<PageFrame> {
                     alignment: Alignment.topCenter,
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(
-                        maxWidth: DesignTokens.componentPageContentMaxWidth,
+                        maxWidth: DesignTokens.componentPageMaxWidth,
                       ),
                       // The title plane is ordinary chrome. Only its
                       // independently interactive buttons own glass surfaces;
@@ -431,7 +422,7 @@ class _PageFrameState extends State<PageFrame> {
                     _WorkspaceToolbar(
                       title: widget.title,
                       titleContent: title ?? widget.titleContent,
-                      titleStyle: widget.titleStyle,
+                      titleStyle: _titleStyle(context),
                       leading: searching ? null : widget.leading,
                       actions: horizontalActions,
                       actionMargin: actionMargin,
@@ -445,7 +436,7 @@ class _PageFrameState extends State<PageFrame> {
                       alignment: Alignment.topCenter,
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(
-                          maxWidth: DesignTokens.componentPageContentMaxWidth,
+                          maxWidth: DesignTokens.componentPageMaxWidth,
                         ),
                         child: Stack(
                           fit: StackFit.expand,
@@ -464,31 +455,23 @@ class _PageFrameState extends State<PageFrame> {
                                           Axis.vertical &&
                                       notification.depth <= 1 &&
                                       (widget.primaryScrollController == null ||
-                                          position == _contentPosition)) {
-                                    final scrolled =
-                                        notification.metrics.extentBefore >
-                                        DesignTokens.spacingLg;
-                                    if (_scrolled != scrolled) {
-                                      setState(() => _scrolled = scrolled);
-                                    }
-                                  }
+                                          position == _contentPosition)) {}
                                   return false;
                                 },
                                 child: widget.child,
                               ),
                             ),
-                            if (_scrolled)
-                              Positioned(
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                child: PageChromeProtection(
-                                  height: top,
-                                  backgroundColor:
-                                      widget.backgroundColor ??
-                                      Theme.of(context).scaffoldBackgroundColor,
-                                ),
+                            Positioned(
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              child: PageChromeProtection(
+                                height: top,
+                                backgroundColor:
+                                    widget.backgroundColor ??
+                                    AppColors.of(context).page,
                               ),
+                            ),
                           ],
                         ),
                       ),
@@ -512,14 +495,15 @@ class _PageFrameState extends State<PageFrame> {
                     heightFactor: 1,
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(
-                        maxWidth: DesignTokens.componentPageContentMaxWidth,
+                        maxWidth: DesignTokens.componentPageMaxWidth,
                       ),
                       child: Padding(
+                        // 底部固定动作左右 16，底边留出安全区和 8。
                         padding: const EdgeInsets.fromLTRB(
-                          DesignTokens.spacingMd,
-                          DesignTokens.spacingXs,
-                          DesignTokens.spacingMd,
-                          DesignTokens.spacingMd,
+                          DesignTokens.spacingLg,
+                          DesignTokens.spacingSm,
+                          DesignTokens.spacingLg,
+                          DesignTokens.spacingSm,
                         ),
                         child: SizedBox(
                           width: double.infinity,
@@ -595,11 +579,9 @@ class _SearchTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     const fieldKey = ValueKey('page-search-field');
     final reduced = GlassMaterial.reduceMotion(context);
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final focusColor = theme.brightness == Brightness.dark
-        ? DesignTokens.componentControlFocusDarkBorderColor
-        : DesignTokens.componentControlFocusBorderColor;
+    final colors = AppColors.of(context);
+    final type = AppTypography.of(context);
+    final focusColor = colors.primary;
     final fieldBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(height / 2),
       borderSide: BorderSide.none,
@@ -646,27 +628,28 @@ class _SearchTitle extends StatelessWidget {
       child: searching
           ? Row(
               key: fieldKey,
-              spacing: DesignTokens.componentIconButtonGap,
+              spacing: DesignTokens.spacingSm,
               children: [
                 Expanded(
                   child: TextField(
                     controller: search.controller,
                     focusNode: focus,
-                    style: theme.textTheme.bodyMedium,
+                    style: type.body,
                     textInputAction: TextInputAction.search,
                     cursorColor: focusColor,
                     decoration: InputDecoration(
                       hintText: search.hint,
-                      hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
+                      hintStyle: type.body.copyWith(
+                        color: colors.textSecondary,
                       ),
                       isDense: true,
                       constraints: BoxConstraints(minHeight: height),
                       contentPadding: const EdgeInsets.symmetric(
-                        horizontal: DesignTokens.spacingSm,
+                        horizontal: DesignTokens.spacingXs,
                         vertical: DesignTokens.spacingXs,
                       ),
-                      fillColor: scheme.surfaceContainerHighest,
+                      filled: true,
+                      fillColor: colors.inset,
                       border: fieldBorder,
                       focusedBorder: fieldBorder.copyWith(
                         borderSide: BorderSide(
@@ -674,13 +657,19 @@ class _SearchTitle extends StatelessWidget {
                           width: DesignTokens.componentControlFocusSize,
                         ),
                       ),
-                      prefixIcon: const Icon(
-                        AppIcons.search,
-                        size: DesignTokens.componentMenuItemSize,
+                      // 搜索框 `search-field`：起始 20 点搜索图形，尾部清除按钮。
+                      prefixIcon: Padding(
+                        padding: const EdgeInsetsDirectional.only(
+                          start: DesignTokens.componentSearchFieldPadding,
+                          end: DesignTokens.spacingSm,
+                        ),
+                        child: Icon(
+                          AppIcons.search,
+                          size: DesignTokens.componentSectionGlyphSize,
+                          color: colors.textSecondary,
+                        ),
                       ),
-                      prefixIconConstraints: const BoxConstraints(
-                        minWidth: DesignTokens.componentIconButtonSize,
-                      ),
+                      prefixIconConstraints: const BoxConstraints(),
                       suffixIcon: ValueListenableBuilder(
                         valueListenable: search.controller,
                         builder: (context, value, _) => value.text.isEmpty
@@ -688,7 +677,9 @@ class _SearchTitle extends StatelessWidget {
                             : GlassActionIcon(
                                 icon: const Icon(AppIcons.close),
                                 tooltip: '清除搜索',
-                                iconSize: DesignTokens.componentIconSmallSize,
+                                color: colors.textSecondary,
+                                iconSize:
+                                    DesignTokens.componentSectionGlyphSize,
                                 onPressed: search.controller.clear,
                               ),
                       ),
@@ -740,16 +731,12 @@ class _WorkspaceToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final backLabel = MaterialLocalizations.of(context).backButtonTooltip;
     final window = DesktopWindowInsets.of(context);
-    final rowPadding = window == null
-        ? DesignTokens.spacingSm
-        : DesignTokens.componentDesktopHeaderPadding;
     final trailing = <Widget>[?actions, ?trailingAction];
     final heading = ConstrainedBox(
-      constraints: BoxConstraints(
-        minHeight: window == null ? 0 : DesignTokens.componentIconButtonSize,
+      constraints: const BoxConstraints(
+        minHeight: DesignTokens.componentBarButtonSize,
       ),
       child: Align(
         alignment: AlignmentDirectional.centerStart,
@@ -760,22 +747,23 @@ class _WorkspaceToolbar extends StatelessWidget {
               title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: titleStyle ?? theme.textTheme.headlineSmall,
+              style: titleStyle,
             ),
       ),
     );
-    return ConstrainedBox(
-      constraints: const BoxConstraints(
-        maxWidth: DesignTokens.componentPageContentMaxWidth,
-        minHeight: DesignTokens.componentPageHeaderHeight,
+    final leadingSlot = leading != null || hasBack;
+    // 页头行高 72，位于安全区或桌面沉浸标题栏之下；起始距边根页 16、有返回时 8。
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        leadingSlot ? DesignTokens.spacingSm : DesignTokens.spacingLg,
+        math.max(MediaQuery.paddingOf(context).top, window?.top ?? 0),
+        actionMargin,
+        0,
       ),
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          DesignTokens.spacingMd,
-          math.max(MediaQuery.paddingOf(context).top, window?.top ?? 0) +
-              rowPadding,
-          actionMargin,
-          rowPadding,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: DesignTokens.componentPageMaxWidth,
+          minHeight: DesignTokens.componentPageBarHeight,
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -792,8 +780,7 @@ class _WorkspaceToolbar extends StatelessWidget {
                   icon: const Icon(AppIcons.back),
                 ),
               ),
-            if (leading != null || hasBack)
-              const SizedBox(width: DesignTokens.spacingSm),
+            if (leadingSlot) const SizedBox(width: DesignTokens.spacingSm),
             Expanded(
               child: DesktopWindowDragArea(
                 enabled: draggableTitle,
@@ -801,7 +788,7 @@ class _WorkspaceToolbar extends StatelessWidget {
               ),
             ),
             if (trailing.isNotEmpty) ...[
-              const SizedBox(width: DesignTokens.spacingMd),
+              const SizedBox(width: DesignTokens.spacingSm),
               ...trailing,
             ],
           ],

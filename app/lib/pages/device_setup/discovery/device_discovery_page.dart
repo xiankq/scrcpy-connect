@@ -11,7 +11,10 @@ import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 
 class DeviceDiscoveryPage extends ConsumerWidget {
@@ -34,12 +37,10 @@ class DeviceDiscoveryPage extends ConsumerWidget {
       child: ConnectionContent(
         child: AsyncContent<List<DiscoveredDevice>>(
           loadingPlaceholder: const GroupedListView(
-            padding: EdgeInsets.all(DesignTokens.spacingMd),
+            padding: _listPadding,
             children: [
               SkeletonRows(
-                height: DesignTokens.componentRowLargeHeight,
-                gap: DesignTokens.spacingXxs,
-                lines: 3,
+                cardRadius: DesignTokens.componentListGroupRounded,
                 trailing: true,
               ),
             ],
@@ -53,75 +54,94 @@ class DeviceDiscoveryPage extends ConsumerWidget {
           builder: (context, list) {
             if (list.isEmpty) {
               return GroupedListView(
-                padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                padding: _listPadding,
                 children: [
                   EmptyContent(
                     icon: AppIcons.connectionDiscovery,
                     title: '未发现设备',
                     message: '检查手机无线调试与网络后重新查找。',
-                    action: FilledButton(
+                    action: AppButton(
+                      role: AppButtonRole.primary,
                       onPressed: refresh,
-                      child: const Text('重新查找'),
+                      label: '重新查找',
                     ),
                   ),
                 ],
               );
             }
-            return GroupedListView.builder(
-              padding: const EdgeInsets.all(DesignTokens.spacingMd),
-              itemCount: list.length,
-              itemBuilder: (context, index) {
-                final d = list[index];
-                final endpoint = d.endpoints.firstOrNull;
-                final pairingService = d.kind == .pairing;
-                return ListTile(
-                  leading: const Icon(LucideIcons.smartphone),
-                  title: Text(
-                    d.instance.isEmpty ? '附近 Android 设备' : d.instance,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _endpointLabel(endpoint),
-                        style: Theme.of(context).textTheme.bodySmall,
+            return GroupedListView(
+              padding: _listPadding,
+              children: [
+                SettingsGroup(
+                  children: [
+                    for (final d in list)
+                      _DiscoveredRow(
+                        device: d,
+                        onTap: () {
+                          if (returnSelection) {
+                            Navigator.of(context).pop(d);
+                            return;
+                          }
+                          final endpoint = d.endpoints.firstOrNull;
+                          final pairingService = d.kind == .pairing;
+                          ConnectionFormRoute(
+                            pairing: pairingService,
+                            transport: pairingService
+                                ? null
+                                : d.kind == .tcp
+                                ? ConnectionTransport.tcp
+                                : ConnectionTransport.tls,
+                            address: endpoint?.address ?? '',
+                            port: endpoint?.port.toString() ?? '',
+                            deviceId: d.deviceId,
+                          ).push<void>(context);
+                        },
                       ),
-                      Text(
-                        pairingService
-                            ? '等待配对'
-                            : d.trusted
-                            ? '已有配对信任'
-                            : '需确认授权',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                  onTap: () {
-                    if (returnSelection) {
-                      Navigator.of(context).pop(d);
-                      return;
-                    }
-                    ConnectionFormRoute(
-                      pairing: pairingService,
-                      transport: pairingService
-                          ? null
-                          : d.kind == .tcp
-                          ? ConnectionTransport.tcp
-                          : ConnectionTransport.tls,
-                      address: endpoint?.address ?? '',
-                      port: endpoint?.port.toString() ?? '',
-                      deviceId: d.deviceId,
-                    ).push<void>(context);
-                  },
-                );
-              },
+                  ],
+                ),
+              ],
             );
           },
         ),
       ),
     );
   }
+}
+
+/// 正文从页头下 12 开始，左右 16（design.md「页面结构」）。
+const _listPadding = EdgeInsets.fromLTRB(
+  DesignTokens.componentPagePadding,
+  DesignTokens.spacingMd,
+  DesignTokens.componentPagePadding,
+  DesignTokens.componentPagePadding,
+);
+
+/// 附近设备行（Ardot A1 2:942）：设备色块、名称与端点，行尾为配对状态和箭头。
+class _DiscoveredRow extends StatelessWidget implements GroupedRow {
+  const _DiscoveredRow({required this.device, required this.onTap});
+
+  final DiscoveredDevice device;
+  final VoidCallback onTap;
+
+  @override
+  double get separatorIndent => tileRowSeparatorIndent;
+
+  @override
+  Widget build(BuildContext context) => AppListRow(
+    leading: const ListIconBadge(
+      icon: LucideIcons.smartphone,
+      backgroundColor: FunctionTone.device,
+    ),
+    title: Text(device.instance.isEmpty ? '附近 Android 设备' : device.instance),
+    subtitle: Text(_endpointLabel(device.endpoints.firstOrNull)),
+    value: device.kind == .pairing
+        ? '等待配对'
+        : device.trusted
+        ? '已有配对信任'
+        : '需确认授权',
+    chevron: true,
+    onTap: onTap,
+  );
 }
 
 String _endpointLabel(DiscoveredEndpoint? endpoint) {

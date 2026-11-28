@@ -1,11 +1,13 @@
 import 'dart:async';
 
-import 'dart:ui' as ui;
-
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/motion.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+
+/// 骨架呼吸的最低不透明度（interaction-motion「等待与状态切换」：50%–100%）。
+const _skeletonMinOpacity = .5;
 
 /// Shows a single accessible loading region once the read has taken 150 ms.
 class LoadingSkeleton extends HookWidget {
@@ -47,7 +49,8 @@ class _SkeletonMotion extends HookWidget {
         (lifecycle == null || lifecycle == AppLifecycleState.resumed) &&
         ModalRoute.isCurrentOf(context) != false &&
         TickerMode.valuesOf(context).enabled;
-    final phase = useAnimationController(duration: skeletonCycle);
+    // 一个呼吸周期 1.6 秒：去程与回程各占一半。
+    final phase = useAnimationController(duration: skeletonCycle ~/ 2);
     useEffect(() {
       if (running) {
         phase.repeat(reverse: true);
@@ -73,51 +76,46 @@ class _SkeletonPalette extends InheritedWidget {
 }
 
 class _SkeletonPaint extends CustomPainter {
-  _SkeletonPaint(this.phase, this.base, this.highlight, this.radius)
-    : super(repaint: phase);
+  _SkeletonPaint(this.phase, this.color, this.radius) : super(repaint: phase);
 
   final Animation<double>? phase;
-  final Color base, highlight;
+  final Color color;
   final double radius;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = base;
-    if (phase case final animation?) {
-      final progress = panelCurve.transform(animation.value);
-      final x = size.width * (progress * 2 - .5);
-      paint.shader = ui.Gradient.linear(
-        Offset(x - size.width * .45, 0),
-        Offset(x + size.width * .45, size.height),
-        [base, highlight, base],
-        const [0, .55, 1],
-      );
-    }
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius)),
-      paint,
+    final breath = phase == null
+        ? 1.0
+        : 1 -
+              (1 - _skeletonMinOpacity) *
+                  Curves.easeInOut.transform(phase!.value);
+    canvas.drawRSuperellipse(
+      RSuperellipse.fromRectAndRadius(
+        Offset.zero & size,
+        Radius.circular(radius.clamp(0, size.shortestSide / 2)),
+      ),
+      Paint()..color = color.withValues(alpha: color.a * breath),
     );
   }
 
   @override
   bool shouldRepaint(_SkeletonPaint oldDelegate) =>
       phase != oldDelegate.phase ||
-      base != oldDelegate.base ||
-      highlight != oldDelegate.highlight ||
+      color != oldDelegate.color ||
       radius != oldDelegate.radius;
 }
 
 class SkeletonRows extends StatelessWidget {
   const SkeletonRows({
     super.key,
-    this.height = DesignTokens.componentRowHeight,
-    this.leadingSize = DesignTokens.componentListIconSize,
+    this.height = DesignTokens.componentListRowHeight,
+    this.leadingSize = DesignTokens.componentIconTileSize,
     this.leadingHeight,
     this.lines = 2,
     this.trailing = false,
     this.progress = false,
     this.cardRadius,
-    this.gap = DesignTokens.spacingZero,
+    this.gap = 0,
   });
 
   final double height, leadingSize, gap;
@@ -138,17 +136,20 @@ class SkeletonRows extends StatelessWidget {
             if (index > 0) SizedBox(height: gap),
             Material(
               color: cardRadius == null
-                  ? DesignTokens.colorTransparent
-                  : Theme.of(context).colorScheme.surface,
-              borderRadius: cardRadius == null
+                  ? AppColors.of(context).card.withAlpha(0)
+                  : AppColors.of(context).card,
+              shape: cardRadius == null
                   ? null
-                  : BorderRadius.circular(cardRadius!),
+                  : RoundedSuperellipseBorder(
+                      borderRadius: BorderRadius.circular(cardRadius!),
+                    ),
               child: ListTile(
                 minTileHeight: height,
                 minLeadingWidth: leadingSize,
                 contentPadding: const EdgeInsets.symmetric(
-                  horizontal: DesignTokens.spacingMd,
+                  horizontal: DesignTokens.componentListRowPadding,
                 ),
+                horizontalTitleGap: DesignTokens.componentListRowGap,
                 leading: SkeletonBlock(
                   width: leadingSize,
                   height: leadingHeight ?? leadingSize,
@@ -158,26 +159,27 @@ class SkeletonRows extends StatelessWidget {
                   children: [
                     SkeletonLine(fraction: index.isEven ? 0.68 : 0.53),
                     if (lines >= 2) ...[
-                      const SizedBox(height: DesignTokens.spacingXxs),
+                      const SizedBox(height: DesignTokens.spacingSm),
                       const SkeletonLine(fraction: 0.42, secondary: true),
                     ],
                     if (lines == 3) ...[
-                      const SizedBox(height: DesignTokens.spacingXxs),
+                      const SizedBox(height: DesignTokens.spacingSm),
                       const SkeletonLine(fraction: 0.56, secondary: true),
                     ],
                     if (progress) ...[
-                      const SizedBox(height: DesignTokens.spacingXxs),
+                      const SizedBox(height: DesignTokens.spacingSm),
                       const SkeletonBlock(
-                        height: DesignTokens.componentTransferProgressHeight,
-                        radius: DesignTokens.componentTransferProgressRounded,
+                        height: DesignTokens.componentProgressHeight,
+                        radius: DesignTokens.componentProgressRounded,
                       ),
                     ],
                   ],
                 ),
                 trailing: trailing
                     ? const SkeletonBlock(
-                        width: DesignTokens.componentIconSize,
-                        height: DesignTokens.spacingXs,
+                        width: DesignTokens.spacingJumbo,
+                        height: DesignTokens.spacingMd,
+                        radius: DesignTokens.roundedFull,
                       )
                     : null,
               ),
@@ -194,33 +196,24 @@ class SkeletonBlock extends StatelessWidget {
     super.key,
     this.width,
     this.height,
-    this.radius = DesignTokens.roundedMd,
+    this.radius = DesignTokens.roundedSm,
   });
 
   final double? width, height;
   final double radius;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
-    return SizedBox(
-      width: width,
-      height: height,
-      child: CustomPaint(
-        painter: _SkeletonPaint(
-          context.dependOnInheritedWidgetOfExactType<_SkeletonPalette>()?.phase,
-          dark
-              ? DesignTokens.componentSkeletonGraphicDarkBackgroundColor
-              : DesignTokens.componentSkeletonGraphicBackgroundColor,
-          dark
-              ? DesignTokens.componentSkeletonHighlightDarkBackgroundColor
-              : DesignTokens.componentSkeletonHighlightBackgroundColor,
-          radius,
-        ),
+  Widget build(BuildContext context) => SizedBox(
+    width: width,
+    height: height,
+    child: CustomPaint(
+      painter: _SkeletonPaint(
+        context.dependOnInheritedWidgetOfExactType<_SkeletonPalette>()?.phase,
+        AppColors.of(context).inset,
+        radius,
       ),
-    );
-  }
+    ),
+  );
 }
 
 class SkeletonLine extends StatelessWidget {
@@ -237,26 +230,21 @@ class SkeletonLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final type = AppTypography.of(context);
     final fontSize = secondary
-        ? theme.textTheme.bodySmall!.fontSize!
-        : theme.textTheme.bodyMedium!.fontSize!;
+        ? type.subheadline.fontSize!
+        : type.body.fontSize!;
     return FractionallySizedBox(
       widthFactor: fraction,
       alignment: alignment,
       child: SizedBox(
-        height: MediaQuery.textScalerOf(context).scale(fontSize) * 0.75,
+        height: MediaQuery.textScalerOf(context).scale(fontSize) * .75,
         child: CustomPaint(
           painter: _SkeletonPaint(
             context
                 .dependOnInheritedWidgetOfExactType<_SkeletonPalette>()
                 ?.phase,
-            theme.brightness == Brightness.dark
-                ? DesignTokens.componentSkeletonLineDarkBackgroundColor
-                : DesignTokens.componentSkeletonLineBackgroundColor,
-            theme.brightness == Brightness.dark
-                ? DesignTokens.componentSkeletonHighlightDarkBackgroundColor
-                : DesignTokens.componentSkeletonHighlightBackgroundColor,
+            AppColors.of(context).inset,
             DesignTokens.roundedFull,
           ),
         ),

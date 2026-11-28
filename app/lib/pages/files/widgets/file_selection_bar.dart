@@ -1,9 +1,10 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_action_bar.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
+import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 
 class FileSelectionBar extends StatelessWidget {
   const FileSelectionBar({
@@ -27,96 +28,62 @@ class FileSelectionBar extends StatelessWidget {
   final VoidCallback onToggleView;
 
   @override
-  Widget build(BuildContext context) => Column(
-    mainAxisSize: MainAxisSize.min,
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Padding(
-        padding: const EdgeInsetsDirectional.only(
-          start: DesignTokens.spacingXs,
-          end: DesignTokens.spacingXs,
-          bottom: DesignTokens.spacingTight,
-        ),
-        child: Text(
-          '当前目录 · $directory',
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-      ),
-      GlassActionBar(
-        actions: [
-          GlassActionBarButton(
-            label: '取回原文件',
-            icon: const Icon(AppIcons.download),
-            onPressed: onRetrieve,
-            tooltip: onRetrieve == null ? retrieveReason : null,
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    final type = AppTypography.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: DesignTokens.spacingMd),
+          child: Text(
+            '当前目录 · $directory',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: type.captionEmphasis.copyWith(color: colors.textSecondary),
           ),
-          GlassActionBarButton(
-            label: '删除',
-            icon: const Icon(AppIcons.delete),
-            onPressed: onDelete,
-            tooltip: onDelete == null ? deleteReason : null,
-          ),
-          MenuAnchor(
-            animated: !GlassMaterial.reduceMotion(context),
-            controller: menuController,
-            consumeOutsideTap: true,
-            alignmentOffset: const Offset(
-              0,
-              DesignTokens.componentFileActionBarPadding +
-                  DesignTokens.spacingXs,
+        ),
+        GlassActionBar(
+          actions: [
+            GlassActionBarButton(
+              label: '取回原文件',
+              icon: const Icon(AppIcons.download),
+              onPressed: onRetrieve,
+              tooltip: onRetrieve == null ? retrieveReason : null,
             ),
-            style: const MenuStyle(
-              alignment: Alignment.bottomCenter,
-              backgroundColor: WidgetStatePropertyAll(
-                DesignTokens.colorTransparent,
-              ),
-              surfaceTintColor: WidgetStatePropertyAll(
-                DesignTokens.colorTransparent,
-              ),
-              elevation: WidgetStatePropertyAll(0),
-              padding: WidgetStatePropertyAll(EdgeInsets.zero),
+            GlassActionBarButton(
+              label: '删除',
+              icon: const Icon(AppIcons.delete),
+              onPressed: onDelete,
+              tooltip: onDelete == null ? deleteReason : null,
             ),
-            menuChildren: [
-              GlassSurfaceGroup.isolated(
-                child: Glass(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: DesignTokens.spacingXs,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      MenuItemButton(
-                        leadingIcon: const Icon(LucideIcons.squarePen),
-                        onPressed: onRename,
-                        child: const Text('重命名'),
-                      ),
-                      MenuItemButton(
-                        leadingIcon: Icon(
-                          viewMode == FileViewMode.grid
-                              ? LucideIcons.list
-                              : LucideIcons.layoutGrid,
-                        ),
-                        onPressed: onToggleView,
-                        child: Text(
-                          viewMode == FileViewMode.grid ? '切换为列表' : '切换为宫格',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-            builder: (context, menu, child) => GlassActionBarButton(
+            GlassMenuButton(
+              controller: menuController,
               label: '更多',
+              tooltip: '更多',
               icon: const Icon(AppIcons.more),
-              onPressed: () => menu.isOpen ? menu.close() : menu.open(),
+              actions: [
+                GlassMenuAction(
+                  label: '重命名',
+                  icon: const Icon(LucideIcons.squarePen),
+                  onPressed: onRename,
+                ),
+                GlassMenuAction(
+                  label: viewMode == FileViewMode.grid ? '切换为列表' : '切换为宫格',
+                  icon: Icon(
+                    viewMode == FileViewMode.grid
+                        ? LucideIcons.list
+                        : LucideIcons.layoutGrid,
+                  ),
+                  onPressed: onToggleView,
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
-    ],
-  );
+          ],
+        ),
+      ],
+    );
+  }
 }

@@ -7,14 +7,24 @@ import 'package:scrcpy_connect/pages/files/file_actions.dart';
 import 'package:scrcpy_connect/pages/files/widgets/file_kind_style.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
-import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_action_bar.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
+
+/// 文件标识卡（Ardot 37:2262）：圆角 28、内距 20、色块与文字间距 16；
+/// 前导为详情尺寸的文件格式色块（[FeatureIcon.detailSize]）。
+const _identityRounded = DesignTokens.roundedXxl;
+const _identityPadding = DesignTokens.spacingXl;
+const _identityGap = DesignTokens.spacingLg;
+
+/// 名称与类型之间的间距（Ardot 37:2264「文本」间距 4）。
+const _identityTextGap = DesignTokens.spacingXs;
 
 class FileDetailsPage extends ConsumerWidget {
   const FileDetailsPage({super.key, required this.device, required this.file});
@@ -31,21 +41,27 @@ class FileDetailsPage extends ConsumerWidget {
       _ when mime == 'application/pdf' => ('PDF 文件', LucideIcons.fileText),
       _ when const {'ZIP', 'RAR', '7Z', 'GZ'}.contains(extension) => (
         '压缩包',
-        LucideIcons.archive,
+        LucideIcons.fileArchive,
       ),
       _ when mime.startsWith('video/') => (
         extension.isEmpty ? '视频' : '$extension 视频',
-        LucideIcons.video,
+        LucideIcons.film,
       ),
-      _ when mime.startsWith('audio/') => ('音频', LucideIcons.audioLines),
+      _ when mime.startsWith('audio/') => ('音频', LucideIcons.music),
       _ when mime.startsWith('image/') => ('图片', LucideIcons.image),
       _ => (extension.isEmpty ? '文件' : '$extension 文件', LucideIcons.fileText),
     };
-    final theme = Theme.of(context);
-    final accent = ConnectTokens.accent(
-      context,
-      fileKindColor(fileKindOf(file), name: file.name, mime: file.mime),
+    final colors = AppColors.of(context);
+    final text = AppTypography.of(context);
+    final accent = fileKindColor(
+      fileKindOf(file),
+      name: file.name,
+      mime: file.mime,
     );
+    final typeLine = [
+      type,
+      if (file.size case final size?) fileSizeLabel(size),
+    ].join(' · ');
     final seconds = file.modified;
     final modified = seconds == null || seconds <= 0
         ? ''
@@ -56,11 +72,7 @@ class FileDetailsPage extends ConsumerWidget {
             alwaysUse24HourFormat: true,
           );
     return PageFrame(
-      titleStyle: Theme.of(context).textTheme.headlineMedium,
       title: '文件详情',
-      backgroundColor: theme.brightness == Brightness.light
-          ? DesignTokens.colorFileTile
-          : null,
       bottom: GlassActionBar(
         actions: [
           GlassActionBarButton(
@@ -87,101 +99,72 @@ class FileDetailsPage extends ConsumerWidget {
         ],
       ),
       child: GroupedListView(
-        padding: const EdgeInsets.all(DesignTokens.spacingLg),
+        padding: const EdgeInsets.symmetric(
+          horizontal: DesignTokens.componentPagePadding,
+        ),
         children: [
-          ContentPanel(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final symbol = Container(
-                  width: DesignTokens.componentEmptyContentIconSize,
-                  height: DesignTokens.componentEmptyContentIconSize,
-                  decoration: BoxDecoration(
-                    color: accent.withValues(
-                      alpha: DesignTokens.componentFeatureIconOpacity,
-                    ),
-                    borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
-                  ),
-                  child: Icon(
-                    icon,
-                    size: DesignTokens.componentIconLargeSize,
-                    color: accent,
-                  ),
-                );
-                final metadata = Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SelectableText(name, style: theme.textTheme.titleLarge),
-                    const SizedBox(height: DesignTokens.spacingXs),
-                    Text(type, style: theme.textTheme.bodySmall),
-                  ],
-                );
-                final minimumNameWidth = MediaQuery.textScalerOf(context)
-                    .scale(theme.textTheme.titleLarge!.fontSize! * 6);
-                if (constraints.maxWidth -
-                        DesignTokens.componentEmptyContentIconSize -
-                        DesignTokens.spacingMd <
-                    minimumNameWidth) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      symbol,
-                      const SizedBox(height: DesignTokens.spacingMd),
-                      metadata,
-                    ],
-                  );
-                }
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    symbol,
-                    const SizedBox(width: DesignTokens.spacingMd),
-                    Expanded(child: metadata),
-                  ],
-                );
-              },
+          DecoratedBox(
+            decoration: ShapeDecoration(
+              color: colors.card,
+              shape: const RoundedSuperellipseBorder(
+                borderRadius: BorderRadius.all(
+                  Radius.circular(_identityRounded),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: DesignTokens.spacingSm),
-          ContentPanel(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final (label, value) in [
-                  if (file.size case final size?) ('大小', fileSizeLabel(size)),
-                  if (modified.isNotEmpty)
-                    ('修改时间', '${fileModifiedLabel(file)} $modified'),
-                  ('来源设备', deviceName(device)),
-                ])
-                  Padding(
-                    padding: const EdgeInsets.only(
-                      bottom: DesignTokens.spacingSm,
-                    ),
-                    child: Row(
+            child: Padding(
+              padding: const EdgeInsets.all(_identityPadding),
+              child: Row(
+                children: [
+                  FeatureIcon(
+                    icon,
+                    color: accent,
+                    size: FeatureIcon.detailSize,
+                  ),
+                  const SizedBox(width: _identityGap),
+                  Expanded(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(label, style: theme.textTheme.bodySmall),
-                        ),
-                        const SizedBox(width: DesignTokens.spacingSm),
-                        Expanded(
-                          flex: 2,
-                          child: Text(value, textAlign: TextAlign.end),
+                        SelectableText(name, style: text.title3),
+                        const SizedBox(height: _identityTextGap),
+                        Text(
+                          typeLine,
+                          style: text.subheadline.copyWith(
+                            color: colors.textSecondary,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                if (file.path case final path?) ...[
-                  Text('文件位置', style: theme.textTheme.bodySmall),
-                  const SizedBox(height: DesignTokens.spacingXs),
-                  SelectableText(path, style: theme.textTheme.bodyMedium),
                 ],
-              ],
+              ),
             ),
+          ),
+          const SizedBox(height: DesignTokens.spacingMd),
+          SettingsGroup(
+            separatorIndent: DesignTokens.componentListRowPadding,
+            children: [
+              for (final (label, value) in [
+                if (file.size case final size?) ('大小', fileSizeLabel(size)),
+                if (modified.isNotEmpty)
+                  ('修改时间', '${fileModifiedLabel(file)} $modified'),
+                ('来源设备', deviceName(device)),
+              ])
+                AppListRow(title: Text(label), value: value),
+              if (file.path case final path?)
+                AppListRow(
+                  title: const Text('文件位置'),
+                  subtitle: SelectableText(path),
+                  subtitleMaxLines: 4,
+                ),
+            ],
           ),
           if (!fileCanOpen(file))
             StateNote(
               fileUnavailableReason(file),
               icon: LucideIcons.circleAlert,
+              color: colors.error,
             ),
         ],
       ),

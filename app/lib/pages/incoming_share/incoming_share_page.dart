@@ -13,8 +13,11 @@ import 'share_submission_notifier.dart';
 import 'package:scrcpy_connect/pages/incoming_share/widgets/share_device_card.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
+import 'package:scrcpy_connect/widgets/grouped_list_segment.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/form_controls.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
+import 'package:scrcpy_connect/widgets/input_field.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
@@ -106,26 +109,41 @@ class IncomingSharePage extends HookConsumerWidget {
     ];
     final fileHeader = <Widget>[
       if (files.isNotEmpty)
-        ConnectSwitchRow(
-          title: Text('传入 ${files.length} 个文件'),
-          value: includeFiles.value,
-          onChanged: submission.busy || locked
-              ? null
-              : (v) => includeFiles.value = v,
+        GroupedListSegment(
+          first: true,
+          last: false,
+          child: ConnectSwitchRow(
+            title: Text('传入 ${files.length} 个文件'),
+            value: includeFiles.value,
+            onChanged: submission.busy || locked
+                ? null
+                : (v) => includeFiles.value = v,
+          ),
         ),
     ];
     final middle = <Widget>[
       if (text.isNotEmpty) ...[
-        ConnectSwitchRow(
-          title: const Text('写入设备剪贴板'),
-
-          value: includeText.value,
-          onChanged: submission.busy || locked
-              ? null
-              : (v) => includeText.value = v,
+        if (files.isNotEmpty) const SizedBox(height: DesignTokens.spacingXxl),
+        SettingsGroup(
+          children: [
+            ConnectSwitchRow(
+              title: const Text('写入设备剪贴板'),
+              value: includeText.value,
+              onChanged: submission.busy || locked
+                  ? null
+                  : (v) => includeText.value = v,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                DesignTokens.componentListRowPadding,
+                DesignTokens.spacingMd,
+                DesignTokens.componentListRowPadding,
+                DesignTokens.componentListRowPadding,
+              ),
+              child: SelectableText(text),
+            ),
+          ],
         ),
-        ContentPanel(child: SelectableText(text)),
-        const SizedBox(height: DesignTokens.spacingMd),
       ],
       const SectionTitle('接收设备'),
       if (devices.isEmpty)
@@ -134,16 +152,16 @@ class IncomingSharePage extends HookConsumerWidget {
     final trailing = <Widget>[
       if (includeFiles.value && files.isNotEmpty) ...[
         const SectionTitle('目标目录'),
-        TextField(
+        AppTextField(
           controller: path,
           enabled: !submission.busy && !locked,
-          decoration: const InputDecoration(
-            labelText: '设备上的完整目录',
-            helperText: '同名文件会在传输中心等待你确认',
-          ),
+          label: '设备上的完整目录',
+          helperText: '同名文件会在传输中心等待你确认',
         ),
-        const SizedBox(height: DesignTokens.spacingSm),
-        OutlinedButton.icon(
+        const SizedBox(height: DesignTokens.spacingMd),
+        AppButton(
+          role: AppButtonRole.secondaryOnPage,
+          expand: true,
           onPressed: selected == null || submission.busy || locked
               ? null
               : () async {
@@ -162,11 +180,8 @@ class IncomingSharePage extends HookConsumerWidget {
                     path.text = directory;
                   }
                 },
-          icon: const Icon(
-            LucideIcons.folderOpen,
-            size: DesignTokens.componentIconActionSize,
-          ),
-          label: const Text('浏览设备目录'),
+          icon: LucideIcons.folderOpen,
+          label: '浏览设备目录',
         ),
       ],
       if (selected != null)
@@ -204,37 +219,33 @@ class IncomingSharePage extends HookConsumerWidget {
         if (!popped) actions.cancel();
       },
       child: PageFrame(
-        titleStyle: Theme.of(context).textTheme.headlineMedium,
         title: files.isEmpty && text.isNotEmpty
             ? '发送文字'
             : files.isNotEmpty && text.isEmpty
             ? '发送文件'
             : '发送到设备',
-        bottom: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: DesignTokens.spacingXs,
-          ),
-          child: FilledButton(
-            style: pagePrimaryButtonStyle,
-            onPressed: canSubmit ? submit : null,
-            child: Text(
-              submission.busy
-                  ? '正在提交…'
-                  : locked
-                  ? '继续完成'
-                  : includeFiles.value && files.isNotEmpty
-                  ? '确认发送'
-                  : '写入设备剪贴板',
-            ),
-          ),
+        bottom: AppButton(
+          role: AppButtonRole.primary,
+          expand: true,
+          onPressed: canSubmit ? submit : null,
+          label: submission.busy
+              ? '正在提交…'
+              : locked
+              ? '继续完成'
+              : includeFiles.value && files.isNotEmpty
+              ? '确认发送'
+              : '写入设备剪贴板',
         ),
-
-        trailingAction: TextButton(
+        trailingAction: AppButton(
+          role: AppButtonRole.text,
+          size: AppButtonSize.section,
           onPressed: submission.busy ? null : actions.cancel,
-          child: Text(locked ? '关闭' : '取消'),
+          label: locked ? '关闭' : '取消',
         ),
         child: GroupedListView.builder(
-          padding: const EdgeInsets.all(DesignTokens.spacingMd),
+          padding: const EdgeInsets.symmetric(
+            horizontal: DesignTokens.spacingLg,
+          ),
           itemCount: trailingStart + trailing.length,
           findChildIndexCallback: (key) => indices[key],
           itemBuilder: (context, index) {
@@ -249,24 +260,31 @@ class IncomingSharePage extends HookConsumerWidget {
             if (index < filesStart) return fileHeader[index - fileHeaderStart];
             if (index < middleStart) {
               final row = index - filesStart;
-              return ActionRow(
+              return GroupedListSegment(
                 key: ValueKey(('incoming-file', share.shareId, row)),
-                icon: LucideIcons.file,
-                color: DesignTokens.colorListIconTransfer,
-                title: files[row].name,
-                value: fileSizeLabel(files[row].size),
+                first: false,
+                last: row == files.length - 1,
+                child: ActionRow(
+                  icon: LucideIcons.file,
+                  color: FunctionTone.file,
+                  title: files[row].name,
+                  value: fileSizeLabel(files[row].size),
+                ),
               );
             }
             if (index < devicesStart) return middle[index - middleStart];
             if (index >= trailingStart) return trailing[index - trailingStart];
             final device = devices[index - devicesStart];
-            return ShareDeviceCard(
+            return Padding(
               key: ValueKey(('incoming-device', device.id)),
-              device: device,
-              selected: deviceId.value == device.id,
-              onTap: submission.busy || locked
-                  ? null
-                  : () => deviceId.value = device.id,
+              padding: const EdgeInsets.only(bottom: DesignTokens.spacingMd),
+              child: ShareDeviceCard(
+                device: device,
+                selected: deviceId.value == device.id,
+                onTap: submission.busy || locked
+                    ? null
+                    : () => deviceId.value = device.id,
+              ),
             );
           },
         ),

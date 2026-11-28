@@ -14,7 +14,9 @@ import 'package:scrcpy_connect/pages/files/widgets/file_kind_style.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/form_controls.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
@@ -49,7 +51,9 @@ class FileSendPage extends HookConsumerWidget {
     final operation = ref.watch(provider);
     final selection = picked.value;
     final label = deviceName(device);
-    final theme = Theme.of(context);
+    final colors = AppColors.of(context);
+    final note = AppTypography.of(context).footnote
+        .copyWith(color: colors.textSecondary);
 
     Future<void> choose({required bool directory}) async {
       if (picking.value) return;
@@ -115,7 +119,6 @@ class FileSendPage extends HookConsumerWidget {
         if (!popped && !operation.busy && !picking.value) picked.value = [];
       },
       child: PageFrame(
-        titleStyle: Theme.of(context).textTheme.headlineMedium,
         onBack: !hasSelection
             ? null
             : () {
@@ -124,180 +127,168 @@ class FileSendPage extends HookConsumerWidget {
         title: !hasSelection ? '发送到手机' : '确认发送',
         bottom: !hasSelection
             ? null
-            : Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: DesignTokens.spacingXs,
-                ),
-                child: FilledButton(
-                  style: pagePrimaryButtonStyle,
-                  onPressed:
-                      !directory.verified || operation.busy || picking.value
-                      ? null
-                      : () async {
-                          final sent = await ref.read(provider.notifier).send([
-                            for (final entry in selection)
-                              FileTransferSelection(
-                                source: entry.path,
-                                destination: p.posix.join(
-                                  destination.value,
-                                  entry.name,
-                                ),
+            : AppButton(
+                label: operation.busy
+                    ? '正在建立传输…'
+                    : isDirectory
+                    ? '发送此文件夹'
+                    : '发送 ${selection.length} 个文件',
+                role: AppButtonRole.primary,
+                expand: true,
+                onPressed:
+                    !directory.verified || operation.busy || picking.value
+                    ? null
+                    : () async {
+                        final sent = await ref.read(provider.notifier).send([
+                          for (final entry in selection)
+                            FileTransferSelection(
+                              source: entry.path,
+                              destination: p.posix.join(
+                                destination.value,
+                                entry.name,
                               ),
-                          ]);
-                          if (!context.mounted || !sent) return;
-                          closePage<bool>(context, true);
-                        },
-                  child: Text(
-                    operation.busy
-                        ? '正在建立传输…'
-                        : isDirectory
-                        ? '发送此文件夹'
-                        : '发送 ${selection.length} 个文件',
-                  ),
-                ),
+                            ),
+                        ]);
+                        if (!context.mounted || !sent) return;
+                        closePage<bool>(context, true);
+                      },
               ),
         child: GroupedListView(
-          padding: const EdgeInsets.all(DesignTokens.spacingLg),
+          padding: const EdgeInsets.symmetric(
+            horizontal: DesignTokens.componentPagePadding,
+          ),
           children: [
-            ContentPanel(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  if (!hasSelection) ...[
-                    ActionRow(
-                      icon: LucideIcons.fileText,
-                      color: DesignTokens.colorListIconDocument,
-                      title: '选择文件',
-                      onTap: picking.value
-                          ? null
-                          : () => choose(directory: false),
-                    ),
-                    if (Platform.isAndroid || Platform.isLinux)
-                      ActionRow(
-                        icon: LucideIcons.folder,
-                        color: DesignTokens.colorListIconDocument,
-                        title: '选择文件夹',
-                        onTap: picking.value
-                            ? null
-                            : () => choose(directory: true),
-                      ),
-                  ] else ...[
-                    for (final entry in selection)
-                      ActionRow(
-                        icon: entry.directory
-                            ? LucideIcons.folder
-                            : fileKindIcon(FileKind.classify(name: entry.name)),
-                        color: entry.directory
-                            ? DesignTokens.colorListIconAmber
-                            : fileKindColor(
-                                FileKind.classify(name: entry.name),
-                                name: entry.name,
-                              ),
-                        title: entry.name,
-                        value: entry.size == null
-                            ? null
-                            : fileSizeLabel(entry.size),
-                        onTap: picking.value || operation.busy
-                            ? null
-                            : () => choose(directory: isDirectory),
-                      ),
-                    ActionRow(
-                      icon: LucideIcons.smartphone,
-                      color: DesignTokens.colorListIconBlue,
-                      title: '目标设备',
-                      value: label,
-                    ),
+            SettingsGroup(
+              children: [
+                if (!hasSelection) ...[
+                  ActionRow(
+                    icon: LucideIcons.fileText,
+                    color: FunctionTone.file,
+                    title: '选择文件',
+                    onTap: picking.value
+                        ? null
+                        : () => choose(directory: false),
+                  ),
+                  if (Platform.isAndroid || Platform.isLinux)
                     ActionRow(
                       icon: LucideIcons.folder,
-                      color: DesignTokens.colorListIconDocument,
-                      title: '目标目录',
-                      value: destination.value,
-                      onTap: operation.busy
+                      color: FunctionTone.file,
+                      title: '选择文件夹',
+                      onTap: picking.value
                           ? null
-                          : () async {
-                              final next = await ShareDirectoryRoute(
-                                deviceId: device.id,
-                                path: destination.value,
-                              ).push<String>(context);
-                              if (context.mounted && next != null) {
-                                destination.value = next;
-                              }
-                            },
+                          : () => choose(directory: true),
                     ),
-                  ],
+                ] else ...[
+                  for (final entry in selection)
+                    ActionRow(
+                      icon: entry.directory
+                          ? LucideIcons.folder
+                          : fileKindIcon(FileKind.classify(name: entry.name)),
+                      color: entry.directory
+                          ? folderKindColor
+                          : fileKindColor(
+                              FileKind.classify(name: entry.name),
+                              name: entry.name,
+                            ),
+                      title: entry.name,
+                      value: entry.size == null
+                          ? null
+                          : fileSizeLabel(entry.size),
+                      onTap: picking.value || operation.busy
+                          ? null
+                          : () => choose(directory: isDirectory),
+                    ),
+                  ActionRow(
+                    icon: LucideIcons.smartphone,
+                    color: FunctionTone.device,
+                    title: '目标设备',
+                    value: label,
+                  ),
+                  ActionRow(
+                    icon: LucideIcons.folder,
+                    color: FunctionTone.file,
+                    title: '目标目录',
+                    value: destination.value,
+                    onTap: operation.busy
+                        ? null
+                        : () async {
+                            final next = await ShareDirectoryRoute(
+                              deviceId: device.id,
+                              path: destination.value,
+                            ).push<String>(context);
+                            if (context.mounted && next != null) {
+                              destination.value = next;
+                            }
+                          },
+                  ),
                 ],
-              ),
+              ],
             ),
-            const SizedBox(height: DesignTokens.spacingLg),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: theme.brightness == Brightness.dark
-                    ? DesignTokens.colorAccentBlueSoftDark
-                    : DesignTokens.colorAccentBlueSoft,
-                borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(DesignTokens.spacingMd),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          LucideIcons.monitor,
-                          size: DesignTokens.componentIconActionSize,
-                        ),
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: DesignTokens.spacingSm,
-                            ),
-                            child: Divider(
-                              color: theme.colorScheme.outlineVariant,
-                            ),
+            const SizedBox(height: DesignTokens.spacingMd),
+            ContentPanel(
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        LucideIcons.monitor,
+                        size: DesignTokens.componentSectionGlyphSize,
+                        color: colors.textSecondary,
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: DesignTokens.spacingSm,
+                          ),
+                          child: SizedBox(
+                            height: DesignTokens.componentSeparatorHeight,
+                            child: ColoredBox(color: colors.separator),
                           ),
                         ),
-                        const Icon(
-                          LucideIcons.smartphone,
-                          size: DesignTokens.componentIconActionSize,
+                      ),
+                      Icon(
+                        LucideIcons.smartphone,
+                        size: DesignTokens.componentSectionGlyphSize,
+                        color: colors.textSecondary,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: DesignTokens.spacingXs),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          !hasSelection
+                              ? '本机内容'
+                              : selection.length == 1
+                              ? selection.single.name
+                              : '${selection.length} 个文件',
+                          style: note,
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: DesignTokens.spacingXs),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            !hasSelection
-                                ? '本机内容'
-                                : selection.length == 1
-                                ? selection.single.name
-                                : '${selection.length} 个文件',
-                            style: theme.textTheme.bodySmall,
-                          ),
+                      ),
+                      const SizedBox(width: DesignTokens.spacingSm),
+                      Expanded(
+                        child: Text(
+                          !hasSelection
+                              ? label
+                              : fileDirectoryLabel(destination.value),
+                          textAlign: TextAlign.end,
+                          style: note,
                         ),
-                        const SizedBox(width: DesignTokens.spacingSm),
-                        Expanded(
-                          child: Text(
-                            !hasSelection
-                                ? label
-                                : fileDirectoryLabel(destination.value),
-                            textAlign: TextAlign.end,
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
             if (hasSelection && directory.error != null)
               StateNote('无法确认目标目录。请刷新或选择其他目录。'),
             if (hasSelection && directory.error != null)
-              OutlinedButton(
+              AppButton(
+                label: '刷新目标目录',
+                role: AppButtonRole.secondaryOnPage,
                 onPressed: () =>
                     ref.read(fileDirectoryProvider(target).notifier).refresh(),
-                child: const Text('刷新目标目录'),
               ),
             if (operation.error case final message?) StateNote(message),
           ],

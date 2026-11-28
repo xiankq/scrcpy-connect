@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:flutter/widgets.dart';
 
 import 'package:scrcpy_connect/router/models/remote_control_intent.dart';
@@ -9,7 +10,6 @@ import 'package:scrcpy_connect/core/errors/request_failure.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/mobile_remote_capabilities.dart';
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/router/models/remote_launch_intent.dart';
 import 'package:scrcpy_connect/router/remote_windows.dart';
 import 'package:scrcpy_connect/router/route_resource_resolver_provider.dart';

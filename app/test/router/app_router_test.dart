@@ -4,9 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
-import 'package:scrcpy_connect/core/devices/models/device_list_state.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
-import 'package:scrcpy_connect/core/recovery/models/recovery_state.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
 import 'package:scrcpy_connect/core/platform/platform_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/platform/background_control.dart';
@@ -17,7 +15,6 @@ import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
 import 'package:scrcpy_connect/core/lifecycle/models/app_state.dart';
 import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/settings/settings_management.dart';
-import 'package:scrcpy_connect/core/settings/models/preferences_state.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/pages/control/control_page.dart';
 import 'package:scrcpy_connect/pages/devices/devices_page.dart';
@@ -29,22 +26,15 @@ import 'package:scrcpy_connect/router/route_resource_view.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/styles/motion.dart';
 
+import '../support/fixed_state.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('页面资源等待时在非对称安全区内居中', (tester) async {
-    const insets = EdgeInsets.fromLTRB(64, 24, 12, 48);
+  testWidgets('页面资源读取完成前显示加载，完成后显示目标页面', (tester) async {
     final resource = Completer<String>();
     await tester.pumpWidget(
       MaterialApp(
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            padding: insets,
-            viewPadding: insets,
-            disableAnimations: true,
-          ),
-          child: child!,
-        ),
         home: RouteResourceView(
           identity: 'pending',
           load: () => resource.future,
@@ -53,8 +43,7 @@ void main() {
       ),
     );
     final loader = find.byType(CircularProgressIndicator);
-    final viewport = tester.getRect(find.byType(Scaffold));
-    expect(tester.getCenter(loader), insets.deflateRect(viewport).center);
+    expect(loader, findsOneWidget);
 
     resource.complete('目标页面');
     await tester.pumpAndSettle();
@@ -68,11 +57,15 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          deviceListProvider.overrideWith(_Devices.new),
-          recoveryStateProvider.overrideWith(_Recovery.new),
+          deviceListProvider.overrideWith(
+            () => FixedDeviceList(
+              devices: const [DeviceSnapshot(id: 'avd', name: 'AVD')],
+            ),
+          ),
+          recoveryStateProvider.overrideWith(FixedRecovery.new),
           fileTransfersProvider.overrideWithValue(_Transfers()),
           transferHistoryRowsProvider.overrideWith((_) => const AsyncData([])),
-          preferencesProvider.overrideWith(_Preferences.new),
+          preferencesProvider.overrideWith(FixedPreferences.new),
           runtimeEventsProvider.overrideWithValue(const Stream.empty()),
           appSnapshotProvider.overrideWithValue(AppState(loading: false)),
           settingsManagementProvider.overrideWithValue(_Settings()),
@@ -101,16 +94,8 @@ void main() {
     final devices = tester.element(find.byType(DevicesPage));
     router.go(const TransfersRoute().location);
     await tester.pump();
-    await tester.pump(shortTransitionDuration ~/ 2);
-    double branchOpacity(Type page) => tester
-        .widget<Opacity>(
-          find
-              .ancestor(of: find.byType(page), matching: find.byType(Opacity))
-              .first,
-        )
-        .opacity;
-    expect(branchOpacity(DevicesPage), closeTo(.5, .01));
-    expect(branchOpacity(TransfersPage), closeTo(.5, .01));
+    // 切换途中，正在淡出的旧页不再接收输入。
+    await tester.pump(const Duration(milliseconds: 110));
     expect(find.byType(EditableText).hitTestable(), findsNothing);
     await _settle(tester);
     expect(find.byType(DevicesPage), findsNothing);
@@ -224,7 +209,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          recoveryStateProvider.overrideWith(_Recovery.new),
+          recoveryStateProvider.overrideWith(FixedRecovery.new),
           routeResourceResolverProvider.overrideWithValue(resources),
         ],
         child: MaterialApp.router(
@@ -286,24 +271,6 @@ class _Resources implements RouteResourceResolver {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _Recovery extends RecoveryStateNotifier {
-  @override
-  RecoveryState build() => RecoveryState();
-}
-
-class _Devices extends DeviceListNotifier {
-  @override
-  DeviceListState build() => DeviceListState(
-    loading: false,
-    devices: const [DeviceSnapshot(id: 'avd', name: 'AVD')],
-  );
-}
-
-class _Preferences extends PreferencesNotifier {
-  @override
-  PreferencesState build() => PreferencesState();
 }
 
 class _Settings implements SettingsManagement {

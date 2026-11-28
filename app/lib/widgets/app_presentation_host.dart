@@ -13,12 +13,15 @@ import 'package:scrcpy_connect/core/files/share_inbox_notifier.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_snapshot_notifier.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/clipboard_visibility.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
-import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/banner.dart';
 import 'package:scrcpy_connect/widgets/system_notifications.dart';
 import 'package:scrcpy_connect/widgets/overlays.dart';
+
+/// 来电横幅停留到用户能读完并决定是否查看电话。
+const _incomingCallBannerDuration = Duration(seconds: 8);
 
 /// 应用根部的外部意图呈现边界；调度与迟到回调必须同时遵循当前前台资格。
 class AppPresentationHost extends HookConsumerWidget {
@@ -217,33 +220,20 @@ class AppPresentationHost extends HookConsumerWidget {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               behavior: SnackBarBehavior.floating,
-              backgroundColor: DesignTokens.colorTransparent,
+              backgroundColor: AppColors.of(context).card.withAlpha(0),
               elevation: 0,
               padding: EdgeInsets.zero,
-              duration: const Duration(seconds: 8),
-              content: ContentSurface(
-                padding: const EdgeInsets.all(DesignTokens.spacingMd),
-                child: Row(
-                  children: [
-                    const ListIconBadge(
-                      icon: LucideIcons.phoneIncoming,
-                      backgroundColor: DesignTokens.colorListIconMint,
-                    ),
-                    const SizedBox(width: DesignTokens.spacingSm),
-                    Expanded(
-                      child: Text(
-                        '${deviceName(device)} · ${call.name ?? call.number ?? '当前来电'}\n声音仍在手机',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                        CallsRoute(deviceId: device.id).push<void>(context);
-                      },
-                      child: const Text('查看电话'),
-                    ),
-                  ],
+              duration: _incomingCallBannerDuration,
+              content: AppBanner(
+                icon: LucideIcons.phoneIncoming,
+                message:
+                    '${deviceName(device)} · ${call.name ?? call.number ?? '当前来电'}\n声音仍在手机',
+                action: TextButton(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    CallsRoute(deviceId: device.id).push<void>(context);
+                  },
+                  child: const Text('查看电话'),
                 ),
               ),
             ),

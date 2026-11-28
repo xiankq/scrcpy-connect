@@ -16,6 +16,11 @@ import 'package:scrcpy_connect/pages/device_setup/pairing/qr_pairing_page.dart';
 import 'package:scrcpy_connect/pages/device_setup/usb/usb_setup_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
 import 'package:scrcpy_connect/widgets/tab_transition.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
@@ -238,14 +243,53 @@ class ConnectionFormPage extends HookConsumerWidget {
       prepareConnection: prepareConnection,
       onUseWireless: () => selectMode(.pairing),
     );
+    Future<void> openNearby() async {
+      final previousMode = mode.value;
+      if (mode.value == AddDeviceMode.qr || mode.value == AddDeviceMode.usb) {
+        if (!await selectMode(AddDeviceMode.pairing)) return;
+      }
+      if (!context.mounted) return;
+      final selection = await const DiscoveryRoute(selection: true)
+          .push<DiscoveredDevice>(context);
+      if (!context.mounted || !ownsScope()) return;
+      if (selection == null) {
+        await selectMode(previousMode);
+        return;
+      }
+      actions.clearFeedback();
+      final device = selection;
+      final endpoint = device.endpoints.firstOrNull;
+      final isPairing = device.kind == .pairing;
+      if (!await selectMode(
+        isPairing ? AddDeviceMode.pairing : AddDeviceMode.ip,
+      )) {
+        return;
+      }
+      if (!context.mounted || !ownsScope()) return;
+      completingPairing.value = false;
+      host.text = endpoint?.address ?? '';
+      if (isPairing) portField.clear();
+      (isPairing ? pairingPort : portField).text =
+          endpoint?.port.toString() ?? '';
+      currentDeviceId.value = deviceId ?? device.deviceId;
+      identityAddress.value = host.text.trim();
+      tlsLocked.value =
+          transport == ConnectionTransport.tls || device.kind != .tcp;
+      selectedTransport.value = device.kind == .tcp
+          ? ConnectionTransport.tcp
+          : ConnectionTransport.tls;
+    }
+
     final primary = switch (mode.value) {
       .qr => qr!.primary,
       .usb =>
         usb!.primary ??
-            const SizedBox(height: DesignTokens.componentButtonPrimaryHeight),
-      _ => FilledButton(
+            const SizedBox(height: DesignTokens.componentButtonFilledHeight),
+      _ => AppButton(
+        role: AppButtonRole.primary,
+        expand: true,
         onPressed: flow.busy ? null : submit,
-        child: Text(pairing ? '配对并连接' : '连接设备'),
+        label: pairing ? '配对并连接' : '连接设备',
       ),
     };
     final body = switch (mode.value) {
@@ -286,179 +330,61 @@ class ConnectionFormPage extends HookConsumerWidget {
                   : reauthorizing
                   ? '重新授权'
                   : '添加设备',
-              titleStyle: Theme.of(context).textTheme.headlineMedium,
-              bottom: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: DesignTokens.spacingXs,
-                ),
-                child: FilledButtonTheme(
-                  data: FilledButtonThemeData(
-                    style: FilledButtonTheme.of(context).style?.copyWith(
-                      minimumSize: const WidgetStatePropertyAll(
-                        Size.fromHeight(
-                          DesignTokens.componentButtonPrimaryHeight,
-                        ),
-                      ),
-                      shape: const WidgetStatePropertyAll(
-                        RoundedRectangleBorder(
-                          borderRadius: BorderRadius.all(
-                            Radius.circular(
-                              DesignTokens.componentButtonPrimaryRounded,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  child: primary,
-                ),
-              ),
+              bottom: primary,
               child: ConnectionContent(
                 child: CustomScrollView(
                   slivers: [
                     const PageChromeSliver(),
                     SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(
-                        DesignTokens.spacingMd,
-                        DesignTokens.spacingXs,
-                        DesignTokens.spacingMd,
-                        DesignTokens.spacingMd,
-                      ),
+                      padding: _formPadding,
                       sliver: SliverMainAxisGroup(
                         slivers: [
-                          SliverToBoxAdapter(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                if (!configuring) ...[
-                                  Material(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .surface,
-                                    borderRadius: BorderRadius.circular(
-                                      DesignTokens
-                                          .componentConnectionNearbyEntryRounded,
-                                    ),
-                                    clipBehavior: Clip.antiAlias,
-                                    child: ListTile(
-                                      minTileHeight: DesignTokens
-                                          .componentConnectionNearbyEntryHeight,
-                                      leading: const Icon(
-                                        AppIcons.connectionDiscovery,
-                                        color: DesignTokens
-                                            .componentConnectionIconNearbyTextColor,
+                          if (!configuring)
+                            SliverToBoxAdapter(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  SettingsGroup(
+                                    children: [
+                                      AppListRow(
+                                        leading: const Icon(
+                                          AppIcons.connectionDiscovery,
+                                          size: DesignTokens
+                                              .componentIconTileSize,
+                                          color: DesignTokens.colorAccentTeal,
+                                        ),
+                                        title: const Text('附近设备'),
+                                        chevron: true,
+                                        onTap: flow.busy ? null : openNearby,
                                       ),
-                                      title: const Text('附近设备'),
-                                      trailing: const Icon(
-                                        AppIcons.forward,
-                                        size:
-                                            DesignTokens.componentIconSmallSize,
-                                      ),
-                                      onTap: flow.busy
-                                          ? null
-                                          : () async {
-                                              final previousMode = mode.value;
-                                              if (mode.value ==
-                                                      AddDeviceMode.qr ||
-                                                  mode.value ==
-                                                      AddDeviceMode.usb) {
-                                                if (!await selectMode(
-                                                  AddDeviceMode.pairing,
-                                                )) {
-                                                  return;
-                                                }
-                                              }
-                                              if (!context.mounted) return;
-                                              final selection =
-                                                  await const DiscoveryRoute(
-                                                    selection: true,
-                                                  ).push<DiscoveredDevice>(
-                                                    context,
-                                                  );
-                                              if (!context.mounted ||
-                                                  !ownsScope()) {
-                                                return;
-                                              }
-                                              if (selection == null) {
-                                                await selectMode(previousMode);
-                                                return;
-                                              }
-                                              actions.clearFeedback();
-                                              final device = selection;
-                                              final endpoint =
-                                                  device.endpoints.firstOrNull;
-                                              final isPairing =
-                                                  device.kind == .pairing;
-                                              if (!await selectMode(
-                                                isPairing
-                                                    ? AddDeviceMode.pairing
-                                                    : AddDeviceMode.ip,
-                                              )) {
-                                                return;
-                                              }
-                                              if (!context.mounted ||
-                                                  !ownsScope()) {
-                                                return;
-                                              }
-                                              completingPairing.value = false;
-                                              host.text =
-                                                  endpoint?.address ?? '';
-                                              if (isPairing) {
-                                                portField.clear();
-                                              }
-                                              (isPairing
-                                                          ? pairingPort
-                                                          : portField)
-                                                      .text =
-                                                  endpoint?.port.toString() ??
-                                                  '';
-                                              currentDeviceId.value =
-                                                  deviceId ?? device.deviceId;
-                                              identityAddress.value = host.text
-                                                  .trim();
-                                              tlsLocked.value =
-                                                  transport ==
-                                                      ConnectionTransport.tls ||
-                                                  device.kind != .tcp;
-                                              selectedTransport.value =
-                                                  device.kind == .tcp
-                                                  ? ConnectionTransport.tcp
-                                                  : ConnectionTransport.tls;
-                                            },
-                                    ),
+                                    ],
                                   ),
                                   const SizedBox(
-                                    height: DesignTokens.roundedMd,
+                                    height: DesignTokens.spacingLg,
                                   ),
-                                ],
-                                if (!configuring) ...[
                                   ConnectionModeSelector(
                                     selected: mode.value,
                                     onChanged: selectMode,
                                   ),
                                   const SizedBox(
-                                    height: DesignTokens.spacingMd,
+                                    height: DesignTokens.spacingLg,
                                   ),
                                 ],
-                              ],
+                              ),
                             ),
-                          ),
                           SliverToBoxAdapter(
                             child: TabContent(
                               child: Form(key: form, child: body),
                             ),
                           ),
                           const SliverToBoxAdapter(
-                            child: SizedBox(height: DesignTokens.spacingSm),
+                            child: SizedBox(height: DesignTokens.spacingXs),
                           ),
                           SliverToBoxAdapter(
                             child: Align(
                               alignment: AlignmentDirectional.centerStart,
                               child: TextButton(
-                                style: TextButton.styleFrom(
-                                  padding: EdgeInsets.zero,
-                                  minimumSize: const Size(44, 44),
-                                ),
+                                style: _helpButtonStyle(context),
                                 onPressed: () =>
                                     Navigator.of(context).push<void>(
                                       MaterialPageRoute(
@@ -469,23 +395,12 @@ class ConnectionFormPage extends HookConsumerWidget {
                                             ),
                                       ),
                                     ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Flexible(
-                                      child: Text(switch (mode.value) {
-                                        .pairing => '配对码帮助',
-                                        .qr => '扫码帮助',
-                                        .usb => 'USB 连接帮助',
-                                        .ip => 'IP 连接帮助',
-                                      }),
-                                    ),
-                                    const Icon(
-                                      AppIcons.forward,
-                                      size: DesignTokens.componentIconSmallSize,
-                                    ),
-                                  ],
-                                ),
+                                child: Text(switch (mode.value) {
+                                  .pairing => '配对码帮助',
+                                  .qr => '扫码帮助',
+                                  .usb => 'USB 连接帮助',
+                                  .ip => 'IP 连接帮助',
+                                }),
                               ),
                             ),
                           ),
@@ -532,6 +447,29 @@ class ConnectionFormPage extends HookConsumerWidget {
   }
 }
 
+/// 正文从页头下 12 开始，左右 16（design.md「页面结构」）。
+const _formPadding = EdgeInsets.fromLTRB(
+  DesignTokens.componentPagePadding,
+  DesignTokens.spacingMd,
+  DesignTokens.componentPagePadding,
+  DesignTokens.componentPagePadding,
+);
+
+/// 帮助入口：左对齐的 `button-text`，文字与正文起点对齐，不加箭头（design.md「按钮」）。
+ButtonStyle _helpButtonStyle(BuildContext context) =>
+    AppButton.styleOf(context, role: AppButtonRole.text).copyWith(
+      padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+      minimumSize: const WidgetStatePropertyAll(
+        Size(
+          DesignTokens.componentBarButtonSize,
+          DesignTokens.componentBarButtonSize,
+        ),
+      ),
+    );
+
+/// 帮助步骤卡（Ardot 帮助步骤 37:2500）的序号圆点。
+const _stepNumberSize = 28.0;
+
 class _ConnectionHelpPage extends StatelessWidget {
   const _ConnectionHelpPage({required this.mode, required this.legacyTcp});
   final AddDeviceMode mode;
@@ -539,6 +477,8 @@ class _ConnectionHelpPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    final type = AppTypography.of(context);
     final (title, instructions) = switch (mode) {
       .pairing => (
         '配对码连接帮助',
@@ -577,17 +517,43 @@ class _ConnectionHelpPage extends StatelessWidget {
       title: title,
       onBack: () => Navigator.pop(context),
       child: Builder(
-        builder: (context) => ListView(
-          padding:
-              const EdgeInsets.all(DesignTokens.spacingMd) +
-              PageChromePadding.of(context),
-          children: [
-            for (final (index, instruction) in instructions.indexed)
-              ListTile(
-                leading: CircleAvatar(child: Text('${index + 1}')),
-                title: Text(instruction),
-              ),
-          ],
+        builder: (context) => ListView.separated(
+          padding: _formPadding + PageChromePadding.of(context),
+          itemCount: instructions.length,
+          separatorBuilder: (_, _) =>
+              const SizedBox(height: DesignTokens.spacingMd),
+          itemBuilder: (context, index) => ContentPanel(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  constraints: const BoxConstraints(
+                    minWidth: _stepNumberSize,
+                    minHeight: _stepNumberSize,
+                  ),
+                  alignment: Alignment.center,
+                  decoration: ShapeDecoration(
+                    color: colors.primaryContainer,
+                    shape: const StadiumBorder(),
+                  ),
+                  child: Text(
+                    '${index + 1}',
+                    style: type.label.copyWith(
+                      color: colors.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: DesignTokens.spacingMd),
+                Expanded(
+                  child: Padding(
+                    // 首行与 28 点序号居中对齐（subheadline 行高 20）。
+                    padding: const EdgeInsets.only(top: DesignTokens.spacingXs),
+                    child: Text(instructions[index], style: type.subheadline),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

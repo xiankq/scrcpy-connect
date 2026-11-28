@@ -1,6 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/motion.dart';
 
+/// 根页在原位交叉淡化 220 毫秒（designs/interaction-motion.md「导航与覆盖层」）。
+const _tabPaneFadeDuration = Duration(milliseconds: 220);
+
 /// Crossfades full-size tab panes while retaining their scroll and route state.
 class TabPaneStack extends StatelessWidget {
   const TabPaneStack({super.key, required this.index, required this.children});
@@ -12,7 +15,7 @@ class TabPaneStack extends StatelessWidget {
   Widget build(BuildContext context) {
     final duration = reduceMotionOf(context)
         ? Duration.zero
-        : shortTransitionDuration;
+        : _tabPaneFadeDuration;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -20,7 +23,7 @@ class TabPaneStack extends StatelessWidget {
           TweenAnimationBuilder<double>(
             tween: Tween(end: position == index ? 1.0 : 0.0),
             duration: duration,
-            curve: shortTransitionCurve,
+            curve: Curves.easeInOut,
             builder: (context, opacity, child) => Offstage(
               offstage: opacity == 0 && position != index,
               child: Opacity(opacity: opacity, child: child),

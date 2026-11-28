@@ -26,6 +26,8 @@ import 'package:scrcpy_connect/pages/incoming_share/widgets/share_device_card.da
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 
+import '../../support/fixed_state.dart';
+
 const _share = IncomingShare(
   shareId: 'share',
   status: .ready,
@@ -105,13 +107,13 @@ void main() {
   test('文件已登记后剪贴板失败，明确继续只重试未完成步骤', () async {
     final first = submit();
     directories.complete();
-    await _flush(container);
+    await flushProviders(container);
     expect(
       transfers.starts.single.plan.items.single.destination,
       '/sdcard/Download/photo.jpg',
     );
     transfers.accept();
-    await _flush(container);
+    await flushProviders(container);
     clipboard.writes.single.completeError(StateError('clipboard unavailable'));
     await first;
     expect(container.read(provider).pushed, isTrue);
@@ -122,7 +124,7 @@ void main() {
     expect(transfers.starts, hasLength(1));
     expect(clipboard.writes, hasLength(2));
     clipboard.writes.last.complete();
-    await _flush(container);
+    await flushProviders(container);
     expect(incoming.consumed.single.id, 'share');
     incoming.consumed.single.result.complete();
     await retry;
@@ -140,7 +142,7 @@ void main() {
   test('离页保留已登记的原传输，不再执行剪贴板或消费分享', () async {
     final sending = submit();
     directories.complete();
-    await _flush(container);
+    await flushProviders(container);
     expect(transfers.starts, hasLength(1));
     leave();
     await container.pump();
@@ -154,9 +156,9 @@ void main() {
   test('部分成功后关闭只结束分享，不自动进入传输中心', () async {
     final sending = submit();
     directories.complete();
-    await _flush(container);
+    await flushProviders(container);
     transfers.accept();
-    await _flush(container);
+    await flushProviders(container);
     clipboard.writes.single.completeError(StateError('clipboard unavailable'));
     await sending;
     final closing = actions.cancel();
@@ -376,9 +378,4 @@ class _Session implements AppSession {
 class _Devices implements DeviceReader {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-Future<void> _flush(ProviderContainer container) async {
-  await Future<void>.delayed(Duration.zero);
-  await container.pump();
 }

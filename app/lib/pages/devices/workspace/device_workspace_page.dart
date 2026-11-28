@@ -17,6 +17,9 @@ import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
+/// 卡片之间的间距（Ardot H3 设备工作台 2:465：概览、快捷入口与应用卡间距 12）。
+const _cardGap = DesignTokens.spacingMd;
+
 class DeviceWorkspacePage extends ConsumerWidget {
   const DeviceWorkspacePage({
     super.key,
@@ -41,8 +44,8 @@ class DeviceWorkspacePage extends ConsumerWidget {
     return PageFrame(
       pane: pane,
       onBack: onBack,
-      title: '设备工作台',
-      titleContent: const SizedBox.shrink(),
+      // 分栏中详情页以设备名作标题（Ardot W10 9:1784），单页为「设备工作台」。
+      title: pane ? deviceName(current) : '设备工作台',
       actions: [
         if (!pane && RemoteWindows.hasWindows(context))
           const RemoteWindowsButton(),
@@ -52,11 +55,8 @@ class DeviceWorkspacePage extends ConsumerWidget {
         slivers: [
           const PageChromeSliver(),
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
-              DesignTokens.spacingMd,
-              DesignTokens.spacingXxs,
-              DesignTokens.spacingMd,
-              DesignTokens.spacingZero,
+            padding: const EdgeInsets.symmetric(
+              horizontal: DesignTokens.componentPagePadding,
             ),
             sliver: SliverToBoxAdapter(
               child: Column(
@@ -65,9 +65,7 @@ class DeviceWorkspacePage extends ConsumerWidget {
                   WorkspaceCallCard(device: current),
                   if (audioError != null)
                     StateNote(audioError, icon: LucideIcons.volumeX),
-                  const SizedBox(
-                    height: DesignTokens.componentWorkspaceSectionGap,
-                  ),
+                  const SizedBox(height: _cardGap),
                   ContentShortcuts(
                     deviceId: id,
                     enabled: online,
@@ -78,20 +76,16 @@ class DeviceWorkspacePage extends ConsumerWidget {
                           : '无法打开，请先连接设备。',
                     ),
                   ),
-                  const SizedBox(
-                    height: DesignTokens.componentWorkspaceSectionGap,
-                  ),
+                  const SizedBox(height: _cardGap),
                   FavoriteApps(key: ValueKey(id), device: current),
-                  const SizedBox(
-                    height: DesignTokens.componentWorkspaceSectionGap,
-                  ),
+                  const SizedBox(height: _cardGap),
                 ],
               ),
             ),
           ),
           SliverPadding(
             padding: const EdgeInsets.symmetric(
-              horizontal: DesignTokens.spacingMd,
+              horizontal: DesignTokens.componentPagePadding,
             ),
             sliver: RunningApps(key: ValueKey('$id:$online'), device: current),
           ),

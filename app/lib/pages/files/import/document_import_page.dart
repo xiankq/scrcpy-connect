@@ -8,9 +8,13 @@ import 'package:scrcpy_connect/core/files/file_transfers.dart';
 import 'package:scrcpy_connect/core/files/system_documents.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/utils/formatters.dart';
-import 'package:scrcpy_connect/widgets/form_controls.dart';
+import 'package:scrcpy_connect/pages/files/widgets/file_kind_style.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
+import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
@@ -74,168 +78,136 @@ class DocumentImportPage extends HookConsumerWidget {
         destination == '/sdcard' || destination.startsWith('/sdcard/')
         ? '内部存储'
         : destination;
+    final colors = AppColors.of(context);
+    final type = AppTypography.of(context);
+    final note = type.footnote.copyWith(color: colors.textSecondary);
     final leading = <Widget>[
-      SizedBox(
-        height: DesignTokens.spacingLg,
-        child: Row(
-          children: [
-            Icon(
-              LucideIcons.smartphone,
-              size: DesignTokens.componentIconSmallSize - 2,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: DesignTokens.spacingTight),
-            Expanded(
-              child: Text(
-                deviceName(device),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          ],
-        ),
+      Row(
+        children: [
+          Icon(
+            LucideIcons.smartphone,
+            size: _deviceGlyphSize,
+            color: colors.textSecondary,
+          ),
+          const SizedBox(width: DesignTokens.spacingSm),
+          Expanded(child: Text(deviceName(device), style: note)),
+        ],
       ),
       const SizedBox(height: DesignTokens.spacingMd),
       ContentPanel(
-        padding: const EdgeInsets.symmetric(
-          horizontal: DesignTokens.spacingLg,
-          vertical: DesignTokens.spacingLg,
-        ),
+        padding: const EdgeInsets.all(DesignTokens.spacingXxl),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: DesignTokens.componentEmptyContentIconSize,
-                height: DesignTokens.componentEmptyContentIconSize,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? DesignTokens.colorAccentAmberSoftDark
-                      : DesignTokens.colorAccentAmberSoft,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  LucideIcons.folderUp,
-                  size: DesignTokens.componentIconLargeSize,
-                  color: DesignTokens.colorAccentAmber,
-                ),
+            const Center(
+              child: FeatureIcon(
+                LucideIcons.folderUp,
+                color: folderKindColor,
+                size: FeatureIcon.detailSize,
               ),
             ),
-            const SizedBox(height: DesignTokens.spacingMd),
+            const SizedBox(height: DesignTokens.spacingLg),
             Text(
               result == null ? '准备发送一个文件夹' : '已读取的文件夹',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineMedium,
+              style: type.title3,
             ),
-            const SizedBox(height: DesignTokens.spacingXs),
+            const SizedBox(height: DesignTokens.spacingSm),
             Text(
               result == null
                   ? '先选择本机文件夹。开始前会读取并列出文件、子文件夹和无法发送的项目。'
                   : '核对实际文件、子文件夹和无法读取的项目后，再发送到手机。',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+              style: type.subheadline.copyWith(color: colors.textSecondary),
             ),
-            const SizedBox(height: DesignTokens.spacingMd),
-            FilledButton.icon(
-              onPressed: operation.busy || sending.value
-                  ? null
-                  : () {
-                      reviewed.value = false;
-                      actions.importDirectory();
-                    },
-              icon: const Icon(LucideIcons.folderOpen),
-              label: Text(result == null ? '选择文件夹' : '重新选择文件夹'),
+            const SizedBox(height: DesignTokens.spacingLg),
+            Center(
+              child: AppButton(
+                label: result == null ? '选择文件夹' : '重新选择文件夹',
+                icon: LucideIcons.folderOpen,
+                role: usable ? AppButtonRole.secondary : AppButtonRole.primary,
+                onPressed: operation.busy || sending.value
+                    ? null
+                    : () {
+                        reviewed.value = false;
+                        actions.importDirectory();
+                      },
+              ),
             ),
             const SizedBox(height: DesignTokens.spacingSm),
             Text(
               '保留目录结构与空文件夹；符号链接不会跟随。',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
+              style: note,
             ),
           ],
         ),
       ),
-      const SizedBox(height: DesignTokens.spacingLg),
-      Text('发送到', style: Theme.of(context).textTheme.titleMedium),
-      const SizedBox(height: DesignTokens.spacingXs),
-      Container(
-        constraints: const BoxConstraints(
-          minHeight: DesignTokens.componentRowLargeHeight,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: DesignTokens.spacingMd),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
-        ),
-        child: Row(
-          children: [
-            const ListIconBadge(
-              icon: LucideIcons.folder,
-              backgroundColor: DesignTokens.colorListIconAmber,
+      const SectionTitle('发送到'),
+      SettingsGroup(
+        children: [
+          AppListRow(
+            leading: const ListIconBadge(
+              icon: folderKindIcon,
+              backgroundColor: folderKindColor,
             ),
-            const SizedBox(width: DesignTokens.spacingSm),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    destinationLabel,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: DesignTokens.spacingXxs),
-                  Tooltip(
-                    message: destination,
-                    child: Text(
-                      destinationScope,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                ],
-              ),
+            title: Text(destinationLabel),
+            subtitle: Tooltip(
+              message: destination,
+              child: Text(destinationScope),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
       const SizedBox(height: DesignTokens.spacingMd),
       if (operation.busy) ...[
         const ContentLoadingIndicator(),
         const StateNote('正在等待系统选择或读取实际内容…'),
-        TextButton(
-          onPressed: operation.cancelling ? null : actions.cancel,
-          child: Text(operation.cancelling ? '正在取消…' : '取消本次读取'),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: AppButton(
+            label: operation.cancelling ? '正在取消…' : '取消本次读取',
+            role: AppButtonRole.text,
+            size: AppButtonSize.section,
+            onPressed: operation.cancelling ? null : actions.cancel,
+          ),
         ),
       ],
       if (operation.error != null)
-        StateNote(operation.error!, icon: LucideIcons.circleAlert),
+        StateNote(
+          operation.error!,
+          icon: LucideIcons.circleAlert,
+          color: colors.error,
+        ),
       if (result != null)
         ContentPanel(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                partial
-                    ? '部分内容已取回，请先核对'
-                    : result.status == DocumentOutcomeStatus.imported
-                    ? '已取回本机暂存，尚未发送'
-                    : result.status == DocumentOutcomeStatus.cancelled
-                    ? '本次选择已取消'
-                    : '尚未取得可发送内容',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              if (name.isNotEmpty) Text(name),
-              if (result.files != null && result.directories != null)
+          child: DefaultTextStyle.merge(
+            style: type.subheadline,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
-                  '${result.files} 个文件 · ${result.directories} 个文件夹 · ${bytes(result.bytes)}',
+                  partial
+                      ? '部分内容已取回，请先核对'
+                      : result.status == DocumentOutcomeStatus.imported
+                      ? '已取回本机暂存，尚未发送'
+                      : result.status == DocumentOutcomeStatus.cancelled
+                      ? '本次选择已取消'
+                      : '尚未取得可发送内容',
+                  style: type.headline,
                 ),
-              if ((result.skipped ?? 0) > 0) Text('跳过 ${result.skipped} 项'),
-              if (usable) Text('发送位置：$target'),
-              if (imported && !usable)
-                const StateNote('系统未提供有效的文件夹名称、路径或可发送内容，请重新选择。'),
-            ],
+                const SizedBox(height: DesignTokens.spacingXs),
+                if (name.isNotEmpty) Text(name),
+                if (result.files != null && result.directories != null)
+                  Text(
+                    '${result.files} 个文件 · ${result.directories} 个文件夹 · ${bytes(result.bytes)}',
+                  ),
+                if ((result.skipped ?? 0) > 0) Text('跳过 ${result.skipped} 项'),
+                if (usable) Text('发送位置：$target'),
+                if (imported && !usable)
+                  const StateNote('系统未提供有效的文件夹名称、路径或可发送内容，请重新选择。'),
+              ],
+            ),
           ),
         ),
     ];
@@ -248,61 +220,56 @@ class DocumentImportPage extends HookConsumerWidget {
         ),
     ];
     return PageFrame(
-      titleStyle: Theme.of(context).textTheme.headlineMedium,
       bottom: usable
-          ? Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: DesignTokens.spacingXs,
-              ),
-              child: FilledButton(
-                style: pagePrimaryButtonStyle,
-                onPressed: sending.value || partial && !reviewed.value
-                    ? null
-                    : () async {
-                        if (!await confirm(
-                              context,
-                              '发送此文件夹？',
-                              '将“$name”发送到 ${deviceName(device)} 的 $target。同名内容逐项确认，不会自动覆盖。',
-                              action: '确认发送',
-                            ) ||
-                            (!context.mounted || !ownsScope())) {
-                          return;
-                        }
-                        sending.value = true;
-                        final response = await performAction(
-                          context,
-                          () => transfers.startTransfer(
-                            FileTransferPlan(
-                              deviceId: device.id,
-                              direction: .push,
-                              items: [
-                                FileTransferSelection(
-                                  source: result!.localPath!,
-                                  destination: target,
-                                ),
-                              ],
-                            ),
-                            shareId: result.managedSourceId,
+          ? AppButton(
+              label: sending.value
+                  ? '正在建立传输…'
+                  : partial
+                  ? '发送已核对的内容'
+                  : '发送此文件夹',
+              role: AppButtonRole.primary,
+              expand: true,
+              onPressed: sending.value || partial && !reviewed.value
+                  ? null
+                  : () async {
+                      if (!await confirm(
+                            context,
+                            '发送此文件夹？',
+                            '将“$name”发送到 ${deviceName(device)} 的 $target。同名内容逐项确认，不会自动覆盖。',
+                            action: '确认发送',
+                          ) ||
+                          (!context.mounted || !ownsScope())) {
+                        return;
+                      }
+                      sending.value = true;
+                      final response = await performAction(
+                        context,
+                        () => transfers.startTransfer(
+                          FileTransferPlan(
+                            deviceId: device.id,
+                            direction: .push,
+                            items: [
+                              FileTransferSelection(
+                                source: result!.localPath!,
+                                destination: target,
+                              ),
+                            ],
                           ),
-                        );
-                        if (context.mounted && ownsScope()) {
-                          sending.value = false;
-                          if (response != null) onSubmitted();
-                        }
-                      },
-                child: Text(
-                  sending.value
-                      ? '正在建立传输…'
-                      : partial
-                      ? '发送已核对的内容'
-                      : '发送此文件夹',
-                ),
-              ),
+                          shareId: result.managedSourceId,
+                        ),
+                      );
+                      if (context.mounted && ownsScope()) {
+                        sending.value = false;
+                        if (response != null) onSubmitted();
+                      }
+                    },
             )
           : null,
       title: '发送到手机',
       child: GroupedListView.builder(
-        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+        padding: const EdgeInsets.symmetric(
+          horizontal: DesignTokens.componentPagePadding,
+        ),
         itemCount: leading.length + errors.length + trailing.length,
         itemBuilder: (context, index) {
           if (index < leading.length) return leading[index];
@@ -312,6 +279,7 @@ class DocumentImportPage extends HookConsumerWidget {
             return StateNote(
               '${error.path.isEmpty ? '' : '${error.path}\n'}${failureCodeMessage(error.code, fallback: '系统无法读取此项。请重新选择文件。')}',
               icon: LucideIcons.circleAlert,
+              color: colors.error,
             );
           }
           return trailing[errorIndex - errors.length];
@@ -320,3 +288,6 @@ class DocumentImportPage extends HookConsumerWidget {
     );
   }
 }
+
+/// 设备来源行的图形大小（与 footnote 行高对齐）。
+const _deviceGlyphSize = DesignTokens.componentChevronSize;

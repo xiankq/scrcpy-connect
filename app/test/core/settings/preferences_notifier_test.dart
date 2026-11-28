@@ -10,6 +10,8 @@ import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/settings/settings_management.dart';
 
+import '../../support/fixed_state.dart';
+
 void main() {
   late _Settings settings;
   late _Session dependencies;
@@ -41,13 +43,13 @@ void main() {
       'device',
       const DevicePreferences(stayAwake: true),
     );
-    await _flush(container);
+    await flushProviders(container);
     expect(settings.writes, hasLength(1));
     settings.writes[0].result.complete(
       Preferences(deviceSettings: settings.writes[0].patch.deviceSettings!),
     );
     await first;
-    await _flush(container);
+    await flushProviders(container);
     final merged = settings.writes[1].patch.deviceSettings!['device']!;
     expect(merged.showNavigationBar, isFalse);
     expect(merged.stayAwake, isTrue);
@@ -71,7 +73,7 @@ void main() {
       'device',
       const DevicePreferences(lockOnClose: true),
     );
-    await _flush(container);
+    await flushProviders(container);
     events.add(
       SettingsChanged(
         Preferences(
@@ -86,7 +88,7 @@ void main() {
       Preferences(appearance: Appearance.light),
     );
     await first;
-    await _flush(container);
+    await flushProviders(container);
     expect(
       container.read(preferencesProvider).values.appearance,
       Appearance.dark,
@@ -111,19 +113,19 @@ void main() {
     );
     final queued = notifier.update(PreferenceChanges(notificationAlerts: true));
     final loading = notifier.load();
-    await _flush(container);
+    await flushProviders(container);
     final replacement = _Settings();
     container.updateOverrides([
       appSessionProvider.overrideWithValue(dependencies),
       settingsManagementProvider.overrideWithValue(replacement),
     ]);
-    await _flush(container);
+    await flushProviders(container);
     final current = container.read(preferencesProvider.notifier);
     expect(current, same(notifier));
     final update = current.update(
       PreferenceChanges(appearance: Appearance.light),
     );
-    await _flush(container);
+    await flushProviders(container);
     replacement.writes.single.result.complete(
       Preferences(appearance: Appearance.light),
     );
@@ -146,7 +148,7 @@ void main() {
     final writing = notifier.update(
       PreferenceChanges(appearance: Appearance.dark),
     );
-    await _flush(container);
+    await flushProviders(container);
     settings.writes.single.result.complete(
       Preferences(appearance: Appearance.dark),
     );
@@ -160,7 +162,7 @@ void main() {
     final retired = notifier.update(
       PreferenceChanges(appearance: Appearance.light),
     );
-    await _flush(container);
+    await flushProviders(container);
     container.dispose();
     settings.writes.last.result.complete(
       Preferences(appearance: Appearance.light),
@@ -202,9 +204,4 @@ class _Session implements AppSession {
   Future<void> Function()? get close => null;
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-Future<void> _flush(ProviderContainer container) async {
-  await Future<void>.delayed(Duration.zero);
-  await container.pump();
 }

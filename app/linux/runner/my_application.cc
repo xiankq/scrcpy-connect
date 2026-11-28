@@ -123,40 +123,170 @@ void register_system_typography(FlView* view) {
       nullptr);
 }
 
-void handle_desktop_window(FlMethodChannel*, FlMethodCall* call, gpointer data) {
-  const gchar* method = fl_method_call_get_name(call);
-  if (g_str_equal(method, "layout")) {
-    g_autoptr(FlValue) layout = fl_value_new_map();
-    fl_value_set_string_take(layout, "left", fl_value_new_int(0));
-    fl_value_set_string_take(layout, "right", fl_value_new_int(0));
-    fl_value_set_string_take(layout, "top", fl_value_new_int(0));
-    fl_method_call_respond_success(call, layout, nullptr);
-  } else if (g_str_equal(method, "activate")) {
-    gtk_window_present(GTK_WINDOW(data));
-    fl_method_call_respond_success(call, nullptr, nullptr);
-  } else {
-    fl_method_call_respond_not_implemented(call, nullptr);
+struct DesktopWindow {
+  GtkWindow* window;
+  FlMethodChannel* channel;
+  bool title_bar;
+  bool maximized;
+  gulong state_changed;
+  gulong press_hook;
+  // 最近一次在本窗口按下的事件；拖动窗口时交给窗口管理器。
+  GdkEvent* press;
+  GtkWidget* press_widget;
+};
+
+FlValue* desktop_window_layout(DesktopWindow* self) {
+  FlValue* layout = fl_value_new_map();
+  fl_value_set_string_take(layout, "left", fl_value_new_int(0));
+  fl_value_set_string_take(layout, "right", fl_value_new_int(0));
+  fl_value_set_string_take(layout, "top", fl_value_new_int(0));
+  fl_value_set_string_take(layout, "titleBar",
+                           fl_value_new_bool(self->title_bar));
+  fl_value_set_string_take(layout, "maximized",
+                           fl_value_new_bool(self->maximized));
+  return layout;
+}
+
+void desktop_window_forget_press(DesktopWindow* self) {
+  g_clear_pointer(&self->press, gdk_event_free);
+  if (self->press_widget != nullptr) {
+    g_object_remove_weak_pointer(G_OBJECT(self->press_widget),
+                                 reinterpret_cast<gpointer*>(&self->press_widget));
+    self->press_widget = nullptr;
   }
 }
 
-void register_desktop_window(FlView* view) {
+gboolean desktop_window_record_press(GSignalInvocationHint*, guint n_values,
+                                     const GValue* values, gpointer data) {
+  auto* self = static_cast<DesktopWindow*>(data);
+  if (n_values < 2) return TRUE;
+  auto* widget = GTK_WIDGET(g_value_get_object(&values[0]));
+  auto* event = static_cast<GdkEvent*>(g_value_get_boxed(&values[1]));
+  if (event == nullptr || event->type != GDK_BUTTON_PRESS ||
+      gtk_widget_get_toplevel(widget) != GTK_WIDGET(self->window)) {
+    return TRUE;
+  }
+  desktop_window_forget_press(self);
+  self->press = gdk_event_copy(event);
+  self->press_widget = widget;
+  g_object_add_weak_pointer(G_OBJECT(widget),
+                            reinterpret_cast<gpointer*>(&self->press_widget));
+  return TRUE;
+}
+
+void desktop_window_start_move(DesktopWindow* self) {
+  if (self->press == nullptr || self->press_widget == nullptr) return;
+  const GdkEventButton& press = self->press->button;
+  gtk_window_begin_move_drag(self->window, press.button,
+                             static_cast<gint>(press.x_root),
+                             static_cast<gint>(press.y_root), press.time);
+  // 窗口管理器接管指针后不再送来松开事件；补发给 Flutter 视图以结束这次按下。
+  GdkEvent* release = gdk_event_copy(self->press);
+  release->button.type = GDK_BUTTON_RELEASE;
+  gboolean handled = FALSE;
+  g_signal_emit_by_name(self->press_widget, "button-release-event", release,
+                        &handled);
+  gdk_event_free(release);
+  desktop_window_forget_press(self);
+}
+
+gboolean desktop_window_state_changed(GtkWidget*, GdkEventWindowState* event,
+                                      gpointer data) {
+  auto* self = static_cast<DesktopWindow*>(data);
+  if ((event->changed_mask & GDK_WINDOW_STATE_MAXIMIZED) == 0) return FALSE;
+  self->maximized =
+      (event->new_window_state & GDK_WINDOW_STATE_MAXIMIZED) != 0;
+  g_autoptr(FlValue) layout = desktop_window_layout(self);
+  fl_method_channel_invoke_method(self->channel, "layoutChanged", layout,
+                                  nullptr, nullptr, nullptr);
+  return FALSE;
+}
+
+void handle_desktop_window(FlMethodChannel*, FlMethodCall* call, gpointer data) {
+  auto* self = static_cast<DesktopWindow*>(data);
+  const gchar* method = fl_method_call_get_name(call);
+  if (g_str_equal(method, "layout")) {
+    g_autoptr(FlValue) layout = desktop_window_layout(self);
+    fl_method_call_respond_success(call, layout, nullptr);
+    return;
+  }
+  if (g_str_equal(method, "activate")) {
+    gtk_window_present(self->window);
+  } else if (g_str_equal(method, "minimize")) {
+    gtk_window_iconify(self->window);
+  } else if (g_str_equal(method, "toggleMaximized")) {
+    if (gtk_window_is_maximized(self->window)) {
+      gtk_window_unmaximize(self->window);
+    } else {
+      gtk_window_maximize(self->window);
+    }
+  } else if (g_str_equal(method, "close")) {
+    // 与系统关闭键相同，发出 delete-event。
+    gtk_window_close(self->window);
+  } else if (g_str_equal(method, "move")) {
+    desktop_window_start_move(self);
+  } else {
+    fl_method_call_respond_not_implemented(call, nullptr);
+    return;
+  }
+  fl_method_call_respond_success(call, nullptr, nullptr);
+}
+
+void desktop_window_dispose(gpointer data) {
+  auto* self = static_cast<DesktopWindow*>(data);
+  if (self->press_hook != 0) {
+    g_signal_remove_emission_hook(
+        g_signal_lookup("button-press-event", GTK_TYPE_WIDGET),
+        self->press_hook);
+  }
+  desktop_window_forget_press(self);
+  if (self->state_changed != 0) {
+    g_signal_handler_disconnect(self->window, self->state_changed);
+  }
+  fl_method_channel_set_method_call_handler(self->channel, nullptr, nullptr,
+                                            nullptr);
+  g_object_unref(self->channel);
+  g_object_unref(self->window);
+  delete self;
+}
+
+// title_bar 为 true 时由 Flutter 绘制标题栏，只用于主窗口。
+void register_desktop_window(FlView* view, bool title_bar) {
   auto* window = GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(view)));
   gtk_window_set_title(window, APP_DISPLAY_NAME);
   gtk_widget_set_size_request(GTK_WIDGET(view), 400, 300);
 
   auto* messenger = fl_engine_get_binary_messenger(fl_view_get_engine(view));
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
-  auto* channel = fl_method_channel_new(
-      messenger, "dev.scrcpyconnect/desktop_window", FL_METHOD_CODEC(codec));
-  fl_method_channel_set_method_call_handler(channel, handle_desktop_window,
-                                            window, nullptr);
+  auto* self = new DesktopWindow{
+      GTK_WINDOW(g_object_ref(window)),
+      fl_method_channel_new(messenger, "dev.scrcpyconnect/desktop_window",
+                            FL_METHOD_CODEC(codec)),
+      title_bar,
+      gtk_window_is_maximized(window) != FALSE,
+      0,
+      0,
+      nullptr,
+      nullptr};
+  fl_method_channel_set_method_call_handler(self->channel,
+                                            handle_desktop_window, self, nullptr);
+  if (title_bar) {
+    self->state_changed =
+        g_signal_connect(window, "window-state-event",
+                         G_CALLBACK(desktop_window_state_changed), self);
+    // Flutter 视图内部的事件盒先收到按下；用发射钩子记录，不改变其处理。
+    self->press_hook = g_signal_add_emission_hook(
+        g_signal_lookup("button-press-event", GTK_TYPE_WIDGET), 0,
+        desktop_window_record_press, self, nullptr);
+  }
+  g_object_set_data_full(G_OBJECT(view), "desktop-window", self,
+                         desktop_window_dispose);
   g_signal_connect(
-      view, "destroy", G_CALLBACK(+[](GtkWidget*, FlMethodChannel* channel) {
-        fl_method_channel_set_method_call_handler(channel, nullptr, nullptr,
-                                                  nullptr);
-        g_object_unref(channel);
+      view, "destroy", G_CALLBACK(+[](GtkWidget* widget, gpointer) {
+        // 在视图释放引擎之前注销 messenger 与 GTK 回调。
+        g_object_set_data(G_OBJECT(widget), "desktop-window", nullptr);
       }),
-      channel);
+      nullptr);
 }
 
 }  // namespace
@@ -191,14 +321,11 @@ static void my_application_activate(GApplication* application) {
   // 背景默认为黑色；需要透明背景时可改为 #00000000。
   gdk_rgba_parse(&background_color, "#000000");
   fl_view_set_background_color(view, &background_color);
-  auto* titlebar = gtk_header_bar_new();
-  gtk_header_bar_set_title(GTK_HEADER_BAR(titlebar), APP_DISPLAY_NAME);
-  gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(titlebar), TRUE);
-  gtk_window_set_titlebar(window, titlebar);
-  gtk_widget_show(titlebar);
+  // 不显示的空标题栏保留客户端装饰的阴影与缩放边框，标题栏由 Flutter 绘制。
+  gtk_window_set_titlebar(window, gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
   gtk_widget_show(GTK_WIDGET(view));
-  register_desktop_window(view);
+  register_desktop_window(view, true);
 
   // Flutter 开始绘制后显示窗口；视图必须先实现，才能开始渲染。
   g_signal_connect_swapped(view, "first-frame", G_CALLBACK(first_frame_cb),
@@ -209,7 +336,7 @@ static void my_application_activate(GApplication* application) {
   desktop_multi_window_plugin_set_window_created_callback(
       [](FlPluginRegistry* registry) {
         // The plugin has already realized the child view with its own titlebar.
-        register_desktop_window(FL_VIEW(registry));
+        register_desktop_window(FL_VIEW(registry), false);
         fl_register_plugins(registry);
       });
 

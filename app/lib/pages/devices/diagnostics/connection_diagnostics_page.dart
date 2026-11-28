@@ -7,7 +7,12 @@ import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/pages/devices/diagnostics/widgets/device_function_checks.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
@@ -26,8 +31,17 @@ class ConnectionDiagnosticsPage extends HookConsumerWidget {
       revision: revision.value,
     );
     final query = ref.watch(provider);
+    // 连接诊断（Ardot H16 2:704）：连接检查、处理入口与功能检查分组，底部通栏「重新检查」。
     return PageFrame(
       title: '连接诊断',
+      bottom: query.hasValue
+          ? AppButton(
+              role: AppButtonRole.primary,
+              expand: true,
+              onPressed: () => revision.value++,
+              label: '重新检查',
+            )
+          : null,
       child: ConnectionContent(
         child: AsyncContent(
           loading: query.isLoading,
@@ -95,34 +109,26 @@ class ConnectionDiagnosticsPage extends HookConsumerWidget {
                     : '请检查本机的调试设置，并在手机上允许调试。',
               ),
             ];
+            final colors = AppColors.of(context);
             final details = <Widget>[
               if (!usb && (current.address ?? '').isNotEmpty)
                 StateNote(
                   '当前地址：${(current.address ?? '')} · 连接端口：${(current.port?.toString() ?? '未记录')}',
                 ),
+              const SectionTitle('连接检查', first: true),
               SettingsGroup(
                 children: [
                   for (final check in checks)
-                    ListTile(
-                      leading: Icon(
-                        check.ok == true
+                    AppListRow(
+                      title: Text(check.name),
+                      subtitle: check.ok ? null : Text(check.message),
+                      trailing: Icon(
+                        check.ok
                             ? LucideIcons.circleCheck
                             : LucideIcons.circleAlert,
-                        size: DesignTokens.componentListIconGlyphSize,
-                        color: check.ok == true
-                            ? DesignTokens.colorSuccess
-                            : DesignTokens.componentConnectionIconUsbTextColor,
+                        size: DesignTokens.componentSectionGlyphSize,
+                        color: check.ok ? colors.success : colors.warning,
                       ),
-                      title: Text(
-                        check.name,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      subtitle: check.ok == true
-                          ? null
-                          : Text(
-                              check.message,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
                     ),
                 ],
               ),
@@ -130,24 +136,27 @@ class ConnectionDiagnosticsPage extends HookConsumerWidget {
                 const StateNote('设备连接出现问题。请检查手机是否开着，再按下方提示重新连接。'),
             ];
             final actions = <Widget>[
-              const SizedBox(height: DesignTokens.spacingMd),
-              FilledButton(
-                onPressed: () => revision.value++,
-                child: const Text('重新检查'),
+              const SizedBox(height: DesignTokens.componentListSectionGap),
+              SettingsGroup(
+                children: [
+                  ActionRow(
+                    icon: AppIcons.viewOptions,
+                    color: FunctionTone.connection,
+                    title: '连接配置',
+                    onTap: () =>
+                        DeviceConnectionRoute(deviceId: device.id)
+                            .push<void>(context),
+                  ),
+                ],
               ),
-              TextButton(
-                onPressed: () =>
-                    DeviceConnectionRoute(deviceId: device.id)
-                        .push<void>(context),
-                child: const Text('连接配置'),
-              ),
-              const SizedBox(height: DesignTokens.spacingMd),
               const SectionTitle('功能检查'),
               DeviceFunctionChecks(device: current, refreshKey: revision.value),
             ];
             return SingleChildScrollView(
               padding:
-                  const EdgeInsets.all(DesignTokens.spacingMd) +
+                  const EdgeInsets.symmetric(
+                    horizontal: DesignTokens.componentPagePadding,
+                  ) +
                   PageChromePadding.of(context),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,

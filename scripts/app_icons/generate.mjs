@@ -52,7 +52,7 @@ async function png(mark, size, opaque = false) {
 
 const iosSheets = {
   'Icon-App-1024x1024@1x.png': source,
-  'Icon-App-Dark.png': alternate('#18233F', ['#8BA9FF', '#FF946B']),
+  'Icon-App-Dark.png': alternate('#131315', ['#5C91FF', '#D9E2FF']),
   'Icon-App-Tinted.png': alternate('#252525', ['#FFFFFF', '#C7C7C7']),
 };
 for (const [file, mark] of Object.entries(iosSheets)) {

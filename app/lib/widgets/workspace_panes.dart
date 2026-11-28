@@ -2,8 +2,9 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:foldable/foldable.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
-import 'package:scrcpy_connect/widgets/content_arrival.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/content_arrival.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
 import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
@@ -46,8 +47,8 @@ final class WorkspacePanes extends StatelessWidget {
           fold?.horizontalSizeClass == SizeClass.regular &&
           (constraints.maxWidth > constraints.maxHeight || divider != null);
       final minimum = duo
-          ? DesignTokens.componentWorkspaceDuoPaneWidth
-          : DesignTokens.componentWorkspacePaneWidth;
+          ? AdaptiveWindowMetrics.duoPaneWidth
+          : AdaptiveWindowMetrics.paneWidth;
       final gap = DesignTokens.spacingSm;
       final hasDivider = divider != null && (width - window.width).abs() < 1;
       final dividerOffset = hasDivider ? divider.left - left : null;
@@ -56,7 +57,7 @@ final class WorkspacePanes extends StatelessWidget {
           hasContent &&
           (duo ||
               window.width - window.insets.left - window.insets.right >=
-                  DesignTokens.componentWorkspaceSplitWidth) &&
+                  AdaptiveWindowMetrics.splitWidth) &&
           available >= minimum * 2 + dividerWidth &&
           (dividerOffset == null ||
               dividerOffset >= minimum &&
@@ -115,11 +116,11 @@ final class WorkspacePanes extends StatelessWidget {
           ),
           if (split && !hasDivider)
             Positioned(
-              top: DesignTokens.spacingMd,
-              bottom: DesignTokens.spacingMd,
+              top: 0,
+              bottom: 0,
               left: left + listWidth + gap / 2,
               child: ColoredBox(
-                color: Theme.of(context).colorScheme.outlineVariant,
+                color: AppColors.of(context).separator,
                 child: const SizedBox(width: DesignTokens.spacingHairline),
               ),
             ),

@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/devices/device_apps.dart';
@@ -9,7 +8,8 @@ import 'package:scrcpy_connect/core/devices/device_query_provider.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/pages/apps/phone_app_launcher.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/devices/device_access.dart';
 
 import 'workspace_app_grid.dart';
@@ -65,36 +65,16 @@ class RunningApps extends HookConsumerWidget {
             ? () => AppsRoute(deviceId: id).push<void>(context)
             : () => offerDeviceConnection(context, ref, device),
         empty: result?.hasError == true
-            ? Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: TextButton(
-                  onPressed: refresh,
-                  child: const Text('读取失败，重试'),
-                ),
+            ? AppButton(
+                role: AppButtonRole.text,
+                size: AppButtonSize.section,
+                onPressed: refresh,
+                label: '读取失败，重试',
               )
-            : ConstrainedBox(
-                constraints: const BoxConstraints(
-                  minHeight: DesignTokens.componentIconButtonSize,
-                ),
-                child: Row(
-                  children: [
-                    if (online) ...[
-                      const Icon(
-                        LucideIcons.layers,
-                        size: DesignTokens.componentWorkspaceRunningEmptySize,
-                      ),
-                      const SizedBox(
-                        width: DesignTokens.componentWorkspaceRunningEmptyGap,
-                      ),
-                    ],
-                    Expanded(
-                      child: Text(
-                        online ? '当前没有正在运行的应用' : '连接后查看正在运行的应用。',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  ],
-                ),
+            : Text(
+                online ? '当前没有正在运行的应用' : '连接后查看正在运行的应用。',
+                style: AppTypography.of(context).subheadline
+                    .copyWith(color: AppColors.of(context).textSecondary),
               ),
       ),
     );

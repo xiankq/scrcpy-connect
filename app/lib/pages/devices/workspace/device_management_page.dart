@@ -15,7 +15,10 @@ import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/devices/device_access.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
+import 'package:scrcpy_connect/widgets/devices/device_status.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 
 class DeviceManagementPage extends ConsumerWidget {
@@ -64,16 +67,19 @@ class DeviceManagementPage extends ConsumerWidget {
       }
     }
 
+    // 设备管理（Ardot H12 2:553）：设备信息与诊断、画面与剪贴板、危险动作三组，组间 24。
     return PageFrame(
       title: '设备管理',
       child: GroupedListView(
-        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+        padding: const EdgeInsets.all(DesignTokens.componentPagePadding),
         children: [
           SettingsGroup(
             children: [
               ActionRow(
-                icon: LucideIcons.squarePen,
+                icon: LucideIcons.pencil,
+                color: FunctionTone.device,
                 title: '设备名称',
+                value: deviceName(current),
                 onTap: () async {
                   final management = ref.read(deviceManagementProvider);
                   final name = await askText(
@@ -110,42 +116,54 @@ class DeviceManagementPage extends ConsumerWidget {
                 },
               ),
               ActionRow(
-                icon: LucideIcons.network,
-                color: DesignTokens.colorListIconMint,
+                icon: LucideIcons.link,
+                color: FunctionTone.connection,
                 title: '连接配置',
+                value: current.transport == null
+                    ? null
+                    : deviceTransportLabel(current),
                 onTap: () =>
                     DeviceConnectionRoute(deviceId: id).push<void>(context),
               ),
               ActionRow(
-                icon: AppIcons.viewOptions,
-                color: DesignTokens.colorListIconBlue,
+                icon: LucideIcons.gauge,
+                title: '连接诊断',
+                onTap: () => DiagnosticsRoute(deviceId: id).push<void>(context),
+              ),
+            ],
+          ),
+          const SizedBox(height: DesignTokens.componentListSectionGap),
+          SettingsGroup(
+            children: [
+              ActionRow(
+                icon: LucideIcons.monitor,
+                color: FunctionTone.media,
                 title: '画面与控制',
                 onTap: () => QualityRoute(deviceId: id).push<void>(context),
               ),
               ConnectSwitchRow(
                 title: const Text('自动同步剪贴板'),
+                subtitle: const Text('连接时同步两端复制的文字'),
                 icon: LucideIcons.clipboard,
-                iconColor: DesignTokens.colorListIconTransfer,
+                iconColor: FunctionTone.transfer,
                 value: preferences.clipboardSync ?? false,
                 onChanged: saveClipboard,
               ),
-              ActionRow(
-                icon: LucideIcons.stethoscope,
-                title: '连接诊断',
-                onTap: () => DiagnosticsRoute(deviceId: id).push<void>(context),
-              ),
-              ActionRow(
-                icon: LucideIcons.unplug,
-                color: DesignTokens.colorListIconCoral,
-                title: online ? '断开设备连接' : '停止连接',
+            ],
+          ),
+          const SizedBox(height: DesignTokens.componentListSectionGap),
+          SettingsGroup(
+            children: [
+              AppListRow(
+                title: Text(online ? '断开设备连接' : '停止连接'),
+                destructive: true,
                 enabled: canStop,
                 onTap: !canStop
                     ? null
                     : () => stopDeviceConnection(context, ref, current),
               ),
-              ActionRow(
-                icon: AppIcons.delete,
-                title: '移除设备',
+              AppListRow(
+                title: const Text('移除设备'),
                 destructive: true,
                 onTap: () async {
                   if (await removeSavedDevice(context, ref, current) &&

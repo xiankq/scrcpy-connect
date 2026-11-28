@@ -9,12 +9,20 @@ import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/motion.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/devices/device_access.dart';
 import 'package:scrcpy_connect/widgets/devices/device_identity.dart';
 import 'package:scrcpy_connect/widgets/devices/device_status.dart';
 
-class DeviceCard extends HookConsumerWidget {
+/// 行尾按钮放不下时改到副标题下方的行宽（按文字缩放折算）。
+const _stackedActionWidth = 250.0;
+
+/// 设备列表行（Ardot 列表行「前导=设备 · 按钮」37:841）：52 点设备块、设备名、
+/// 状态 · 连接方式，行尾为区块尺寸次要按钮。放在设备分组卡片内，分屏选中时铺 `primary-container`。
+class DeviceCard extends HookConsumerWidget implements GroupedRow {
   const DeviceCard({
     super.key,
     required this.device,
@@ -26,6 +34,9 @@ class DeviceCard extends HookConsumerWidget {
   final bool compact;
   final bool selected;
   final VoidCallback? onOpen;
+
+  @override
+  double get separatorIndent => deviceRowSeparatorIndent;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -63,9 +74,7 @@ class DeviceCard extends HookConsumerWidget {
     void remove() => run(() async {
       await removeSavedDevice(context, ref, current);
     });
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final dark = theme.brightness == Brightness.dark;
+    final colors = AppColors.of(context);
     final actions = [
       (
         connected
@@ -100,15 +109,23 @@ class DeviceCard extends HookConsumerWidget {
           for (final (label, icon, action) in actions)
             PopupMenuItem(
               value: action,
+              height: DesignTokens.componentMenuItemHeight,
               child: Row(
                 children: [
                   Icon(
                     icon,
-                    size: DesignTokens.componentIconSmallSize,
-                    color: label == '移除此设备' ? colors.error : null,
+                    size: DesignTokens.componentMenuItemSize,
+                    color: label == '移除此设备' ? colors.error : colors.text,
                   ),
-                  const SizedBox(width: DesignTokens.spacingSm),
-                  Flexible(child: Text(label)),
+                  const SizedBox(width: DesignTokens.spacingMd),
+                  Flexible(
+                    child: Text(
+                      label,
+                      style: AppTypography.of(context).subheadline.copyWith(
+                        color: label == '移除此设备' ? colors.error : colors.text,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -140,51 +157,9 @@ class DeviceCard extends HookConsumerWidget {
       detail = deviceTransportLabel(current);
     }
     final identity = DeviceIdentity(device: current, compact: compact);
-    final labels = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          deviceName(current),
-          style: theme.textTheme.titleMedium,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: DesignTokens.spacingXxs),
-        Text(
-          detail == null ? status : '$status · $detail',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: switch (current.status) {
-              .failed => colors.error,
-              .unauthorized => DesignTokens.componentConnectionIconUsbTextColor,
-              _ => colors.onSurfaceVariant,
-            },
-          ),
-        ),
-      ],
-    );
-    final action = FilledButton(
-      style: FilledButton.styleFrom(
-        minimumSize: const Size(
-          DesignTokens.componentDeviceListActionWidth,
-          DesignTokens.componentDeviceListActionHeight,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: DesignTokens.spacingXs),
-        backgroundColor: connected
-            ? dark
-                  ? DesignTokens.colorAccentBlueSoftDark
-                  : DesignTokens.colorAccentBlueSoft
-            : dark
-            ? DesignTokens.colorDevicePanelDark
-            : DesignTokens.colorDevicePanel,
-        foregroundColor: connected
-            ? dark
-                  ? DesignTokens.colorConnectionTrackArcDark
-                  : DesignTokens.componentDeviceListOpenTextColor
-            : colors.onSurface,
-        shape: const StadiumBorder(),
-        textStyle: theme.textTheme.labelLarge,
-      ),
+    final subtitle = Text(detail == null ? status : '$status · $detail');
+    final action = AppButton(
+      size: AppButtonSize.section,
       onPressed: pending.value || starting.value && !inProgress
           ? null
           : connected
@@ -192,14 +167,14 @@ class DeviceCard extends HookConsumerWidget {
           : inProgress || waiting
           ? stop
           : connect,
-      child: Text(switch (current.status) {
+      label: switch (current.status) {
         .connected => '打开屏幕',
         _ when starting.value && !inProgress => '正在连接',
         .failed => '重试',
         .unauthorized => '重新授权',
         _ when inProgress || waiting => '停止连接',
         _ => '连接',
-      }),
+      },
     );
 
     return Semantics(
@@ -207,62 +182,39 @@ class DeviceCard extends HookConsumerWidget {
       customSemanticsActions: {
         const CustomSemanticsAction(label: '设备操作'): openMenu,
       },
-      child: Material(
-        color: selected ? colors.surfaceContainerHigh : colors.surface,
-        shape: const RoundedSuperellipseBorder(
-          borderRadius: BorderRadius.all(
-            Radius.circular(DesignTokens.componentDeviceListItemRounded),
-          ),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap:
-              onOpen ??
-              () => WorkspaceRoute(deviceId: device.id).push<void>(context),
-          onLongPress: openMenu,
-          onSecondaryTapUp: (details) => openMenu(details.globalPosition),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: compact
-                  ? DesignTokens.componentDeviceListItemCompactHeight
-                  : DesignTokens.componentDeviceListItemHeight,
-            ),
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: DesignTokens.componentDeviceListItemPadding,
-                vertical: compact
-                    ? DesignTokens.spacingXs
-                    : DesignTokens.spacingMd,
-              ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final scale = MediaQuery.textScalerOf(context).scale(1);
-                  return Row(
-                    children: [
-                      identity,
-                      const SizedBox(width: DesignTokens.spacingMd),
-                      if (constraints.maxWidth / scale < 250)
-                        Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              labels,
-                              const SizedBox(height: DesignTokens.spacingXs),
-                              action,
-                            ],
-                          ),
-                        )
-                      else ...[
-                        Expanded(child: labels),
-                        const SizedBox(width: DesignTokens.spacingXs),
-                        action,
-                      ],
-                    ],
-                  );
-                },
-              ),
-            ),
+      child: GestureDetector(
+        onSecondaryTapUp: (details) => openMenu(details.globalPosition),
+        child: Material(
+          color: selected ? colors.primaryContainer : colors.card.withAlpha(0),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final scale = MediaQuery.textScalerOf(context).scale(1);
+              final stacked =
+                  constraints.maxWidth / scale < _stackedActionWidth;
+              return AppListRow(
+                selected: selected,
+                leading: identity,
+                title: Text(deviceName(current)),
+                titleMaxLines: 2,
+                subtitle: stacked
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          subtitle,
+                          const SizedBox(height: DesignTokens.spacingXs),
+                          action,
+                        ],
+                      )
+                    : subtitle,
+                trailing: stacked ? null : action,
+                onTap:
+                    onOpen ??
+                    () =>
+                        WorkspaceRoute(deviceId: device.id).push<void>(context),
+                onLongPress: openMenu,
+              );
+            },
           ),
         ),
       ),

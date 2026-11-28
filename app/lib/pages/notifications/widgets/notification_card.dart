@@ -1,7 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/core/devices/device_notifications.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
@@ -10,7 +9,8 @@ import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/pages/apps/widgets/phone_app_icon.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 
 class NotificationCard extends HookConsumerWidget {
@@ -93,69 +93,84 @@ class NotificationCard extends HookConsumerWidget {
         : elapsed != null && !elapsed.isNegative && elapsed.inHours < 1
         ? '${elapsed.inMinutes}分钟前'
         : time;
-    final theme = Theme.of(context);
-    return ContentPanel(
+    final colors = AppColors.of(context);
+    final type = AppTypography.of(context);
+    const shape = RoundedSuperellipseBorder(
+      borderRadius: BorderRadius.all(
+        Radius.circular(DesignTokens.componentListGroupRounded),
+      ),
+    );
+    // 通知卡（Ardot 37:1111）：内距 16、间距 12；36 应用图标，标题一行、正文最多两行，
+    // 时间在右上，可清除时 32 紧凑清除键在右下。
+    return Material(
       key: ValueKey('notification-${notification.id}'),
-      padding: EdgeInsets.zero,
+      color: colors.card,
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: opening.value || notification.canOpen == false ? null : open,
-        borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
+        customBorder: shape,
+        splashColor: colors.page.withAlpha(0),
+        highlightColor: colors.pressed,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            DesignTokens.spacingMd,
-            DesignTokens.spacingSm,
-            DesignTokens.spacingSm,
-            DesignTokens.spacingSm,
-          ),
+          padding: const EdgeInsets.all(DesignTokens.componentCardPadding),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            spacing: DesignTokens.spacingMd,
             children: [
               Semantics(
                 label: appName.isEmpty ? '手机通知' : appName,
                 child: packageName.isNotEmpty
                     ? PhoneAppIcon(
-                        size: DesignTokens.componentNotificationAppIconSize,
+                        size: notificationAppIconSize,
                         deviceId: device.id,
                         packageName: packageName,
                         userId: notification.userId,
                       )
-                    : const Icon(LucideIcons.bell),
+                    : SizedBox.square(
+                        dimension: notificationAppIconSize,
+                        child: Icon(
+                          AppIcons.notifications,
+                          color: colors.textSecondary,
+                        ),
+                      ),
               ),
-              const SizedBox(width: DesignTokens.spacingSm),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
+                  spacing: DesignTokens.spacingXs,
                   children: [
                     Text(
                       notification.title.isEmpty ? '手机通知' : notification.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: type.headline,
                     ),
                     if (notification.body.isNotEmpty)
                       Text(
                         notification.body,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                        style: type.subheadline.copyWith(
+                          color: colors.textSecondary,
                         ),
                       ),
                   ],
                 ),
               ),
-              const SizedBox(width: DesignTokens.spacingXs),
               ConstrainedBox(
                 constraints: BoxConstraints(
                   maxWidth:
-                      104 *
-                      MediaQuery.textScalerOf(context).scale(1).clamp(1, 1.2),
+                      _trailingMaxWidth *
+                      MediaQuery.textScalerOf(context)
+                          .scale(1)
+                          .clamp(1, _trailingMaxScale),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   mainAxisSize: MainAxisSize.min,
+                  spacing: DesignTokens.spacingSm,
                   children: [
                     if (timeLabel != null)
                       Text(
@@ -164,16 +179,16 @@ class NotificationCard extends HookConsumerWidget {
                         overflow: TextOverflow.ellipsis,
                         semanticsLabel:
                             '收到于 ${localizations.formatFullDate(posted!)} $time',
-                        style: theme.textTheme.bodySmall,
+                        style: type.footnote.copyWith(
+                          color: colors.textSecondary,
+                        ),
                       ),
                     if (notification.canDismiss == true)
-                      IconButton(
+                      SolidIconButton(
+                        compact: true,
                         tooltip: '清除通知',
                         onPressed: clearing ? null : onClear,
-                        icon: const Icon(
-                          AppIcons.close,
-                          size: DesignTokens.componentIconSmallSize,
-                        ),
+                        icon: AppIcons.close,
                       ),
                   ],
                 ),
@@ -185,3 +200,10 @@ class NotificationCard extends HookConsumerWidget {
     );
   }
 }
+
+/// 通知卡的应用图标尺寸（Ardot 通知卡 37:1111「应用图标」36）。
+const notificationAppIconSize = 36.0;
+
+/// 时间列最宽 104，随字号最多放大到 1.2 倍，保证正文仍有空间。
+const _trailingMaxWidth = 104.0;
+const _trailingMaxScale = 1.2;

@@ -2,13 +2,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/pages/control/remote_input_owner.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
+import 'package:scrcpy_connect/pages/control/widgets/remote_opening_view.dart';
 import 'package:scrcpy_connect/pages/control/widgets/remote_recovery_panel.dart';
 import 'package:scrcpy_connect/pages/control/widgets/remote_surface.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
-import 'package:scrcpy_connect/widgets/ambient_loading_field.dart';
+import 'package:scrcpy_connect/widgets/page_loader.dart';
 
 void main() {
-  testWidgets('首帧前球体绕行缩放，失败冻结渐变，重试继续', (tester) async {
+  testWidgets('等待首帧时延迟显示加载，失败时给出原因、重试和关闭，减弱动效时形状静止', (tester) async {
     tester.view
       ..physicalSize = const Size(320, 550)
       ..devicePixelRatio = 1;
@@ -60,9 +61,13 @@ void main() {
 
     List<List<Object?>> drawCalls(Symbol method) {
       final finder = find.descendant(
-        of: find.byType(AmbientLoadingField),
-        matching: find.byType(CustomPaint),
+        of: find.byType(RemoteOpeningView),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is CustomPaint && widget.painter is LoaderShapesPainter,
+        ),
       );
+      if (finder.evaluate().isEmpty) return const [];
       final field = tester.widget<CustomPaint>(finder.first);
       final canvas = TestRecordingCanvas();
       field.painter!.paint(canvas, tester.getSize(finder.first));
@@ -74,48 +79,38 @@ void main() {
     }
 
     await show();
-    final initial = drawCalls(#drawCircle);
-    final initialGradient = drawCalls(#translate);
-    expect(initial, hasLength(3));
-
-    await tester.pump(const Duration(milliseconds: 800));
-    final moving = drawCalls(#drawCircle);
-    expect(
-      moving.map((orb) => orb.first),
-      isNot(initial.map((orb) => orb.first)),
-    );
-    expect(
-      moving.map((orb) => orb.last),
-      isNot(initial.map((orb) => orb.last)),
-    );
-    final movingGradient = drawCalls(#translate);
-    expect(movingGradient, isNot(initialGradient));
+    // 等待不足 400 毫秒时不闪出加载形状。
+    expect(drawCalls(#drawPath), isEmpty);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(drawCalls(#drawPath), hasLength(3));
 
     presentation.failOperation('未收到手机画面。');
     await show();
     expect(find.text('未收到手机画面。'), findsOneWidget);
+    expect(find.text('未能启动画面服务'), findsOneWidget);
     expect(find.text('重试').hitTestable(), findsOneWidget);
     expect(
       find.byKey(const ValueKey('remote-first-frame-close')).hitTestable(),
       findsOneWidget,
     );
-    expect(drawCalls(#drawCircle), isEmpty);
-    await tester.pump(const Duration(seconds: 1));
-    expect(drawCalls(#translate), movingGradient);
+    expect(
+      find.descendant(
+        of: find.byType(RemoteRecoveryPanel),
+        matching: find.byType(RemoteOpeningFailureMark),
+      ),
+      findsOneWidget,
+    );
+    expect(drawCalls(#drawPath), isEmpty);
 
     presentation.beginStart();
     await show();
-    expect(drawCalls(#drawCircle), moving);
-    await tester.pump(const Duration(milliseconds: 800));
-    expect(drawCalls(#translate), isNot(movingGradient));
+    expect(drawCalls(#drawPath), hasLength(3));
+    expect(find.byType(RemoteOpeningFailureMark), findsNothing);
 
     await show(reduceMotion: true);
-    final still = drawCalls(#drawCircle);
-    final stillGradient = drawCalls(#translate);
+    final still = drawCalls(#translate);
     await tester.pump(const Duration(seconds: 1));
-    expect(still, hasLength(3));
-    expect(drawCalls(#drawCircle), still);
-    expect(drawCalls(#translate), stillGradient);
+    expect(drawCalls(#translate), still);
   });
 }
 

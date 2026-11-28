@@ -8,7 +8,7 @@ import 'package:scrcpy_connect/core/media/models/recovered_video_session.dart';
 import 'package:scrcpy_connect/core/recovery/runtime_snapshot_reader.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 
-import '../../fixtures/video_events.dart';
+import '../../support/video_events.dart';
 
 void main() {
   late RuntimeEvents events;

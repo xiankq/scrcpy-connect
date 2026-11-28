@@ -8,9 +8,14 @@ import 'package:scrcpy_connect/pages/devices/workspace/widgets/device_summary.da
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/router/remote_windows.dart';
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/devices/device_access.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
+
+/// 两个按钮并排所需的最小行宽（按文字缩放折算），不足时上下排列。
+const _stackedActionsWidth = 240.0;
 
 class DeviceHero extends HookConsumerWidget {
   const DeviceHero({super.key, required this.device, this.pane = false});
@@ -43,20 +48,9 @@ class DeviceHero extends HookConsumerWidget {
     final unauthorized = device.status == DeviceConnectionStatus.unauthorized;
     final connecting = busy.value || deviceConnectionInProgress(device);
     final id = device.id;
-    final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
-    final mainAction = FilledButton(
-      style: FilledButton.styleFrom(
-        minimumSize: const Size.fromHeight(
-          DesignTokens.componentWorkspacePrimaryActionHeight,
-        ),
-        backgroundColor: connecting
-            ? dark
-                  ? DesignTokens.colorMutedDark
-                  : DesignTokens.colorMuted
-            : null,
-        foregroundColor: connecting ? theme.colorScheme.onSurface : null,
-      ),
+    final mainAction = AppButton(
+      role: AppButtonRole.primary,
+      expand: true,
       onPressed: connecting
           ? busy.value && !deviceConnectionInProgress(device)
                 ? null
@@ -73,38 +67,31 @@ class DeviceHero extends HookConsumerWidget {
                 }
               }
             },
-      child: Text(
-        connecting
-            ? '取消连接'
-            : online
-            ? '打开手机屏幕'
-            : unauthorized
-            ? '重新授权'
-            : device.status == .failed
-            ? '重试'
-            : '连接',
-      ),
+      label: connecting
+          ? '取消连接'
+          : online
+          ? '打开手机屏幕'
+          : unauthorized
+          ? '重新授权'
+          : device.status == .failed
+          ? '重试'
+          : '连接',
     );
-    final details = FilledButton(
-      style: FilledButton.styleFrom(
-        minimumSize: const Size.fromHeight(
-          DesignTokens.componentWorkspacePrimaryActionHeight,
-        ),
-        backgroundColor: theme.colorScheme.surface,
-        foregroundColor: theme.colorScheme.onSurface,
-      ),
+    final details = AppButton(
+      expand: true,
       onPressed: () => DeviceDetailsRoute(deviceId: id).push<void>(context),
-      child: const Text('设备详情'),
+      label: '设备详情',
     );
+    // 工作台概览（Ardot 37:1626）：hero-card，内距 20，概览与按钮间距 20，按钮间距 12。
     return Material(
-      color: dark
-          ? DesignTokens.componentDeviceHeroDarkBackgroundColor
-          : DesignTokens.componentDeviceHeroBackgroundColor,
-      borderRadius: BorderRadius.circular(
-        DesignTokens.componentDeviceHeroRounded,
+      color: AppColors.of(context).card,
+      shape: const RoundedSuperellipseBorder(
+        borderRadius: BorderRadius.all(
+          Radius.circular(DesignTokens.componentHeroCardRounded),
+        ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(DesignTokens.componentDeviceHeroPadding),
+        padding: const EdgeInsets.all(DesignTokens.componentHeroCardPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -116,28 +103,24 @@ class DeviceHero extends HookConsumerWidget {
               connecting: busy.value,
               pane: pane,
             ),
-            const SizedBox(height: DesignTokens.componentDeviceHeroGap),
+            const SizedBox(height: DesignTokens.spacingXl),
             LayoutBuilder(
               builder: (context, constraints) {
                 final scale = MediaQuery.textScalerOf(context).scale(1);
-                return constraints.maxWidth / scale < 240
+                return constraints.maxWidth / scale < _stackedActionsWidth
                     ? Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           mainAction,
-                          const SizedBox(height: DesignTokens.spacingXs),
+                          const SizedBox(height: DesignTokens.spacingMd),
                           details,
                         ],
                       )
                     : Row(
                         children: [
-                          Expanded(flex: 3, child: mainAction),
-                          const SizedBox(
-                            width:
-                                DesignTokens.spacingSm -
-                                DesignTokens.spacingMicro,
-                          ),
-                          Expanded(flex: 2, child: details),
+                          Expanded(child: mainAction),
+                          const SizedBox(width: DesignTokens.spacingMd),
+                          Expanded(child: details),
                         ],
                       );
               },

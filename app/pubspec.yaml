@@ -1,7 +1,7 @@
 name: scrcpy_connect
 description: 邻接：通过 Rust ADB 使用另一台 Android 手机。
 publish_to: none
-version: 0.1.0+4
+version: 0.1.0+5
 resolution: workspace
 environment:
   sdk: ^3.14.0

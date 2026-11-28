@@ -12,29 +12,13 @@ void main() {
   ) async {
     final events = StreamController<WindowEnvironment?>();
     addTearDown(events.close);
-    WindowEnvironment? observed;
-    await tester.pumpWidget(
-      MediaQuery(
-        data: const MediaQueryData(size: Size(700, 500)),
-        child: WindowEnvironmentScope(
-          readHostEnvironment: () async => const WindowEnvironment(
-            width: 700,
-            height: 500,
-            windowId: 'stage-7',
-          ),
-          watchHostEnvironment: () => events.stream,
-          child: Builder(
-            builder: (context) {
-              observed = context.windowEnvironment;
-              return const SizedBox.shrink();
-            },
-          ),
-        ),
-      ),
+    final observed = await _observe(
+      tester,
+      host: () async => _host,
+      watch: () => events.stream,
     );
     await tester.pump();
-    await tester.pump();
-    expect(observed?.posture, WindowPosture.normal);
+    expect(observed()?.posture, WindowPosture.normal);
 
     events.add(
       const WindowEnvironment(
@@ -44,54 +28,24 @@ void main() {
         posture: WindowPosture.book,
         postureProvided: true,
         displayFeaturesProvided: true,
-        displayFeatures: [
-          WindowDisplayFeature(
-            left: 349,
-            top: 0,
-            width: 2,
-            height: 500,
-            type: WindowDisplayFeatureType.fold,
-            state: WindowPosture.book,
-            separating: true,
-          ),
-        ],
+        displayFeatures: [_hostFold],
       ),
     );
     await tester.pump();
     await tester.pump();
 
-    expect(observed?.posture, WindowPosture.book);
-    expect(observed?.verticalPaneDivider, isNotNull);
+    expect(observed()?.posture, WindowPosture.book);
+    expect(observed()?.verticalPaneDivider, isNotNull);
   });
 
   testWidgets('projects MediaQuery fold posture without a host override', (
     tester,
   ) async {
-    WindowEnvironment? observed;
-    await tester.pumpWidget(
-      MediaQuery(
-        data: MediaQueryData(
-          size: const Size(700, 500),
-          displayFeatures: const [
-            DisplayFeature(
-              bounds: Rect.fromLTWH(349, 0, 2, 500),
-              type: DisplayFeatureType.fold,
-              state: DisplayFeatureState.postureHalfOpened,
-            ),
-          ],
-        ),
-        child: Builder(
-          builder: (context) {
-            observed = context.windowEnvironment;
-            return const SizedBox.shrink();
-          },
-        ),
-      ),
-    );
+    final observed = await _observe(tester, features: const [_mediaFold]);
 
-    expect(observed?.posture, WindowPosture.book);
-    expect(observed?.displayFeatures.single.state, WindowPosture.book);
-    expect(observed?.verticalPaneDivider, isNull);
+    expect(observed()?.posture, WindowPosture.book);
+    expect(observed()?.displayFeatures.single.state, WindowPosture.book);
+    expect(observed()?.verticalPaneDivider, isNull);
   });
 
   testWidgets('keeps tabletop content inside the top pane', (tester) async {
@@ -149,77 +103,45 @@ void main() {
   testWidgets('merges host posture with the live Flutter view size', (
     tester,
   ) async {
-    WindowEnvironment? observed;
-    await tester.pumpWidget(
-      MediaQuery(
-        data: const MediaQueryData(size: Size(700, 500)),
-        child: WindowEnvironmentScope(
-          readHostEnvironment: () async => const WindowEnvironment(
-            width: 1200,
-            height: 800,
-            windowId: 'stage-7',
-            mode: WindowMode.split,
-            posture: WindowPosture.book,
-            displayFeatures: [
-              WindowDisplayFeature(
-                left: 349,
-                top: 0,
-                width: 2,
-                height: 500,
-                type: WindowDisplayFeatureType.hinge,
-                separating: true,
-              ),
-            ],
-          ),
-          child: Builder(
-            builder: (context) {
-              observed = context.windowEnvironment;
-              return const SizedBox.shrink();
-            },
-          ),
-        ),
+    final observed = await _observe(
+      tester,
+      host: () async => const WindowEnvironment(
+        width: 1200,
+        height: 800,
+        windowId: 'stage-7',
+        mode: WindowMode.split,
+        posture: WindowPosture.book,
+        displayFeatures: [_hostFold],
       ),
     );
-    await tester.pump();
 
-    expect(observed?.width, 700);
-    expect(observed?.height, 500);
-    expect(observed?.windowId, 'stage-7');
-    expect(observed?.mode, WindowMode.split);
-    expect(observed?.posture, WindowPosture.book);
-    expect(observed?.verticalPaneDivider, isNotNull);
+    expect(observed()?.width, 700);
+    expect(observed()?.height, 500);
+    expect(observed()?.windowId, 'stage-7');
+    expect(observed()?.mode, WindowMode.split);
+    expect(observed()?.posture, WindowPosture.book);
+    expect(observed()?.verticalPaneDivider, isNotNull);
   });
 
   testWidgets(
     'uses desktop engine identity when the host projection is absent',
     (tester) async {
-      WindowEnvironment? observed;
-      await tester.pumpWidget(
-        MediaQuery(
-          data: const MediaQueryData(size: Size(1200, 800)),
-          child: WindowEnvironmentScope(
-            readHostEnvironment: () async => null,
-            readDesktopWindowIdentity: () async => const WindowEnvironment(
-              width: 1,
-              height: 1,
-              windowId: 'desktop:window-7',
-              mode: WindowMode.freeform,
-            ),
-            child: Builder(
-              builder: (context) {
-                observed = context.windowEnvironment;
-                return const SizedBox.shrink();
-              },
-            ),
-          ),
+      final observed = await _observe(
+        tester,
+        size: const Size(1200, 800),
+        host: () async => null,
+        desktopIdentity: () async => const WindowEnvironment(
+          width: 1,
+          height: 1,
+          windowId: 'desktop:window-7',
+          mode: WindowMode.freeform,
         ),
       );
-      await tester.pump();
 
-      expect(observed?.windowId, 'desktop:window-7');
-      expect(observed?.mode, WindowMode.freeform);
-      expect(observed?.width, 1200);
-      expect(observed?.height, 800);
+      expect(observed()?.windowId, 'desktop:window-7');
+      expect(observed()?.mode, WindowMode.freeform);
+      expect(observed()?.width, 1200);
+      expect(observed()?.height, 800);
     },
   );
 
@@ -227,122 +149,112 @@ void main() {
     tester,
   ) async {
     var posture = WindowPosture.normal;
-    var reads = 0;
-    WindowEnvironment? observed;
-    await tester.pumpWidget(
-      MediaQuery(
-        data: const MediaQueryData(size: Size(700, 500)),
-        child: WindowEnvironmentScope(
-          readHostEnvironment: () async {
-            reads++;
-            return WindowEnvironment(
-              width: 1200,
-              height: 800,
-              posture: posture,
-              postureProvided: true,
-              windowId: 'stage-7',
-            );
-          },
-          child: Builder(
-            builder: (context) {
-              observed = context.windowEnvironment;
-              return const SizedBox.shrink();
-            },
-          ),
-        ),
+    final observed = await _observe(
+      tester,
+      host: () async => WindowEnvironment(
+        width: 1200,
+        height: 800,
+        posture: posture,
+        postureProvided: true,
+        windowId: 'stage-7',
       ),
     );
-    await tester.pump();
-    expect(observed?.posture, WindowPosture.normal);
-    expect(reads, 1);
+    expect(observed()?.posture, WindowPosture.normal);
 
     posture = WindowPosture.tabletop;
     tester.binding.handleMetricsChanged();
     await tester.pump();
     await tester.pump();
 
-    expect(reads, 2);
-    expect(observed?.posture, WindowPosture.tabletop);
+    expect(observed()?.posture, WindowPosture.tabletop);
   });
 
   testWidgets(
     'keeps a live fold posture when the host only identifies a window',
     (tester) async {
-      WindowEnvironment? observed;
-      await tester.pumpWidget(
-        MediaQuery(
-          data: MediaQueryData(
-            size: const Size(700, 500),
-            displayFeatures: const [
-              DisplayFeature(
-                bounds: Rect.fromLTWH(349, 0, 2, 500),
-                type: DisplayFeatureType.fold,
-                state: DisplayFeatureState.postureHalfOpened,
-              ),
-            ],
-          ),
-          child: WindowEnvironmentScope(
-            readHostEnvironment: () async => const WindowEnvironment(
-              width: 700,
-              height: 500,
-              windowId: 'stage-7',
-            ),
-            child: Builder(
-              builder: (context) {
-                expect(
-                  MediaQuery.of(context).displayFeatures.single.state,
-                  DisplayFeatureState.postureHalfOpened,
-                );
-                observed = context.windowEnvironment;
-                return const SizedBox.shrink();
-              },
-            ),
-          ),
-        ),
+      final observed = await _observe(
+        tester,
+        features: const [_mediaFold],
+        host: () async => _host,
       );
-      await tester.pump();
 
-      expect(observed?.posture, WindowPosture.book);
-      expect(observed?.displayFeatures, hasLength(1));
+      expect(observed()?.posture, WindowPosture.book);
+      expect(observed()?.displayFeatures, hasLength(1));
+      final media = MediaQuery.of(tester.element(find.byType(SizedBox)));
+      expect(
+        media.displayFeatures.single.state,
+        DisplayFeatureState.postureHalfOpened,
+      );
     },
   );
 
   testWidgets('clears a live fold when the host explicitly closes it', (
     tester,
   ) async {
-    WindowEnvironment? observed;
-    await tester.pumpWidget(
-      MediaQuery(
-        data: MediaQueryData(
-          size: const Size(700, 500),
-          displayFeatures: const [
-            DisplayFeature(
-              bounds: Rect.fromLTWH(349, 0, 2, 500),
-              type: DisplayFeatureType.fold,
-              state: DisplayFeatureState.postureHalfOpened,
-            ),
-          ],
-        ),
-        child: WindowEnvironmentScope(
-          readHostEnvironment: () async => const WindowEnvironment(
-            width: 700,
-            height: 500,
-            windowId: 'stage-7',
-            postureProvided: true,
-            displayFeaturesProvided: true,
-          ),
-          child: Builder(
-            builder: (context) {
-              observed = context.windowEnvironment;
-              return const SizedBox.shrink();
-            },
-          ),
-        ),
+    final observed = await _observe(
+      tester,
+      features: const [_mediaFold],
+      host: () async => const WindowEnvironment(
+        width: 700,
+        height: 500,
+        windowId: 'stage-7',
+        postureProvided: true,
+        displayFeaturesProvided: true,
       ),
     );
-    await tester.pump();
 
-    expect(observed?.posture, WindowPosture.normal);
-    expect(observed?.displayFeatures, isEmpty);
+    expect(observed()?.posture, WindowPosture.normal);
+    expect(observed()?.displayFeatures, isEmpty);
   });
+}
+
+const _host = WindowEnvironment(width: 700, height: 500, windowId: 'stage-7');
+
+const _mediaFold = DisplayFeature(
+  bounds: Rect.fromLTWH(349, 0, 2, 500),
+  type: DisplayFeatureType.fold,
+  state: DisplayFeatureState.postureHalfOpened,
+);
+
+const _hostFold = WindowDisplayFeature(
+  left: 349,
+  top: 0,
+  width: 2,
+  height: 500,
+  type: WindowDisplayFeatureType.fold,
+  state: WindowPosture.book,
+  separating: true,
+);
+
+/// 挂载窗口环境并返回最近一次读到的环境；不传 [host] 时不挂 scope，只读 MediaQuery。
+Future<WindowEnvironment? Function()> _observe(
+  WidgetTester tester, {
+  Size size = const Size(700, 500),
+  List<DisplayFeature> features = const [],
+  Future<WindowEnvironment?> Function()? host,
+  Future<WindowEnvironment?> Function()? desktopIdentity,
+  Stream<WindowEnvironment?> Function()? watch,
+}) async {
+  WindowEnvironment? observed;
+  final probe = Builder(
+    builder: (context) {
+      observed = context.windowEnvironment;
+      return const SizedBox.shrink();
+    },
+  );
+  await tester.pumpWidget(
+    MediaQuery(
+      data: MediaQueryData(size: size, displayFeatures: features),
+      child: host == null
+          ? probe
+          : WindowEnvironmentScope(
+              readHostEnvironment: host,
+              readDesktopWindowIdentity: desktopIdentity ?? () async => null,
+              watchHostEnvironment: watch ?? () => const Stream.empty(),
+              child: probe,
+            ),
+    ),
+  );
+  await tester.pump();
+  return () => observed;
 }

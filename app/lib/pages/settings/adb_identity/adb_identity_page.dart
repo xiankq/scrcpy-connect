@@ -13,9 +13,13 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/identity/identity_management_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/input_field.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
+import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:scrcpy_connect/widgets/overlays.dart';
 
@@ -109,14 +113,13 @@ class AdbIdentityPage extends HookConsumerWidget {
     return PageFrame(
       title: '授权密钥',
       child: GroupedListView(
-        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+        padding: const EdgeInsets.all(DesignTokens.componentPagePadding),
         children: [
           SettingsGroup(
             children: [
               SettingsRow(
-                compact: true,
-                icon: LucideIcons.fingerprint,
-                color: DesignTokens.colorListIconSlate,
+                icon: LucideIcons.shieldCheck,
+                color: FunctionTone.connection,
                 title: '本机指纹',
                 value: fingerprint == null
                     ? (result.connectionState == ConnectionState.done
@@ -142,32 +145,38 @@ class AdbIdentityPage extends HookConsumerWidget {
                       ),
               ),
               SettingsRow(
-                compact: true,
                 icon: LucideIcons.keyRound,
-                color: DesignTokens.colorListIconBlue,
+                color: FunctionTone.connection,
                 title: '导入身份',
+                subtitle: '替换为已有的 RSA 私钥',
                 onTap: busy.value ? null : importIdentity,
-              ),
-              SettingsRow(
-                compact: true,
-                icon: LucideIcons.rotateCcw,
-                color: DesignTokens.colorListIconCoral,
-                title: '重置身份',
-                destructive: true,
-                onTap: busy.value ? null : resetIdentity,
               ),
             ],
           ),
+          const SectionFooter('手机“无线调试”中显示同一指纹时，说明授权来自本机。'),
           if (result.hasError)
             StateNote(
               failureMessage(result.error, fallback: '无法读取调试密钥。请重新打开此页。'),
             ),
           if (failure.value case final error?) StateNote(error),
           if (notice.value case final message?) StateNote(message),
+          const SizedBox(height: DesignTokens.componentListSectionGap),
+          // 危险动作：页面上的通栏胶囊（design.md「列表」危险动作）。
+          AppButton(
+            role: AppButtonRole.destructiveOnPage,
+            expand: true,
+            icon: LucideIcons.rotateCcw,
+            onPressed: busy.value ? null : resetIdentity,
+            label: '重置身份',
+          ),
+          const SectionFooter('重置后，已授权的手机需要重新允许调试。'),
+          const SizedBox(height: DesignTokens.spacingLg),
           Center(
-            child: TextButton(
+            child: AppButton(
+              role: AppButtonRole.text,
+              size: AppButtonSize.section,
               onPressed: busy.value ? null : () => revision.value++,
-              child: Text(busy.value ? '正在更新…' : '更新指纹'),
+              label: busy.value ? '正在更新…' : '更新指纹',
             ),
           ),
         ],
@@ -218,7 +227,10 @@ class _PrivateKeyInput extends HookWidget {
     return PageFrame(
       title: '导入身份',
       onBack: () => Navigator.pop(context),
-      bottom: FilledButton(
+      bottom: AppButton(
+        role: AppButtonRole.primary,
+        expand: true,
+        label: '核对替换影响',
         onPressed: loading.value
             ? null
             : () {
@@ -226,41 +238,37 @@ class _PrivateKeyInput extends HookWidget {
                   Navigator.pop(context, normalizeAdbPrivateKeyPem(pem.text));
                 }
               },
-        child: const Text('核对替换影响'),
       ),
       child: ConnectionContent(
         child: GroupedListView(
-          padding: const EdgeInsets.all(DesignTokens.spacingMd),
+          padding: const EdgeInsets.all(DesignTokens.componentPagePadding),
           children: [
             Form(
               key: key,
-              child: TextFormField(
+              child: AppTextField(
+                label: '私钥文本',
+                hintText: '粘贴 RSA 私钥',
                 controller: pem,
                 enabled: !loading.value,
                 onChanged: (_) => fileError.value = null,
                 minLines: 5,
                 maxLines: 10,
-                autocorrect: false,
-                enableSuggestions: false,
-                enableIMEPersonalizedLearning: false,
-                smartDashesType: SmartDashesType.disabled,
-                smartQuotesType: SmartQuotesType.disabled,
-                decoration: InputDecoration(
-                  labelText: '私钥文本',
-                  hintText: '粘贴 RSA 私钥',
-                  alignLabelWithHint: true,
-                  errorText: fileError.value,
-                ),
+                sensitive: true,
+                errorText: fileError.value,
                 validator: validateAdbPrivateKeyPem,
               ),
             ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: loading.value ? null : pickFile,
-                icon: const Icon(LucideIcons.folderOpen),
-                label: Text(loading.value ? '正在读取…' : '选取文件'),
-              ),
+            const SizedBox(height: DesignTokens.componentListSectionGap),
+            SettingsGroup(
+              children: [
+                SettingsRow(
+                  icon: LucideIcons.folderOpen,
+                  color: FunctionTone.file,
+                  title: loading.value ? '正在读取…' : '选取文件',
+                  enabled: !loading.value,
+                  onTap: loading.value ? null : pickFile,
+                ),
+              ],
             ),
           ],
         ),

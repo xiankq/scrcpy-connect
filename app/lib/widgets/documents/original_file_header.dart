@@ -16,7 +16,10 @@ class OriginalFileHeader extends StatelessWidget {
     children: [
       FeatureIcon(
         kind == 'directory' ? LucideIcons.folder : LucideIcons.file,
-        color: ConnectTokens.amber,
+        // 文件格式色：文件夹 accent-amber，文档 accent-indigo（design.md「功能色」）。
+        color: kind == 'directory'
+            ? DesignTokens.colorAccentAmber
+            : DesignTokens.colorAccentIndigo,
       ),
       const SizedBox(width: DesignTokens.spacingMd),
       Expanded(
@@ -29,7 +32,7 @@ class OriginalFileHeader extends StatelessWidget {
                 name,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleLarge,
+                style: AppTypography.of(context).headline,
               ),
             ),
           ],

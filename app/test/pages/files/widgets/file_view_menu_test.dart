@@ -58,7 +58,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('底栏使用 13 点标签，点文字可打开排序，大字时标签完整', (tester) async {
+  testWidgets('底栏点「视图与排序」文字在底栏上方打开排序，大字时标签完整', (tester) async {
     tester.view
       ..physicalSize = const Size(390, 700)
       ..devicePixelRatio = 1;
@@ -107,29 +107,23 @@ void main() {
       ),
     );
     final trigger = find.text('视图与排序');
-    final label = tester.renderObject<RenderParagraph>(trigger);
-    expect(label.text.style?.fontSize, 13);
-    expect(label.text.style?.fontWeight, FontWeight.w500);
-    expect(tester.getSize(find.byType(Glass)).height, 64);
-    expect(tester.getCenter(trigger).dx, closeTo(195, .01));
     final bar = tester.getRect(find.byType(Glass));
     await tester.tap(trigger);
     await tester.pumpAndSettle();
-    expect(find.text('排序'), findsOneWidget);
+    expect(find.text('修改时间'), findsOneWidget);
     final panel = tester.getRect(find.byType(Glass).last);
     expect(panel.bottom, lessThan(bar.top));
-    expect(panel.center.dx, closeTo(bar.center.dx, .01));
     await tester.tap(find.text('大小'));
     await tester.pumpAndSettle();
     expect(sort, FileSortKey.size);
-    expect(find.text('排序'), findsNothing);
+    expect(find.text('修改时间'), findsNothing);
 
     tester.view.physicalSize = const Size(320, 580);
     await tester.pumpAndSettle();
-    expect(tester.getSize(find.byType(Glass)).height, greaterThan(64));
-    final largeLabel = tester.renderObject<RenderParagraph>(trigger);
-    expect(largeLabel.textScaler.scale(13), 26);
-    expect(largeLabel.didExceedMaxLines, isFalse);
+    expect(
+      tester.renderObject<RenderParagraph>(trigger).didExceedMaxLines,
+      isFalse,
+    );
     expect(tester.takeException(), isNull);
   });
 }

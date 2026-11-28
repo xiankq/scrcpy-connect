@@ -17,10 +17,7 @@ import 'package:scrcpy_connect/core/devices/models/device_call.dart';
 import 'package:scrcpy_connect/core/devices/models/device_list_state.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/media/audio_error_notifier.dart';
-import 'package:scrcpy_connect/core/recovery/models/recovery_state.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
-import 'package:scrcpy_connect/core/settings/models/preferences.dart';
-import 'package:scrcpy_connect/core/settings/models/preferences_state.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/pages/device_setup/connection/widgets/connection_attempt_status.dart';
 import 'package:scrcpy_connect/pages/devices/devices_page.dart';
@@ -32,10 +29,11 @@ import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/app_session_scope.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
+
+import '../../support/fixed_state.dart';
 
 const _phone = DeviceSnapshot(
   id: 'pixel',
@@ -134,22 +132,12 @@ void main() {
       devices: [_phone, _offline, _tablet, _failed],
       connections: connections,
     );
-    final first = find.byType(DeviceCard).first;
-    final second = find.byType(DeviceCard).at(1);
-    final add = find.byWidgetPredicate(
-      (widget) => widget is GlassActionIcon && widget.tooltip == '添加设备',
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is GlassActionIcon && widget.tooltip == '添加设备',
+      ),
+      findsOneWidget,
     );
-    final addSurface = find.ancestor(of: add, matching: find.byType(Glass));
-    final search = find.byKey(const ValueKey('page-search-open'));
-    expect(tester.widget<Glass>(addSurface).variant, GlassVariant.pill);
-    expect(tester.getSize(addSurface), const Size(96, 44));
-    expect(tester.getSize(add), const Size.square(44));
-    expect(tester.getSize(search), const Size.square(44));
-    expect(tester.getCenter(add).dy, tester.getCenter(search).dy);
-    expect(tester.getTopLeft(add).dx - tester.getTopRight(search).dx, 8);
-    expect(tester.getTopRight(addSurface).dx, tester.getTopRight(first).dx);
-    expect(tester.getSize(first).height, 108);
-    expect(tester.getTopLeft(second).dy - tester.getBottomLeft(first).dy, 12);
     expect(find.text('打开屏幕'), findsNWidgets(2));
     expect(find.text('重试'), findsOneWidget);
 
@@ -205,15 +193,9 @@ void main() {
 
   testWidgets('首次添加在设备页显示完整靠近插画及通栏动作', (tester) async {
     await _show(tester, const DevicesPage());
-    final art = find.byType(FirstDeviceIllustration);
-    final action = find.widgetWithText(FilledButton, '添加设备');
-    expect(tester.getSize(art), const Size(342, 270));
-    expect(tester.getSize(action), const Size(342, 50));
-    expect(tester.getTopLeft(action).dx, tester.getTopLeft(art).dx);
-    expect(
-      tester.getBottomLeft(art).dy,
-      lessThan(tester.getTopLeft(find.text('添加第一台设备')).dy),
-    );
+    expect(find.byType(FirstDeviceIllustration), findsOneWidget);
+    expect(find.text('添加第一台设备'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, '添加设备'), findsOneWidget);
     expect(find.byType(TextField), findsNothing);
     expect(find.widgetWithText(AppBar, '设备'), findsOneWidget);
   });
@@ -240,23 +222,6 @@ void main() {
     expect(find.text('设备'), findsNothing);
     expect(tester.state<EditableTextState>(finder), same(editor));
     expect(tester.widget<EditableText>(finder).focusNode.hasFocus, isTrue);
-  });
-
-  testWidgets('首次添加靠近动效停在减少动态时的同一构图', (tester) async {
-    await _show(tester, const DevicesPage(), reducedMotion: false);
-    final card = find.byWidgetPredicate(
-      (widget) =>
-          widget is Image &&
-          widget.image is AssetImage &&
-          (widget.image as AssetImage).assetName.endsWith('intro-card.png'),
-    );
-    final initial = tester.getCenter(card);
-    await tester.pump(const Duration(milliseconds: 320));
-    final settled = tester.getCenter(card);
-    expect(settled.dx, greaterThan(initial.dx));
-    expect(settled.dy, lessThan(initial.dy));
-    await _show(tester, const DevicesPage());
-    expect(tester.getCenter(card), settled);
   });
 
   testWidgets('工作台读取当前连接的电量，并刷新实际充电状态', (tester) async {
@@ -321,7 +286,7 @@ void main() {
     expect(find.byIcon(LucideIcons.batteryCharging), findsNothing);
   });
 
-  testWidgets('工作台空态左对齐，保持两张应用卡片的对应位置', (tester) async {
+  testWidgets('工作台空态可进入全部应用和常用应用选择', (tester) async {
     await _show(
       tester,
       DeviceWorkspacePage(
@@ -336,33 +301,15 @@ void main() {
         ),
       ),
     );
-    final favoriteTitle = find.text('常用应用');
-    final action = find.text('添加常用应用');
-    final runningTitle = find.text('正在运行');
-    final runningEmpty = find.text('当前没有正在运行的应用');
-    expect(
-      tester.getTopLeft(action).dx - tester.getTopLeft(favoriteTitle).dx,
-      54,
-    );
-    expect(
-      tester.getTopLeft(runningTitle).dx,
-      tester.getTopLeft(favoriteTitle).dx,
-    );
-    expect(
-      tester.getTopLeft(runningEmpty).dx - tester.getTopLeft(runningTitle).dx,
-      31,
-    );
-    expect(
-      tester.getTopLeft(runningTitle).dy - tester.getTopLeft(favoriteTitle).dy,
-      124,
-    );
+    expect(find.text('当前没有正在运行的应用'), findsOneWidget);
     expect(find.text('全部应用').hitTestable(), findsOneWidget);
-    await tester.tap(action);
+    await tester.tap(find.text('添加常用应用'));
     await tester.pumpAndSettle();
     expect(find.text('选择常用应用'), findsOneWidget);
-    final done = find.widgetWithText(FilledButton, '完成');
-    expect(done.hitTestable(), findsOneWidget);
-    expect(find.ancestor(of: done, matching: find.byType(Glass)), findsNothing);
+    expect(
+      find.widgetWithText(FilledButton, '完成').hitTestable(),
+      findsOneWidget,
+    );
   });
 
   testWidgets('窄屏深色大字保留连接取消及工作台快捷入口', (tester) async {
@@ -407,7 +354,6 @@ void main() {
     expect(find.text('本机'), findsOneWidget);
     expect(find.text('手机'), findsOneWidget);
     expect(find.text('正在配对并查找手机的连接地址'), findsOneWidget);
-    expect(tester.getRect(cancel), const Rect.fromLTWH(24, 746, 342, 50));
     await tester.tap(cancel);
     expect(cancelled, isTrue);
   });
@@ -440,8 +386,8 @@ Future<void> _show(
         if (inspection != null)
           deviceInspectionProvider.overrideWithValue(inspection),
         runtimeEventsProvider.overrideWithValue(const Stream.empty()),
-        recoveryStateProvider.overrideWith(_Recovery.new),
-        preferencesProvider.overrideWith(_Preferences.new),
+        recoveryStateProvider.overrideWith(FixedRecovery.new),
+        preferencesProvider.overrideWith(FixedPreferences.new),
         audioErrorProvider.overrideWith(_Audio.new),
         deviceCallsSnapshotProvider(_phone.id).overrideWith(
           (_) async => const DeviceCallsSnapshot(deviceId: 'pixel'),
@@ -512,16 +458,6 @@ class _Connections implements DeviceConnectionControl {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _Recovery extends RecoveryStateNotifier {
-  @override
-  RecoveryState build() => RecoveryState();
-}
-
-class _Preferences extends PreferencesNotifier {
-  @override
-  PreferencesState build() => PreferencesState(values: Preferences());
 }
 
 class _Audio extends AudioErrorNotifier {

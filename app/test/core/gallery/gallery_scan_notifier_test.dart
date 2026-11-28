@@ -9,6 +9,8 @@ import 'package:scrcpy_connect/core/gallery/gallery_scan_notifier.dart';
 import 'package:scrcpy_connect/core/gallery/gallery_scanner.dart';
 import 'package:scrcpy_connect/core/gallery/gallery_scanner_provider.dart';
 
+import '../../support/fixed_state.dart';
+
 void main() {
   final scope = Object();
   const device = DeviceSnapshot(id: 'device', guid: 'guid');
@@ -30,7 +32,7 @@ void main() {
     await container.pump();
     scanner.starts.single.complete(_snapshot('retired', ['/old']));
     await start;
-    await _flush(container);
+    await flushProviders(container);
     expect(scanner.cancelled, [(deviceId: 'device', scanId: 'retired')]);
   });
 
@@ -51,12 +53,12 @@ void main() {
     container.updateOverrides([
       galleryScannerProvider.overrideWithValue(replacement),
     ]);
-    await _flush(container);
+    await flushProviders(container);
     expect(container.read(provider).items, isEmpty);
     expect(history.read(device), isNull);
     scanner.starts.single.complete(_snapshot('retired', ['/old']));
     await start;
-    await _flush(container);
+    await flushProviders(container);
     expect(scanner.cancelled, [(deviceId: 'device', scanId: 'retired')]);
     expect(replacement.cancelled, isEmpty);
     history.save(
@@ -155,9 +157,4 @@ class _Scanner implements GalleryScanner {
     cancelled.add(target);
     return _snapshot(target.scanId, []);
   }
-}
-
-Future<void> _flush(ProviderContainer container) async {
-  await Future<void>.delayed(Duration.zero);
-  await container.pump();
 }

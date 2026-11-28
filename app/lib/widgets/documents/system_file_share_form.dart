@@ -8,6 +8,8 @@ import 'package:scrcpy_connect/core/content/content_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/platform/platform_channels.dart';
 import 'package:scrcpy_connect/hooks/use_transfer_cache_lease.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/documents/original_file_header.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -22,9 +24,13 @@ class SystemFileShareForm extends HookConsumerWidget {
     this.kind = 'file',
     this.transferId,
     this.sourceLabel = '被控设备',
+    this.role = AppButtonRole.primary,
   });
   final String localPath, name, kind, sourceLabel;
   final String? transferId;
+
+  /// 分享按钮的角色。页面已有主动作（如「保存到系统位置」）时传次要角色，保持每屏一个主按钮。
+  final AppButtonRole role;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -41,7 +47,11 @@ class SystemFileShareForm extends HookConsumerWidget {
       children: [
         OriginalFileHeader(name: name, kind: kind),
         const SizedBox(height: DesignTokens.spacingMd),
-        Text('$sourceLabel → 本机暂存 → 接收应用'),
+        Text(
+          '$sourceLabel → 本机暂存 → 接收应用',
+          style: AppTypography.of(context).footnote
+              .copyWith(color: AppColors.of(context).textSecondary),
+        ),
         const StateNote('原文件尚未保存到系统位置。选择接收应用后，系统会交给它一份副本。'),
         if (defaultTargetPlatform == TargetPlatform.linux)
           const StateNote('此系统不支持文件分享面板，请使用保存到系统位置。')
@@ -60,7 +70,10 @@ class SystemFileShareForm extends HookConsumerWidget {
               onChanged: (value) => reviewed.value = value == true,
               title: const Text('我已在接收应用核对，仍需再次分享'),
             ),
-          FilledButton.icon(
+          AppButton(
+            role: role,
+            expand: true,
+            icon: AppIcons.share,
             onPressed:
                 !ready ||
                     busy.value ||
@@ -92,14 +105,11 @@ class SystemFileShareForm extends HookConsumerWidget {
                       if (context.mounted) busy.value = false;
                     }
                   },
-            icon: const Icon(Icons.share_outlined),
-            label: Text(
-              busy.value
-                  ? '正在打开系统分享…'
-                  : attempted.value
-                  ? '再次系统分享'
-                  : '系统分享',
-            ),
+            label: busy.value
+                ? '正在打开系统分享…'
+                : attempted.value
+                ? '再次系统分享'
+                : '系统分享',
           ),
         ],
       ],

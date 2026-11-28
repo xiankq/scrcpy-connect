@@ -1,72 +1,52 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
 
-class SettingsRow extends StatelessWidget {
+/// 设置行（Ardot 列表行「前导=色块」）：功能色块 + 标题，可带副标题、行尾值与控件。
+///
+/// 有 [onTap] 且没有 [trailing] 时是导航行，行尾显示箭头。危险动作不用列表行，
+/// 用页面上的通栏危险胶囊（design.md「列表」）。
+class SettingsRow extends StatelessWidget implements GroupedRow {
   const SettingsRow({
     super.key,
     required this.icon,
-    required this.color,
+    this.color = FunctionTone.utility,
     required this.title,
     this.subtitle,
     this.value,
     this.trailing,
     this.onTap,
-    this.compact = false,
-    this.destructive = false,
+    this.enabled = true,
   });
 
   final IconData icon;
+
+  /// 功能色，取 [FunctionTone]。
   final Color color;
   final String title;
   final String? subtitle, value;
   final Widget? trailing;
   final VoidCallback? onTap;
-  final bool compact, destructive;
+
+  /// 关闭时整行与色块呈禁用色。导航行未提供 [onTap] 时不必关闭。
+  final bool enabled;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return ListTile(
-      minTileHeight: compact
-          ? DesignTokens.componentSettingsRowHeight
-          : DesignTokens.componentRowHeight,
-      minVerticalPadding: DesignTokens.spacingXxs,
-      minLeadingWidth: 0,
-      leading: ListIconBadge(
-        icon: icon,
-        backgroundColor: color,
-        compact: compact,
-      ),
-      title: Text(
-        title,
-        style:
-            (compact ? theme.textTheme.bodyMedium : theme.textTheme.bodyLarge)
-                ?.copyWith(color: destructive ? theme.colorScheme.error : null),
-      ),
-      subtitle: subtitle == null
-          ? null
-          : Text(subtitle!, style: theme.textTheme.bodySmall),
-      trailing:
-          trailing ??
-          (value != null || onTap != null
-              ? Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (value != null)
-                      Text(value!, style: theme.textTheme.bodySmall),
-                    if (onTap != null) ...[
-                      if (value != null)
-                        const SizedBox(width: DesignTokens.spacingXs),
-                      const Icon(
-                        AppIcons.forward,
-                        size: DesignTokens.componentIconSmallSize,
-                      ),
-                    ],
-                  ],
-                )
-              : null),
-      onTap: onTap,
-    );
-  }
+  double get separatorIndent => tileRowSeparatorIndent;
+
+  @override
+  Widget build(BuildContext context) => AppListRow(
+    enabled: enabled,
+    onTap: onTap,
+    leading: ListIconBadge(
+      icon: icon,
+      backgroundColor: enabled ? color : AppColors.of(context).disabled,
+    ),
+    title: Text(title),
+    subtitle: subtitle == null ? null : Text(subtitle!),
+    value: value,
+    trailing: trailing,
+    chevron: trailing == null && onTap != null,
+  );
 }

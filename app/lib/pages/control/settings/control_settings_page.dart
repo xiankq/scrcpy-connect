@@ -19,6 +19,7 @@ import 'package:scrcpy_connect/widgets/choice_picker.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
@@ -95,54 +96,13 @@ class ControlSettingsPage extends HookConsumerWidget {
     return PageFrame(
       title: '画面与控制',
       child: GroupedListView(
-        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+        padding: const EdgeInsets.fromLTRB(
+          DesignTokens.componentPagePadding,
+          0,
+          DesignTokens.componentPagePadding,
+          DesignTokens.spacingLg,
+        ),
         children: [
-          const SectionTitle('画面与手机屏幕'),
-          SettingsGroup(
-            children: [
-              toggle(
-                '显示导航键',
-                LucideIcons.navigation,
-                DesignTokens.colorListIconBlue,
-                preferences.showNavigationBar ?? true,
-                (next) => DevicePreferences(showNavigationBar: next),
-              ),
-              toggle(
-                '新画面启动时点亮屏幕',
-                LucideIcons.sun,
-                DesignTokens.colorListIconAmber,
-                preferences.wakeOnConnect ?? true,
-                (next) => DevicePreferences(wakeOnConnect: next),
-              ),
-              toggle(
-                '关闭最后画面时熄屏',
-                LucideIcons.moon,
-                DesignTokens.colorListIconAmber,
-                preferences.lockOnClose ?? false,
-                (next) => DevicePreferences(lockOnClose: next),
-              ),
-              toggle(
-                '保持手机唤醒',
-                LucideIcons.alarmClock,
-                DesignTokens.colorListIconUtility,
-                preferences.stayAwake ?? false,
-                (next) => DevicePreferences(stayAwake: next),
-              ),
-            ],
-          ),
-          const SectionTitle('屏幕布局'),
-          SettingsGroup(
-            children: [
-              ActionRow(
-                icon: LucideIcons.ratio,
-                color: DesignTokens.colorListIconBlue,
-                title: '屏幕比例',
-                trailing: Text(RemoteDisplaySettings(preferences).label),
-                onTap: () =>
-                    chooseScreenRatio(context, ref, device.id, preferences),
-              ),
-            ],
-          ),
           PageChromePadding(
             padding: EdgeInsets.zero,
             showRecovery: false,
@@ -206,7 +166,7 @@ class ControlSettingsPage extends HookConsumerWidget {
                       children: [
                         QualityOptionRow(
                           title: '清晰度',
-                          icon: LucideIcons.monitor,
+                          icon: LucideIcons.image,
                           currentValue:
                               clarity[current.maxSize] ?? '${current.maxSize}P',
                           onTap: applying.value || !available
@@ -258,17 +218,67 @@ class ControlSettingsPage extends HookConsumerWidget {
                       StateNote(_codecReason(codec)),
                     if (data.activeSessions.isNotEmpty) ...[
                       const SectionTitle('正在使用的画面'),
-                      for (final stream in data.activeSessions)
-                        ActionRow(
-                          icon: LucideIcons.monitor,
-                          color: DesignTokens.colorListIconBlue,
-                          title: stream.name,
-                        ),
+                      SettingsGroup(
+                        children: [
+                          for (final stream in data.activeSessions)
+                            ActionRow(
+                              icon: LucideIcons.monitor,
+                              color: FunctionTone.device,
+                              title: stream.name,
+                            ),
+                        ],
+                      ),
                     ],
                   ],
                 );
               },
             ),
+          ),
+          const SectionTitle('画面与手机屏幕'),
+          SettingsGroup(
+            children: [
+              toggle(
+                '显示导航键',
+                LucideIcons.panelBottom,
+                FunctionTone.device,
+                preferences.showNavigationBar ?? true,
+                (next) => DevicePreferences(showNavigationBar: next),
+              ),
+              toggle(
+                '新画面启动时点亮屏幕',
+                LucideIcons.sun,
+                FunctionTone.display,
+                preferences.wakeOnConnect ?? true,
+                (next) => DevicePreferences(wakeOnConnect: next),
+              ),
+              toggle(
+                '关闭最后画面时熄屏',
+                LucideIcons.moon,
+                FunctionTone.display,
+                preferences.lockOnClose ?? false,
+                (next) => DevicePreferences(lockOnClose: next),
+              ),
+              toggle(
+                '保持手机唤醒',
+                LucideIcons.coffee,
+                FunctionTone.utility,
+                preferences.stayAwake ?? false,
+                (next) => DevicePreferences(stayAwake: next),
+              ),
+            ],
+          ),
+          const SectionTitle('屏幕布局'),
+          SettingsGroup(
+            children: [
+              ActionRow(
+                icon: LucideIcons.rectangleHorizontal,
+                color: FunctionTone.device,
+                title: '屏幕比例',
+                value: RemoteDisplaySettings(preferences).label,
+                onTap: () =>
+                    chooseScreenRatio(context, ref, device.id, preferences),
+              ),
+            ],
           ),
         ],
       ),

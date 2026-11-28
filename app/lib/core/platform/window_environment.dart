@@ -77,9 +77,6 @@ final class WindowDisplayFeature {
   @override
   int get hashCode =>
       Object.hash(left, top, width, height, type, state, separating);
-
-  bool contains(double x, double y) =>
-      x >= left && x <= left + width && y >= top && y <= top + height;
 }
 
 final class WindowEnvironment {

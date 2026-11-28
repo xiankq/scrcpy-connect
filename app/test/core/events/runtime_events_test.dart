@@ -9,7 +9,7 @@ import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/recovery/models/runtime_snapshot.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 
-import '../../fixtures/video_events.dart';
+import '../../support/video_events.dart';
 
 void main() {
   test('重入发布保持业务与帧序列，类型化恢复回执不改变业务水位或重入策略', () async {

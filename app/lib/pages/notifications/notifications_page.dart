@@ -13,6 +13,7 @@ import 'package:scrcpy_connect/pages/notifications/widgets/notification_card.dar
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
@@ -20,6 +21,7 @@ import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
+import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:scrcpy_connect/widgets/system_notifications.dart';
 
@@ -83,10 +85,12 @@ class NotificationsPage extends HookConsumerWidget {
       children: [
         if (showEnableAlerts)
           Padding(
-            padding: const EdgeInsets.only(bottom: DesignTokens.spacingSm),
-            child: OutlinedButton(
+            padding: const EdgeInsets.only(bottom: DesignTokens.spacingMd),
+            child: AppButton(
+              role: AppButtonRole.secondaryOnPage,
+              expand: true,
               onPressed: enablingAlerts.value ? null : enableAlerts,
-              child: Text(enablingAlerts.value ? '正在检查通知权限…' : '开启系统提醒'),
+              label: enablingAlerts.value ? '正在检查通知权限…' : '开启系统提醒',
             ),
           ),
       ],
@@ -95,7 +99,7 @@ class NotificationsPage extends HookConsumerWidget {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(DesignTokens.spacingMd),
+            padding: const EdgeInsets.all(DesignTokens.componentPagePadding),
             child: notificationHeader,
           ),
           Expanded(child: content),
@@ -242,15 +246,15 @@ class NotificationsPage extends HookConsumerWidget {
       ],
       child: AsyncContent(
         loadingPlaceholder: GroupedListView(
-          padding: const EdgeInsets.all(DesignTokens.spacingMd),
+          padding: const EdgeInsets.all(DesignTokens.componentPagePadding),
           children: [
             notificationHeader,
             const SkeletonRows(
-              height: DesignTokens.componentNotificationListItemHeight,
-              leadingSize: DesignTokens.componentNotificationAppIconSize,
+              height: _notificationSkeletonHeight,
+              leadingSize: notificationAppIconSize,
               lines: 3,
-              cardRadius: DesignTokens.componentNotificationListItemRounded,
-              gap: DesignTokens.componentNotificationListItemGap,
+              cardRadius: DesignTokens.componentListGroupRounded,
+              gap: _notificationGap,
             ),
           ],
         ),
@@ -260,9 +264,10 @@ class NotificationsPage extends HookConsumerWidget {
         onRefresh: refresh,
         emptyTitle: '当前无法同步通知',
         failure: '请确认手机已连接，也可以直接在手机上查看。',
-        alternative: TextButton(
+        alternative: AppButton(
+          role: AppButtonRole.text,
           onPressed: () => openRemoteRoute(context, deviceId: device.id),
-          child: const Text('在手机上继续处理'),
+          label: '在手机上继续处理',
         ),
         builder: (context, data) {
           Future<void> verify() async {
@@ -300,15 +305,18 @@ class NotificationsPage extends HookConsumerWidget {
                 message: '无法读取手机通知。请解锁手机后刷新，也可以直接在手机上查看。',
                 action: Column(
                   mainAxisSize: MainAxisSize.min,
+                  spacing: DesignTokens.spacingSm,
                   children: [
-                    FilledButton(
+                    AppButton(
+                      role: AppButtonRole.primary,
                       onPressed: () =>
                           openRemoteRoute(context, deviceId: device.id),
-                      child: const Text('在手机上查看'),
+                      label: '在手机上查看',
                     ),
-                    TextButton(
+                    AppButton(
+                      role: AppButtonRole.text,
                       onPressed: starting.value ? null : verify,
-                      child: Text(state == .stopped ? '开启通知与来电' : '刷新通知'),
+                      label: state == .stopped ? '开启通知与来电' : '刷新通知',
                     ),
                   ],
                 ),
@@ -321,9 +329,10 @@ class NotificationsPage extends HookConsumerWidget {
                 icon: LucideIcons.bell,
                 title: '没有当前通知',
                 message: '这里只显示仍有效的通知，不建立长期通知档案。',
-                action: TextButton(
+                action: AppButton(
+                  role: AppButtonRole.secondaryOnPage,
                   onPressed: starting.value ? null : verify,
-                  child: const Text('刷新当前通知'),
+                  label: '刷新当前通知',
                 ),
               ),
             );
@@ -343,7 +352,7 @@ class NotificationsPage extends HookConsumerWidget {
             onRefresh: verify,
             child: GroupedListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(DesignTokens.spacingMd),
+              padding: const EdgeInsets.all(DesignTokens.componentPagePadding),
               itemCount: notifications.length + offset,
               findChildIndexCallback: (key) => indices[key],
               itemBuilder: (context, index) {
@@ -368,27 +377,19 @@ class NotificationsPage extends HookConsumerWidget {
                         ));
                 return Padding(
                   key: notificationKey(notification),
-                  padding: const EdgeInsets.only(
-                    bottom: DesignTokens.componentNotificationListItemGap,
-                  ),
+                  padding: const EdgeInsets.only(bottom: _notificationGap),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       if (firstOfDay)
-                        Padding(
-                          padding: const EdgeInsets.only(
-                            top: DesignTokens.spacingXs,
-                            bottom: DesignTokens.spacingSm,
-                          ),
-                          child: Text(
-                            DateUtils.isSameDay(posted, now)
-                                ? '今天'
-                                : DateUtils.isSameDay(posted, yesterday)
-                                ? '昨天'
-                                : MaterialLocalizations.of(context)
-                                      .formatShortMonthDay(posted),
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
+                        SectionTitle(
+                          DateUtils.isSameDay(posted, now)
+                              ? '今天'
+                              : DateUtils.isSameDay(posted, yesterday)
+                              ? '昨天'
+                              : MaterialLocalizations.of(context)
+                                    .formatShortMonthDay(posted),
+                          first: position == 0,
                         ),
                       NotificationCard(
                         device: device,
@@ -407,3 +408,9 @@ class NotificationsPage extends HookConsumerWidget {
     );
   }
 }
+
+/// 通知卡之间的间距（Ardot C1 通知列表 2:1874：卡片间 12）。
+const _notificationGap = DesignTokens.spacingMd;
+
+/// 骨架卡高度：内距 16×2、标题一行与正文两行（Ardot 通知卡 37:1111）。
+const _notificationSkeletonHeight = 96.0;

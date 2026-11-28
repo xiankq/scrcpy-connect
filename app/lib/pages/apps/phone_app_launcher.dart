@@ -15,7 +15,9 @@ import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/router/remote_windows.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart' show feedback;
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
@@ -142,7 +144,8 @@ Future<AppOpenMode?> _chooseMode(
   required bool windowAvailable,
   BuildContext? source,
 }) {
-  final theme = Theme.of(context);
+  final colors = AppColors.of(context);
+  final type = AppTypography.of(context);
   final phone = hasIndependentWindow ? '移回手机屏幕' : '在手机屏幕中打开';
   final window = hasIndependentWindow ? '切回独立应用' : '打开独立应用画面';
   final anchor = source?.mounted == true ? source!.findRenderObject() : null;
@@ -151,14 +154,12 @@ Future<AppOpenMode?> _chooseMode(
     return liquid.showGlassContextMenu<AppOpenMode>(
       context: context,
       targetRect: anchor.localToGlobal(Offset.zero) & anchor.size,
-      menuWidth: DesignTokens.componentAppContinuationMenuWidth,
+      menuWidth: DesignTokens.componentMenuWidth,
       borderRadius: DesignTokens.componentMenuRounded,
       rowBorderRadius: DesignTokens.componentMenuItemRounded,
       settings: GlassMaterial.settings(context, variant: GlassVariant.menu),
       quality: GlassMaterial.quality(context),
-      barrierColor: theme.brightness == Brightness.dark
-          ? DesignTokens.componentModalScrimDarkBackgroundColor
-          : DesignTokens.componentModalScrimBackgroundColor,
+      barrierColor: colors.scrim,
       actions: [
         Padding(
           padding: const EdgeInsets.fromLTRB(
@@ -167,7 +168,10 @@ Future<AppOpenMode?> _chooseMode(
             DesignTokens.componentMenuItemPadding,
             DesignTokens.spacingXs,
           ),
-          child: Text(appName, style: theme.textTheme.titleMedium),
+          child: Text(
+            appName,
+            style: type.footnote.copyWith(color: colors.textSecondary),
+          ),
         ),
         for (final (mode, label, icon) in [
           (AppOpenMode.phone, phone, AppIcons.navigationDevices),
@@ -176,9 +180,9 @@ Future<AppOpenMode?> _chooseMode(
           liquid.GlassMenuItem(
             title: label,
             height: DesignTokens.componentMenuItemHeight,
-            titleStyle: theme.textTheme.labelLarge,
+            titleStyle: type.subheadline,
             icon: Icon(icon),
-            iconColor: theme.colorScheme.onSurface,
+            iconColor: colors.text,
             iconSize: DesignTokens.componentMenuItemSize,
             onTap: () => navigator.pop(mode),
           ),
@@ -189,23 +193,31 @@ Future<AppOpenMode?> _chooseMode(
   Widget actions(BuildContext context) => Column(
     mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.stretch,
-    spacing: DesignTokens.spacingXs,
+    spacing: DesignTokens.spacingSm,
     children: [
-      FilledButton(
+      AppButton(
+        role: AppButtonRole.primary,
+        expand: true,
         onPressed: () => Navigator.pop(context, AppOpenMode.phone),
-        child: Text(phone, textAlign: TextAlign.center),
+        label: phone,
       ),
-      OutlinedButton(
+      AppButton(
+        expand: true,
         onPressed: windowAvailable
             ? () => Navigator.pop(context, AppOpenMode.window)
             : null,
-        child: Text(window, textAlign: TextAlign.center),
+        label: window,
       ),
       if (!windowAvailable)
-        Text('此设备当前不支持独立应用画面', style: theme.textTheme.bodySmall),
-      TextButton(
+        Text(
+          '此设备当前不支持独立应用画面',
+          style: type.footnote.copyWith(color: colors.textSecondary),
+        ),
+      AppButton(
+        role: AppButtonRole.text,
+        expand: true,
         onPressed: () => Navigator.pop(context),
-        child: const Text('取消'),
+        label: '取消',
       ),
     ],
   );
@@ -230,15 +242,25 @@ Future<AppOpenMode?> _chooseMode(
           builder: (context) => SafeArea(
             top: false,
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(DesignTokens.spacingMd),
+              padding: const EdgeInsets.fromLTRB(
+                DesignTokens.componentSheetPadding,
+                0,
+                DesignTokens.componentSheetPadding,
+                DesignTokens.componentSheetPadding,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(appName, style: theme.textTheme.titleLarge),
+                  Text(appName, style: type.title3),
                   const SizedBox(height: DesignTokens.spacingXxs),
-                  Text(device, style: theme.textTheme.bodySmall),
-                  const SizedBox(height: DesignTokens.spacingMd),
+                  Text(
+                    device,
+                    style: type.subheadline.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: DesignTokens.spacingLg),
                   actions(context),
                 ],
               ),

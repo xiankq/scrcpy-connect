@@ -7,14 +7,22 @@ import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
-import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/devices/device_status.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
 import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
+import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
+
+/// 读取中行尾值占位宽度（约为常见值的宽度）。
+const _valuePlaceholderWidth = 96.0;
+
+/// 读取值最多占行宽的比例；值完整换行显示，不截断。
+const _valueMaxWidthFactor = .5;
 
 class DeviceDetailsPage extends ConsumerWidget {
   const DeviceDetailsPage({super.key, required this.device});
@@ -174,100 +182,36 @@ class DeviceDetailsPage extends ConsumerWidget {
           ],
         ),
       ];
-      final theme = Theme.of(context);
-      final labelStyle = theme.textTheme.labelLarge!;
-      final headingStyle = labelStyle.merge(
-        DesignTokens.componentDeviceDetailSectionTypography,
-      );
-      final valueStyle = labelStyle
-          .merge(DesignTokens.componentDeviceDetailValueTypography)
-          .copyWith(
-            color: theme.brightness == Brightness.dark
-                ? theme.colorScheme.onSurfaceVariant
-                : DesignTokens.componentDeviceDetailValueTextColor,
-          );
       final timestamp = updated?.toString().split('.').first;
+      // 设备详情（Ardot H13 2:615）：每组一个组头加分组卡片，行尾为读取值。
       final sections = <Widget>[
         for (final (index, (section, title, fields)) in groups.indexed) ...[
-          if (index > 0)
-            const SizedBox(
-              height: DesignTokens.componentDeviceDetailSectionGap,
-            ),
-          Padding(
-            padding: const EdgeInsetsDirectional.only(
-              start: DesignTokens.spacingXs,
-              end: DesignTokens.spacingXs,
-              bottom: DesignTokens.spacingTight,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                minHeight: DesignTokens.componentDeviceDetailSectionHeight,
-              ),
-              child: Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: Semantics(
-                  header: true,
-                  child: Text(title, style: headingStyle),
-                ),
+          SectionTitle(title, first: index == 0),
+          SettingsGroup(
+            children: [
+              for (final (label, value) in fields)
+                _DetailRow(label: label, value: loading ? null : value),
+            ],
+          ),
+          if (failures[section] case final failure?)
+            StateNote(
+              failureCodeMessage(
+                failure.code,
+                fallback: '无法读取这部分信息。请检查手机连接后刷新。',
               ),
             ),
-          ),
-          ContentPanel(
-            padding: const EdgeInsets.symmetric(
-              horizontal: DesignTokens.spacingMd,
-              vertical: DesignTokens.spacingXxs,
-            ),
-            child: Column(
-              children: [
-                for (final (label, value) in fields)
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      minHeight: DesignTokens.componentSettingsRowHeight,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: DesignTokens.spacingXs,
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(child: Text(label, style: labelStyle)),
-                          const SizedBox(width: DesignTokens.spacingXs),
-                          Expanded(
-                            child: loading
-                                ? const SkeletonLine(
-                                    fraction: .64,
-                                    alignment: AlignmentDirectional.centerEnd,
-                                  )
-                                : Text(
-                                    value,
-                                    style: valueStyle,
-                                    textAlign: TextAlign.end,
-                                  ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                if (failures[section] case final failure?)
-                  StateNote(
-                    failureCodeMessage(
-                      failure.code,
-                      fallback: '无法读取这部分信息。请检查手机连接后刷新。',
-                    ),
-                  ),
-                if (section == DeviceDetailSection.memory &&
-                    failures[DeviceDetailSection.storage] != null)
-                  const StateNote('存储信息未获取'),
-                if (section == DeviceDetailSection.battery &&
-                    failures[DeviceDetailSection.power] != null)
-                  const StateNote('屏幕与锁定状态未获取'),
-              ],
-            ),
-          ),
+          if (section == DeviceDetailSection.memory &&
+              failures[DeviceDetailSection.storage] != null)
+            const StateNote('存储信息未获取'),
+          if (section == DeviceDetailSection.battery &&
+              failures[DeviceDetailSection.power] != null)
+            const StateNote('屏幕与锁定状态未获取'),
         ],
       ];
       return GroupedListView(
-        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+        padding: const EdgeInsets.symmetric(
+          horizontal: DesignTokens.componentPagePadding,
+        ),
         children: [
           if (loading)
             LoadingSkeleton(
@@ -293,7 +237,6 @@ class DeviceDetailsPage extends ConsumerWidget {
 
     return PageFrame(
       title: '设备详情',
-      titleStyle: Theme.of(context).textTheme.headlineMedium,
       actions: [
         GlassActionIcon(
           tooltip: '刷新',
@@ -314,4 +257,50 @@ class DeviceDetailsPage extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// 读取值行：标题为字段名，行尾为 `subheadline` + `text-secondary` 的读取值，
+/// 长值在行尾完整换行（共用行尾值最多两行，这里需要完整可读）；[value] 为空时显示占位。
+class _DetailRow extends StatelessWidget implements GroupedRow {
+  const _DetailRow({required this.label, required this.value});
+  final String label;
+  final String? value;
+
+  @override
+  double get separatorIndent => listRowSeparatorIndent(null);
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => AppListRow(
+      // 值放在标题行内而不是行尾槽：行尾槽限高，长值需要完整换行。
+      title: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Expanded(child: Text(label)),
+          const SizedBox(width: DesignTokens.componentListRowGap),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: constraints.maxWidth * _valueMaxWidthFactor,
+            ),
+            child: switch (value) {
+              final value? => Text(
+                value,
+                textAlign: TextAlign.end,
+                style: AppTypography.of(context).subheadline
+                    .copyWith(color: AppColors.of(context).textSecondary),
+              ),
+              null => const SizedBox(
+                width: _valuePlaceholderWidth,
+                child: SkeletonLine(
+                  fraction: .64,
+                  alignment: AlignmentDirectional.centerEnd,
+                ),
+              ),
+            },
+          ),
+        ],
+      ),
+    ),
+  );
 }

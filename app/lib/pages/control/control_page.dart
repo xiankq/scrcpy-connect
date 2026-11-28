@@ -917,6 +917,7 @@ class _ControlPageState extends ConsumerState<ControlPage>
       presentation: presentation,
       independent: widget.packageName != null,
       waitingForFirstFrame: presentation.awaitingFirstFrame,
+      deviceLabel: deviceName(widget.device),
       onReturn: () => unawaited(leave()),
       onManageActivities: () =>
           DeviceActivitiesRoute(deviceId: widget.device.id).push<void>(context),
@@ -971,7 +972,17 @@ class _ControlPageState extends ConsumerState<ControlPage>
         });
       }
     }
-    return ScaffoldMessenger(
+    // 画面在 `viewport` 上时系统栏用亮色图形（媒体上的白色状态栏与 Home 指示条）；
+    // 首帧等待回到 `page` 底，沿用主题的系统栏样式。
+    final systemOverlay = loadingBackdrop
+        ? Theme.of(context).appBarTheme.systemOverlayStyle
+        : SystemUiOverlayStyle.light.copyWith(
+            statusBarColor: DesignTokens.componentRemoteViewportBackgroundColor
+                .withAlpha(0),
+            systemNavigationBarColor:
+                DesignTokens.componentRemoteViewportBackgroundColor,
+          );
+    final messenger = ScaffoldMessenger(
       key: notices.messengerKey,
       child: PopScope(
         canPop: presentation.exiting,
@@ -990,7 +1001,8 @@ class _ControlPageState extends ConsumerState<ControlPage>
             if (!focused) unawaited(releaseInputs());
           },
           child: Scaffold(
-            backgroundColor: DesignTokens.colorBlack,
+            backgroundColor:
+                DesignTokens.componentRemoteViewportBackgroundColor,
             resizeToAvoidBottomInset: true,
             bottomNavigationBar: showNavigationBar && !loadingBackdrop
                 ? RemoteNavigationBar(
@@ -1063,5 +1075,11 @@ class _ControlPageState extends ConsumerState<ControlPage>
         ),
       ),
     );
+    return systemOverlay == null
+        ? messenger
+        : AnnotatedRegion<SystemUiOverlayStyle>(
+            value: systemOverlay,
+            child: messenger,
+          );
   }
 }

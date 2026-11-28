@@ -104,7 +104,7 @@ class DevicePreferences with _$DevicePreferences {
 @freezed
 class Preferences with _$Preferences {
   Preferences({
-    this.appearance = Appearance.light,
+    this.appearance = Appearance.system,
     this.glassEffects = GlassEffects.automatic,
     this.backgroundKeepAlive = true,
     this.notificationAlerts = false,

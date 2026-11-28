@@ -49,7 +49,24 @@ function componentRules(state) {
 export function lintDesign(markdown) {
   // Only extend the official unknown-property check; every other official rule
   // still sees the complete model, including colors referenced by extensions.
+  // `<role>-dark` is the night value of the same role, so it counts as referenced
+  // when its day role is referenced; components describe roles, not modes.
   const rules = DEFAULT_RULES.map(rule => state => rule(state).filter(finding => {
+    const dark = /^colors\.(.+)-dark$/.exec(finding.path ?? '');
+    if (dark && /never referenced/.test(finding.message)) {
+      return rule(state).some(other => other.path === `colors.${dark[1]}` && /never referenced/.test(other.message));
+    }
+    // 主色底上的 on-primary 文字只用于 15 点以上 600 字重的标签，按大字标准 3:1 校验（见 design.md「颜色」）。
+    const contrast = /textColor \((#[0-9a-f]{6,8})\) on backgroundColor \((#[0-9a-f]{6,8})\) has contrast ratio ([\d.]+):1/i.exec(finding.message ?? '');
+    if (contrast) {
+      const hex = token => {
+        const { r, g, b } = state.colors.get(token) ?? {};
+        return '#' + [r, g, b].map(v => (v ?? 0).toString(16).padStart(2, '0')).join('');
+      };
+      const onPrimary = contrast[1].toLowerCase().slice(0, 7) === hex('on-primary')
+        && contrast[2].toLowerCase().slice(0, 7) === hex('primary');
+      return !(onPrimary && Number(contrast[3]) >= 3);
+    }
     if (finding.rule !== 'broken-ref' || finding.severity !== 'warning') return true;
     const match = /^components\.([^.]+)\.([^.]+)$/.exec(finding.path ?? '');
     if (!match) return true;

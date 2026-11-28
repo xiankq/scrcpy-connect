@@ -7,7 +7,8 @@ import 'package:scrcpy_connect/pages/device_setup/connection/connection_form_pag
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
-import 'package:scrcpy_connect/widgets/content.dart';
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 
 class DeviceConnectionSettingsPage extends HookConsumerWidget {
   const DeviceConnectionSettingsPage({super.key, required this.device});
@@ -28,15 +29,19 @@ class DeviceConnectionSettingsPage extends HookConsumerWidget {
           current?.status == DeviceConnectionStatus.connected &&
               current?.transport != DeviceTransport.tcp
           ? Padding(
-              padding: const EdgeInsets.only(top: DesignTokens.spacingLg),
-              child: ContentPanel(
-                child: ActionRow(
-                  icon: AppIcons.connectionIp,
-                  color: DesignTokens.colorListIconMint,
-                  title: '转为 IP 连接',
-                  onTap: () =>
-                      DeviceIpRoute(deviceId: device.id).push<void>(context),
-                ),
+              padding: const EdgeInsets.only(
+                top: DesignTokens.componentListSectionGap,
+              ),
+              child: SettingsGroup(
+                children: [
+                  ActionRow(
+                    icon: AppIcons.connectionIp,
+                    color: FunctionTone.device,
+                    title: '转为 IP 连接',
+                    onTap: () =>
+                        DeviceIpRoute(deviceId: device.id).push<void>(context),
+                  ),
+                ],
               ),
             )
           : null,

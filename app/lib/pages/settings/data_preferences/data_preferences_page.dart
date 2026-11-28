@@ -8,7 +8,9 @@ import 'package:scrcpy_connect/pages/settings/data_preferences/widgets/metadata_
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
+import 'package:scrcpy_connect/widgets/section_title.dart';
 
 import '../widgets/settings_row.dart';
 import 'metadata_operation_notifier.dart';
@@ -29,15 +31,45 @@ class DataPreferencesPage extends HookConsumerWidget {
     return PageFrame(
       title: '设备记录与恢复',
       child: GroupedListView(
-        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+        padding: const EdgeInsets.all(DesignTokens.componentPagePadding),
         children: [
+          if (operation.refreshPending) ...[
+            SettingsGroup(
+              children: [
+                SettingsRow(
+                  icon: AppIcons.refresh,
+                  color: FunctionTone.archive,
+                  title: '重新加载记录',
+                  onTap: operation.busy ? null : actions.refreshRecords,
+                ),
+              ],
+            ),
+            const SizedBox(height: DesignTokens.componentListSectionGap),
+          ],
           SettingsGroup(
             children: [
               SettingsRow(
-                compact: true,
+                icon: LucideIcons.upload,
+                color: FunctionTone.archive,
+                title: '导出记录',
+                subtitle: '保存为文件，可在其他主控导入',
+                onTap: operation.busy
+                    ? null
+                    : () => actions.exportRecords(
+                        saveFile: (bytes) => !context.mounted
+                            ? Future<Uri?>.value(null)
+                            : FilePicker.saveFile(
+                                fileName: 'interconnect-devices.json',
+                                mimeType: 'application/json',
+                                bytes: bytes,
+                              ),
+                      ),
+              ),
+              SettingsRow(
                 icon: AppIcons.download,
-                color: DesignTokens.colorListIconPurple,
+                color: FunctionTone.archive,
                 title: '导入记录',
+                subtitle: '导入前可预览将新增的设备',
                 onTap: operation.busy
                     ? null
                     : () => actions.importRecords(
@@ -55,33 +87,9 @@ class DataPreferencesPage extends HookConsumerWidget {
                               ),
                       ),
               ),
-              SettingsRow(
-                compact: true,
-                icon: LucideIcons.upload,
-                color: DesignTokens.colorListIconPurple,
-                title: '导出记录',
-                onTap: operation.busy
-                    ? null
-                    : () => actions.exportRecords(
-                        saveFile: (bytes) => !context.mounted
-                            ? Future<Uri?>.value(null)
-                            : FilePicker.saveFile(
-                                fileName: 'interconnect-devices.json',
-                                mimeType: 'application/json',
-                                bytes: bytes,
-                              ),
-                      ),
-              ),
-              if (operation.refreshPending)
-                SettingsRow(
-                  compact: true,
-                  icon: AppIcons.refresh,
-                  color: DesignTokens.colorListIconSlate,
-                  title: '重新加载记录',
-                  onTap: operation.busy ? null : actions.refreshRecords,
-                ),
             ],
           ),
+          const SectionFooter('记录包含设备名称、连接方式和偏好，不含手机授权。'),
         ],
       ),
     );

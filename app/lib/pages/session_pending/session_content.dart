@@ -1,6 +1,7 @@
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -32,14 +33,20 @@ class AppSessionContent extends StatelessWidget {
           final chrome = PageChromePadding.of(context);
           if (session.failure case final failure?) {
             return ListView(
-              padding: chrome + const EdgeInsets.all(DesignTokens.spacingMd),
+              padding:
+                  chrome +
+                  const EdgeInsets.symmetric(
+                    horizontal: DesignTokens.componentPagePadding,
+                  ),
               children: [
                 StateNote(failure, icon: LucideIcons.circleAlert),
                 Align(
                   alignment: AlignmentDirectional.centerStart,
-                  child: TextButton(
+                  child: AppButton(
+                    role: AppButtonRole.secondaryOnPage,
+                    size: AppButtonSize.section,
                     onPressed: session.onRetry,
-                    child: const Text('重试'),
+                    label: '重试',
                   ),
                 ),
               ],

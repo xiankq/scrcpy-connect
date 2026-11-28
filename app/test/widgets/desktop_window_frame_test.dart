@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/platform/desktop_window.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 
@@ -27,7 +28,9 @@ void main() {
     var back = 0;
     await tester.pumpWidget(
       MaterialApp(
-        builder: (context, child) => DesktopWindowFrame(child: child!),
+        theme: ConnectTokens.theme(Brightness.light),
+        builder: (context, child) =>
+            DesktopWindowFrame(title: '邻接', child: child!),
         home: PageFrame(
           title: 'USB 连接',
           onBack: () => back++,
@@ -59,7 +62,7 @@ void main() {
       (_) {},
     );
     await tester.pump();
-    expect(tester.getRect(first).top, immersive.top - 32);
+    expect(tester.getRect(first).top, closeTo(immersive.top - 32, 1e-6));
     expect(tester.getRect(first).left, immersive.left);
 
     await tester.drag(find.text('USB 连接'), const Offset(60, 0));

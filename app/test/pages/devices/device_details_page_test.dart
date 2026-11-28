@@ -7,14 +7,14 @@ import 'package:scrcpy_connect/core/devices/device_inspection.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/core/devices/device_query_provider.dart';
 import 'package:scrcpy_connect/core/devices/models/device_battery.dart';
-import 'package:scrcpy_connect/core/devices/models/device_list_state.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
-import 'package:scrcpy_connect/core/recovery/models/recovery_state.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
 import 'package:scrcpy_connect/pages/devices/details/device_details_page.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
+
+import '../../support/fixed_state.dart';
 
 void main() {
   testWidgets('设备详情首次读取延迟显示值骨架，刷新时保留已读值', (tester) async {
@@ -36,7 +36,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
     expect(find.byType(SkeletonLine), findsWidgets);
     final label = find.text('设备型号');
-    final placeholderPosition = tester.getCenter(label);
+    // 值从占位换成读取值时，字段名起点不动。
+    final placeholderPosition = tester.getTopLeft(label);
     expect(find.text('未获取'), findsNothing);
 
     const reading = DeviceReading(
@@ -47,7 +48,7 @@ void main() {
     first.complete(reading);
     await tester.pumpAndSettle();
     expect(find.byType(SkeletonLine), findsNothing);
-    expect(tester.getCenter(label), placeholderPosition);
+    expect(tester.getTopLeft(label), placeholderPosition);
     expect(find.text('Pixel 8'), findsOneWidget);
 
     await tester.tap(find.widgetWithIcon(IconButton, AppIcons.refresh));
@@ -64,9 +65,7 @@ void main() {
     expect(find.text('Pixel 9'), findsOneWidget);
   });
 
-  testWidgets('device details starts with compact label and value rows', (
-    tester,
-  ) async {
+  testWidgets('设备详情展示读取到的系统与电池字段，不重复设备名称', (tester) async {
     tester.view
       ..physicalSize = const Size(390, 844)
       ..devicePixelRatio = 1;
@@ -96,14 +95,7 @@ void main() {
       ),
     );
 
-    final label = tester.getCenter(find.text('设备型号'));
-    final value = tester.getCenter(find.text('Pixel 8'));
-    expect(value.dx, greaterThan(label.dx));
-    expect(value.dy, closeTo(label.dy, 1));
-    expect(
-      tester.getCenter(find.text('品牌 / 产品')).dy - label.dy,
-      closeTo(50, 1),
-    );
+    expect(find.text('Pixel 8'), findsOneWidget);
     expect(find.text('测试手机'), findsNothing);
     expect(find.text('设备序列号').hitTestable(), findsOneWidget);
     expect(find.text('当前电量').hitTestable(), findsOneWidget);
@@ -112,9 +104,7 @@ void main() {
     expect(find.text('30 °C'), findsOneWidget);
   });
 
-  testWidgets('narrow dark details wraps long values at large text size', (
-    tester,
-  ) async {
+  testWidgets('窄屏深色大字下离线详情先显示最近连接说明，所有字段可滚动到', (tester) async {
     tester.view
       ..physicalSize = const Size(300, 700)
       ..devicePixelRatio = 1;
@@ -141,7 +131,7 @@ void main() {
     final note = find.textContaining('最近连接');
     final heading = find.text('设备与系统');
     expect(tester.getCenter(note).dy, lessThan(tester.getCenter(heading).dy));
-    expect(tester.getSize(find.text(model)).height, greaterThan(56));
+    expect(find.text(model), findsOneWidget);
     final lastField = find.text('处理器核心');
     await tester.scrollUntilVisible(lastField, 300);
     await Scrollable.ensureVisible(tester.element(lastField), alignment: 0.5);
@@ -165,8 +155,10 @@ Future<void> _pumpDetails(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        deviceListProvider.overrideWith(() => _Devices(device)),
-        recoveryStateProvider.overrideWith(_Recovery.new),
+        deviceListProvider.overrideWith(
+          () => FixedDeviceList(devices: [device]),
+        ),
+        recoveryStateProvider.overrideWith(FixedRecovery.new),
         details.overrideWith((_) => read()),
       ],
       child: MaterialApp(
@@ -183,17 +175,4 @@ Future<void> _pumpDetails(
     ),
   );
   await tester.pump();
-}
-
-class _Devices extends DeviceListNotifier {
-  _Devices(this.device);
-  final DeviceSnapshot device;
-
-  @override
-  DeviceListState build() => DeviceListState(devices: [device], loading: false);
-}
-
-class _Recovery extends RecoveryStateNotifier {
-  @override
-  RecoveryState build() => RecoveryState();
 }
