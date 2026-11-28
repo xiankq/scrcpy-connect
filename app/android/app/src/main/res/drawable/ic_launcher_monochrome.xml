@@ -1,7 +1,7 @@
 <!-- Generated from designs/assets/app-icon.svg. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
     <group android:translateX="13" android:translateY="13" android:scaleX="0.080078125" android:scaleY="0.080078125">
-        <path android:fillColor="#FFFFFFFF" android:pathData="M246 560 V455 C246 337 337 249 456 249 H570 C611 249 632 224 659 199 C682 178 715 180 736 201 C758 223 758 257 736 279 L689 326 C657 357 626 367 581 367 H466 C405 367 362 407 362 466 V560 C362 592 336 618 304 618 C272 618 246 592 246 560 Z" />
-        <path android:fillColor="#FFFFFFFF" android:pathData="M778 464 V569 C778 687 687 775 568 775 H454 C413 775 392 800 365 825 C342 846 309 844 288 823 C266 801 266 767 288 745 L335 698 C367 667 398 657 443 657 H558 C619 657 662 617 662 558 V464 C662 432 688 406 720 406 C752 406 778 432 778 464 Z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M314 248 H602 A104 104 0 0 1 706 352 V400 H652 A108 108 0 0 0 544 508 V664 H314 A104 104 0 0 1 210 560 V352 A104 104 0 0 1 314 248 Z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M652 420 H724 A88 88 0 0 1 812 508 V700 A88 88 0 0 1 724 788 H652 A88 88 0 0 1 564 700 V508 A88 88 0 0 1 652 420 Z" />
     </group>
 </vector>
