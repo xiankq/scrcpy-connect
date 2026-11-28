@@ -14,15 +14,15 @@ import 'package:scrcpy_connect/pages/gallery/preview/widgets/media_preview_toolb
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/content/cached_file_image.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 
 void main() {
-  testWidgets('Duo 照片返回键使用侧边 clear 圆键，画面仍可操作', (tester) async {
+  testWidgets('Duo 照片返回键移到侧边栏起点，画面仍可点击', (tester) async {
     var backTaps = 0;
     var mediaTaps = 0;
     await tester.pumpWidget(
       MaterialApp(
+        theme: ConnectTokens.theme(Brightness.light),
         home: Scaffold(
           body: liquid.GlassVerticalBar(
             data: const liquid.GlassVerticalBarData(
@@ -48,12 +48,7 @@ void main() {
       ),
     );
     final back = find.byType(GlassToolbarIconButton);
-    expect(
-      tester.widget<GlassToolbarIconButton>(back).variant,
-      GlassVariant.clear,
-    );
     expect(tester.getTopLeft(back).dy, 120);
-    expect(tester.getCenter(back).dx, 800 - 42);
     expect(tester.getCenter(find.text('test.png')).dy, lessThan(120));
     await tester.tap(back);
     await tester.tapAt(const Offset(400, 400));

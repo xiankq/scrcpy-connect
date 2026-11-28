@@ -11,7 +11,10 @@ import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/workspace_call_card.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
@@ -20,6 +23,11 @@ import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
+
+/// 页面内容内距：左右 16（design.md「页面结构」）。
+const _contentPadding = EdgeInsets.symmetric(
+  horizontal: DesignTokens.componentPagePadding,
+);
 
 class ActivitiesPage extends HookConsumerWidget {
   const ActivitiesPage({super.key, required this.deviceId});
@@ -46,7 +54,7 @@ class ActivitiesPage extends HookConsumerWidget {
       title: '当前活动',
       child: AsyncContent<ActivityCollection>(
         loadingPlaceholder: GroupedListView(
-          padding: const EdgeInsets.all(DesignTokens.spacingMd),
+          padding: _contentPadding,
           children: [
             WorkspaceCallCard(device: device),
             const SkeletonRows(lines: 1, trailing: true),
@@ -73,84 +81,87 @@ class ActivitiesPage extends HookConsumerWidget {
               .toList();
           if (activities.isEmpty && unresolved.isEmpty) {
             return GroupedListView(
-              padding: const EdgeInsets.all(DesignTokens.spacingMd),
+              padding: _contentPadding,
               children: [
                 WorkspaceCallCard(device: device),
                 EmptyContent(
                   icon: LucideIcons.activity,
                   title: '暂无正在进行的活动',
-                  action: TextButton(
+                  action: AppButton(
+                    role: AppButtonRole.secondaryOnPage,
+                    size: AppButtonSize.section,
                     onPressed: refresh,
-                    child: const Text('重新检查'),
+                    label: '重新检查',
                   ),
                 ),
               ],
             );
           }
-          return GroupedListView.builder(
-            padding: const EdgeInsets.all(DesignTokens.spacingMd),
-            itemCount: activities.length + unresolved.length + 1,
-            itemBuilder: (context, index) {
-              if (index == 0) {
-                return Padding(
-                  padding: const EdgeInsets.all(DesignTokens.spacingSm),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        activities.firstOrNull?.deviceName ?? '此设备',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      if (unresolved.isNotEmpty) const SectionTitle('待核对'),
-                      WorkspaceCallCard(device: device),
-                    ],
-                  ),
-                );
-              }
-              if (index <= unresolved.length) {
-                return _PendingLaunch(
-                  deviceId: deviceId,
-                  session: unresolved[index - 1],
-                  refresh: refresh,
-                );
-              }
-              final activity = activities[index - unresolved.length - 1];
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (index == unresolved.length + 1)
-                    const SectionTitle('正在进行'),
-                  ActionRow(
-                    key: ValueKey(activity.target),
-                    icon: LucideIcons.activity,
-                    color: DesignTokens.colorListIconMint,
-                    title: activity.name,
-                    trailing: Tooltip(
-                      message: statusText(activity.status),
-                      child: TextButton(
-                        onPressed: () async {
-                          if (await confirm(
-                                context,
-                                '停止“${activity.name}”？',
-                                activity.stopImpact,
-                                action: '停止活动',
-                              ) &&
-                              context.mounted &&
-                              ownsScope()) {
-                            await performAction(
-                              context,
-                              () => management.stopActivity(activity.target),
-                            );
-                            if (ownsScope()) refresh();
-                          }
-                        },
-                        child: const Text('停止'),
-                      ),
-                    ),
+          final colors = AppColors.of(context);
+          final type = AppTypography.of(context);
+          return GroupedListView(
+            padding: _contentPadding,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: DesignTokens.componentListHeaderPadding,
+                ),
+                child: Text(
+                  activities.firstOrNull?.deviceName ?? '此设备',
+                  style: type.footnote.copyWith(color: colors.textSecondary),
+                ),
+              ),
+              WorkspaceCallCard(device: device),
+              if (unresolved.isNotEmpty) ...[
+                const SectionTitle('待核对'),
+                for (final (index, session) in unresolved.indexed) ...[
+                  if (index > 0) const SizedBox(height: DesignTokens.spacingMd),
+                  _PendingLaunch(
+                    deviceId: deviceId,
+                    session: session,
+                    refresh: refresh,
                   ),
                 ],
-              );
-            },
+              ],
+              if (activities.isNotEmpty) ...[
+                const SectionTitle('正在进行'),
+                SettingsGroup(
+                  children: [
+                    for (final activity in activities)
+                      ActionRow(
+                        key: ValueKey(activity.target),
+                        icon: LucideIcons.activity,
+                        color: FunctionTone.connection,
+                        title: activity.name,
+                        trailing: Tooltip(
+                          message: statusText(activity.status),
+                          child: AppButton(
+                            size: AppButtonSize.section,
+                            onPressed: () async {
+                              if (await confirm(
+                                    context,
+                                    '停止“${activity.name}”？',
+                                    activity.stopImpact,
+                                    action: '停止活动',
+                                  ) &&
+                                  context.mounted &&
+                                  ownsScope()) {
+                                await performAction(
+                                  context,
+                                  () =>
+                                      management.stopActivity(activity.target),
+                                );
+                                if (ownsScope()) refresh();
+                              }
+                            },
+                            label: '停止',
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ],
           );
         },
       ),
@@ -198,82 +209,101 @@ class _PendingLaunch extends HookConsumerWidget {
     }
 
     final id = session.sessionId;
-    return Padding(
-      padding: const EdgeInsets.all(DesignTokens.spacingMd),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(session.name, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: DesignTokens.spacingXs),
-          Text('暂时无法确认应用是否已打开。请先查看手机屏幕。'),
-          Wrap(
-            spacing: DesignTokens.spacingSm,
-            children: [
-              TextButton(
-                onPressed: busy.value
-                    ? null
-                    : () => run(() async {
-                        final result = await management.readActivities(
-                          deviceId: deviceId,
-                        );
-                        if (!context.mounted || !ownsScope()) return;
-                        final linked = session.linkedSessionId ?? id;
-                        final pendingIds = result.pendingApplications
-                            .map((item) => item.sessionId)
-                            .toSet();
-                        final live = result.activities
-                            .where(
-                              (item) =>
-                                  item.target is SessionActivityTarget &&
-                                  (item.target as SessionActivityTarget)
-                                          .sessionId ==
-                                      linked &&
-                                  !pendingIds.contains(linked) &&
-                                  !const {
-                                    'failed',
-                                    'stopped',
-                                    'error',
-                                  }.contains(item.status),
-                            )
-                            .firstOrNull;
-                        if (ownsScope()) refresh();
-                        if (live != null) {
-                          await openRemoteRoute(
-                            context,
+    final colors = AppColors.of(context);
+    final type = AppTypography.of(context);
+    // 待核对的打开记录：一张 `card`（圆角 16、内距 16），标题、说明与两个区块按钮。
+    return Material(
+      color: colors.card,
+      shape: const RoundedSuperellipseBorder(
+        borderRadius: BorderRadius.all(
+          Radius.circular(DesignTokens.componentCardRounded),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(DesignTokens.componentCardPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(session.name, style: type.headline),
+            const SizedBox(height: DesignTokens.spacingXs),
+            Text(
+              '暂时无法确认应用是否已打开。请先查看手机屏幕。',
+              style: type.subheadline.copyWith(color: colors.textSecondary),
+            ),
+            const SizedBox(height: DesignTokens.spacingMd),
+            Wrap(
+              spacing: DesignTokens.spacingSm,
+              runSpacing: DesignTokens.spacingSm,
+              children: [
+                AppButton(
+                  size: AppButtonSize.section,
+                  onPressed: busy.value
+                      ? null
+                      : () => run(() async {
+                          final result = await management.readActivities(
                             deviceId: deviceId,
-                            sessionId: (live.target as SessionActivityTarget)
-                                .sessionId,
                           );
-                        } else {
-                          feedback(context, '本次打开仍待核对，请在手机检查。未重新发送打开请求。');
-                        }
-                      }),
-                child: const Text('重新核对'),
-              ),
-              TextButton(
-                onPressed: busy.value
-                    ? null
-                    : () => run(() async {
-                        if (!await confirm(
+                          if (!context.mounted || !ownsScope()) return;
+                          final linked = session.linkedSessionId ?? id;
+                          final pendingIds = result.pendingApplications
+                              .map((item) => item.sessionId)
+                              .toSet();
+                          final live = result.activities
+                              .where(
+                                (item) =>
+                                    item.target is SessionActivityTarget &&
+                                    (item.target as SessionActivityTarget)
+                                            .sessionId ==
+                                        linked &&
+                                    !pendingIds.contains(linked) &&
+                                    !const {
+                                      'failed',
+                                      'stopped',
+                                      'error',
+                                    }.contains(item.status),
+                              )
+                              .firstOrNull;
+                          if (ownsScope()) refresh();
+                          if (live != null) {
+                            await openRemoteRoute(
                               context,
-                              '关闭本次打开记录？',
-                              '仅结束本次跟踪及所属捕获，手机上的应用任务保留。之后重新打开可能迁移现有任务。',
-                              action: '关闭记录',
-                            ) ||
-                            !context.mounted ||
-                            !ownsScope()) {
-                          return;
-                        }
-                        await management.stopActivity(
-                          ActivityTarget.session(id),
-                        );
-                        if (ownsScope()) refresh();
-                      }),
-                child: const Text('关闭记录'),
-              ),
-            ],
-          ),
-        ],
+                              deviceId: deviceId,
+                              sessionId: (live.target as SessionActivityTarget)
+                                  .sessionId,
+                            );
+                          } else {
+                            feedback(context, '本次打开仍待核对，请在手机检查。未重新发送打开请求。');
+                          }
+                        }),
+                  label: '重新核对',
+                ),
+                AppButton(
+                  role: AppButtonRole.destructive,
+                  size: AppButtonSize.section,
+                  onPressed: busy.value
+                      ? null
+                      : () => run(() async {
+                          if (!await confirm(
+                                context,
+                                '关闭本次打开记录？',
+                                '仅结束本次跟踪及所属捕获，手机上的应用任务保留。之后重新打开可能迁移现有任务。',
+                                action: '关闭记录',
+                              ) ||
+                              !context.mounted ||
+                              !ownsScope()) {
+                            return;
+                          }
+                          await management.stopActivity(
+                            ActivityTarget.session(id),
+                          );
+                          if (ownsScope()) refresh();
+                        }),
+                  label: '关闭记录',
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

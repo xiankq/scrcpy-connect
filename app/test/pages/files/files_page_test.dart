@@ -5,7 +5,6 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/core/devices/device_readiness_provider.dart';
-import 'package:scrcpy_connect/core/devices/models/device_list_state.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/files/file_cancellation.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
@@ -14,13 +13,13 @@ import 'package:scrcpy_connect/core/files/file_directories.dart';
 import 'package:scrcpy_connect/core/files/file_mutations.dart';
 import 'package:scrcpy_connect/core/files/file_transfers.dart';
 import 'package:scrcpy_connect/core/files/models/file_catalog_entry.dart';
-import 'package:scrcpy_connect/core/recovery/models/recovery_state.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
-import 'package:scrcpy_connect/core/settings/models/preferences_state.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/pages/files/files_page.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
+
+import '../../support/fixed_state.dart';
 
 const _device = DeviceSnapshot(id: 'phone', name: '测试手机');
 
@@ -155,15 +154,19 @@ Future<void> _showFiles(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        deviceListProvider.overrideWith(_Devices.new),
+        deviceListProvider.overrideWith(
+          () => FixedDeviceList(devices: [_device]),
+        ),
         deviceReadinessProvider(_device.id).overrideWith(
           (_) => const DeviceReadiness(
             connectionId: 'connection',
             status: DeviceConnectionStatus.connected,
           ),
         ),
-        preferencesProvider.overrideWith(_Preferences.new),
-        recoveryStateProvider.overrideWith(_Recovery.new),
+        preferencesProvider.overrideWith(
+          () => FixedPreferences(Preferences(fileViewMode: .list)),
+        ),
+        recoveryStateProvider.overrideWith(FixedRecovery.new),
         fileChangesProvider.overrideWithValue(changes),
         fileDirectoriesProvider.overrideWithValue(directories),
         fileMutationsProvider.overrideWithValue(_Mutations()),
@@ -204,23 +207,6 @@ class _Directories implements FileDirectories {
       entries: entries[path]!,
     );
   }
-}
-
-class _Devices extends DeviceListNotifier {
-  @override
-  DeviceListState build() =>
-      DeviceListState(devices: [_device], loading: false);
-}
-
-class _Preferences extends PreferencesNotifier {
-  @override
-  PreferencesState build() =>
-      PreferencesState(values: Preferences(fileViewMode: .list));
-}
-
-class _Recovery extends RecoveryStateNotifier {
-  @override
-  RecoveryState build() => RecoveryState();
 }
 
 class _Mutations implements FileMutations {

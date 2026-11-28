@@ -3,10 +3,13 @@ import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/devices/models/device_battery.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/devices/device_identity.dart';
 import 'package:scrcpy_connect/widgets/devices/device_status.dart';
 
+/// 工作台概览的上半部（Ardot 37:1510「概览」）：左侧 `title1` 设备名、系统版本、
+/// 电量与连接方式，右侧手机轮廓，间距 16。
 class DeviceSummary extends StatelessWidget {
   const DeviceSummary({
     super.key,
@@ -22,7 +25,8 @@ class DeviceSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
+    final colors = AppColors.of(context);
+    final type = AppTypography.of(context);
     final displayedDevice = connecting
         ? device.copyWith(status: .connecting)
         : device;
@@ -49,15 +53,20 @@ class DeviceSummary extends StatelessWidget {
       String value, {
       String? accessibilityLabel,
       Color? iconColor,
+      bool emphasized = false,
     }) => Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: DesignTokens.componentIconSmallSize, color: iconColor),
-        const SizedBox(width: DesignTokens.spacingXxs),
+        Icon(
+          icon,
+          size: DesignTokens.componentSectionGlyphSize,
+          color: iconColor ?? colors.text,
+        ),
+        const SizedBox(width: DesignTokens.spacingSm),
         Flexible(
           child: Text(
             value,
-            style: text.bodyMedium,
+            style: emphasized ? type.label : type.subheadline,
             semanticsLabel: accessibilityLabel,
           ),
         ),
@@ -68,62 +77,52 @@ class DeviceSummary extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(top: pane ? 0 : DesignTokens.spacingSm),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Semantics(
-                  header: true,
-                  child: Text(
-                    name,
-                    style: text.displaySmall?.copyWith(
-                      fontSize: DesignTokens.typographyConnectionTitleFontSize,
-                      height: DesignTokens.typographyConnectionTitleLineHeight,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Semantics(
+                header: true,
+                child: Text(
+                  name,
+                  style: type.title1,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
+              ),
+              if (version != null || model != null && model != name) ...[
                 const SizedBox(height: DesignTokens.spacingXs),
-                if (version != null || model != null && model != name)
-                  Text(
-                    version != null ? 'Android $version' : model!,
-                    style: text.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                const SizedBox(height: DesignTokens.spacingLg),
-                Wrap(
-                  spacing: DesignTokens.spacingMd,
-                  runSpacing: DesignTokens.spacingXs,
-                  children: [
-                    metric(
-                      batteryIcon,
-                      level == null ? '—' : '$level%',
-                      accessibilityLabel: statusLabel == null
-                          ? levelLabel
-                          : '$levelLabel，$statusLabel',
-                      iconColor: charging
-                          ? Theme.of(context).brightness == Brightness.dark
-                                ? DesignTokens.colorSuccessDark
-                                : DesignTokens.colorSuccess
-                          : null,
-                    ),
-                    if (transport != null)
-                      metric(
-                        transport == .usb ? LucideIcons.usb : LucideIcons.wifi,
-                        transport == .usb
-                            ? 'USB 调试'
-                            : deviceTransportLabel(device),
-                      ),
-                  ],
+                Text(
+                  version != null ? 'Android $version' : model!,
+                  style: type.subheadline.copyWith(color: colors.textSecondary),
                 ),
               ],
-            ),
+              const SizedBox(height: DesignTokens.spacingLg),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: DesignTokens.spacingSm,
+                children: [
+                  metric(
+                    batteryIcon,
+                    level == null ? '—' : '$level%',
+                    emphasized: true,
+                    accessibilityLabel: statusLabel == null
+                        ? levelLabel
+                        : '$levelLabel，$statusLabel',
+                    iconColor: charging ? colors.success : null,
+                  ),
+                  if (transport != null)
+                    metric(
+                      transport == .usb ? LucideIcons.usb : LucideIcons.wifi,
+                      transport == .usb
+                          ? 'USB 调试'
+                          : deviceTransportLabel(device),
+                    ),
+                ],
+              ),
+            ],
           ),
         ),
-        const SizedBox(width: DesignTokens.spacingSm),
+        const SizedBox(width: DesignTokens.spacingLg),
         Semantics(
           label: deviceStatusText(displayedDevice),
           child: DeviceIdentity(

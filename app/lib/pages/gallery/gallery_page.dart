@@ -17,6 +17,8 @@ import 'package:scrcpy_connect/pages/gallery/widgets/gallery_scope_sheet.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_action_bar.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
@@ -90,9 +92,9 @@ class GalleryPage extends HookConsumerWidget {
     final reading =
         scan.error == null && (scan.scanning || scan.result == null);
     const gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
-      maxCrossAxisExtent: 124,
-      crossAxisSpacing: DesignTokens.spacingXs,
-      mainAxisSpacing: DesignTokens.spacingXs,
+      maxCrossAxisExtent: _maxThumbnailExtent,
+      crossAxisSpacing: _thumbnailGap,
+      mainAxisSpacing: _thumbnailGap,
     );
     Future<void> reload() async {
       if (selected.value.isNotEmpty || scan.scanning) return;
@@ -112,11 +114,7 @@ class GalleryPage extends HookConsumerWidget {
     final chosen = media.where((file) => selected.value.contains(file.path));
     void closeSelection() => selected.value = {};
     final page = PageFrame(
-      titleStyle: Theme.of(context).textTheme.headlineMedium,
       title: selecting ? '已选择 ${chosen.length} 项' : '相册',
-      backgroundColor: Theme.of(context).brightness == Brightness.light
-          ? DesignTokens.colorFileTile
-          : null,
       leading: selecting
           ? GlassToolbarIconButton(
               semanticLabel: '退出选择',
@@ -130,39 +128,24 @@ class GalleryPage extends HookConsumerWidget {
         children: [
           if (scan.result case final snapshot? when !selecting) ...[
             ContentPanel(
-              padding: const EdgeInsetsDirectional.only(
-                start: DesignTokens.spacingMd,
-                end: DesignTokens.spacingXs,
-              ),
-              radius: DesignTokens.roundedMd,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      snapshot.total == media.length
-                          ? '共 ${media.length} 项'
-                          : '已显示 ${media.length} / ${snapshot.total} 项',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                  TextButton.icon(
-                    iconAlignment: IconAlignment.end,
-                    icon: const Icon(
-                      AppIcons.forward,
-                      size: DesignTokens.componentIconSmallSize,
-                    ),
-                    onPressed: () => showAppModalSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      builder: (_) =>
-                          GalleryScopeSheet(device: device, snapshot: snapshot),
-                    ),
-                    label: const Text('检查范围'),
-                  ),
-                ],
+              padding: EdgeInsets.zero,
+              child: AppListRow(
+                title: Text(
+                  snapshot.total == media.length
+                      ? '共 ${media.length} 项'
+                      : '已显示 ${media.length} / ${snapshot.total} 项',
+                ),
+                value: '检查范围',
+                chevron: true,
+                onTap: () => showAppModalSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) =>
+                      GalleryScopeSheet(device: device, snapshot: snapshot),
+                ),
               ),
             ),
-            const SizedBox(height: DesignTokens.spacingXs),
+            const SizedBox(height: DesignTokens.spacingMd),
           ],
           GlassActionBar(
             actions: [
@@ -221,9 +204,9 @@ class GalleryPage extends HookConsumerWidget {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(
-                    DesignTokens.spacingMd,
-                    DesignTokens.spacingXs,
-                    DesignTokens.spacingMd,
+                    DesignTokens.componentPagePadding,
+                    0,
+                    DesignTokens.componentPagePadding,
                     DesignTokens.spacingSm,
                   ),
                   child: Column(
@@ -255,8 +238,8 @@ class GalleryPage extends HookConsumerWidget {
                 slivers: [
                   if (media.isEmpty && reading && !scan.showingPrevious)
                     SliverPadding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: DesignTokens.spacingMd,
+                      padding: const EdgeInsets.only(
+                        top: DesignTokens.spacingLg,
                       ),
                       sliver: SliverToBoxAdapter(
                         child: LoadingSkeleton(
@@ -270,7 +253,8 @@ class GalleryPage extends HookConsumerWidget {
                                         gridDelegate.maxCrossAxisExtent)
                                     .ceil() *
                                 4,
-                            itemBuilder: (_, _) => const SkeletonBlock(),
+                            itemBuilder: (_, _) =>
+                                const SkeletonBlock(radius: 0),
                           ),
                         ),
                       ),
@@ -286,22 +270,22 @@ class GalleryPage extends HookConsumerWidget {
                         message: status == .completed
                             ? '此范围没有识别到照片或视频；应用私有内容请在手机原应用中查看。'
                             : '未读目录仍可能包含照片或视频，可重新检查或在手机上继续。',
-                        action: TextButton(
+                        action: AppButton(
+                          label: '在手机上继续处理',
+                          role: AppButtonRole.primary,
                           onPressed: () =>
                               openRemoteRoute(context, deviceId: device.id),
-                          child: const Text('在手机上继续处理'),
                         ),
                       ),
                     ),
                   SliverPadding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: DesignTokens.spacingMd,
-                    ),
+                    padding: EdgeInsets.zero,
                     sliver: GalleryDateGrid(
                       device: device,
                       entries: media,
                       delegate: gridDelegate,
                       selected: selected.value,
+                      selectionActive: selecting,
                       onTap: (file) {
                         final path = file.path!;
                         if (selecting) {
@@ -357,3 +341,7 @@ class GalleryPage extends HookConsumerWidget {
     );
   }
 }
+
+/// 相册缩略格（Ardot 相册缩略格 37:2162）：手机三列、间距 2；宽窗口按最大边长增加列数。
+const _maxThumbnailExtent = 160.0;
+const _thumbnailGap = DesignTokens.spacingXxs;

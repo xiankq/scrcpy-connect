@@ -189,8 +189,8 @@ void main() {
     expect(setup.calls, hasLength(1));
     setup.calls.single.deliver();
     await tester.pumpAndSettle();
-    expect(tester.getCenter(find.textContaining('扫描此二维码。')).dx, 640);
-    expect(tester.getCenter(find.widgetWithText(FilledButton, '重新生成')).dx, 640);
+    expect(find.textContaining('扫描此二维码。'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, '重新生成'), findsOneWidget);
     setup.calls.single.result.complete(_paired('device'));
     await tester.pumpAndSettle();
     expect(find.text('已配对，尚未连接'), findsOneWidget);

@@ -86,35 +86,17 @@ void main() {
     expect(client.connects, 2);
   });
 
-  test('元数据导入不创建配对、发现、重连或原生查询执行者', () async {
+  test('空操作、元数据导入和离线查询只创建所用能力，不创建伴生、观察、清单部署或配对', () async {
     final changes = <DeviceListChanged>[];
-    final resources = await _resources(onDevicesChanged: changes.add);
-    final metadata = resources.metadata;
-    final document = DeviceMetadata.parse({
-      'format': 'scrcpy-connect-metadata',
-      'version': 1,
-      'devices': [
-        {
-          'name': 'Imported phone',
-          'address': '192.0.2.1',
-          'port': 5555,
-          'transport': 'tcp',
-        },
-      ],
-    });
-    final receipt = await metadata.import(
-      document,
-      importGlobalPreferences: false,
-      apply: (commit) => commit(),
+    var stopped = 0;
+    final resources = await _resources(
+      onDevicesChanged: changes.add,
+      stopWork: (id, connection, accepted) async {
+        expect(id, 'retired-record');
+        expect(accepted, isFalse);
+        stopped++;
+      },
     );
-    expect(changes.single.devices.single.id, receipt.receipt.deviceIds.single);
-    await resources.close();
-    _expectUnused(resources, devicesUsed: true);
-    expect(resources.metadata, same(metadata));
-  });
-
-  test('空记录、无关事件和退出不创建未使用的设备执行所有者', () async {
-    final resources = await _resources();
     expect(resources.records.current.devices, isEmpty);
     expect(
       (await resources.identities.selectForDevice()).fingerprint,
@@ -132,22 +114,7 @@ void main() {
     );
     await resources.forgetObservation('unused');
     await resources.stopConnections();
-    await resources.stopAdmission();
-    await resources.close();
-    await resources.close();
-    resources.handleEvent(RuntimeEvent(DeviceListChanged([])));
-    _expectUnused(resources);
-  });
 
-  test('空连接取消和退休不创建伴生、观察或捕获执行器', () async {
-    var stopped = 0;
-    final resources = await _resources(
-      stopWork: (id, connection, accepted) async {
-        expect(id, 'retired-record');
-        expect(accepted, isFalse);
-        stopped++;
-      },
-    );
     final devices = resources.devices;
     expect(devices.readDevices(), isEmpty);
     await devices.cancelConnectionAttempt('unused-attempt');
@@ -163,13 +130,59 @@ void main() {
       ),
     );
     expect(stopped, 1);
+
+    final receipt = await resources.metadata.import(
+      DeviceMetadata.parse({
+        'format': 'scrcpy-connect-metadata',
+        'version': 1,
+        'devices': [
+          {
+            'name': 'Imported phone',
+            'address': '192.0.2.1',
+            'port': 5555,
+            'transport': 'tcp',
+          },
+        ],
+      }),
+      importGlobalPreferences: false,
+      apply: (commit) => commit(),
+    );
+    expect(changes.single.devices.single.id, receipt.receipt.deviceIds.single);
+
+    const missing = '00000000-0000-0000-0000-000000000001';
+    await expectLater(
+      resources.apps.readInstalledApps(missing),
+      throwsA(
+        isA<RequestFailure>().having((e) => e.code, 'code', 'disconnected'),
+      ),
+    );
+    await expectLater(
+      resources.operations.readCapabilities(missing),
+      throwsA(
+        isA<RequestFailure>().having((e) => e.code, 'code', 'device_not_found'),
+      ),
+    );
+    await expectLater(
+      resources.operations.wakeDevice(missing),
+      throwsA(
+        isA<RequestFailure>().having((e) => e.code, 'code', 'disconnected'),
+      ),
+    );
+
+    await resources.stopAdmission();
     await resources.close();
-    expect(resources.devices, same(devices));
+    await resources.close();
+    resources.handleEvent(RuntimeEvent(DeviceListChanged([])));
     expect(
       devices.readDevices,
       throwsA(isA<RequestFailure>().having((e) => e.code, 'code', 'disposed')),
     );
-    _expectUnused(resources, devicesUsed: true);
+    _expectUnused(
+      resources,
+      devicesUsed: true,
+      operationsUsed: true,
+      appsUsed: true,
+    );
   });
 
   test('重连刷新与恢复事件只读取设备投影，不装配其他能力', () async {
@@ -201,44 +214,6 @@ void main() {
     expect(sequenceReads, 1);
     expect(settingsReads, 1);
     _expectUnused(resources, devicesUsed: true, reconnectUsed: true);
-  });
-
-  test('离线应用查询不创建清单部署或伴生所有者', () async {
-    final resources = await _resources();
-    final apps = resources.apps;
-    await expectLater(
-      apps.readInstalledApps('00000000-0000-0000-0000-000000000001'),
-      throwsA(
-        isA<RequestFailure>().having((e) => e.code, 'code', 'disconnected'),
-      ),
-    );
-    await resources.close();
-    expect(resources.apps, same(apps));
-    expect(() => resources.serverQueries, throwsA(isA<RequestFailure>()));
-    expect(() => resources.companion, throwsA(isA<RequestFailure>()));
-    expect(() => resources.observations, throwsA(isA<RequestFailure>()));
-    expect(() => resources.setup, throwsA(isA<RequestFailure>()));
-  });
-
-  test('能力评估和空唤醒不创建配对、清单部署或伴生观察', () async {
-    final resources = await _resources();
-    final operations = resources.operations;
-    const id = '00000000-0000-0000-0000-000000000001';
-    await expectLater(
-      operations.readCapabilities(id),
-      throwsA(
-        isA<RequestFailure>().having((e) => e.code, 'code', 'device_not_found'),
-      ),
-    );
-    await expectLater(
-      operations.wakeDevice(id),
-      throwsA(
-        isA<RequestFailure>().having((e) => e.code, 'code', 'disconnected'),
-      ),
-    );
-    await resources.close();
-    expect(resources.operations, same(operations));
-    _expectUnused(resources, devicesUsed: true, operationsUsed: true);
   });
 
   test('延迟创建的配对流程直接遵守当前恢复屏障，不依赖创建前收到事件', () async {
@@ -646,6 +621,7 @@ void _expectUnused(
   bool devicesUsed = false,
   bool reconnectUsed = false,
   bool operationsUsed = false,
+  bool appsUsed = false,
 }) {
   final disposed = throwsA(
     isA<RequestFailure>().having((error) => error.code, 'code', 'disposed'),
@@ -656,7 +632,7 @@ void _expectUnused(
   expect(() => resources.companion, disposed);
   expect(() => resources.serverQueries, disposed);
   expect(() => resources.observations, disposed);
-  expect(() => resources.apps, disposed);
+  if (!appsUsed) expect(() => resources.apps, disposed);
   if (!operationsUsed) expect(() => resources.operations, disposed);
   expect(() => resources.identity, disposed);
 }

@@ -1,8 +1,12 @@
-import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
 
-class ChoiceRow<T> extends StatelessWidget {
+/// 单选弹层与单选列表的选项行（design.md「输入与选择」）：
+/// 当前项行尾为 `primary` 对勾，不另加底色；对勾占 22 点尾槽，切换时文字宽度不变。
+class ChoiceRow<T> extends StatelessWidget implements GroupedRow {
   const ChoiceRow({
     super.key,
     required this.value,
@@ -22,54 +26,36 @@ class ChoiceRow<T> extends StatelessWidget {
   final String? disabledReason;
 
   @override
+  double get separatorIndent => listRowSeparatorIndent(
+    leading == null ? null : DesignTokens.componentIconTileSize,
+  );
+
+  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final colors = AppColors.of(context);
+    final enabled = onChanged != null;
+    final reason = disabledReason;
     return Semantics(
       checked: selected,
       inMutuallyExclusiveGroup: true,
-      child: ListTile(
-        contentPadding:
-            contentPadding ??
-            const EdgeInsets.symmetric(
-              horizontal: DesignTokens.componentPickerOptionPadding,
-            ),
-        minTileHeight: DesignTokens.componentPickerOptionHeight,
-        minVerticalPadding: DesignTokens.spacingXxs,
-        minLeadingWidth: DesignTokens.componentPickerOptionSize,
-        leading: leading,
+      child: AppListRow(
+        enabled: enabled,
         selected: selected,
-        selectedTileColor: theme.brightness == Brightness.dark
-            ? DesignTokens.colorGlassSelectedDark
-            : DesignTokens.colorGlassSelected,
-        selectedColor: theme.colorScheme.onSurface,
-        shape: const RoundedSuperellipseBorder(
-          borderRadius: BorderRadius.all(
-            Radius.circular(DesignTokens.componentPickerOptionRounded),
-          ),
-        ),
-        titleTextStyle: theme.textTheme.bodyLarge?.copyWith(
-          color: onChanged != null
-              ? theme.colorScheme.onSurface
-              : theme.disabledColor,
-        ),
-        enabled: onChanged != null,
+        contentPadding: contentPadding,
+        leading: leading,
+        title: title,
+        subtitle: reason == null || reason.isEmpty ? null : Text(reason),
+        onTap: enabled ? () => onChanged!(value) : null,
         trailing: SizedBox.square(
-          dimension: DesignTokens.componentPickerOptionSize,
+          dimension: listRowTrailingSlot,
           child: selected
               ? Icon(
                   LucideIcons.check,
-                  color: onChanged != null
-                      ? theme.colorScheme.onSurface
-                      : theme.disabledColor,
-                  size: DesignTokens.componentPickerOptionSize,
+                  size: listRowTrailingSlot,
+                  color: enabled ? colors.primary : colors.disabled,
                 )
               : null,
         ),
-        title: title,
-        subtitle: disabledReason == null || disabledReason!.isEmpty
-            ? null
-            : Text(disabledReason!),
-        onTap: onChanged == null ? null : () => onChanged!(value),
       ),
     );
   }

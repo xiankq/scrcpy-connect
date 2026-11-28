@@ -1,15 +1,18 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/widgets/content_arrival.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/files/file_directory_notifier.dart';
 import 'package:scrcpy_connect/pages/files/widgets/file_breadcrumbs.dart';
-import 'package:scrcpy_connect/router/navigation.dart';
+import 'package:scrcpy_connect/pages/files/widgets/file_kind_style.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/form_controls.dart';
-import 'package:scrcpy_connect/widgets/action_row.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
+import 'package:scrcpy_connect/widgets/grouped_list_segment.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
+import 'package:scrcpy_connect/widgets/section_title.dart';
+import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
@@ -37,89 +40,51 @@ class FileDirectoryPickerPage extends HookConsumerWidget {
       path: path.value,
     ));
     final query = ref.watch(provider);
-    final theme = Theme.of(context);
     final label = deviceName(device);
-    final parent = fileParentPath(path.value);
     Future<void> refresh() => ref.read(provider.notifier).refresh();
 
     return PageFrame(
-      titleStyle: Theme.of(context).textTheme.headlineMedium,
       title: '选择目标目录',
-      bottom: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: DesignTokens.spacingXs),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('文件将发送到', style: theme.textTheme.bodySmall),
-            const SizedBox(height: DesignTokens.spacingXs),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: theme.brightness == Brightness.dark
-                    ? DesignTokens.colorAccentBlueSoftDark
-                    : DesignTokens.colorAccentBlueSoft,
-                borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(DesignTokens.spacingSm),
-                child: Text(
-                  '$label · ${path.value}',
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ),
-            ),
-            const SizedBox(height: DesignTokens.spacingSm),
-            FilledButton(
-              style: pagePrimaryButtonStyle,
-              onPressed: query.verified
-                  ? () => closePage<String>(context, path.value)
-                  : null,
-              child: const Text('使用此目录'),
-            ),
-          ],
-        ),
+      bottom: AppButton(
+        label: '使用此目录',
+        role: AppButtonRole.primary,
+        expand: true,
+        onPressed: query.verified
+            ? () => closePage<String>(context, path.value)
+            : null,
       ),
       child: CustomScrollView(
         slivers: [
           const PageChromeSliver(),
           SliverPadding(
-            padding: const EdgeInsets.all(DesignTokens.spacingMd),
+            padding: const EdgeInsets.symmetric(
+              horizontal: DesignTokens.componentPagePadding,
+            ),
             sliver: SliverToBoxAdapter(
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (parent != null) ...[
-                    IconButton(
-                      onPressed: () => path.value = parent,
-                      tooltip: '上一级',
-                      icon: const Icon(LucideIcons.arrowUp),
-                    ),
-                    const SizedBox(width: DesignTokens.spacingXs),
-                  ],
-                  Expanded(
-                    child: FileBreadcrumbs(
-                      path: path.value,
-                      onSelected: (next) => path.value = next,
-                    ),
+                  FileBreadcrumbs(
+                    path: path.value,
+                    onSelected: (next) => path.value = next,
                   ),
+                  if (query.data != null && query.error != null) ...[
+                    const StateNote('无法核验当前目录。请刷新后再选择。'),
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: AppButton(
+                        label: '刷新目录',
+                        role: AppButtonRole.secondaryOnPage,
+                        size: AppButtonSize.section,
+                        onPressed: refresh,
+                      ),
+                    ),
+                  ],
+                  SectionTitle('${fileDirectoryLabel(path.value)} 中的文件夹'),
                 ],
               ),
             ),
           ),
-          if (query.data != null && query.error != null)
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: DesignTokens.spacingMd,
-              ),
-              sliver: SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const StateNote('无法核验当前目录。请刷新后再选择。'),
-                    TextButton(onPressed: refresh, child: const Text('刷新目录')),
-                  ],
-                ),
-              ),
-            ),
           ContentArrival(
             sliver: true,
             state: query.data != null,
@@ -129,7 +94,7 @@ class FileDirectoryPickerPage extends HookConsumerWidget {
                 if (query.data case final data?)
                   SliverPadding(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: DesignTokens.spacingMd,
+                      horizontal: DesignTokens.componentPagePadding,
                     ),
                     sliver: Builder(
                       builder: (context) {
@@ -138,22 +103,29 @@ class FileDirectoryPickerPage extends HookConsumerWidget {
                             .toList();
                         if (directories.isEmpty) {
                           return const SliverToBoxAdapter(
-                            child: Text('此目录没有子文件夹'),
+                            child: SectionFooter('此目录没有子文件夹'),
                           );
                         }
                         return SliverList.builder(
                           itemCount: directories.length,
                           itemBuilder: (context, index) {
                             final directory = directories[index];
-                            return Material(
-                              color: theme.colorScheme.surface,
-                              child: ActionRow(
-                                key: ValueKey(directory.path),
-                                icon: LucideIcons.folder,
-                                color: DesignTokens.colorListIconAmber,
-                                title: directory.name,
-                                onTap:
-                                    !fileCanOpen(directory) || !query.verified
+                            final enabled =
+                                fileCanOpen(directory) && query.verified;
+                            return GroupedListSegment.at(
+                              key: ValueKey(directory.path),
+                              index: index,
+                              count: directories.length,
+                              separatorIndent: tileRowSeparatorIndent,
+                              child: AppListRow(
+                                leading: const ListIconBadge(
+                                  icon: folderKindIcon,
+                                  backgroundColor: folderKindColor,
+                                ),
+                                title: Text(directory.name),
+                                chevron: true,
+                                enabled: enabled,
+                                onTap: !enabled
                                     ? null
                                     : () => path.value = directory.path!,
                               ),
@@ -175,7 +147,7 @@ class FileDirectoryPickerPage extends HookConsumerWidget {
                       failure: '请检查手机连接后重试。',
                       loadingPlaceholder: const Padding(
                         padding: EdgeInsets.symmetric(
-                          horizontal: DesignTokens.spacingMd,
+                          horizontal: DesignTokens.componentPagePadding,
                         ),
                         child: SkeletonRows(lines: 1, trailing: true),
                       ),
@@ -183,6 +155,14 @@ class FileDirectoryPickerPage extends HookConsumerWidget {
                     ),
                   ),
               ],
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: DesignTokens.componentPagePadding,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: SectionFooter('文件将发送到 $label · ${path.value}'),
             ),
           ),
           const PageChromeBottomSliver(),

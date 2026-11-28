@@ -1,13 +1,24 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/platform/desktop_window.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/desktop_title_bar.dart';
 
 /// Publishes the space occupied by the native controls for this window only.
+/// When the runner hides the system title bar (Windows, Linux), draws the
+/// app title bar above the content.
 class DesktopWindowFrame extends StatefulWidget {
-  const DesktopWindowFrame({super.key, required this.child});
+  const DesktopWindowFrame({
+    super.key,
+    required this.title,
+    this.controls = const PlatformDesktopWindowControls(),
+    required this.child,
+  });
 
+  final String title;
+  final DesktopWindowControls controls;
   final Widget child;
 
   @override
@@ -15,7 +26,7 @@ class DesktopWindowFrame extends StatefulWidget {
 }
 
 class _DesktopWindowFrameState extends State<DesktopWindowFrame> {
-  DesktopWindowLayout _layout = (left: 0, right: 0, top: 0);
+  DesktopWindowLayout _layout = DesktopWindow.nativeLayout;
 
   @override
   void initState() {
@@ -44,12 +55,37 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame> {
   }
 
   @override
-  Widget build(BuildContext context) => DesktopWindowInsets(
-    left: _layout.left,
-    right: _layout.right,
-    top: _layout.top,
-    child: widget.child,
-  );
+  Widget build(BuildContext context) {
+    final content = DesktopWindowInsets(
+      left: _layout.left,
+      right: _layout.right,
+      top: _layout.top,
+      child: widget.child,
+    );
+    if (!_layout.titleBar) return content;
+    final media = MediaQuery.of(context);
+    return Column(
+      children: [
+        DesktopTitleBar(
+          title: widget.title,
+          maximized: _layout.maximized,
+          controls: widget.controls,
+        ),
+        Expanded(
+          // Window size classes measure the content below the title bar.
+          child: MediaQuery(
+            data: media.copyWith(
+              size: Size(
+                media.size.width,
+                math.max(0, media.size.height - DesktopTitleBarMetrics.height),
+              ),
+            ),
+            child: content,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 /// Reserves the physical edge occupied by the window buttons within a pane.

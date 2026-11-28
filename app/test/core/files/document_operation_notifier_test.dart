@@ -10,6 +10,8 @@ import 'package:scrcpy_connect/core/files/models/document_event.dart';
 import 'package:scrcpy_connect/core/files/models/document_selection.dart';
 import 'package:scrcpy_connect/core/files/system_documents.dart';
 
+import '../../support/fixed_state.dart';
+
 const _source = DocumentSource(
   sourceId: 'transfer:original',
   localPath: '/cache/original.bin',
@@ -48,20 +50,20 @@ void main() {
     final subscription = container.listen(provider, (_, _) {});
     final actions = container.read(provider.notifier);
     final first = actions.importDirectory();
-    await _flush(container);
+    await flushProviders(container);
     await actions.importDirectory();
     expect(documents.imports, hasLength(1));
     documents.imports.single.result.complete(_imported('first'));
     await first;
     final second = actions.importDirectory();
-    await _flush(container);
+    await flushProviders(container);
     expect(documents.released, ['first']);
     expect(documents.imports, hasLength(2));
     documents.imports.last.result.complete(_imported('second'));
     await second;
     expect(container.read(provider).result?.managedSourceId, 'second');
     subscription.close();
-    await _flush(container);
+    await flushProviders(container);
     expect(documents.released, ['first', 'second']);
   });
 
@@ -71,7 +73,7 @@ void main() {
     container.listen(provider, (_, _) {});
     final actions = container.read(provider.notifier);
     final first = actions.importDirectory();
-    await _flush(container);
+    await flushProviders(container);
     documents.imports.single.result.complete(_imported('retained'));
     await first;
     documents.releaseFailure = StateError('release failed');
@@ -82,7 +84,7 @@ void main() {
     expect(container.read(provider).busy, isFalse);
     documents.releaseFailure = null;
     final retry = actions.importDirectory();
-    await _flush(container);
+    await flushProviders(container);
     expect(documents.released, ['retained', 'retained']);
     expect(documents.imports, hasLength(2));
     documents.imports.last.result.complete(
@@ -99,7 +101,7 @@ void main() {
     final actions = container.read(provider.notifier);
     final original = actions.importDirectory();
     final originalScope = actions.captureScope();
-    await _flush(container);
+    await flushProviders(container);
     final id = documents.imports.single.id;
     final selection = DocumentSelectionRequest(
       operationId: id,
@@ -116,11 +118,11 @@ void main() {
         fail('旧选择不得交给新响应者');
       }),
     ]);
-    await _flush(container);
+    await flushProviders(container);
     expect(originalScope(), isFalse);
     expect(previous.cancelled, [id]);
     final next = container.read(provider.notifier).importDirectory();
-    await _flush(container);
+    await flushProviders(container);
     reply(
       DocumentLocationsSelected([
         const SelectedDocument(handle: 'old', uri: 'content://old'),
@@ -144,7 +146,7 @@ void main() {
     container.listen(provider, (_, _) {});
     final actions = container.read(provider.notifier);
     final importing = actions.importDirectory();
-    await _flush(container);
+    await flushProviders(container);
     final id = documents.imports.single.id;
     final reply = actions.claimSelection(
       DocumentSelectionRequest(operationId: id, mode: .importDirectory),
@@ -169,11 +171,11 @@ void main() {
     );
     container.listen(provider, (_, _) {});
     final actions = container.read(provider.notifier);
-    await _flush(container);
+    await flushProviders(container);
     await actions.export('blocked');
     expect(documents.exports, isEmpty);
     events.add(const DocumentDeliveryChanged(_source).toApplicationEvent());
-    await _flush(container);
+    await flushProviders(container);
     documents.reads.last.complete(
       const FileDeliveryRecord(
         operationId: 'current',
@@ -181,7 +183,7 @@ void main() {
         status: .resultUnknown,
       ),
     );
-    await _flush(container);
+    await flushProviders(container);
     documents.reads.first.complete(
       const FileDeliveryRecord(
         operationId: 'stale',
@@ -189,18 +191,18 @@ void main() {
         status: .pending,
       ),
     );
-    await _flush(container);
+    await flushProviders(container);
     expect(container.read(provider).recordOperationId, 'current');
     expect(container.read(provider).refreshing, isFalse);
     final saving = actions.export('original.bin', reviewed: true);
-    await _flush(container);
+    await flushProviders(container);
     expect(documents.exports.single.plan.reviewedOperationId, 'current');
     documents.exports.single.result.complete(
       const DocumentOutcome(status: .saved),
     );
     await saving;
     final additional = actions.export('copy.bin', additionalCopy: true);
-    await _flush(container);
+    await flushProviders(container);
     expect(
       documents.exports.last.plan.additionalCopyOfOperationId,
       documents.exports.first.plan.operationId,
@@ -218,7 +220,7 @@ void main() {
       exportSource: _source,
     );
     final subscription = container.listen(provider, (_, _) {});
-    await _flush(container);
+    await flushProviders(container);
     documents.reads.single.complete(
       const FileDeliveryRecord(
         operationId: 'pending',
@@ -226,9 +228,9 @@ void main() {
         status: .pending,
       ),
     );
-    await _flush(container);
+    await flushProviders(container);
     subscription.close();
-    await _flush(container);
+    await flushProviders(container);
     expect(documents.cancelled, ['pending']);
   });
 }
@@ -238,11 +240,6 @@ DocumentOutcome _imported(String source) => DocumentOutcome(
   managedSourceId: source,
   localPath: '/cache/$source',
 );
-
-Future<void> _flush(ProviderContainer container) async {
-  await Future<void>.delayed(Duration.zero);
-  await container.pump();
-}
 
 final class _Documents implements SystemDocuments {
   final imports = <({String id, Completer<DocumentOutcome> result})>[];

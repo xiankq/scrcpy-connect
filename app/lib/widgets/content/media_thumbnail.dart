@@ -44,32 +44,32 @@ class MediaThumbnail extends HookConsumerWidget {
     );
     final result = useFuture(future, preserveState: false);
     final source = result.data?.path ?? '';
-    Widget placeholder([String? imageFailure]) => Container(
-      color: compact
-          ? Theme.of(context).colorScheme.surfaceContainerLow
-          : Theme.of(context).colorScheme.surface,
+    final colors = AppColors.of(context);
+    final type = AppTypography.of(context);
+    // 缩略占位为 `block` 底（design.md「表面层级」）；重试为 44 点命中区的玻璃图标键。
+    final retryButton = GlassActionIcon(
+      tooltip: '重试缩略图',
+      onPressed: () => retry.value++,
+      icon: Icon(
+        AppIcons.refresh,
+        size: DesignTokens.componentSectionGlyphSize,
+        color: colors.text,
+      ),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(
+        minWidth: DesignTokens.componentBarButtonSize,
+        minHeight: DesignTokens.componentBarButtonSize,
+      ),
+    );
+    Widget placeholder([String? imageFailure]) => ColoredBox(
+      color: colors.block,
       child: Center(
         child: result.connectionState != ConnectionState.done
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+            ? const ContentLoadingIndicator(
+                size: DesignTokens.componentSectionGlyphSize,
               )
             : compact
-            ? GlassActionIcon(
-                tooltip: '重试缩略图',
-                onPressed: () => retry.value++,
-                icon: const Icon(
-                  AppIcons.refresh,
-                  size: DesignTokens.componentIconActionSize,
-                  color: ConnectTokens.coral,
-                ),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(
-                  minWidth: DesignTokens.componentIconButtonSize,
-                  minHeight: DesignTokens.componentIconButtonSize,
-                ),
-              )
+            ? retryButton
             : Padding(
                 padding: const EdgeInsets.all(DesignTokens.spacingXs),
                 child: Column(
@@ -79,7 +79,7 @@ class MediaThumbnail extends HookConsumerWidget {
                       name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: type.caption,
                       textAlign: TextAlign.center,
                     ),
                     Flexible(
@@ -91,26 +91,13 @@ class MediaThumbnail extends HookConsumerWidget {
                             ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontSize: DesignTokens.typographyMicroFontSize,
+                        style: type.caption.copyWith(
+                          color: colors.textSecondary,
                         ),
                         textAlign: TextAlign.center,
                       ),
                     ),
-                    GlassActionIcon(
-                      tooltip: '重试缩略图',
-                      onPressed: () => retry.value++,
-                      icon: const Icon(
-                        AppIcons.refresh,
-                        size: DesignTokens.componentIconActionSize,
-                        color: ConnectTokens.coral,
-                      ),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: DesignTokens.componentIconButtonSize,
-                        minHeight: DesignTokens.componentIconButtonSize,
-                      ),
-                    ),
+                    retryButton,
                   ],
                 ),
               ),
@@ -129,10 +116,10 @@ class MediaThumbnail extends HookConsumerWidget {
             child: frame != null
                 ? child
                 : ColoredBox(
-                    color: Theme.of(context).colorScheme.surfaceContainerLow,
+                    color: colors.block,
                     child: const Center(
                       child: ContentLoadingIndicator(
-                        size: DesignTokens.componentIconSmallSize,
+                        size: DesignTokens.componentSectionGlyphSize,
                       ),
                     ),
                   ),

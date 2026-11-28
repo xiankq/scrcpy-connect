@@ -7,11 +7,14 @@ import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/pages/device_setup/wireless/models/wireless_setup_state.dart';
 import 'package:scrcpy_connect/pages/device_setup/wireless/wireless_setup_notifier.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/choice_picker.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/devices/device_access.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/input_field.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
@@ -84,107 +87,125 @@ class WirelessSetupPage extends HookConsumerWidget {
       }
     }
 
+    final colors = AppColors.of(context);
+    final type = AppTypography.of(context);
     return PageFrame(
       title: '转为 IP 连接',
+      bottom: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppButton(
+            role: AppButtonRole.primary,
+            expand: true,
+            onPressed: state.busy || state.loading || state.addresses.isEmpty
+                ? null
+                : submit,
+            label: state.busy ? '正在切换…' : '切换并连接',
+          ),
+          if (state.busy && state.canCancel)
+            AppButton(
+              role: AppButtonRole.text,
+              onPressed: state.phase == WirelessSetupPhase.cancelling
+                  ? null
+                  : actions.cancel,
+              label: switch (state.phase) {
+                WirelessSetupPhase.cancelling => '正在取消…',
+                WirelessSetupPhase.cleanupRequired => '重试取消',
+                _ => '取消本次切换',
+              },
+            ),
+        ],
+      ),
       child: ConnectionContent(
         child: GroupedListView(
-          padding: const EdgeInsets.all(DesignTokens.spacingMd),
+          padding: const EdgeInsets.fromLTRB(
+            DesignTokens.componentPagePadding,
+            DesignTokens.spacingMd,
+            DesignTokens.componentPagePadding,
+            DesignTokens.componentPagePadding,
+          ),
           children: [
-            ContentPanel(
-              child: Form(
-                key: form,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      '切换将中断当前连接及活动。仅在可信网络使用。',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+            Form(
+              key: form,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (state.loading) ...[
+                    const ContentLoadingIndicator(),
                     const SizedBox(height: DesignTokens.spacingMd),
-                    if (state.loading) const ContentLoadingIndicator(),
-                    FormField<String>(
-                      key: ValueKey(choice),
-                      initialValue: choice,
-                      validator: (next) =>
-                          next == null ? '请选择此设备当前的网络地址' : null,
-                      builder: (field) {
-                        final options = {
-                          for (final candidate in state.addresses)
-                            candidate.address: candidate.interface.isEmpty
-                                ? candidate.address
-                                : '${candidate.address} · ${candidate.interface}',
-                        };
-                        return ChoiceField(
-                          label: '目标设备网络地址',
-                          value:
-                              options[choice] ??
-                              (options.isEmpty ? '暂无可用地址' : '选择网络地址'),
-                          errorText: field.errorText,
-                          onPressed:
-                              state.busy || state.loading || options.isEmpty
-                              ? null
-                              : (anchor) async {
-                                  final next = await showChoicePicker<String>(
-                                    context: field.context,
-                                    title: '目标设备网络地址',
-                                    options: options.keys,
-                                    label: (option) => options[option]!,
-                                    isSelected: (option) => option == choice,
-                                    anchorPoint: anchor,
-                                  );
-                                  if (next != null && current()) {
-                                    selected.value = next;
-                                  }
-                                },
-                        );
-                      },
-                    ),
-                    if (!state.loading &&
-                        state.error == null &&
-                        state.addresses.isEmpty)
-                      const StateNote('此设备当前没有可用的网络地址。连接网络后重新获取。'),
-                    TextButton(
+                  ],
+                  FormField<String>(
+                    key: ValueKey(choice),
+                    initialValue: choice,
+                    validator: (next) => next == null ? '请选择此设备当前的网络地址' : null,
+                    builder: (field) {
+                      final options = {
+                        for (final candidate in state.addresses)
+                          candidate.address: candidate.interface.isEmpty
+                              ? candidate.address
+                              : '${candidate.address} · ${candidate.interface}',
+                      };
+                      return ChoiceField(
+                        label: '目标设备网络地址',
+                        value:
+                            options[choice] ??
+                            (options.isEmpty ? '暂无可用地址' : '选择网络地址'),
+                        errorText: field.errorText,
+                        onPressed:
+                            state.busy || state.loading || options.isEmpty
+                            ? null
+                            : (anchor) async {
+                                final next = await showChoicePicker<String>(
+                                  context: field.context,
+                                  title: '目标设备网络地址',
+                                  options: options.keys,
+                                  label: (option) => options[option]!,
+                                  isSelected: (option) => option == choice,
+                                  anchorPoint: anchor,
+                                );
+                                if (next != null && current()) {
+                                  selected.value = next;
+                                }
+                              },
+                      );
+                    },
+                  ),
+                  if (!state.loading &&
+                      state.error == null &&
+                      state.addresses.isEmpty)
+                    const StateNote('此设备当前没有可用的网络地址。连接网络后重新获取。'),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: AppButton(
+                      role: AppButtonRole.text,
                       onPressed: state.busy || state.loading
                           ? null
                           : actions.refresh,
-                      child: Text(state.loading ? '正在获取…' : '重新获取地址'),
+                      label: state.loading ? '正在获取…' : '重新获取地址',
                     ),
-                    const SizedBox(height: DesignTokens.spacingMd),
-                    TextFormField(
-                      controller: port,
-                      enabled: !state.busy,
-                      validator: validatePort,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: '连接端口'),
-                    ),
-                    if (state.error != null) StateNote(state.error!),
-                    if (state.notice != null) StateNote(state.notice!),
-                    if (selectionNotice.value != null &&
-                        selectionNotice.value != state.notice)
-                      StateNote(selectionNotice.value!),
-                    if (state.phase == WirelessSetupPhase.completed)
-                      const StateNote('已转为 IP 连接'),
-                    const SizedBox(height: DesignTokens.spacingSectionTitle),
-                    FilledButton(
-                      onPressed:
-                          state.busy || state.loading || state.addresses.isEmpty
-                          ? null
-                          : submit,
-                      child: Text(state.busy ? '正在切换…' : '切换并连接'),
-                    ),
-                    if (state.busy && state.canCancel)
-                      TextButton(
-                        onPressed: state.phase == WirelessSetupPhase.cancelling
-                            ? null
-                            : actions.cancel,
-                        child: Text(switch (state.phase) {
-                          WirelessSetupPhase.cancelling => '正在取消…',
-                          WirelessSetupPhase.cleanupRequired => '重试取消',
-                          _ => '取消本次切换',
-                        }),
-                      ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: DesignTokens.spacingSm),
+                  AppTextField(
+                    label: '连接端口',
+                    controller: port,
+                    enabled: !state.busy,
+                    keyboardType: TextInputType.number,
+                    validator: validatePort,
+                  ),
+                  const SizedBox(height: DesignTokens.spacingLg),
+                  Text(
+                    '切换将中断当前连接及活动。仅在可信网络使用。',
+                    style: type.footnote.copyWith(color: colors.textSecondary),
+                  ),
+                  if (state.error != null) StateNote(state.error!),
+                  if (state.notice != null) StateNote(state.notice!),
+                  if (selectionNotice.value != null &&
+                      selectionNotice.value != state.notice)
+                    StateNote(selectionNotice.value!),
+                  if (state.phase == WirelessSetupPhase.completed)
+                    const StateNote('已转为 IP 连接'),
+                ],
               ),
             ),
           ],

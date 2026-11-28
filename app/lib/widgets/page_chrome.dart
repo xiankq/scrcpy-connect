@@ -1,5 +1,5 @@
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/recovery_status.dart';
 
 /// 边距归滚动内容所有，使视口可以延伸到界面装饰下方。
@@ -98,39 +98,37 @@ class PageChromeBody extends StatelessWidget {
   );
 }
 
-/// 滚动边缘保护完全位于标题区域内。
+/// 顶部渐隐（Ardot 41:587）：页面色从状态栏起铺满前 60%，随后渐隐为透明，延伸到页头下 16。
+/// 正文滚到页头下方时由它保护标题与页头按钮的可读性。
 class PageChromeProtection extends StatelessWidget {
   const PageChromeProtection({
     super.key,
     required this.height,
     required this.backgroundColor,
   });
+
+  /// 页头底边到窗口顶边的距离。
   final double height;
   final Color backgroundColor;
 
+  /// 渐隐中实色段所占比例。
+  static const solidFraction = .6;
+
   @override
   Widget build(BuildContext context) {
-    final extent = height;
-    if (extent <= 0) return const SizedBox.shrink();
-    final protected = backgroundColor.withValues(
-      alpha: DesignTokens.componentScrollEdgeOpacity,
-    );
+    if (height <= 0) return const SizedBox.shrink();
     return IgnorePointer(
       child: SizedBox(
-        height: extent,
+        height: height + DesignTokens.spacingLg,
         child: DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              stops: [
-                0,
-                ((height - DesignTokens.spacingLg) / extent).clamp(0, 1),
-                1,
-              ],
+              stops: const [0, solidFraction, 1],
               colors: [
-                protected,
-                protected,
+                backgroundColor,
+                backgroundColor,
                 backgroundColor.withValues(alpha: 0),
               ],
             ),

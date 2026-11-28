@@ -22,7 +22,7 @@ class ConnectionFailureNote extends StatelessWidget {
   Widget build(BuildContext context) => StateNote(
     connectionFailureMessage(failure, pairing: pairing, legacyTcp: legacyTcp),
     icon: LucideIcons.circleAlert,
-    color: ConnectTokens.danger,
+    color: AppColors.of(context).error,
   );
 }
 

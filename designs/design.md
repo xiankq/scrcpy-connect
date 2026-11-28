@@ -1,36 +1,36 @@
 ---
 version: beta
 name: 邻接 Interconnect
-description: 近场工作台。以 Prism UI 的分层实体面、连续圆角与液态玻璃为基础，品牌钴蓝标记主操作，功能色帮助识别入口。
+description: 近场工作台。以 Prism UI 的分层实体面、连续圆角与液态玻璃为基础，品牌亮蓝标记主操作，功能色帮助识别入口。
 colors:
-  primary: '#2657D5'
-  primary-dark: '#436EEC'
+  primary: '#4C88FF'
+  primary-dark: '#5C91FF'
   on-primary: '#FFFFFF'
-  on-primary-dark: '#FFFFFF'
-  primary-container: '#DCE1FF'
-  primary-container-dark: '#264190'
-  on-primary-container: '#264190'
-  on-primary-container-dark: '#DCE1FF'
+  on-primary-dark: '#001945'
+  primary-container: '#D9E2FF'
+  primary-container-dark: '#19438F'
+  on-primary-container: '#19438F'
+  on-primary-container-dark: '#D9E2FF'
   page: '#F0EDF0'
   page-dark: '#131315'
   card: '#FCF8F9'
-  card-dark: '#262528'
+  card-dark: '#252628'
   block: '#F0EDF0'
   block-dark: '#323235'
   inset: '#E4E2E5'
   inset-dark: '#404042'
   text: '#191B23'
-  text-dark: '#F6F5FF'
-  text-secondary: '#434654'
-  text-secondary-dark: '#C4C5D6'
+  text-dark: '#F6F6FF'
+  text-secondary: '#424654'
+  text-secondary-dark: '#C2C6D6'
   separator: '#191B2324'
-  separator-dark: '#F6F5FF24'
-  outline: '#747686'
-  outline-dark: '#8D90A0'
+  separator-dark: '#F6F6FF24'
+  outline: '#737785'
+  outline-dark: '#8C909F'
   disabled: '#191B2361'
-  disabled-dark: '#F6F5FF61'
+  disabled-dark: '#F6F6FF61'
   disabled-container: '#191B231F'
-  disabled-container-dark: '#F6F5FF1F'
+  disabled-container-dark: '#F6F6FF1F'
   pressed: '#BCBCBC66'
   pressed-dark: '#CCCCCC40'
   scrim: '#00000033'
@@ -56,17 +56,17 @@ colors:
   on-warning-container: '#693C00'
   on-warning-container-dark: '#FFDCBE'
   glass-regular: '#FDFDFD8A'
-  glass-regular-dark: '#3534379E'
+  glass-regular-dark: '#3435379E'
   glass-pill: '#F4F4F494'
-  glass-pill-dark: '#3534377A'
+  glass-pill-dark: '#3435377A'
   glass-menu: '#FCF8F98C'
-  glass-menu-dark: '#353437A1'
+  glass-menu-dark: '#343537A1'
   glass-clear: '#FFFFFF1F'
   glass-fill: '#00000021'
   glass-fill-dark: '#FFFFFF21'
   glass-rim: '#FFFFFF'
-  dock-platter: '#DCE1FFD9'
-  dock-platter-dark: '#000A31D9'
+  dock-platter: '#D9E2FFD9'
+  dock-platter-dark: '#000D2AD9'
   shadow: '#0000001E'
   shadow-dark: '#0000002D'
   shadow-dock: '#00000014'
@@ -413,7 +413,7 @@ components:
     typography: '{typography.tab-label}'
   dock-platter:
     backgroundColor: '{colors.dock-platter}'
-    textColor: '{colors.primary}'
+    textColor: '{colors.on-primary-container}'
   navigation-rail:
     width: 72px
   sidebar:
@@ -580,14 +580,17 @@ components:
 
 ## 颜色
 
-主色由品牌钴蓝 `#2657D5` 按 Prism `vivid` 风格生成。表面、文字和分隔线都取自同一套 Prism 色调，品牌主色只用于主操作、选中和进度。若改用黑白主题，把 `primary` 与 `on-primary` 换成 Prism `monochrome` 的值即可，其他角色不变。
+- 主色是亮蓝 `#4C88FF`，按 Prism `vivid` 风格生成整套色调。深色模式主色为 `#5C91FF`，主色上的文字为深蓝 `#001945`。
+- 对比度例外：浅色主按钮的白字对比 3.35:1，卡片上的主色文字 3.18:1，都低于正文要求的 4.5:1。因此主色底白字只用于 15 点以上、600 字重的标签和图形，按大字标准 3:1 校验；主色文字只用于同样字重的文字按钮，说明性正文不用主色。
+- 表面、文字和分隔线取自同一套 Prism 色调。品牌主色只用于主操作、选中和进度。
+- 改用黑白主题时，只需把 `primary` 和 `on-primary` 换成 Prism `monochrome` 的值，其他角色不变。
 
 ### 表面层级
 
 | 层级 | 浅色 | 深色 | 用于 |
 | --- | --- | --- | --- |
 | `page` | `#F0EDF0` | `#131315` | 页面底、抽屉底 |
-| `card` | `#FCF8F9` | `#262528` | 分组列表、卡片、浮层的实体回退 |
+| `card` | `#FCF8F9` | `#252628` | 分组列表、卡片、浮层的实体回退 |
 | `block` | `#F0EDF0` | `#323235` | 卡片上的次要按钮、分段轨道、缩略占位 |
 | `inset` | `#E4E2E5` | `#404042` | 输入框、搜索框、关闭的开关轨道、骨架 |
 
@@ -666,7 +669,9 @@ components:
 | 照片与视频预览上的返回和底栏 | `glass-clear`，配亮色图形，按画面亮度加 `media-protection` |
 | 页面底部的通栏主按钮 | 实体 `button-filled` |
 
-玻璃关闭、降低透明度或提高对比度时，所有玻璃回退为实体浮层面（浅色 `card`，深色 `block`）加 `dock-shadow`，尺寸、位置、焦点不变。设计稿为每个玻璃组件同时提供玻璃与实体两种外观。
+- 「液态玻璃」设为关闭、玻璃渲染初始化完成前、系统开启降低透明度或提高对比度时，所有玻璃回退为实体浮层面（浅色 `card`，深色 `block`）加 `dock-shadow`，尺寸、位置、焦点不变。
+- 「极致」在平台不支持完整折射时，按「标准」渲染。各平台默认档位见[设置与本地数据](prod/information-architecture.md#设置与本地数据)。
+- 设计稿为每个玻璃组件同时提供玻璃与实体两种外观。
 
 ### 玻璃配方
 
@@ -676,13 +681,13 @@ Prism 的玻璃之所以“活”，靠的是以下五层叠加，单独提高�
 2. **上下高光**：1.2–1.3 点的白色内高光只出现在上下边缘，到圆端逐渐消失。没有光源方向，也不随手势转动。
 3. **两侧深色细线**：0.67 点外缘线，左右两侧约 22% 黑，上下约 4–7%，用来勾出形状。
 4. **饱和度提升**：背后内容饱和度提高 100–180%。
-5. **底色**：浅色接近白，深色为 `#353437`。
+5. **底色**：浅色接近白，深色为 `#343537`。
 
 | 预设 | 底色（浅／深） | 模糊 σ | 高光强度／宽度 | 阴影 |
 | --- | --- | --- | --- | --- |
-| `glass-regular` | 白 54% ／ `#353437` 62% | 2.5 | 0.28 / 1.2 | 无 |
-| `glass-pill` | `#F4F4F4` 58% ／ `#353437` 48% | 15.6（雾化 72%） | 0.6 / 1.3 | 8% blur 24 y8 + 4% blur 3 y1 |
-| `glass-menu` | 卡片色 55% ／ `#353437` 63% | 12 | 顶部内光 16% | 11.8% blur 29 y8 |
+| `glass-regular` | 白 54% ／ `#343537` 62% | 2.5 | 0.28 / 1.2 | 无 |
+| `glass-pill` | `#F4F4F4` 58% ／ `#343537` 48% | 15.6（雾化 72%） | 0.6 / 1.3 | 8% blur 24 y8 + 4% blur 3 y1 |
+| `glass-menu` | 卡片色 55% ／ `#343537` 63% | 12 | 顶部内光 16% | 11.8% blur 29 y8 |
 | `glass-alert` | 同 menu | 16 | 同 menu，两侧细线 35% | 同 menu |
 | `glass-clear` | 白 12% | 1 | 0.4 / 1.2 | 无 |
 
@@ -706,8 +711,8 @@ Ardot 的 `GLASS` 效果配合描边可以还原以上五层。所有玻璃母�
 ### 底部导航
 
 - 胶囊高 62，内距 4，每项宽 86，三项总宽 274。底边距取 21 与底部安全区中的较大值，水平居中。
-- 图形 28、标签 `tab-label`，未选中为 `text-secondary`。
-- 选中项是宽 ≥ 84 的实色托盘：浅色 `#DCE1FF` 85%，深色 `#000A31` 85%，图形和标签为 `primary`。
+- 图形 28、标签 `tab-label`，未选中为 `text-secondary`；选中项标签加重到 600，侧栏、导航轨道与竖向导航同此。
+- 选中项是宽 ≥ 84 的实色托盘：浅色 `#D9E2FF` 85%，深色 `#000D2A` 85%，图形和标签为 `on-primary-container`（主色在托盘上对比不足 3:1）。
 - 按住时托盘化为透明放大镜：各边外扩 8，内容放大 1.16 倍，边缘有约 3 点红蓝色散，阴影 5.5% blur 5 y8。设计稿在分镜中表达这一帧。
 
 ## 控件
@@ -733,20 +738,21 @@ Ardot 的 `GLASS` 效果配合描边可以还原以上五层。所有玻璃母�
 | 紧凑 | 32 | 20 | 密集工具、宫格角落 |
 
 - 所有带文字的按钮用 `label`（15/20 600），图标在文字前，间距 8。
+- 页面上独立的危险动作（清理可释放的暂存、重置身份、清空日志、清空导入记录等）不做成列表行：用整宽停靠尺寸的危险按钮，放在页面底上（`card` 底、`error` 文字），图形在前、文字居中，与上一组相隔 24，说明文字放在按钮下方作组脚。执行前仍用确认框确认。
 - 页头相邻的两个及以上图标按钮合成一个玻璃胶囊（按钮组），每项保留独立命中区，组内间距 0、项宽 44。单个按钮是 44 点正圆。
 - 返回一律是页头起始侧的 44 点玻璃圆键加 `back` 图标。照片与视频预览上改用 `glass-clear`。没有裸箭头返回。
 - 行尾文字导航（如「配对码帮助」）是 `button-text`，不加箭头。可点进入下一页的整行用列表行加 `chevron`。
-- 按压：实体按钮浅色降到 75% 不透明，深色叠加 20% 白；玻璃按钮放大最多 16 点并在手指处出现 16% 白色辉光。任何按钮按下都不缩小。
+- 按压反馈见[触点反馈](interaction-motion.md#触点反馈)。
 - 禁用：前景 `disabled`，底 `disabled-container`；确认框中的禁用动作保留原填充。焦点环为 2 点 `primary`，在实色或玻璃上外移 1 点。
 
 ### 列表
 
-- 分组列表是一张 `list-group`：外圈圆角 24，行与行之间不留间隙，用 `separator` 分隔。分隔线从标题文字的起点开始，到右缘前 14 结束；最后一行、按压行及其相邻行下方不画分隔线。
+- 分组列表是一张 `list-group`：外圈圆角 24，行与行之间不留间隙，用 `separator` 分隔。分隔线从标题文字的起点开始，到右缘前 16 结束；最后一行、按压行及其相邻行下方不画分隔线。
 - 行最小高 56，左右内距 16，上下至少 10，前导与标题间距 16。标题 `body`，副标题 `subheadline` + `text-secondary`。行尾值用 `subheadline` + `text-secondary`，导航行尾加 18 点 `chevron`。
 - 前导可以是功能色块（30 点）、设备块（52 点）、文件格式图标或应用原图标，同一组内前导类型一致。
 - 组头在卡片外，`headline` + `text-secondary`，内距左右 16、上 24、下 8；组脚用 `footnote`。根页标题下的第一组省略上 24。
 - 动态列表（设备、文件、通知、传输任务）同样用分组卡片。只有当条目带有独立操作区或缩略图时，才拆成彼此相隔 12 的独立 `card`（圆角 24）。
-- 选择态在行尾用 22 点圆形 `selection-mark`：未选为 `outline` 1.5 点空心圆，选中为 `primary` 实心加白色对勾。宫格的选择标记叠在缩略图右上角，距边 6。
+- 选择态在行尾用 22 点圆形 `selection-mark`：未选为 `outline` 1.5 点空心圆，选中为 `primary` 实心加白色对勾。列表里选择标记与箭头共用 22 点尾槽，切换选择态时文字宽度不变。宫格（文件与相册）的选择标记叠在缩略图区域正中，用叠放样式 `selection-mark-overlay`：直径 26，白色 1.5 圆环；未选时内部为 28% 黑底，已选时为 `primary` 实心加白色对勾。叠放标记明暗模式下都用白色，不随 `on-primary` 变化。
 
 ### 输入与选择
 
@@ -768,7 +774,7 @@ Ardot 的 `GLASS` 效果配合描边可以还原以上五层。所有玻璃母�
 ### 空态、加载与进度
 
 - 空态：居中略偏上（纵向 40%），最宽 320。插图 160：`primary-container` 柔形底（圆、波浪圆或超椭圆）上放 64 点 `primary` 线形图形；下方 16 为 `headline` 标题，8 为 `subheadline` 说明，24 为主按钮。
-- 整页加载：三枚 `primary` 形状（圆、12 波浪圆、超椭圆）各 20 点，间距 52，依次跳起 30 点，地面为 44×6 的 `primary-container` 胶囊，一轮 1.2 秒。等待超过 400 毫秒才出现。
+- 整页加载：三枚 `primary` 形状（圆、12 波浪圆、超椭圆）各 20 点，间距 52，依次跳起 30 点，地面为 44×6 的 `primary-container` 胶囊。出现时机和节奏见[等待与状态切换](interaction-motion.md#等待与状态切换)。
 - 骨架：`inset` 胶囊，沿真实内容的几何排列；占位不接收焦点，每个加载区域提供一个读屏状态。
 - 进度条：高 3 胶囊，`primary` 前景，`primary-container` 轨道。页头下方的整页进度贴住页头底边。不定进度用 24 点 `primary` 环形指示器。
 
@@ -805,7 +811,7 @@ Ardot 的 `GLASS` 效果配合描边可以还原以上五层。所有玻璃母�
 
 ### 手机屏幕与应用
 
-- 首帧等待：画面区为 `page`，中央是整页加载形状，下方为 `subheadline` 阶段文字；页头起始侧为关闭按钮。失败时形状停止，原位显示原因与「重试」`button-filled`。
+- 首帧等待：画面区为 `page`，页头起始侧为关闭按钮。168×332 手机示意（`device-screen` 底、圆角 34）身后为主色光晕，屏内是整页加载形状；下方 `title3` 标题、`subheadline` 设备名，再下为阶段卡片（`card`、圆角 24，行高 44）：完成为 `success` 勾，进行中为旋转的 `primary` 圈与加粗正文，待开始为虚线圈。失败时示意屏中央换成 72 点 `error-container` 警示标记，原因居中，失败步骤为 `error` 叉与加粗文字，底部固定「重试」`button-filled`，其余动作为次要胶囊。内容最宽 400 居中；矮而宽的窗口示意在起始侧、文字与阶段在另一侧。
 - 熄屏：黑色视口中央为 `glass-clear` 的「点亮屏幕」胶囊按钮。暂停提示用横幅，位于最后一帧上方安全区。
 - 画面与控制、应用接续等设置页沿用分组列表；选择类设置在行尾显示当前值和 `chevron`，点按打开单选弹层。
 
@@ -826,7 +832,7 @@ Ardot 的 `GLASS` 效果配合描边可以还原以上五层。所有玻璃母�
 ### 通知与电话
 
 - 通知按日期分组，每条为独立 `card`：36 点应用原图标、标题一行、正文最多两行，右上时间，右下 32 点紧凑清除按钮（`block` 底）。页头尾部为「清除全部」图标按钮。
-- 电话页为 `call-stage` 深蓝实体面：联系人居中，头像 112，姓名 `large-title`，阶段 `subheadline` + `call-text-secondary`。底部动作区：拒接（`destructive`）与接听（`accent-green`）为 72 点圆键，静音与声音为 64 点 `call-key` 圆键，图形白色，下方 `footnote` 标签。
+- 电话页为通话舞台：`call-stage` 底上三团静态模糊彩光（`primary`、`accent-teal`、`accent-indigo`）。页头为 `glass-clear` 返回键与居中的 `glass-clear` 来源胶囊（高 32，「设备名 · 声音位置」）。联系人居中：头像 120、白色 2 描边，姓名 `large-title` 白色，阶段 `body` 白色 72%；响铃时头像外有 256/208/160 三道淡白同心环，通话中头像身后为主色光晕并显示声波，读取中断时头像变暗并带 `accent-amber` 断开徽标，画面待核对为 160 虚线环。没有通话时头像 112、`call-key` 底与电话图形。有通话时打开手机画面为 `glass-clear` 胶囊；没有通话或待核对时为 `button-filled`；读取中断的说明与「检查通话状态」放在圆角 34 的 `glass-clear` 托盘内。拒接、接听、静音、声音等 72/64 点圆键只在能力支持时出现。
 
 ### 设置
 
@@ -846,7 +852,7 @@ Ardot 的 `GLASS` 效果配合描边可以还原以上五层。所有玻璃母�
 
 | 窗口 | 结构 | 说明 |
 | --- | --- | --- |
-| W < 600 | 单列 + 底部导航 | 列表点入详情。桌面使用独立的系统标题栏，应用页头在其下方 |
+| W < 600 | 单列 + 底部导航 | 列表点入详情。桌面上应用页头在标题栏下方，见[桌面窗口标题栏](#桌面窗口标题栏) |
 | 600 ≤ W < 840 | 72 点图标导航轨道 + 单窗格 | 详情原位替换窗格，返回恢复列表 |
 | 840 ≤ W < 1080 | 220 点文字侧栏 + 单窗格 | 表单与详情居中在 720 阅读列内，宫格随宽度变化 |
 | W ≥ 1080 | 文字侧栏 + 列表／详情双栏 | 两窗格各至少 360 点、各自滚动。设备与工作台、传输与任务详情用此结构 |
@@ -858,12 +864,28 @@ Ardot 的 `GLASS` 效果配合描边可以还原以上五层。所有玻璃母�
 ### 远控窗口
 
 - 设备页和工作台提供「远控窗口」入口，画面工具提供「切换窗口」。弹层内按设备分组的宫格：手机屏幕在本组首格，独立应用显示应用原图标和名称，当前画面用 `primary-container` 底。由画面进入时，标题下方提供「返回工作台」。
-- 桌面远控子窗口使用系统标题栏，标题为「设备名 · 手机屏幕」或「设备名 · 应用名」；按打开时的源比例设置画面区，旋转后调整比例。
+- 桌面远控子窗口的标题为「设备名 · 手机屏幕」或「设备名 · 应用名」，标题栏样式见[桌面窗口标题栏](#桌面窗口标题栏)。画面区按打开时手机屏幕的比例设置，手机旋转后调整。
 - 普通屏的应用内窗口在 W ≥ 840 且两侧安全宽度均至少 360 点时可并排，间隔 8。折叠屏把铰链留空，按两侧实测宽度判断。[远控窗口画板](https://ardot.tencent.com/file/749360133997361?node_id=19%3A1) · [两路并排画板](https://ardot.tencent.com/file/749360133997361?node_id=20%3A1)
 
 ### 桌面窗口标题栏
 
-Windows 和 Linux 主窗口始终显示带应用名的原生标题栏，按钮位置和顺序跟随系统与 GTK 主题。macOS 主窗口宽度 ≥ 600 时，页面与侧栏延伸到窗口顶边，保留左上交通灯；页头和侧栏在原生按钮高度下再留 12。宽度 < 600 时显示独立标题栏。沉浸状态的页名和空白处可拖动窗口。远控子窗口使用各平台原生标题栏和边框。[macOS 窗口画板](https://ardot.tencent.com/file/749360133997361?node_id=24%3A2)
+Windows 和 Linux 主窗口：
+
+- 隐去系统标题栏，改用应用自绘的标题栏：高 40，卡片底，应用名居左。
+- 右侧依次为最小化、最大化（最大化后变为还原）、关闭：三个 28 点圆键，间隔 6，距右缘 6，块面底，图形为 1.5 描边圆头线条。
+- 悬停时底色加深一档；关闭键悬停时为 `destructive` 底配白色图形。
+- 在空白处拖动可移动窗口，双击切换最大化。窗口四边仍可拖动缩放，Windows 保留贴靠布局。[桌面标题栏组件](https://ardot.tencent.com/file/749360133997361?node_id=41%3A1357)
+
+macOS 主窗口：
+
+- 宽度 ≥ 600 时，页面和侧栏延伸到窗口顶边，保留左上角交通灯；页头和侧栏在交通灯高度下方再留 12。
+- 宽度 < 600 时，显示独立的标题栏。[macOS 窗口画板](https://ardot.tencent.com/file/749360133997361?node_id=24%3A2)
+
+通用：
+
+- 标题栏里的窗口标题用 13/18 600，这是 `footnote` 唯一的加重用法。
+- 沉浸状态下，页名和空白处可拖动窗口。
+- 远控子窗口在各平台都使用系统原生标题栏和边框。
 
 ### iPhone Duo 专项
 
@@ -882,13 +904,13 @@ Windows 和 Linux 主窗口始终显示带应用名的原生标题栏，按钮�
 
 ## 应用图标
 
-邻接的标记是两道错位的实色弧，两端朝相反方向偏转，在中间留出工作区。默认外观为浅蓝渐变底、钴蓝 `#2657D5` 与朱红 `#D7512B` 两道弧，16–32 像素下仍靠轮廓和留白区分；单色外观沿用完整轮廓。
+邻接的标记是一块屏幕与一部手机贴边相邻：亮蓝 `#4C88FF` 的横向屏幕，右下角叠一部深蓝 `#19438F` 的竖向手机，两者之间留出等宽白缝。默认外观为纯白底；深色外观为 `#131315` 底、`#5C91FF` 屏幕与 `#D9E2FF` 手机；单色外观沿用完整轮廓。白缝在 16–32 像素下仍可分辨两块形状。
 
 iOS 与 iPadOS 使用出血方形，由系统加遮罩，提供默认、深色和着色外观。Android 分离前景、底色和单色层，前景放在 108 dp 画板的安全区中央。macOS Dock 使用带外缘留白的版本，Windows 使用多分辨率 ICO，Linux 应用菜单与窗口共用同一 SVG。[图标源文件](assets/app-icon.svg) · [Ardot 标识稿](https://ardot.tencent.com/file/749360133997361?node_id=12%3A985)
 
 ## Ardot 画布约定
 
-- 文件分两页：「规范与组件」放变量说明、母组件集和图标库；「产品画板」按业务流程自上而下分区，区内从左到右按操作顺序排列，每行最多八张。
+- 文件分三页：「规范与组件」放变量说明、母组件集和图标库；「邻接 · 产品设计」放产品画板，按业务流程自上而下分区，区内从左到右按操作顺序排列，每行最多八张；「README 插画」放 README 配图，中英文各一套，以 0.625 倍导出为 JPEG 到 `docs/assets/readme/`。配图由产品画板复制拼成，画板改版后重新复制并导出。
 - 画板命名「编号  页面 · 状态」，同页状态、就地面板、深色、200% 字号和分镜紧跟主稿，命名为「编号 · 类型  说明」。移动或重做画板时保留节点 ID，以免文档链接失效。
 - 母组件都是组件集，用变体表达尺寸、状态和明暗（例如「按钮」：角色 × 尺寸 × 状态）。同一控件只保留一个组件集；页面只放实例，不脱离组件。
 - 所有容器使用自动布局。只有叠放关系（状态点、玻璃浮层、媒体保护）使用绝对定位。
@@ -897,6 +919,6 @@ iOS 与 iPadOS 使用出血方形，由系统加遮罩，提供默认、深色�
 
 ## 改稿验收
 
-- 用完整页面核对母组件、明暗主题、200% 字号和降低透明度。玻璃效果在实际渲染中核对，内容必须延伸到玻璃下方。
-- 运行 `npm run lint --prefix scripts/design_tokens` 检查本文，Ardot 变量用 `node scripts/design_tokens/ardot.mjs --check` 核对，步骤见[生成与同步](../scripts/design_tokens/README.md)。
-- 依据：[Prism UI 0.1.3](https://github.com/chen08209/prism_ui/tree/v0.1.3)、[Apple 材料指南](https://developer.apple.com/design/human-interface-guidelines/materials)、[Apple 无障碍指南](https://developer.apple.com/design/human-interface-guidelines/accessibility)、[Apple 字体指南](https://developer.apple.com/design/human-interface-guidelines/typography)、[Meet Liquid Glass](https://developer.apple.com/videos/play/wwdc2025/219/)。
+改稿后的检查项只写在[设计规则 · 验证](AGENTS.md#验证)。本文的校验与 Ardot 变量核对命令见[生成与同步](../scripts/design_tokens/README.md)。
+
+依据：[Prism UI 0.1.3](https://github.com/chen08209/prism_ui/tree/v0.1.3)、[Apple 材料指南](https://developer.apple.com/design/human-interface-guidelines/materials)、[Apple 无障碍指南](https://developer.apple.com/design/human-interface-guidelines/accessibility)、[Apple 字体指南](https://developer.apple.com/design/human-interface-guidelines/typography)、[Meet Liquid Glass](https://developer.apple.com/videos/play/wwdc2025/219/)。

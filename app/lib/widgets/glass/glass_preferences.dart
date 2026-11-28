@@ -13,6 +13,8 @@ GlassEffects platformGlassEffects(TargetPlatform platform) =>
     };
 
 /// 将应用偏好接入官方辅助功能作用域。
+///
+/// 降低透明度只把玻璃换成同尺寸实体面，按压膨胀等动效不变；减少动态由系统偏好关闭。
 class GlassPreferences extends StatelessWidget {
   const GlassPreferences({
     super.key,
@@ -61,12 +63,6 @@ class GlassPreferences extends StatelessWidget {
             quality: opaque
                 ? liquid.GlassQuality.minimal
                 : qualityFor(resolved),
-            interaction: opaque
-                ? const liquid.GlassInteractionSettings(
-                    stretch: 0,
-                    interactionScale: 1,
-                  )
-                : null,
           ),
           child: child,
         ),

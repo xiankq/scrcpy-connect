@@ -9,18 +9,20 @@ import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
+import 'package:scrcpy_connect/widgets/page_loader.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
-
-import '../widgets/settings_row.dart';
 
 class MediaCachePage extends HookConsumerWidget {
   const MediaCachePage({super.key});
@@ -46,6 +48,7 @@ class MediaCachePage extends HookConsumerWidget {
             '释放 ${_size(reclaimable)} 空间？',
             '使用中的 ${_size(protected)} 将继续保留。清理后再次查看时，将从手机重新获取。',
             action: '清理 ${_size(reclaimable)}',
+            danger: true,
           ) ||
           (!context.mounted || !ownsScope())) {
         return;
@@ -74,19 +77,6 @@ class MediaCachePage extends HookConsumerWidget {
 
     return PageFrame(
       title: '媒体暂存',
-      bottom: data == null
-          ? null
-          : FilledButton(
-              style: FilledButton.styleFrom(
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(
-                    Radius.circular(DesignTokens.componentButtonPrimaryRounded),
-                  ),
-                ),
-              ),
-              onPressed: busy.value || reclaimable == 0 ? null : clear,
-              child: Text(busy.value ? '正在清理…' : '清理可释放的暂存'),
-            ),
       actions: [
         GlassActionIcon(
           tooltip: '重新检查占用',
@@ -97,18 +87,17 @@ class MediaCachePage extends HookConsumerWidget {
         ),
       ],
       child: query.when(
-        loading: () => const PageChromeBody(
-          child: Center(child: CircularProgressIndicator.adaptive()),
-        ),
+        loading: () => const PageChromeBody(child: PageLoader()),
         error: (error, _) => PageChromeBody(
           child: EmptyContent(
             icon: LucideIcons.circleAlert,
             title: '暂时无法读取媒体暂存',
             message: failureMessage(error, fallback: '无法读取媒体暂存。请重试。'),
-            action: OutlinedButton.icon(
+            action: AppButton(
+              role: AppButtonRole.secondaryOnPage,
               onPressed: () => ref.invalidate(cacheStatusProvider),
-              icon: const Icon(AppIcons.refresh),
-              label: const Text('重新检查'),
+              icon: AppIcons.refresh,
+              label: '重新检查',
             ),
           ),
         ),
@@ -118,125 +107,129 @@ class MediaCachePage extends HookConsumerWidget {
           final reclaimable = data.reclaimableBytes;
           final reserved = data.reservedBytes;
           final protectedItems = data.protectedItems;
+          final colors = AppColors.of(context);
+          final type = AppTypography.of(context);
           return GroupedListView(
-            padding: const EdgeInsets.all(DesignTokens.spacingMd),
+            padding: const EdgeInsets.all(DesignTokens.componentPagePadding),
             children: [
               SettingsGroup(
                 children: [
-                  for (final (label, amount, icon, color) in [
-                    (
-                      '已占用',
-                      used,
-                      LucideIcons.hardDrive,
-                      DesignTokens.colorListIconSlate,
-                    ),
-                    (
-                      '可清理',
-                      reclaimable,
-                      AppIcons.delete,
-                      DesignTokens.colorListIconSlate,
-                    ),
-                    (
-                      '使用中',
-                      protected,
-                      LucideIcons.lock,
-                      DesignTokens.colorListIconSlate,
-                    ),
-                    (
-                      '准备中',
-                      reserved,
-                      LucideIcons.timer,
-                      DesignTokens.colorListIconTransfer,
-                    ),
+                  for (final (label, detail, amount) in [
+                    ('已占用', null, used),
+                    ('可清理', '已完成且未在使用的副本', reclaimable),
+                    ('使用中', '正在传输或预览，暂不清理', protected),
+                    ('准备中', null, reserved),
                   ])
-                    SettingsRow(
-                      title: label,
+                    AppListRow(
+                      title: Text(label),
+                      subtitle: detail == null ? null : Text(detail),
                       value: _size(amount),
-                      icon: icon,
-                      color: color,
                     ),
                 ],
               ),
+              const SectionFooter('清理只删除本机暂存副本，手机原件和已保存到系统的文件均会保留。'),
               if (!data.spaceVerified)
                 const StateNote('暂时无法读取本机剩余空间。请检查存储空间后重试。'),
               if (protectedItems.isNotEmpty) const SectionTitle('受保护原件'),
               for (final item in protectedItems)
-                ContentPanel(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.name,
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                      Text(
-                        '${_cacheSourceLabel(devices, item)} · ${_size(item.bytes)}',
-                      ),
-                      if (item.sourcePath?.isNotEmpty == true)
-                        Text(item.sourcePath!),
-                      StateNote(item.reason),
-                      Wrap(
-                        spacing: DesignTokens.spacingSm,
-                        children: [
-                          if (item.transferId?.isNotEmpty == true)
-                            TextButton(
-                              onPressed: () =>
-                                  TransferDetailsRoute(taskId: item.transferId!)
-                                      .push<void>(context),
-                              child: const Text('查看传输'),
+                Padding(
+                  padding: const EdgeInsets.only(
+                    bottom: DesignTokens.spacingMd,
+                  ),
+                  child: ContentPanel(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.name, style: type.headline),
+                        const SizedBox(height: DesignTokens.spacingXxs),
+                        Text(
+                          '${_cacheSourceLabel(devices, item)} · ${_size(item.bytes)}',
+                          style: type.subheadline.copyWith(
+                            color: colors.textSecondary,
+                          ),
+                        ),
+                        if (item.sourcePath?.isNotEmpty == true)
+                          Text(
+                            item.sourcePath!,
+                            style: type.footnote.copyWith(
+                              color: colors.textSecondary,
                             ),
-                          if (supportsSystemDocumentSave &&
-                              item.canExport &&
-                              item.transferId?.isNotEmpty == true)
-                            TextButton(
-                              onPressed: () =>
-                                  DocumentExportRoute(taskId: item.transferId!)
-                                      .push<void>(context),
-                              child: const Text('保存到系统位置'),
-                            ),
-                          if (supportsSystemFileShare && item.canShare)
-                            TextButton(
-                              onPressed: busy.value
-                                  ? null
-                                  : () async {
-                                      busy.value = true;
-                                      try {
-                                        final result = await sharePreparedFile(
-                                          context,
-                                          ref,
-                                          item.localPath,
-                                        );
-                                        if (context.mounted && ownsScope()) {
-                                          feedback(context, result.message);
+                          ),
+                        StateNote(item.reason),
+                        Wrap(
+                          spacing: DesignTokens.spacingSm,
+                          runSpacing: DesignTokens.spacingSm,
+                          children: [
+                            if (item.transferId?.isNotEmpty == true)
+                              AppButton(
+                                size: AppButtonSize.section,
+                                onPressed: () => TransferDetailsRoute(
+                                  taskId: item.transferId!,
+                                ).push<void>(context),
+                                label: '查看传输',
+                              ),
+                            if (supportsSystemDocumentSave &&
+                                item.canExport &&
+                                item.transferId?.isNotEmpty == true)
+                              AppButton(
+                                size: AppButtonSize.section,
+                                onPressed: () => DocumentExportRoute(
+                                  taskId: item.transferId!,
+                                ).push<void>(context),
+                                label: '保存到系统位置',
+                              ),
+                            if (supportsSystemFileShare && item.canShare)
+                              AppButton(
+                                size: AppButtonSize.section,
+                                onPressed: busy.value
+                                    ? null
+                                    : () async {
+                                        busy.value = true;
+                                        try {
+                                          final result =
+                                              await sharePreparedFile(
+                                                context,
+                                                ref,
+                                                item.localPath,
+                                              );
+                                          if (context.mounted && ownsScope()) {
+                                            feedback(context, result.message);
+                                          }
+                                        } catch (error) {
+                                          if (context.mounted && ownsScope()) {
+                                            feedback(
+                                              context,
+                                              failureMessage(
+                                                error,
+                                                fallback:
+                                                    '暂时无法确认分享是否完成。请先查看接收文件的应用。',
+                                              ),
+                                            );
+                                          }
+                                        } finally {
+                                          if (context.mounted && ownsScope()) {
+                                            busy.value = false;
+                                          }
                                         }
-                                      } catch (error) {
-                                        if (context.mounted && ownsScope()) {
-                                          feedback(
-                                            context,
-                                            failureMessage(
-                                              error,
-                                              fallback:
-                                                  '暂时无法确认分享是否完成。请先查看接收文件的应用。',
-                                            ),
-                                          );
-                                        }
-                                      } finally {
-                                        if (context.mounted && ownsScope()) {
-                                          busy.value = false;
-                                        }
-                                      }
-                                    },
-                              child: const Text('系统分享'),
-                            ),
-                        ],
-                      ),
-                    ],
+                                      },
+                                label: '系统分享',
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              if (outcome.value != null) ...[
-                const SizedBox(height: DesignTokens.spacingMd),
-                StateNote(outcome.value!),
-              ],
+              if (outcome.value != null) StateNote(outcome.value!),
+              const SizedBox(height: DesignTokens.componentListSectionGap),
+              // 危险动作：页面上的通栏胶囊（design.md「列表」危险动作）。
+              AppButton(
+                role: AppButtonRole.destructiveOnPage,
+                expand: true,
+                icon: AppIcons.delete,
+                onPressed: busy.value || reclaimable == 0 ? null : clear,
+                label: busy.value ? '正在清理…' : '清理可释放的暂存',
+              ),
             ],
           );
         },

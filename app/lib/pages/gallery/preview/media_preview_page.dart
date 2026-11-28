@@ -17,6 +17,7 @@ import 'package:scrcpy_connect/pages/gallery/preview/widgets/video_preview.dart'
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/content_arrival.dart';
 import 'package:scrcpy_connect/widgets/content/cached_file_image.dart';
@@ -56,7 +57,7 @@ class MediaPreviewPage extends HookConsumerWidget {
         ? const SafeArea(
             top: false,
             bottom: false,
-            child: Center(child: CircularProgressIndicator.adaptive()),
+            child: Center(child: ContentLoadingIndicator()),
           )
         : result.hasError
         ? EmptyContent(
@@ -71,15 +72,22 @@ class MediaPreviewPage extends HookConsumerWidget {
               children: [
                 if (isMediaCacheAdmissionFailure(result.error))
                   const MediaCacheBlocker(),
-                OutlinedButton(
+                AppButton(
+                  label: '重新预览',
+                  role: AppButtonRole.primary,
                   onPressed: () => retry.value++,
-                  child: const Text('重新预览'),
                 ),
-                TextButton(onPressed: retrieve, child: const Text('取回文件')),
-                TextButton(
+                const SizedBox(height: DesignTokens.spacingSm),
+                AppButton(
+                  label: '取回文件',
+                  role: AppButtonRole.text,
+                  onPressed: retrieve,
+                ),
+                AppButton(
+                  label: '在手机上查看',
+                  role: AppButtonRole.text,
                   onPressed: () =>
                       openRemoteRoute(context, deviceId: device.id),
-                  child: const Text('在手机上查看'),
                 ),
               ],
             ),
@@ -93,14 +101,15 @@ class MediaPreviewPage extends HookConsumerWidget {
                   icon: LucideIcons.imageOff,
                   title: '无法预览此格式',
                   message: '无法预览这种内容。可以保存原文件，或在手机上查看。',
-                  action: FilledButton(
+                  action: AppButton(
+                    label: '取回文件',
+                    role: AppButtonRole.primary,
                     onPressed: retrieve,
-                    child: const Text('取回文件'),
                   ),
                 );
               }
               return ColoredBox(
-                color: DesignTokens.colorMediaInk,
+                color: DesignTokens.colorViewport,
                 child: Image(
                   image: source.startsWith('http')
                       ? NetworkImage(source)
@@ -129,9 +138,10 @@ class MediaPreviewPage extends HookConsumerWidget {
                   errorBuilder: (_, _, _) => EmptyContent(
                     icon: LucideIcons.imageOff,
                     title: '无法读取这张图片',
-                    action: TextButton(
+                    action: AppButton(
+                      label: '重新预览',
+                      role: AppButtonRole.primary,
                       onPressed: () => retry.value++,
-                      child: const Text('重新预览'),
                     ),
                   ),
                 ),
@@ -160,12 +170,7 @@ class MediaPreviewPage extends HookConsumerWidget {
         ),
     ];
     final chromeInset =
-        MediaQuery.paddingOf(context).top +
-        DesignTokens.spacingMd * 2 +
-        (MediaQuery.textScalerOf(context)
-                    .scale(DesignTokens.typographyBodyFontSize) *
-                DesignTokens.typographyBodyLineHeight)
-            .clamp(DesignTokens.componentIconButtonSize, double.infinity);
+        MediaQuery.paddingOf(context).top + DesignTokens.componentPageBarHeight;
     final inheritedTheme = Theme.of(context);
     final darkTheme = ConnectTokens.theme(
       Brightness.dark,
@@ -199,14 +204,18 @@ class MediaPreviewPage extends HookConsumerWidget {
           builder: (context) {
             final actionBar = SafeArea(
               top: false,
-              minimum: const EdgeInsets.all(DesignTokens.spacingMd),
+              // 底栏左右 16、底边留出安全区和 8（与 PageFrame 底部槽一致）。
+              minimum: const EdgeInsets.fromLTRB(
+                DesignTokens.componentPagePadding,
+                DesignTokens.spacingSm,
+                DesignTokens.componentPagePadding,
+                DesignTokens.spacingSm,
+              ),
               child: Center(
                 heightFactor: 1,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(
-                    maxWidth:
-                        DesignTokens.componentMediaPreviewBarWidth +
-                        2 * DesignTokens.spacingXs,
+                    maxWidth: DesignTokens.componentPageMaxWidth,
                   ),
                   child: GlassActionBar(
                     variant: GlassVariant.clear,
@@ -223,7 +232,7 @@ class MediaPreviewPage extends HookConsumerWidget {
               ),
             );
             return Scaffold(
-              backgroundColor: DesignTokens.colorMediaInk,
+              backgroundColor: DesignTokens.colorViewport,
               body: Stack(
                 fit: StackFit.expand,
                 children: [

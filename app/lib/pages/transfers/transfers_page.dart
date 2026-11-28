@@ -9,6 +9,7 @@ import 'package:scrcpy_connect/core/files/file_transfers.dart';
 import 'package:scrcpy_connect/core/files/transfer_query_provider.dart';
 import 'package:scrcpy_connect/pages/transfers/details/transfer_details_page.dart';
 import 'package:scrcpy_connect/pages/transfers/widgets/transfer_history_row.dart';
+import 'package:scrcpy_connect/pages/transfers/widgets/transfer_task_card.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
@@ -23,6 +24,10 @@ import 'package:scrcpy_connect/widgets/workspace_panes.dart';
 
 import 'models/transfer_history_entry.dart';
 import 'transfer_history_provider.dart';
+
+/// 骨架卡高度：进行中卡片含进度区（Ardot T1 2:1633 约 116），已结束卡片约 104。
+const _activeCardHeight = 116.0;
+const _finishedCardHeight = 104.0;
 
 class TransfersPage extends HookConsumerWidget {
   const TransfersPage({super.key, this.embedded = false});
@@ -118,8 +123,14 @@ class TransfersPage extends HookConsumerWidget {
             ? null
             : _representative(current);
         final selector = Padding(
-          padding: const EdgeInsets.all(DesignTokens.spacingMd),
+          padding: const EdgeInsets.fromLTRB(
+            DesignTokens.spacingLg,
+            0,
+            DesignTokens.spacingLg,
+            DesignTokens.spacingMd,
+          ),
           child: ConnectSegmentedControl<bool>(
+            onPage: true,
             options: const [(false, '传输中'), (true, '已结束')],
             selected: finished.value,
             onSelected: (done) {
@@ -143,20 +154,18 @@ class TransfersPage extends HookConsumerWidget {
             slivers: [
               if (loading)
                 SliverPadding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: DesignTokens.spacingMd,
+                  padding: const EdgeInsets.fromLTRB(
+                    DesignTokens.spacingLg,
+                    0,
+                    DesignTokens.spacingLg,
+                    DesignTokens.spacingLg,
                   ),
                   sliver: SliverToBoxAdapter(
                     child: SkeletonRows(
-                      height:
-                          DesignTokens.componentRowLargeHeight +
-                          (done
-                              ? DesignTokens.spacingMd
-                              : DesignTokens.spacingLg),
-                      leadingSize:
-                          DesignTokens.componentTransferCardThumbnailWidth,
-                      cardRadius: DesignTokens.roundedLg,
-                      gap: DesignTokens.spacingSm,
+                      height: done ? _finishedCardHeight : _activeCardHeight,
+                      leadingSize: transferThumbnailSize,
+                      cardRadius: DesignTokens.componentListGroupRounded,
+                      gap: DesignTokens.spacingMd,
                       lines: 3,
                       trailing: true,
                       progress: !done,
@@ -167,20 +176,23 @@ class TransfersPage extends HookConsumerWidget {
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: EmptyContent(
-                    icon: LucideIcons.arrowUpDown,
+                    icon: LucideIcons.inbox,
                     title: done ? '暂无已结束的传输' : '暂无正在传输的任务',
                     message: done ? '完成、失败或取消的任务会出现在这里。' : '发送和接收文件时，可在这里查看进度。',
                   ),
                 )
               else
                 SliverPadding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: DesignTokens.spacingMd,
+                  padding: const EdgeInsets.fromLTRB(
+                    DesignTokens.spacingLg,
+                    0,
+                    DesignTokens.spacingLg,
+                    DesignTokens.spacingLg,
                   ),
                   sliver: SliverList.separated(
                     itemCount: entries.length,
                     separatorBuilder: (_, _) =>
-                        const SizedBox(height: DesignTokens.spacingSm),
+                        const SizedBox(height: DesignTokens.spacingMd),
                     itemBuilder: (context, index) {
                       final row = entries[index];
                       return TransferHistoryRow(
@@ -220,7 +232,6 @@ class TransfersPage extends HookConsumerWidget {
                 ? finishedScroll
                 : ongoingScroll,
             actions: useSideToolbar ? null : actions,
-            groupHorizontalActions: finished.value,
             child: PageChromeBody(
               child: Column(
                 children: [

@@ -20,6 +20,7 @@ import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/pages/files/file_actions.dart';
 import 'package:scrcpy_connect/pages/files/file_actions_notifier.dart';
+import 'package:scrcpy_connect/pages/files/widgets/file_breadcrumbs.dart';
 import 'package:scrcpy_connect/pages/files/widgets/file_browser_entry.dart';
 import 'package:scrcpy_connect/pages/files/widgets/file_entry_sliver.dart';
 import 'package:scrcpy_connect/pages/files/widgets/file_selection_bar.dart';
@@ -27,6 +28,8 @@ import 'package:scrcpy_connect/pages/files/widgets/file_type_filter_grid.dart';
 import 'package:scrcpy_connect/pages/files/widgets/file_view_menu.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/devices/device_source_row.dart';
@@ -38,6 +41,8 @@ import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
+import 'package:scrcpy_connect/widgets/search_field.dart';
+import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 class FilesPage extends HookConsumerWidget {
@@ -159,6 +164,11 @@ class FilesPage extends HookConsumerWidget {
               ?.value
               .value
         : null;
+    final capacityLabel = switch (capacity) {
+      (totalBytes: final total?, availableBytes: final available?) =>
+        '${fileSizeLabel(available)} / ${fileSizeLabel(total)} 可用',
+      _ => null,
+    };
     final typeFilter = atStorageRoot ? rootFilter.value : FileTypeFilter.all;
 
     Future<bool> mutate(Future<bool> Function() action) async {
@@ -319,7 +329,6 @@ class FilesPage extends HookConsumerWidget {
             }
           },
           child: PageFrame(
-            titleStyle: Theme.of(context).textTheme.headlineMedium,
             title: selecting.value
                 ? '已选择 ${selected.value.length} 项'
                 : atStorageRoot
@@ -335,9 +344,6 @@ class FilesPage extends HookConsumerWidget {
                     ),
                   )
                 : null,
-            backgroundColor: Theme.of(context).brightness == Brightness.dark
-                ? DesignTokens.colorCanvasDark
-                : Theme.of(context).colorScheme.surface,
             onBack: selecting.value
                 ? exitSelection
                 : parentPath == null
@@ -360,20 +366,7 @@ class FilesPage extends HookConsumerWidget {
                       ),
                     ),
                   ]
-                : !atStorageRoot
-                ? null
-                : [
-                    GlassActionIcon(
-                      tooltip: '搜索文件',
-                      onPressed: !verified
-                          ? null
-                          : () => FileSearchRoute(
-                              deviceId: sourceId,
-                              path: path.value,
-                            ).push<void>(context),
-                      icon: const Icon(AppIcons.search),
-                    ),
-                  ],
+                : null,
             bottom: selecting.value
                 ? FileSelectionBar(
                     menuController: selectionMenu,
@@ -543,9 +536,10 @@ class FilesPage extends HookConsumerWidget {
                         query.error,
                         fallback: '无法读取这个文件夹。请检查手机连接后重试。',
                       ),
-                      action: TextButton(
+                      action: AppButton(
+                        label: '重新检查',
+                        role: AppButtonRole.primary,
                         onPressed: () => unawaited(refresh()),
-                        child: const Text('重新检查'),
                       ),
                     ),
                   )
@@ -561,13 +555,13 @@ class FilesPage extends HookConsumerWidget {
                         SliverToBoxAdapter(
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(
-                              DesignTokens.spacingMd,
-                              DesignTokens.spacingXs,
-                              DesignTokens.spacingMd,
-                              DesignTokens.spacingSm,
+                              DesignTokens.componentPagePadding,
+                              0,
+                              DesignTokens.componentPagePadding,
+                              _headerGap,
                             ),
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 if (!connected)
                                   DeviceSourceRow(
@@ -587,67 +581,24 @@ class FilesPage extends HookConsumerWidget {
                                   const StateNote(
                                     '部分选中的文件已找不到。请重新全选当前列表，或退出选择后刷新。',
                                   ),
-                                if (!atStorageRoot)
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: TextButton.icon(
-                                          style: TextButton.styleFrom(
-                                            alignment: AlignmentDirectional
-                                                .centerStart,
-                                            backgroundColor: Theme.of(context)
-                                                .colorScheme
-                                                .surfaceContainerLow,
-                                          ),
-                                          onPressed:
-                                              !verified || selecting.value
-                                              ? null
-                                              : () => FileSearchRoute(
-                                                  deviceId: sourceId,
-                                                  path: path.value,
-                                                ).push<void>(context),
-                                          icon: const Icon(
-                                            AppIcons.search,
-                                            size: DesignTokens
-                                                .componentIconActionSize,
-                                          ),
-                                          label: const Text('搜索此目录'),
-                                        ),
-                                      ),
-                                      if (parentPath != null) ...[
-                                        const SizedBox(
-                                          width: DesignTokens.spacingXs,
-                                        ),
-                                        Flexible(
-                                          child: TextButton.icon(
-                                            style: TextButton.styleFrom(
-                                              backgroundColor: Theme.of(context)
-                                                  .colorScheme
-                                                  .surfaceContainerLow,
-                                            ),
-                                            onPressed: selecting.value
-                                                ? null
-                                                : () =>
-                                                      openDirectory(parentPath),
-                                            icon: const Icon(
-                                              AppIcons.back,
-                                              size: DesignTokens
-                                                  .componentIconSmallSize,
-                                            ),
-                                            label: Text(
-                                              parentPath == '/sdcard'
-                                                  ? '共享存储'
-                                                  : fileDirectoryLabel(
-                                                      parentPath,
-                                                    ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ],
+                                if (!selecting.value) ...[
+                                  AppSearchField(
+                                    readOnly: true,
+                                    hintText: atStorageRoot ? '搜索文件' : '搜索此目录',
+                                    onTap: !verified
+                                        ? null
+                                        : () => FileSearchRoute(
+                                            deviceId: sourceId,
+                                            path: path.value,
+                                          ).push<void>(context),
                                   ),
+                                  const SizedBox(height: _headerGap),
+                                  if (!atStorageRoot)
+                                    FileBreadcrumbs(
+                                      path: path.value,
+                                      onSelected: openDirectory,
+                                    ),
+                                ],
                                 if (atStorageRoot) ...[
                                   FileTypeFilterGrid(
                                     selected: typeFilter,
@@ -655,33 +606,20 @@ class FilesPage extends HookConsumerWidget {
                                         ? null
                                         : (next) => rootFilter.value = next,
                                   ),
-                                  const SizedBox(
-                                    height: DesignTokens.spacingMd,
-                                  ),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          '手机存储',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium,
-                                        ),
-                                      ),
-                                      if (capacity case (
-                                        totalBytes: final total?,
-                                        availableBytes: final available?,
-                                      ))
-                                        Flexible(
-                                          child: Text(
-                                            '${fileSizeLabel(available)} / ${fileSizeLabel(total)} 可用',
+                                  SectionTitle(
+                                    '手机存储',
+                                    action: capacityLabel == null
+                                        ? null
+                                        : Text(
+                                            capacityLabel,
                                             textAlign: TextAlign.end,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall,
+                                            style: AppTypography.of(context)
+                                                .footnote
+                                                .copyWith(
+                                                  color: AppColors.of(context)
+                                                      .textSecondary,
+                                                ),
                                           ),
-                                        ),
-                                    ],
                                   ),
                                 ],
                                 if (data != null &&
@@ -708,7 +646,8 @@ class FilesPage extends HookConsumerWidget {
                               if (data == null)
                                 SliverPadding(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: DesignTokens.spacingMd,
+                                    horizontal:
+                                        DesignTokens.componentPagePadding,
                                   ),
                                   sliver: SliverToBoxAdapter(
                                     child: viewMode == FileViewMode.list
@@ -741,21 +680,23 @@ class FilesPage extends HookConsumerWidget {
                                     message: hasFilter
                                         ? '文件类型只筛选当前目录中的文件；文件夹仍按原顺序显示。'
                                         : '发送本机文件到 ${path.value}，或新建文件夹。',
-                                    action: TextButton(
+                                    action: AppButton(
+                                      label: hasFilter ? '清除筛选' : '发送文件',
+                                      role: AppButtonRole.primary,
                                       onPressed: selecting.value || !verified
                                           ? null
                                           : hasFilter
                                           ? () => rootFilter.value =
                                                 FileTypeFilter.all
                                           : openSend,
-                                      child: Text(hasFilter ? '清除筛选' : '发送文件'),
                                     ),
                                   ),
                                 )
                               else ...[
                                 SliverPadding(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: DesignTokens.spacingMd,
+                                    horizontal:
+                                        DesignTokens.componentPagePadding,
                                   ),
                                   sliver: FileEntrySliver(
                                     entries: listing.entries,
@@ -791,9 +732,9 @@ class FilesPage extends HookConsumerWidget {
                                   SliverToBoxAdapter(
                                     child: Padding(
                                       padding: const EdgeInsets.fromLTRB(
-                                        DesignTokens.spacingMd,
+                                        DesignTokens.componentPagePadding,
                                         DesignTokens.spacingSm,
-                                        DesignTokens.spacingMd,
+                                        DesignTokens.componentPagePadding,
                                         DesignTokens.spacingMd,
                                       ),
                                       child: StateNote(
@@ -804,17 +745,8 @@ class FilesPage extends HookConsumerWidget {
                                     ),
                                   ),
                               ],
-                              SliverToBoxAdapter(
-                                child: SizedBox(
-                                  height: selecting.value
-                                      ? MediaQuery.textScalerOf(context).scale(
-                                              DesignTokens
-                                                  .componentNavigationHeight,
-                                            ) +
-                                            DesignTokens.spacingXxl +
-                                            MediaQuery.paddingOf(context).bottom
-                                      : DesignTokens.spacingLg,
-                                ),
+                              const SliverToBoxAdapter(
+                                child: SizedBox(height: DesignTokens.spacingLg),
                               ),
                             ],
                           ),
@@ -829,6 +761,10 @@ class FilesPage extends HookConsumerWidget {
     );
   }
 }
+
+/// 搜索框、路径行与目录之间的间距（Ardot F2 2:1357 正文：间距 12）。
+const _headerGap = DesignTokens.spacingMd;
+const _gridSkeletonGap = DesignTokens.spacingSm;
 
 String _typeFilterLabel(FileTypeFilter filter) => switch (filter) {
   FileTypeFilter.all => '全部',
@@ -860,11 +796,11 @@ class _FileGridSkeleton extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     children: [
       for (var row = 0; row < 4; row++) ...[
-        if (row > 0) const SizedBox(height: DesignTokens.spacingSm),
+        if (row > 0) const SizedBox(height: _gridSkeletonGap),
         Row(
           children: [
             for (var column = 0; column < columns; column++) ...[
-              if (column > 0) const SizedBox(width: DesignTokens.spacingSm),
+              if (column > 0) const SizedBox(width: _gridSkeletonGap),
               const Expanded(
                 child: Column(
                   children: [

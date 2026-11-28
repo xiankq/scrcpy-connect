@@ -7,6 +7,7 @@ import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -44,7 +45,7 @@ class BackgroundPage extends HookConsumerWidget {
         ),
       ],
       child: GroupedListView(
-        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+        padding: const EdgeInsets.all(DesignTokens.componentPagePadding),
         children: [
           SettingsGroup(
             children: [
@@ -52,15 +53,14 @@ class BackgroundPage extends HookConsumerWidget {
                 SettingsRow(
                   icon: LucideIcons.shieldCheck,
                   color: data.supported
-                      ? DesignTokens.colorListIconMint
-                      : DesignTokens.colorListIconUtility,
+                      ? FunctionTone.connection
+                      : FunctionTone.utility,
                   title: data.title,
                   subtitle: data.reason,
                 )
               else
                 SettingsRow(
                   icon: LucideIcons.shieldCheck,
-                  color: DesignTokens.colorListIconUtility,
                   title: background.hasError ? '无法读取后台运行状态' : '正在检查后台运行',
                   onTap: background.hasError ? refresh : null,
                 ),
@@ -71,7 +71,7 @@ class BackgroundPage extends HookConsumerWidget {
             children: [
               SettingsRow(
                 icon: LucideIcons.bell,
-                color: DesignTokens.colorListIconCoral,
+                color: FunctionTone.notification,
                 title: '通知与来电权限',
                 value: switch (status.permissionGranted) {
                   true => '已允许',

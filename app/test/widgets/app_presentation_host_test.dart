@@ -29,68 +29,18 @@ import 'package:scrcpy_connect/core/notifications/system_notification_sink_provi
 void main() {
   testWidgets('类型化来电呈现电话入口，后台前迟到的呈现不打开，新回执可重试', (tester) async {
     final events = StreamController<RuntimeEvent>.broadcast(sync: true);
-    final navigator = GlobalKey<NavigatorState>();
-    final router = GoRouter(
-      navigatorKey: navigator,
-      routes: [
-        GoRoute(
-          path: '/',
-          builder: (_, _) => const Scaffold(body: Text('首页')),
-        ),
-        GoRoute(
-          path: '/devices/:deviceId/calls',
-          builder: (_, state) =>
-              Scaffold(body: Text('通话目标：${state.pathParameters['deviceId']}')),
-        ),
-      ],
-    );
-    final container = ProviderContainer(
-      overrides: [
-        appSessionProvider.overrideWithValue(
-          AppSession(
-            events: events.stream,
-            initialize: false,
-            initialState: AppState(
-              devices: [
-                const DeviceSnapshot(
-                  id: 'device',
-                  name: 'Phone',
-                  status: .connected,
-                ),
-              ],
-              loading: false,
-              settings: Preferences(),
-            ),
-          ),
-        ),
-        deviceReaderProvider.overrideWithValue(_Devices()),
-        settingsManagementProvider.overrideWithValue(_Settings()),
-        incomingSharesProvider.overrideWithValue(_Shares()),
-        remoteClipboardProvider.overrideWithValue(_Clipboard()),
-        systemNotificationSinkProvider.overrideWithValue(
-          const NoopSystemNotificationSink(),
-        ),
-      ],
-    );
-    addTearDown(() async {
-      container.dispose();
-      router.dispose();
-      await events.close();
-    });
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp.router(
-          theme: ConnectTokens.theme(Brightness.light),
-          routerConfig: router,
-          builder: (_, child) => AppPresentationHost(
-            navigator: navigator,
-            router: router,
-            child: child!,
-          ),
-        ),
+    addTearDown(events.close);
+    final router = await _pumpHost(
+      tester,
+      events: events,
+      target: 'calls',
+      device: const DeviceSnapshot(
+        id: 'device',
+        name: 'Phone',
+        status: .connected,
       ),
+      settings: Preferences(),
+      sink: const NoopSystemNotificationSink(),
     );
     await tester.pumpAndSettle();
     const calls = DeviceCallsSnapshot(
@@ -134,61 +84,17 @@ void main() {
   testWidgets('系统提醒点击经核心变更流通知宿主，后台等待，前台只打开当前目标一次', (tester) async {
     final events = StreamController<RuntimeEvent>.broadcast(sync: true);
     final sink = _NotificationSink();
-    final navigator = GlobalKey<NavigatorState>();
-    final router = GoRouter(
-      navigatorKey: navigator,
-      routes: [
-        GoRoute(
-          path: '/',
-          builder: (_, _) => const Scaffold(body: Text('首页')),
-        ),
-        GoRoute(
-          path: '/devices/:deviceId/notifications',
-          builder: (_, state) =>
-              Scaffold(body: Text('通知目标：${state.pathParameters['deviceId']}')),
-        ),
-      ],
-    );
-    final container = ProviderContainer(
-      overrides: [
-        appSessionProvider.overrideWithValue(
-          AppSession(
-            events: events.stream,
-            initialize: false,
-            initialState: AppState(
-              devices: [const DeviceSnapshot(id: 'device', status: .connected)],
-              loading: false,
-              settings: Preferences(notificationAlerts: true),
-            ),
-          ),
-        ),
-        deviceReaderProvider.overrideWithValue(_Devices()),
-        settingsManagementProvider.overrideWithValue(_Settings()),
-        incomingSharesProvider.overrideWithValue(_Shares()),
-        remoteClipboardProvider.overrideWithValue(_Clipboard()),
-        systemNotificationSinkProvider.overrideWithValue(sink),
-      ],
-    );
     addTearDown(() async {
-      container.dispose();
-      router.dispose();
       await events.close();
       await sink.clicks.close();
     });
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp.router(
-          theme: ConnectTokens.theme(Brightness.light),
-          routerConfig: router,
-          builder: (_, child) => AppPresentationHost(
-            navigator: navigator,
-            router: router,
-            child: child!,
-          ),
-        ),
-      ),
+    final router = await _pumpHost(
+      tester,
+      events: events,
+      target: 'notifications',
+      device: const DeviceSnapshot(id: 'device', status: .connected),
+      settings: Preferences(notificationAlerts: true),
+      sink: sink,
     );
     await tester.pumpAndSettle();
     const baseline = DeviceNotificationsSnapshot(
@@ -244,6 +150,73 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+}
+
+/// 挂载首页和 `/devices/:deviceId/$target` 两条路由，目标页显示目标设备。
+Future<GoRouter> _pumpHost(
+  WidgetTester tester, {
+  required StreamController<RuntimeEvent> events,
+  required String target,
+  required DeviceSnapshot device,
+  required Preferences settings,
+  required SystemNotificationSink sink,
+}) async {
+  final label = target == 'calls' ? '通话目标' : '通知目标';
+  final navigator = GlobalKey<NavigatorState>();
+  final router = GoRouter(
+    navigatorKey: navigator,
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (_, _) => const Scaffold(body: Text('首页')),
+      ),
+      GoRoute(
+        path: '/devices/:deviceId/$target',
+        builder: (_, state) =>
+            Scaffold(body: Text('$label：${state.pathParameters['deviceId']}')),
+      ),
+    ],
+  );
+  final container = ProviderContainer(
+    overrides: [
+      appSessionProvider.overrideWithValue(
+        AppSession(
+          events: events.stream,
+          initialize: false,
+          initialState: AppState(
+            devices: [device],
+            loading: false,
+            settings: settings,
+          ),
+        ),
+      ),
+      deviceReaderProvider.overrideWithValue(_Devices()),
+      settingsManagementProvider.overrideWithValue(_Settings()),
+      incomingSharesProvider.overrideWithValue(_Shares()),
+      remoteClipboardProvider.overrideWithValue(_Clipboard()),
+      systemNotificationSinkProvider.overrideWithValue(sink),
+    ],
+  );
+  addTearDown(() {
+    container.dispose();
+    router.dispose();
+  });
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp.router(
+        theme: ConnectTokens.theme(Brightness.light),
+        routerConfig: router,
+        builder: (_, child) => AppPresentationHost(
+          navigator: navigator,
+          router: router,
+          child: child!,
+        ),
+      ),
+    ),
+  );
+  return router;
 }
 
 final class _Devices implements DeviceReader {

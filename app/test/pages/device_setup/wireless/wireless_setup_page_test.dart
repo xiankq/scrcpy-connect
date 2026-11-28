@@ -11,11 +11,12 @@ import 'package:scrcpy_connect/core/devices/device_management.dart';
 import 'package:scrcpy_connect/core/devices/device_reader.dart';
 import 'package:scrcpy_connect/core/devices/device_setup.dart';
 import 'package:scrcpy_connect/core/devices/models/device_endpoint.dart';
-import 'package:scrcpy_connect/core/devices/models/device_list_state.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/lifecycle/app_session_provider.dart';
 import 'package:scrcpy_connect/pages/device_setup/wireless/wireless_setup_page.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
+
+import '../../../support/fixed_state.dart';
 
 void main() {
   testWidgets('表单核验后先显示确认，接受后提交精确目标并展示真实结果', (tester) async {
@@ -30,7 +31,7 @@ void main() {
     call.result.complete(_receipt);
     await tester.pumpAndSettle();
     expect(find.text('已转为 IP 连接'), findsOneWidget);
-    expect(fixture.devices._refreshes, 1);
+    expect(fixture.refreshes, 1);
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: fixture.container,
@@ -57,7 +58,7 @@ void main() {
     expect(fixture.management.cancelled, [call.attemptId]);
     call.result.complete(_receipt);
     await tester.pumpAndSettle();
-    expect(fixture.devices._refreshes, 0);
+    expect(fixture.refreshes, 0);
     expect(tester.takeException(), isNull);
   });
 }
@@ -80,8 +81,7 @@ final class _Fixture {
   final setup = _Setup();
   final management = _Management();
   late ProviderContainer container;
-  _Devices get devices =>
-      container.read(deviceListProvider.notifier) as _Devices;
+  var refreshes = 0;
 
   Future<void> show(WidgetTester tester) async {
     container = ProviderContainer(
@@ -91,7 +91,10 @@ final class _Fixture {
         deviceManagementProvider.overrideWithValue(management),
         deviceInspectionProvider.overrideWithValue(_Inspection()),
         deviceReaderProvider.overrideWithValue(_Reader()),
-        deviceListProvider.overrideWith(_Devices.new),
+        deviceListProvider.overrideWith(
+          () =>
+              FixedDeviceList(devices: [_device], onRefresh: () => refreshes++),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -185,13 +188,4 @@ class _Reader implements DeviceReader {
   DeviceSnapshot readDevice(String id) => _device;
   @override
   List<DeviceSnapshot> readDevices() => [_device];
-}
-
-class _Devices extends DeviceListNotifier {
-  var _refreshes = 0;
-  @override
-  DeviceListState build() =>
-      DeviceListState(devices: [_device], loading: false);
-  @override
-  Future<void> refresh() async => _refreshes++;
 }

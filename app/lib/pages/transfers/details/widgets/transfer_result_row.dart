@@ -1,72 +1,52 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/files/models/file_transfer_snapshot.dart';
-import 'package:scrcpy_connect/pages/transfers/widgets/transfer_direction_badge.dart';
+import 'package:scrcpy_connect/pages/files/widgets/file_kind_style.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/file_browser.dart';
 import 'package:scrcpy_connect/widgets/file_transfer_labels.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
 
-class TransferResultRow extends StatelessWidget {
+/// 「本次文件」分组中的一项（Ardot T2 2:2920）：格式色块、文件名与路径，行尾为本项结果。
+///
+/// 失败或待核对的项改用通知色警示图形。
+class TransferResultRow extends StatelessWidget implements GroupedRow {
   const TransferResultRow({super.key, required this.transfer, this.onOpen});
 
   final FileTransferSnapshot transfer;
   final VoidCallback? onOpen;
 
   @override
+  double get separatorIndent =>
+      listRowSeparatorIndent(DesignTokens.componentIconTileSize);
+
+  @override
   Widget build(BuildContext context) {
     final issue = transferStatusHasIssue(transfer.status);
-    final content = Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: DesignTokens.spacingMd,
-        vertical: DesignTokens.spacingXs,
+    final kind = FileKind.classify(name: transfer.name);
+    final folder = transfer.kind == .directory;
+    final path = transfer.direction == .push
+        ? transfer.destination
+        : transfer.source;
+    return AppListRow(
+      onTap: onOpen,
+      chevron: onOpen != null,
+      leading: ListIconBadge(
+        icon: issue
+            ? LucideIcons.circleAlert
+            : folder
+            ? folderKindIcon
+            : fileKindIcon(kind),
+        backgroundColor: issue
+            ? FunctionTone.notification
+            : folder
+            ? folderKindColor
+            : fileKindColor(kind, name: transfer.name),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TransferDirectionBadge(transfer: transfer),
-          const SizedBox(width: DesignTokens.spacingSm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  transfer.name,
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-                const SizedBox(height: DesignTokens.spacingXxs),
-                Text(
-                  transfer.direction == .push
-                      ? transfer.destination
-                      : transfer.source,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: DesignTokens.spacingXxs),
-                Text(
-                  transferStatusDescription(transfer),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: issue ? Theme.of(context).colorScheme.error : null,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (onOpen != null)
-            GlassMenuButton(
-              icon: const Icon(AppIcons.more),
-              tooltip: '查看此项传输',
-              actions: [
-                GlassMenuAction(
-                  label: '查看此项',
-                  icon: const Icon(LucideIcons.info),
-                  onPressed: onOpen,
-                ),
-              ],
-            ),
-        ],
-      ),
+      title: Text(transfer.name),
+      subtitle: path.isEmpty ? null : Text(path),
+      value: transferStatusDescription(transfer),
     );
-    return onOpen == null ? content : InkWell(onTap: onOpen, child: content);
   }
 }

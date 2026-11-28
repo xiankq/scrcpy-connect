@@ -16,7 +16,8 @@ import 'package:scrcpy_connect/pages/transfers/widgets/transfer_progress.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/utils/formatters.dart';
-import 'package:scrcpy_connect/widgets/form_controls.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
@@ -221,46 +222,43 @@ class ReceiveContentPage extends HookConsumerWidget {
             void openTransfer() =>
                 TransferDetailsRoute(taskId: taskId).push<void>(context);
             final action = canOpen
-                ? FilledButton.icon(
-                    style: pagePrimaryButtonStyle,
+                ? AppButton(
+                    role: AppButtonRole.primary,
+                    expand: true,
                     onPressed: busy.value ? null : openFile,
-                    icon: const Icon(LucideIcons.externalLink),
-                    label: const Text('使用本机应用打开'),
+                    icon: LucideIcons.externalLink,
+                    label: '使用本机应用打开',
                   )
                 : canShare
-                ? FilledButton.icon(
-                    style: pagePrimaryButtonStyle,
+                ? AppButton(
+                    role: AppButtonRole.primary,
+                    expand: true,
                     onPressed:
                         busy.value ||
                             shareResult.value?.needsRecipientCheck == true &&
                                 !shareReviewed.value
                         ? null
                         : deliverShare,
-                    icon: const Icon(AppIcons.share),
-                    label: Text(
-                      shareResult.value == null ? '交给系统分享' : '重新打开系统分享',
-                    ),
+                    icon: AppIcons.share,
+                    label: shareResult.value == null ? '交给系统分享' : '重新打开系统分享',
                   )
                 : pending
-                ? FilledButton(
-                    style: pagePrimaryButtonStyle,
+                ? AppButton(
+                    role: AppButtonRole.primary,
+                    expand: true,
                     onPressed: openTransfer,
-                    child: const Text('查看本次传输'),
+                    label: '查看本次传输',
                   )
                 : null;
+            final colors = AppColors.of(context);
+            final type = AppTypography.of(context);
             return PageFrame(
               title: title,
-              titleStyle: Theme.of(context).textTheme.headlineMedium,
-              bottom: action == null
-                  ? null
-                  : Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: DesignTokens.spacingXs,
-                      ),
-                      child: action,
-                    ),
+              bottom: action,
               child: GroupedListView(
-                padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: DesignTokens.spacingLg,
+                ),
                 children: [
                   OriginalFileHeader(
                     name: current.name,
@@ -277,9 +275,9 @@ class ReceiveContentPage extends HookConsumerWidget {
                               : ready
                               ? '原文件已准备好'
                               : statusText(status.name),
-                          style: Theme.of(context).textTheme.titleLarge,
+                          style: type.headline,
                         ),
-                        const SizedBox(height: DesignTokens.spacingSm),
+                        const SizedBox(height: DesignTokens.spacingMd),
                         FileDeliveryPath(
                           sourceLabel: (current.sourceLabel ?? '被控设备'),
                           systemLabel:
@@ -302,9 +300,12 @@ class ReceiveContentPage extends HookConsumerWidget {
                           TransferProgress(
                             value: transferProgressValue(completed, total),
                           ),
-                          const SizedBox(height: DesignTokens.spacingXs),
+                          const SizedBox(height: DesignTokens.spacingSm),
                           Text(
                             '${bytes(completed)} / ${total > 0 ? bytes(total) : '大小未知'}',
+                            style: type.footnote.copyWith(
+                              color: colors.textSecondary,
+                            ),
                           ),
                         ],
                       ],
@@ -329,8 +330,12 @@ class ReceiveContentPage extends HookConsumerWidget {
                         refresh();
                       },
                     ),
-                  if (current.canCancel)
-                    OutlinedButton(
+                  if (current.canCancel) ...[
+                    const SizedBox(height: DesignTokens.spacingLg),
+                    AppButton(
+                      role: AppButtonRole.destructiveOnPage,
+                      expand: true,
+                      label: '取消本次传输',
                       onPressed: busy.value
                           ? null
                           : () async {
@@ -355,8 +360,8 @@ class ReceiveContentPage extends HookConsumerWidget {
                                 refresh();
                               }
                             },
-                      child: const Text('取消本次传输'),
                     ),
+                  ],
                   if (!pending && !ready && status != .conflict)
                     StateNote(
                       cacheLease.hasError
@@ -374,12 +379,16 @@ class ReceiveContentPage extends HookConsumerWidget {
                     if (shareResult.value != null)
                       StateNote(shareResult.value!.message),
                     if (shareResult.value?.needsRecipientCheck == true)
-                      CheckboxListTile(
-                        value: shareReviewed.value,
-                        onChanged: busy.value
-                            ? null
-                            : (value) => shareReviewed.value = value == true,
-                        title: const Text('我已在接收应用核对，仍需再次分享'),
+                      SettingsGroup(
+                        children: [
+                          ConnectSwitchRow(
+                            value: shareReviewed.value,
+                            onChanged: busy.value
+                                ? null
+                                : (value) => shareReviewed.value = value,
+                            title: const Text('我已在接收应用核对，仍需再次分享'),
+                          ),
+                        ],
                       ),
                   ],
                   if (ready &&
@@ -392,13 +401,19 @@ class ReceiveContentPage extends HookConsumerWidget {
                           ? '文件夹请先保存到系统位置，再从文件应用中选择需要分享的内容。'
                           : '当前主控尚不支持将暂存文件夹保存到系统位置，请在手机上处理或从文件页选择其他传输方式。',
                     ),
-                  const SizedBox(height: DesignTokens.spacingMd),
+                  const SizedBox(height: DesignTokens.spacingLg),
                   if (!pending)
-                    TextButton(
+                    AppButton(
+                      role: AppButtonRole.text,
                       onPressed: openTransfer,
-                      child: const Text('查看本次传输详情'),
+                      label: '查看本次传输详情',
                     ),
-                  TextButton(onPressed: refresh, child: const Text('刷新文件状态')),
+                  AppButton(
+                    role: AppButtonRole.text,
+                    onPressed: refresh,
+                    label: '刷新文件状态',
+                  ),
+                  const SizedBox(height: DesignTokens.spacingLg),
                 ],
               ),
             );

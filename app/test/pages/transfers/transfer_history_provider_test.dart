@@ -7,6 +7,8 @@ import 'package:scrcpy_connect/core/files/models/file_transfer_snapshot.dart';
 import 'package:scrcpy_connect/core/files/transfer_query_provider.dart';
 import 'package:scrcpy_connect/pages/transfers/transfer_history_provider.dart';
 
+import '../../support/fixed_state.dart';
+
 void main() {
   test('页面按批次合并展示，设备改名只更新投影而不重查传输', () async {
     var reads = 0;
@@ -38,8 +40,7 @@ void main() {
     );
     addTearDown(container.dispose);
     container.listen(transferHistoryRowsProvider, (_, _) {});
-    await Future<void>.delayed(Duration.zero);
-    await container.pump();
+    await flushProviders(container);
     var rows = container.read(transferHistoryRowsProvider).requireValue;
     expect(rows, hasLength(2));
     expect(rows.first.members, hasLength(2));

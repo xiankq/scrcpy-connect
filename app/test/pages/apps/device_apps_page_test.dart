@@ -6,11 +6,12 @@ import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/devices/device_apps.dart';
 import 'package:scrcpy_connect/core/devices/device_query_provider.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
-import 'package:scrcpy_connect/core/recovery/models/recovery_state.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
 import 'package:scrcpy_connect/pages/apps/device_apps_page.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
+
+import '../../support/fixed_state.dart';
 
 void main() {
   const device = DeviceSnapshot(id: 'phone');
@@ -23,10 +24,13 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          recoveryStateProvider.overrideWith(_Recovery.new),
+          recoveryStateProvider.overrideWith(FixedRecovery.new),
           provider.overrideWith((_) => result.future),
         ],
-        child: const MaterialApp(home: DeviceAppsPage(device: device)),
+        child: MaterialApp(
+          theme: ConnectTokens.theme(Brightness.light),
+          home: const DeviceAppsPage(device: device),
+        ),
       ),
     );
 
@@ -53,7 +57,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            recoveryStateProvider.overrideWith(_Recovery.new),
+            recoveryStateProvider.overrideWith(FixedRecovery.new),
             provider.overrideWith((_) => result.future),
           ],
           child: MaterialApp(
@@ -97,7 +101,7 @@ void main() {
     var reads = 0;
     final container = ProviderContainer(
       overrides: [
-        recoveryStateProvider.overrideWith(_Recovery.new),
+        recoveryStateProvider.overrideWith(FixedRecovery.new),
         provider.overrideWith((_) => reads++ == 0 ? [] : refresh.future),
       ],
     );
@@ -105,7 +109,10 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(home: DeviceAppsPage(device: device)),
+        child: MaterialApp(
+          theme: ConnectTokens.theme(Brightness.light),
+          home: const DeviceAppsPage(device: device),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -121,9 +128,4 @@ void main() {
     refresh.complete([]);
     await tester.pumpAndSettle();
   });
-}
-
-class _Recovery extends RecoveryStateNotifier {
-  @override
-  RecoveryState build() => RecoveryState();
 }

@@ -1,29 +1,35 @@
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/motion.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/banner.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/errors/failure_message.dart';
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/overlays.dart';
 
-void feedback(BuildContext context, String message) =>
-    ScaffoldMessenger.of(context).showSnackBar(appSnackBar(message));
+export 'package:scrcpy_connect/widgets/banner.dart' show BannerTone;
 
-/// 文字反馈使用实体面，前景在接收消息的上下文中跟随明暗主题。
-SnackBar appSnackBar(String message) => SnackBar(
-  behavior: SnackBarBehavior.floating,
-  backgroundColor: DesignTokens.colorTransparent,
-  elevation: 0,
-  padding: EdgeInsets.zero,
-  content: Builder(
-    builder: (context) => ContentSurface(
-      radius: DesignTokens.roundedLg,
-      padding: const EdgeInsets.all(DesignTokens.spacingMd),
-      child: Text(
-        message,
-        style: Theme.of(context).textTheme.bodyMedium
-            ?.copyWith(color: Theme.of(context).colorScheme.onSurface),
-      ),
-    ),
-  ),
+void feedback(
+  BuildContext context,
+  String message, {
+  BannerTone tone = BannerTone.info,
+}) => ScaffoldMessenger.of(context).showSnackBar(
+  appSnackBar(message, tone: tone),
+  snackBarAnimationStyle: reduceMotionOf(context)
+      ? AnimationStyle.noAnimation
+      : const AnimationStyle(reverseDuration: bannerExitDuration),
 );
+
+/// 文字反馈以横幅呈现；停留时长随语气（信息、成功 3 秒，警告 5 秒，错误 6 秒）。
+SnackBar appSnackBar(String message, {BannerTone tone = BannerTone.info}) =>
+    SnackBar(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: DesignTokens.colorOnMedia.withAlpha(0),
+      elevation: 0,
+      padding: EdgeInsets.zero,
+      duration: tone.duration,
+      content: AppBanner(message: message, tone: tone),
+    );
+
 Future<T?> performAction<T>(
   BuildContext context,
   Future<T> Function() action, {
@@ -32,11 +38,17 @@ Future<T?> performAction<T>(
 }) async {
   try {
     final result = await action();
-    if (context.mounted && success != null) feedback(context, success);
+    if (context.mounted && success != null) {
+      feedback(context, success, tone: BannerTone.success);
+    }
     return result;
   } catch (error) {
     if (context.mounted) {
-      feedback(context, failureMessage(error, fallback: failure));
+      feedback(
+        context,
+        failureMessage(error, fallback: failure),
+        tone: BannerTone.error,
+      );
     }
     return null;
   }
@@ -95,7 +107,7 @@ class _TextDialogState extends State<_TextDialog> {
       children: [
         if (widget.label != null) ...[
           ExcludeSemantics(child: Text(widget.label!)),
-          const SizedBox(height: DesignTokens.spacingXs),
+          const SizedBox(height: DesignTokens.spacingSm),
         ],
         Semantics(
           label: widget.label,
@@ -128,6 +140,7 @@ class _TextDialogState extends State<_TextDialog> {
   );
 }
 
+/// 确认框：取消为次要胶囊，确认为主要胶囊；[danger] 时确认为 `destructive` 实色白字。
 Future<bool> confirm(
   BuildContext context,
   String title,
@@ -137,50 +150,28 @@ Future<bool> confirm(
 }) async =>
     await showAppDialog<bool>(
       context: context,
-      builder: (context) {
-        final theme = Theme.of(context);
-        final dark = theme.brightness == Brightness.dark;
-        const size = Size.fromHeight(DesignTokens.componentAlertButtonHeight);
-        const shape = RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(
-            Radius.circular(DesignTokens.componentAlertButtonRounded),
+      builder: (context) => AppAlertDialog(
+        glass: true,
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
           ),
-        );
-        return AppAlertDialog(
-          glass: true,
-          title: Text(title),
-          content: Text(message),
-          actions: [
-            TextButton(
-              style: TextButton.styleFrom(
-                minimumSize: size,
-                backgroundColor: theme.colorScheme.surfaceContainerHigh,
-                foregroundColor: theme.colorScheme.onSurface,
-                shape: shape,
-              ),
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                minimumSize: size,
-                backgroundColor: !danger
-                    ? null
-                    : dark
-                    ? DesignTokens.componentAlertDangerDarkBackgroundColor
-                    : DesignTokens.componentAlertDangerBackgroundColor,
-                foregroundColor: !danger
-                    ? null
-                    : dark
-                    ? DesignTokens.componentAlertDangerDarkTextColor
-                    : DesignTokens.componentAlertDangerTextColor,
-                shape: shape,
-              ),
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(action, textAlign: TextAlign.center),
-            ),
-          ],
-        );
-      },
+          FilledButton(
+            style: danger ? destructiveFilledStyle(context) : null,
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(action, textAlign: TextAlign.center),
+          ),
+        ],
+      ),
     ) ??
     false;
+
+/// 确认框主位置上的危险动作：`destructive` 实色、白色标签。
+ButtonStyle destructiveFilledStyle(BuildContext context) =>
+    FilledButton.styleFrom(
+      backgroundColor: AppColors.of(context).destructive,
+      foregroundColor: DesignTokens.colorOnMedia,
+    );

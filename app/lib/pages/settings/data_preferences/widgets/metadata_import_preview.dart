@@ -1,10 +1,14 @@
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/settings/metadata_management.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
+import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 import '../../widgets/settings_row.dart';
@@ -20,54 +24,26 @@ class MetadataImportPreview extends HookWidget {
     return PageFrame(
       title: '导入预览',
       onBack: () => Navigator.pop(context),
-      bottom: FilledButton(
-        style: FilledButton.styleFrom(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(
-              DesignTokens.componentButtonPrimaryRounded,
-            ),
-          ),
-          minimumSize: const Size.fromHeight(
-            DesignTokens.componentButtonPrimaryHeight,
-          ),
-        ),
+      bottom: AppButton(
+        role: AppButtonRole.primary,
+        expand: true,
         onPressed: () =>
             Navigator.pop(context, duplicate ? null : importGlobal.value),
-        child: Text(duplicate ? '完成' : '导入 ${preview.newRecords} 条记录'),
+        label: duplicate ? '完成' : '导入 ${preview.newRecords} 条记录',
       ),
       child: GroupedListView(
-        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+        padding: const EdgeInsets.all(DesignTokens.componentPagePadding),
         children: [
           SettingsGroup(
             children: [
               SettingsRow(
                 icon: LucideIcons.smartphone,
-                color: DesignTokens.colorListIconPurple,
+                color: FunctionTone.archive,
                 title: duplicate ? '此文件已经导入' : '将新增 ${preview.newRecords} 条记录',
                 subtitle: duplicate
                     ? '上次新增 ${preview.receipt!.restored} 条记录'
                     : null,
               ),
-              if (!duplicate && changes.isNotEmpty)
-                SettingsRow(
-                  icon: LucideIcons.settings,
-                  color: DesignTokens.colorListIconBlue,
-                  title: '同时导入全局偏好',
-                  onTap: () => importGlobal.value = !importGlobal.value,
-                  trailing: Checkbox(
-                    value: importGlobal.value,
-                    onChanged: (value) => importGlobal.value = value == true,
-                  ),
-                ),
-              if (importGlobal.value)
-                for (final change in changes)
-                  ListTile(
-                    dense: true,
-                    title: Text(_preferenceName(change.key)),
-                    subtitle: Text(
-                      '${_preferenceValue(change.current, key: change.key)} → ${_preferenceValue(change.imported, key: change.key)}',
-                    ),
-                  ),
             ],
           ),
           if (duplicate)
@@ -78,6 +54,27 @@ class MetadataImportPreview extends HookWidget {
             })
           else
             const StateNote('导入后，手机仍需单独授权。各设备的画质、电源和剪贴板偏好需重新设置。'),
+          if (!duplicate && changes.isNotEmpty) ...[
+            const SectionTitle('选项'),
+            SettingsGroup(
+              children: [
+                ConnectSwitchRow(
+                  icon: AppIcons.viewOptions,
+                  title: const Text('同时导入全局偏好'),
+                  value: importGlobal.value,
+                  onChanged: (value) => importGlobal.value = value,
+                ),
+                if (importGlobal.value)
+                  for (final change in changes)
+                    AppListRow(
+                      title: Text(_preferenceName(change.key)),
+                      subtitle: Text(
+                        '${_preferenceValue(change.current, key: change.key)} → ${_preferenceValue(change.imported, key: change.key)}',
+                      ),
+                    ),
+              ],
+            ),
+          ],
         ],
       ),
     );

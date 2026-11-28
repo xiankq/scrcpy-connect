@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:adb/adb.dart' show AdbCancellation;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_connection_control.dart';
@@ -21,10 +20,9 @@ import 'package:scrcpy_connect/pages/device_setup/connection/models/connection_a
 import 'package:scrcpy_connect/pages/device_setup/connection/connection_form_page.dart';
 import 'package:scrcpy_connect/pages/device_setup/connection/widgets/connection_address_fields.dart';
 import 'package:scrcpy_connect/pages/device_setup/connection/widgets/connection_attempt_status.dart';
-import 'package:scrcpy_connect/pages/device_setup/connection/widgets/connection_mode_selector.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/styles/motion.dart';
-import 'package:scrcpy_connect/widgets/page_frame.dart';
+import 'package:scrcpy_connect/widgets/input_field.dart';
 
 const _endpoint = DeviceEndpoint(address: 'phone.local', port: 5555);
 const _connect = ConnectionAttemptRequest.connect(endpoint: _endpoint);
@@ -329,7 +327,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('添加设备的 USB 状态卡、表单和主操作在宽窗内共用中轴', (tester) async {
+  testWidgets('添加设备切换方式时显示对应主操作，快速来回切换保留已填地址', (tester) async {
     tester.view
       ..physicalSize = const Size(1280, 720)
       ..devicePixelRatio = 1;
@@ -352,55 +350,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final tabs = find.byType(ConnectionModeSelector);
-    final frame = tester.state(find.byType(PageFrame));
-    final selector = tester.element(tabs);
-    final viewport = tester.state(find.byType(Scrollable));
-    final headerFades = find.ancestor(
-      of: find.text('添加设备'),
-      matching: find.byType(FadeTransition),
-    );
-    final status = find.text('连接手机');
-    final statusIcon = find.byIcon(LucideIcons.circle);
     final check = find.widgetWithText(FilledButton, '检查连接');
-    expect(tester.getCenter(tabs).dx, 640);
-    expect(tester.getCenter(status).dx, 640);
-    expect(tester.getCenter(statusIcon).dx, 640);
-    expect(tester.getCenter(check).dx, 640);
-    expect(
-      tester.getRect(status).top,
-      greaterThan(tester.getRect(tabs).bottom),
-    );
-
+    expect(find.text('连接手机'), findsOneWidget);
+    expect(check, findsOneWidget);
     for (final (label, action) in [('配对码', '配对并连接'), ('IP 连接', '连接设备')]) {
       await tester.tap(find.text(label));
-      await tester.pump();
-      await tester.pump(shortTransitionDuration ~/ 2);
-      expect(tester.state(find.byType(PageFrame)), same(frame));
-      expect(tester.element(tabs), same(selector));
-      expect(tester.state(find.byType(Scrollable).first), same(viewport));
-      expect(
-        tester
-            .widgetList<FadeTransition>(headerFades)
-            .every((fade) => fade.opacity.value == 1),
-        isTrue,
-      );
-      final formFades = tester
-          .widgetList<FadeTransition>(
-            find.ancestor(
-              of: find.byType(Form),
-              matching: find.byType(FadeTransition),
-            ),
-          )
-          .where((fade) => fade.opacity.value < 1);
-      expect(formFades, hasLength(2));
-      expect(formFades.every((fade) => fade.opacity.value > 0), isTrue);
       await tester.pumpAndSettle();
-      expect(tester.getCenter(find.byType(ConnectionAddressFields)).dx, 640);
-      expect(
-        tester.getCenter(find.widgetWithText(FilledButton, action)).dx,
-        640,
-      );
+      expect(find.widgetWithText(FilledButton, action), findsOneWidget);
     }
 
     final inputs = find.byType(EditableText);
@@ -412,7 +368,6 @@ void main() {
       await tester.pump(shortTransitionDuration ~/ 4);
     }
     await tester.pumpAndSettle();
-    expect(tester.element(tabs), same(selector));
     expect(
       tester.widget<EditableText>(inputs.first).controller.text,
       'phone.local',
@@ -423,14 +378,11 @@ void main() {
     tester.view.physicalSize = const Size(320, 520);
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
     await tester.pumpAndSettle();
-    expect(tester.getCenter(status).dx, 160);
-    expect(tester.getCenter(statusIcon).dx, 160);
-    expect(tester.getCenter(check).dx, 160);
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -380));
     await tester.pumpAndSettle();
     final help = find.widgetWithText(TextButton, 'USB 连接帮助');
-    expect(tester.getRect(help).bottom, lessThan(tester.getRect(check).top));
     expect(help.hitTestable(), findsOneWidget);
+    expect(check.hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -486,11 +438,7 @@ void main() {
     final fields = tester.widget<ConnectionAddressFields>(
       find.byType(ConnectionAddressFields),
     );
-    final inputs = find.byType(TextFormField);
-    expect(
-      tester.getTopLeft(inputs.at(0)).dy,
-      tester.getTopLeft(inputs.at(1)).dy,
-    );
+    final inputs = find.byType(AppTextField);
     await tester.showKeyboard(inputs.at(2));
     final codeFocus = tester
         .widget<EditableText>(

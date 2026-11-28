@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:scrcpy_connect/pages/gallery/preview/widgets/media_controls_protection.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
@@ -32,11 +33,11 @@ class MediaPreviewToolbar extends StatelessWidget {
         icon: const Icon(AppIcons.back),
       ),
     );
-    final verticalPadding = window == null
-        ? DesignTokens.spacingMd
-        : (DesignTokens.componentPageHeaderHeight -
-                  DesignTokens.componentIconButtonSize) /
-              2;
+    // 与页头一致：高 72，44 点返回键距起始边 8，标题紧随其后间距 8（Ardot 页头 37:795）。
+    const verticalPadding =
+        (DesignTokens.componentPageBarHeight -
+            DesignTokens.componentBarButtonSize) /
+        2;
     final header = MediaControlsProtection(
       child: SafeArea(
         bottom: false,
@@ -48,30 +49,31 @@ class MediaPreviewToolbar extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(
             window != null && window.left > 0
                 ? window.left + DesignTokens.spacingXs
-                : DesignTokens.spacingMd,
+                : DesignTokens.spacingSm,
             verticalPadding,
             window != null && window.right > 0
                 ? window.right + DesignTokens.spacingXs
-                : DesignTokens.spacingMd,
+                : DesignTokens.componentPagePadding,
             verticalPadding,
           ),
           child: Row(
             children: [
               if (side == null) ...[
                 back,
-                const SizedBox(width: DesignTokens.spacingXs),
+                const SizedBox(width: DesignTokens.spacingSm),
               ],
               Expanded(
                 child: DesktopWindowDragArea(
                   child: SizedBox(
-                    height: DesignTokens.componentIconButtonSize,
+                    height: DesignTokens.componentBarButtonSize,
                     child: Align(
                       alignment: AlignmentDirectional.centerStart,
                       child: Text(
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium,
+                        style: AppTypography.of(context).title3
+                            .copyWith(color: DesignTokens.colorOnMedia),
                       ),
                     ),
                   ),
@@ -92,7 +94,7 @@ class MediaPreviewToolbar extends StatelessWidget {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                const Positioned(
+                Positioned(
                   left: -DesignTokens.spacingSm,
                   right: -DesignTokens.spacingSm,
                   top: -DesignTokens.spacingSm,
@@ -102,8 +104,10 @@ class MediaPreviewToolbar extends StatelessWidget {
                       decoration: BoxDecoration(
                         gradient: RadialGradient(
                           colors: [
-                            DesignTokens.colorMediaShade,
-                            DesignTokens.colorTransparent,
+                            DesignTokens
+                                .componentMediaProtectionBackgroundColor,
+                            DesignTokens.componentMediaProtectionBackgroundColor
+                                .withAlpha(0),
                           ],
                           stops: [0.15, 1],
                         ),

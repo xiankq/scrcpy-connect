@@ -3,7 +3,8 @@ import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 
 enum MediaControlsEdge { top, bottom }
 
-/// 先保护实际媒体控件，再向内容区淡出。
+/// 媒体保护（design.md「材质」media-protection）：先以 `media-scrim` 托住媒体上的控件，
+/// 再在 64 点内向内容区淡出。
 class MediaControlsProtection extends StatelessWidget {
   const MediaControlsProtection({
     super.key,
@@ -26,7 +27,9 @@ class MediaControlsProtection extends StatelessWidget {
           children: [
             const Positioned.fill(
               child: IgnorePointer(
-                child: ColoredBox(color: DesignTokens.colorMediaShade),
+                child: ColoredBox(
+                  color: DesignTokens.componentMediaProtectionBackgroundColor,
+                ),
               ),
             ),
             child,
@@ -41,14 +44,8 @@ class MediaControlsProtection extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: top
-                      ? const [
-                          DesignTokens.colorMediaShade,
-                          DesignTokens.colorTransparent,
-                        ]
-                      : const [
-                          DesignTokens.colorTransparent,
-                          DesignTokens.colorMediaShade,
-                        ],
+                      ? [_scrim, _scrim.withAlpha(0)]
+                      : [_scrim.withAlpha(0), _scrim],
                 ),
               ),
             ),
@@ -58,3 +55,5 @@ class MediaControlsProtection extends StatelessWidget {
     );
   }
 }
+
+const _scrim = DesignTokens.componentMediaProtectionBackgroundColor;

@@ -5,6 +5,7 @@ import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/content_arrival.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
+import 'package:scrcpy_connect/widgets/page_loader.dart';
 
 /// 读取过程保留已有内容；首次加载、失败及重试由视图呈现。
 class AsyncContent<T extends Object> extends StatelessWidget {
@@ -46,10 +47,7 @@ class AsyncContent<T extends Object> extends StatelessWidget {
 
   Widget _content(BuildContext context, bool waiting) {
     if (waiting) {
-      return loadingPlaceholder ??
-          const PageChromeBody(
-            child: Center(child: CircularProgressIndicator.adaptive()),
-          );
+      return loadingPlaceholder ?? const PageChromeBody(child: PageLoader());
     }
     if (error != null || data == null) {
       return PageChromeBody(
@@ -61,12 +59,13 @@ class AsyncContent<T extends Object> extends StatelessWidget {
               : failureMessage(error, fallback: failure),
           action: Column(
             mainAxisSize: MainAxisSize.min,
+            spacing: DesignTokens.spacingSm,
             children: [
-              OutlinedButton.icon(
+              FilledButton.icon(
                 onPressed: onRefresh,
                 icon: const Icon(
                   AppIcons.refresh,
-                  size: DesignTokens.componentIconActionSize,
+                  size: DesignTokens.componentBarGlyphSize,
                 ),
                 label: const Text('重试'),
               ),

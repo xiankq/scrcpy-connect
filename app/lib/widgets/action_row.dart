@@ -1,8 +1,13 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
 
-class ActionRow extends StatelessWidget {
+/// 带功能色块的动作或导航行（Ardot 列表行「前导=色块」）。
+///
+/// 有 [onTap] 且没有 [trailing] 时行尾显示箭头；危险动作标题用 `error`、色块用通知色。
+class ActionRow extends StatelessWidget implements GroupedRow {
   const ActionRow({
     super.key,
     required this.icon,
@@ -13,86 +18,44 @@ class ActionRow extends StatelessWidget {
     this.destructive = false,
     this.color,
     this.trailing,
+    this.subtitle,
     this.contentPadding = const EdgeInsets.symmetric(
-      horizontal: DesignTokens.spacingMd,
+      horizontal: DesignTokens.componentListRowPadding,
     ),
   });
   final IconData icon;
   final String title;
+  final String? subtitle;
   final String? value;
   final VoidCallback? onTap;
   final bool enabled;
   final bool destructive;
+
+  /// 功能色，取 [FunctionTone]；默认通用色，危险动作为通知色。
   final Color? color;
   final Widget? trailing;
   final EdgeInsetsGeometry contentPadding;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final arrow = onTap == null
-        ? null
-        : const Icon(
-            AppIcons.forward,
-            size: DesignTokens.componentIconSmallSize,
-          );
-    Widget tile(Widget? end) => ListTile(
-      enabled: enabled,
-      contentPadding: contentPadding,
-      minLeadingWidth: DesignTokens.componentListIconSize,
-      leading: ListIconBadge(
-        icon: icon,
-        backgroundColor: enabled
-            ? color ??
-                  (destructive
-                      ? DesignTokens.colorListIconCoral
-                      : DesignTokens.colorListIconUtility)
-            : theme.disabledColor,
-      ),
-      title: Text(
-        title,
-        style: theme.textTheme.bodyLarge?.copyWith(
-          color: !enabled
-              ? theme.disabledColor
-              : destructive
-              ? theme.colorScheme.error
-              : null,
-        ),
-      ),
-      trailing: end,
-      onTap: onTap,
-    );
+  double get separatorIndent => tileRowSeparatorIndent;
 
-    if (value case final label? when trailing == null) {
-      return LayoutBuilder(
-        builder: (context, constraints) => tile(
-          ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: constraints.maxWidth * .44),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Tooltip(
-                    message: label,
-                    child: Text(
-                      label,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.end,
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ),
-                ),
-                if (arrow != null) ...[
-                  const SizedBox(width: DesignTokens.spacingXxs),
-                  arrow,
-                ],
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-    return tile(trailing ?? arrow);
-  }
+  @override
+  Widget build(BuildContext context) => AppListRow(
+    enabled: enabled,
+    onTap: onTap,
+    destructive: destructive,
+    contentPadding: contentPadding,
+    leading: ListIconBadge(
+      icon: icon,
+      backgroundColor: enabled
+          ? color ??
+                (destructive ? FunctionTone.notification : FunctionTone.utility)
+          : AppColors.of(context).disabled,
+    ),
+    title: Text(title),
+    subtitle: subtitle == null ? null : Text(subtitle!),
+    value: trailing == null ? value : null,
+    trailing: trailing,
+    chevron: trailing == null && onTap != null,
+  );
 }

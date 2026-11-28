@@ -7,6 +7,16 @@ import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/files/models/file_catalog_entry.dart';
 import 'package:scrcpy_connect/pages/gallery/widgets/gallery_media_tile.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+
+/// 日期组头（Ardot F6 2:1429）：`headline` + `text-secondary`，左右 16，上 16、下 8；
+/// 缩略图通栏排列。
+const _headerPadding = EdgeInsets.fromLTRB(
+  DesignTokens.componentPagePadding,
+  DesignTokens.spacingLg,
+  DesignTokens.componentPagePadding,
+  DesignTokens.spacingSm,
+);
 
 /// Keep one lazy viewport for both date headings and thumbnail rows.
 class GalleryDateGrid extends HookWidget {
@@ -17,6 +27,7 @@ class GalleryDateGrid extends HookWidget {
     required this.delegate,
     required this.selected,
     required this.onTap,
+    this.selectionActive = false,
   });
 
   final DeviceSnapshot device;
@@ -24,6 +35,7 @@ class GalleryDateGrid extends HookWidget {
   final SliverGridDelegateWithMaxCrossAxisExtent delegate;
   final Set<String> selected;
   final ValueChanged<FileCatalogEntry> onTap;
+  final bool selectionActive;
 
   @override
   Widget build(BuildContext context) {
@@ -67,17 +79,16 @@ class GalleryDateGrid extends HookWidget {
                 if (row.files.isEmpty) {
                   final day = row.day;
                   return Padding(
-                    padding: const EdgeInsets.only(
-                      top: DesignTokens.spacingSm,
-                      bottom: DesignTokens.spacingXs,
-                    ),
+                    padding: _headerPadding,
                     child: Semantics(
                       header: true,
                       child: Text(
                         day == null
                             ? '日期未知'
                             : '${day.year == year ? '' : '${day.year} 年 '}${day.month} 月 ${day.day} 日',
-                        style: Theme.of(context).textTheme.titleMedium,
+                        style: AppTypography.of(context).headline.copyWith(
+                          color: AppColors.of(context).textSecondary,
+                        ),
                       ),
                     ),
                   );
@@ -99,6 +110,7 @@ class GalleryDateGrid extends HookWidget {
                             file: row.files[i],
                             device: device,
                             selected: selected.contains(row.files[i].path),
+                            selectionActive: selectionActive,
                             onTap: () => onTap(row.files[i]),
                           ),
                         ),

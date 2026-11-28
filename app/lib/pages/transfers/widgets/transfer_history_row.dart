@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:scrcpy_connect/core/errors/failure_message.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -14,12 +12,11 @@ import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/file_transfer_labels.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
-import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/status_tag.dart';
 import 'package:scrcpy_connect/utils/formatters.dart';
-import 'package:scrcpy_connect/widgets/file_browser.dart';
-import 'package:scrcpy_connect/pages/files/widgets/file_kind_style.dart';
 
 import 'transfer_progress.dart';
+import 'transfer_task_card.dart';
 
 import '../models/transfer_history_entry.dart';
 
@@ -136,31 +133,11 @@ class TransferHistoryRow extends HookConsumerWidget {
       }
     }
 
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final path = task.localPath;
-    final kind = FileKind.classify(name: task.name);
     final group = task.kind == .directory || row.members.length > 1;
-    final iconColor = ConnectTokens.accent(
-      context,
-      group
-          ? DesignTokens.colorListIconAmber
-          : fileKindColor(kind, name: task.name),
-    );
-    final graphic = FeatureIcon(
-      group ? LucideIcons.folder : fileKindIcon(kind),
-      color: iconColor,
-      size: DesignTokens.componentTransferCardThumbnailWidth,
-    );
     final progressVisible =
         task.status == .running || task.status == .finalizing;
     final terminal = transferHistoryFinished(row);
     final issue = transferStatusHasIssue(task.status);
-    final statusColor = issue
-        ? colors.error
-        : task.status == .completed || task.status == .completedWithSkips
-        ? ConnectTokens.accent(context, ConnectTokens.mint)
-        : colors.onSurfaceVariant;
     final stage = busy.value
         ? '正在停止…'
         : task.errorCode == 'result_unknown' || task.cleanupPending
@@ -168,6 +145,15 @@ class TransferHistoryRow extends HookConsumerWidget {
         : task.status == .conflict
         ? '待处理'
         : statusText(task.status.name);
+    final tone = issue
+        ? StatusTagTone.error
+        : task.status == .conflict ||
+              task.errorCode == 'result_unknown' ||
+              task.cleanupPending
+        ? StatusTagTone.warning
+        : task.status == .completed || task.status == .completedWithSkips
+        ? StatusTagTone.success
+        : StatusTagTone.neutral;
     final amount = terminal
         ? transferResultSize(task)
         : total > 0
@@ -179,199 +165,51 @@ class TransferHistoryRow extends HookConsumerWidget {
         ? DateTime.fromMillisecondsSinceEpoch(task.endedAt! * 1000)
         : null;
     final localizations = MaterialLocalizations.of(context);
-    const shape = RoundedSuperellipseBorder(
-      borderRadius: BorderRadius.all(
-        Radius.circular(DesignTokens.componentListCardRounded),
-      ),
-    );
-    return Semantics(
+    final showPercent = progressVisible && progress != null && !busy.value;
+    return TransferTaskCard(
       selected: selected,
-      child: Material(
-        color: selected ? colors.surfaceContainerHigh : colors.surface,
-        shape: shape,
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onOpen,
-          child: Padding(
-            padding: const EdgeInsetsDirectional.fromSTEB(
-              DesignTokens.spacingMd,
-              DesignTokens.spacingSm,
-              DesignTokens.spacingXs,
-              DesignTokens.spacingSm,
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (kind == FileKind.images && path != null && !group)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
-                    child: Image.file(
-                      File(path),
-                      width: DesignTokens.componentTransferCardThumbnailWidth,
-                      height: DesignTokens.componentTransferCardThumbnailWidth,
-                      fit: BoxFit.cover,
-                      cacheWidth: 144,
-                      excludeFromSemantics: true,
-                      errorBuilder: (_, _, _) => graphic,
-                    ),
-                  )
-                else
-                  graphic,
-                const SizedBox(width: DesignTokens.spacingSm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            flex: 3,
-                            child: Text(
-                              task.name,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: DesignTokens.spacingXs),
-                          Flexible(
-                            flex: 2,
-                            child:
-                                progressVisible &&
-                                    progress != null &&
-                                    !busy.value
-                                ? Text(
-                                    '${(progress * 100).floor()}%',
-                                    textAlign: TextAlign.end,
-                                    style: theme.textTheme.titleMedium,
-                                  )
-                                : DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      color: task.status == .conflict
-                                          ? (theme.brightness == Brightness.dark
-                                                ? DesignTokens
-                                                      .colorAccentAmberSoftDark
-                                                : DesignTokens
-                                                      .colorAccentAmberSoft)
-                                          : statusColor.withValues(
-                                              alpha: DesignTokens
-                                                  .componentFeatureIconOpacity,
-                                            ),
-                                      borderRadius: BorderRadius.circular(
-                                        DesignTokens.roundedFull,
-                                      ),
-                                    ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: DesignTokens.spacingXs,
-                                        vertical: DesignTokens.spacingMicro,
-                                      ),
-                                      child: Text(
-                                        stage,
-                                        textAlign: TextAlign.end,
-                                        style: theme.textTheme.labelMedium
-                                            ?.copyWith(color: statusColor),
-                                      ),
-                                    ),
-                                  ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: DesignTokens.spacingXxs),
-                      Row(
-                        children: [
-                          Icon(
-                            task.direction == .push
-                                ? LucideIcons.arrowUpFromLine
-                                : LucideIcons.arrowDownToLine,
-                            size: DesignTokens.componentIconSmallSize,
-                            color: colors.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: DesignTokens.spacingXxs),
-                          Flexible(
-                            child: Text(
-                              direction,
-                              style: theme.textTheme.bodySmall,
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (progressVisible) ...[
-                        const SizedBox(height: DesignTokens.spacingXs),
-                        TransferProgress(value: progress),
-                      ],
-                      if (amount.isNotEmpty ||
-                          issue ||
-                          ended != null ||
-                          task.status == .conflict) ...[
-                        const SizedBox(height: DesignTokens.spacingXxs),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                task.status == .conflict
-                                    ? (task.direction == .push
-                                          ? '手机中已有同名文件'
-                                          : '本机已有同名文件')
-                                    : issue
-                                    ? transferStatusDescription(task)
-                                    : amount,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: issue ? statusColor : null,
-                                ),
-                              ),
-                            ),
-                            if (ended != null) ...[
-                              const SizedBox(width: DesignTokens.spacingXs),
-                              Flexible(
-                                child: Text(
-                                  '${ended.month}/${ended.day} ${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(ended), alwaysUse24HourFormat: true)}',
-                                  textAlign: TextAlign.end,
-                                  style: theme.textTheme.bodySmall,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
+      onTap: onOpen,
+      thumbnail: TransferThumbnail(task: task, group: group),
+      title: task.name,
+      direction: '${task.direction == .push ? '发送' : '取回'} · $direction',
+      status: showPercent
+          ? TransferPercent(progress)
+          : StatusTag(stage, tone: tone),
+      showProgress: progressVisible,
+      progress: progress,
+      detail: task.status == .conflict
+          ? (task.direction == .push ? '手机中已有同名文件' : '本机已有同名文件')
+          : issue
+          ? transferStatusDescription(task)
+          : amount,
+      detailIssue: issue,
+      time: ended == null
+          ? null
+          : '${ended.month}/${ended.day} ${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(ended), alwaysUse24HourFormat: true)}',
+      trailing: busy.value
+          ? const SizedBox.square(
+              dimension: DesignTokens.componentBarButtonSize,
+              child: ContentLoadingIndicator(
+                size: DesignTokens.componentChevronSize,
+              ),
+            )
+          : GlassMenuButton(
+              icon: const Icon(AppIcons.more),
+              tooltip: '传输操作',
+              actions: [
+                GlassMenuAction(
+                  label: '查看详情',
+                  icon: const Icon(LucideIcons.info),
+                  onPressed: onOpen,
                 ),
-                if (busy.value)
-                  const SizedBox(
-                    width: DesignTokens.componentIconButtonSize,
-                    height: DesignTokens.componentIconButtonSize,
-                    child: ContentLoadingIndicator(
-                      size: DesignTokens.componentIconSmallSize,
-                    ),
-                  )
-                else
-                  GlassMenuButton(
-                    icon: const Icon(AppIcons.more),
-                    tooltip: '传输操作',
-                    actions: [
-                      GlassMenuAction(
-                        label: '查看详情',
-                        icon: const Icon(LucideIcons.info),
-                        onPressed: onOpen,
-                      ),
-                      GlassMenuAction(
-                        label: active ? '停止并移除…' : '移除记录',
-                        icon: const Icon(AppIcons.delete),
-                        destructive: true,
-                        onPressed: remove,
-                      ),
-                    ],
-                  ),
+                GlassMenuAction(
+                  label: active ? '停止并移除…' : '移除记录',
+                  icon: const Icon(AppIcons.delete),
+                  destructive: true,
+                  onPressed: remove,
+                ),
               ],
             ),
-          ),
-        ),
-      ),
     );
   }
 }

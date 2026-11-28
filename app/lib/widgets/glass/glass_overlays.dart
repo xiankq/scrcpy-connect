@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 
 /// 玻璃操作组中的图标动作；表面、命中几何、焦点和手势识别器仍由 Material 图标按钮负责。
 class GlassActionIcon extends StatelessWidget {
@@ -30,7 +31,7 @@ class GlassActionIcon extends StatelessWidget {
       icon: icon,
       onPressed: onPressed,
       iconSize: iconSize,
-      color: color ?? Theme.of(context).colorScheme.onSurface,
+      color: color ?? AppColors.of(context).text,
       padding: padding,
       constraints: constraints,
       style: style,

@@ -1,8 +1,10 @@
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
 import 'package:scrcpy_connect/widgets/choice_row.dart';
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/overlays.dart';
 
 Future<T?> showChoicePicker<T>({
@@ -39,59 +41,61 @@ Future<T?> showChoicePicker<T>({
       ),
     );
   }).toList();
-  Widget content(BuildContext context) => SafeArea(
-    top: false,
-    child: ListView(
-      shrinkWrap: true,
-      padding: const EdgeInsetsDirectional.fromSTEB(
-        DesignTokens.componentPickerPadding,
-        DesignTokens.spacingXs,
-        DesignTokens.componentPickerPadding,
-        DesignTokens.spacingSm,
+  // 单选弹层：标题栏 + 一张分组卡片，当前项行尾为 primary 对勾（Ardot 37:1361 / 37:1398）。
+  Widget content(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SheetHeader(
+            title: title,
+            trailing: TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+          ),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                DesignTokens.componentSheetPadding,
+                DesignTokens.spacingSm,
+                DesignTokens.componentSheetPadding,
+                centered ? DesignTokens.spacingLg : _sheetBottomPadding,
+              ),
+              child: SettingsGroup(
+                separatorIndent: DesignTokens.componentListRowPadding,
+                children: rows,
+              ),
+            ),
+          ),
+        ],
       ),
-      children: [
-        Padding(
-          padding: const EdgeInsetsDirectional.only(
-            start: DesignTokens.spacingMd,
-            end: DesignTokens.spacingXxs,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('取消'),
-              ),
-            ],
-          ),
-        ),
-        ...rows,
-      ],
-    ),
-  );
+    );
+  }
 
   return centered
       ? showAppDialog<T>(
           context: context,
           anchorPoint: position,
           builder: (context) => Dialog(
-            backgroundColor: DialogTheme.of(context).backgroundColor,
+            backgroundColor: AppColors.of(context).page,
             elevation: 0,
-            constraints: const BoxConstraints.tightFor(
-              width: DesignTokens.componentPickerWidth,
+            insetPadding: const EdgeInsets.all(DesignTokens.spacingXxl),
+            constraints: const BoxConstraints(
+              maxWidth: DesignTokens.componentFormSheetWidth,
             ),
             shape: const RoundedSuperellipseBorder(
               borderRadius: BorderRadius.all(
-                Radius.circular(DesignTokens.componentPickerRounded),
+                Radius.circular(DesignTokens.componentFormSheetRounded),
               ),
             ),
             clipBehavior: Clip.antiAlias,
-            child: content(context),
+            child: Padding(
+              padding: const EdgeInsets.only(top: DesignTokens.spacingSm),
+              child: content(context),
+            ),
           ),
         )
       : showAppModalSheet<T>(
@@ -100,6 +104,9 @@ Future<T?> showChoicePicker<T>({
           builder: content,
         );
 }
+
+/// Ardot「单选弹层 / 抽屉」37:1361 下内距 40。
+const _sheetBottomPadding = DesignTokens.spacingJumbo;
 
 /// The trigger stays in its form while the selection gets a modal route.
 class ChoiceField extends StatefulWidget {
@@ -124,72 +131,75 @@ class _ChoiceFieldState extends State<ChoiceField> {
   bool _focused = false;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    child: InkWell(
-      onFocusChange: (focused) => setState(() => _focused = focused),
-      onTap: widget.onPressed == null
-          ? null
-          : () {
-              final box = context.findRenderObject()! as RenderBox;
-              widget.onPressed!(
-                box.localToGlobal(box.size.center(Offset.zero)),
-              );
-            },
-      borderRadius: BorderRadius.circular(
-        DesignTokens.componentSelectionFieldRounded,
-      ),
-      child: InputDecorator(
-        isFocused: _focused,
-        decoration: InputDecoration(
-          labelText: widget.label,
-          errorText: widget.errorText,
-          enabled: widget.onPressed != null,
-          constraints: const BoxConstraints(
-            minHeight: DesignTokens.componentSelectionFieldHeight,
-          ),
-          contentPadding: const EdgeInsetsDirectional.fromSTEB(
-            DesignTokens.componentSelectionFieldPadding,
-            DesignTokens.componentSelectionFieldVerticalPadding,
-            DesignTokens.spacingXs,
-            DesignTokens.componentSelectionFieldVerticalPadding,
-          ),
-          border: const OutlineInputBorder(
-            borderRadius: BorderRadius.all(
-              Radius.circular(DesignTokens.componentSelectionFieldRounded),
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    final type = AppTypography.of(context);
+    const radius = BorderRadius.all(
+      Radius.circular(DesignTokens.componentInputRounded),
+    );
+    final enabled = widget.onPressed != null;
+    return Semantics(
+      button: true,
+      child: InkWell(
+        onFocusChange: (focused) => setState(() => _focused = focused),
+        onTap: widget.onPressed == null
+            ? null
+            : () {
+                final box = context.findRenderObject()! as RenderBox;
+                widget.onPressed!(
+                  box.localToGlobal(box.size.center(Offset.zero)),
+                );
+              },
+        borderRadius: radius,
+        child: InputDecorator(
+          isFocused: _focused,
+          decoration: InputDecoration(
+            labelText: widget.label,
+            errorText: widget.errorText,
+            enabled: enabled,
+            filled: true,
+            fillColor: colors.inset,
+            constraints: const BoxConstraints(
+              minHeight: DesignTokens.componentInputHeight,
             ),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: const BorderRadius.all(
-              Radius.circular(DesignTokens.componentSelectionFieldRounded),
+            contentPadding: const EdgeInsetsDirectional.fromSTEB(
+              DesignTokens.componentInputPadding,
+              DesignTokens.spacingMd,
+              DesignTokens.spacingXs,
+              DesignTokens.spacingMd,
             ),
-            borderSide: BorderSide(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? DesignTokens.componentControlFocusDarkBorderColor
-                  : DesignTokens.componentControlFocusBorderColor,
-              width: DesignTokens.componentControlFocusSize,
+            border: const OutlineInputBorder(
+              borderRadius: radius,
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: radius,
+              borderSide: BorderSide(
+                color: colors.primary,
+                width: DesignTokens.componentControlFocusSize,
+              ),
+            ),
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: DesignTokens.componentBarButtonSize,
+              minHeight: DesignTokens.componentBarButtonSize,
+            ),
+            suffixIcon: Icon(
+              LucideIcons.chevronDown,
+              size: DesignTokens.componentChevronSize,
+              color: enabled ? colors.textSecondary : colors.disabled,
             ),
           ),
-          suffixIconConstraints: const BoxConstraints(
-            minWidth: 28,
-            minHeight: DesignTokens.componentIconButtonSize,
-          ),
-          suffixIcon: const Icon(
-            LucideIcons.chevronDown,
-            size: DesignTokens.componentIconSmallSize,
+          isEmpty: false,
+          child: Text(
+            widget.value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: type.body.copyWith(
+              color: enabled ? colors.text : colors.disabled,
+            ),
           ),
         ),
-        isEmpty: false,
-        child: Text(
-          widget.value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: widget.label == null
-              ? Theme.of(context).textTheme.labelLarge
-              : null,
-        ),
       ),
-    ),
-  );
+    );
+  }
 }

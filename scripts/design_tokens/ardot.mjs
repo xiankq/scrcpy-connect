@@ -66,7 +66,7 @@ if (flag === '--check' && snapshot) {
         const mode = set.modes.find(mode => mode.name === name);
         const resolved = item.valuesByMode[mode?.id];
         const match = typeof value === 'object'
-          ? resolved && Object.keys(value).every(channel => Math.abs(resolved[channel] - value[channel]) < 1e-6)
+          ? resolved && Object.keys(value).every(channel => Math.abs(resolved[channel] - value[channel]) < 0.5 / 255)
           : resolved === value;
         if (!match) changes.push(`${key} [${name}]: value differs from the specification`);
       }

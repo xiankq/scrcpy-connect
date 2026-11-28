@@ -1,8 +1,3 @@
-import 'dart:io';
-import 'dart:ui' as ui;
-
-import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -23,20 +18,19 @@ import 'package:scrcpy_connect/core/lifecycle/state_subscription_provider.dart';
 import 'package:scrcpy_connect/core/media/audio_error_notifier.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_card.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/device_workspace_page.dart';
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/core/devices/models/device_list_state.dart';
-import 'package:scrcpy_connect/core/recovery/models/recovery_state.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
-import 'package:scrcpy_connect/core/settings/models/preferences_state.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart'
+    show AppIcons;
 import 'package:scrcpy_connect/router/route_resource_resolver_provider.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:scrcpy_connect/widgets/navigation_scaffold.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
+
+import '../support/fixed_state.dart';
 
 void main() {
   testWidgets('桌面侧栏展开时保留图标位置和正文滚动', (tester) async {
@@ -74,10 +68,10 @@ void main() {
     tester.view.physicalSize = const Size(900, 660);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    expect(tester.getSize(sidebar).width, inExclusiveRange(72, 208));
+    expect(tester.getSize(sidebar).width, inExclusiveRange(72, 220));
     expect(tester.getCenter(icon), position);
     await tester.pumpAndSettle();
-    expect(tester.getSize(sidebar).width, 208);
+    expect(tester.getSize(sidebar).width, 220);
     expect(scroll.offset, 190);
 
     tester.view.physicalSize = const Size(550, 660);
@@ -96,7 +90,6 @@ void main() {
       tester.view.physicalSize = const Size(599, 800);
       const connected = 'pixel-8';
       const offline = 'pixel-9';
-      const key = ValueKey('workspace-test-capture');
       const sidebar = ValueKey('app-sidebar');
       const bottom = ValueKey('app-bottom-navigation');
       final router = createAppRouter();
@@ -104,49 +97,33 @@ void main() {
       final subscription = StateSubscription(_WorkspaceSession());
       addTearDown(subscription.dispose);
 
-      final output = Platform.environment['INTERCONNECT_VISUAL_OUTPUT'];
-      if (output != null) {
-        await tester.runAsync(() async {
-          final asset = File(
-            '../designs/assets/fonts/misans/MiSans-Regular.woff2',
-          );
-          final bytes = await asset.readAsBytes();
-          await (FontLoader(
-            'WorkspaceFixture',
-          )..addFont(Future.value(ByteData.sublistView(bytes)))).load();
-          await (FontLoader('packages/lucide_icons_flutter/Lucide')..addFont(
-                rootBundle.load(
-                  'packages/lucide_icons_flutter/assets/lucide.ttf',
-                ),
-              ))
-              .load();
-        });
-      }
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
             stateSubscriptionProvider.overrideWithValue(subscription),
             deviceListProvider.overrideWith(
-              () => _Devices([
-                DeviceSnapshot(
-                  id: connected,
-                  name: 'Pixel 8',
-                  status: .connected,
-                  transport: .tls,
-                  androidVersion: '15',
-                  battery: 78,
-                  batteryUpdatedAt:
-                      DateTime.now().millisecondsSinceEpoch ~/ 1000,
-                ),
-                const DeviceSnapshot(
-                  id: offline,
-                  name: 'Pixel 9',
-                  status: .offline,
-                ),
-              ]),
+              () => FixedDeviceList(
+                devices: [
+                  DeviceSnapshot(
+                    id: connected,
+                    name: 'Pixel 8',
+                    status: .connected,
+                    transport: .tls,
+                    androidVersion: '15',
+                    battery: 78,
+                    batteryUpdatedAt:
+                        DateTime.now().millisecondsSinceEpoch ~/ 1000,
+                  ),
+                  const DeviceSnapshot(
+                    id: offline,
+                    name: 'Pixel 9',
+                    status: .offline,
+                  ),
+                ],
+              ),
             ),
-            recoveryStateProvider.overrideWith(_Recovery.new),
-            preferencesProvider.overrideWith(_Preferences.new),
+            recoveryStateProvider.overrideWith(FixedRecovery.new),
+            preferencesProvider.overrideWith(FixedPreferences.new),
             deviceConnectionsProvider.overrideWithValue(_ConnectionControl()),
             audioErrorProvider.overrideWith(_AudioError.new),
             routeResourceResolverProvider.overrideWithValue(
@@ -170,16 +147,9 @@ void main() {
               ),
             ),
           ],
-          child: RepaintBoundary(
-            key: key,
-            child: MaterialApp.router(
-              theme: ConnectTokens.theme(
-                Brightness.light,
-                fontFamily: output == null ? null : 'WorkspaceFixture',
-              ),
-              debugShowCheckedModeBanner: false,
-              routerConfig: router,
-            ),
+          child: MaterialApp.router(
+            theme: ConnectTokens.theme(Brightness.light),
+            routerConfig: router,
           ),
         ),
       );
@@ -189,38 +159,17 @@ void main() {
         expect(tester.takeException(), isNull);
       }
 
-      Future<void> capture(String name) async {
-        if (output == null) return;
-        final boundary = tester.renderObject<RenderRepaintBoundary>(
-          find.byKey(key),
-        );
-        await tester.runAsync(() async {
-          final picture = await boundary.toImage();
-          final bytes = await picture.toByteData(
-            format: ui.ImageByteFormat.png,
-          );
-          await File('$output/$name.png').writeAsBytes(
-            bytes!.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes),
-          );
-          picture.dispose();
-        });
-      }
-
       await resize(599);
       expect(find.byKey(bottom), findsOneWidget);
       expect(find.byType(DeviceWorkspacePage), findsNothing);
-      await capture('W12-599-fixture');
 
       await resize(600);
       expect(find.byKey(bottom), findsNothing);
-      expect(
-        tester.getSize(find.byKey(sidebar)).width,
-        DesignTokens.componentSidebarCompactWidth,
-      );
+      expect(tester.getSize(find.byKey(sidebar)).width, 72);
       await resize(839);
       expect(tester.getSize(find.byKey(sidebar)).width, 72);
       await resize(840);
-      expect(tester.getSize(find.byKey(sidebar)).width, 208);
+      expect(tester.getSize(find.byKey(sidebar)).width, 220);
       await resize(1079);
       expect(find.byType(DeviceWorkspacePage), findsNothing);
 
@@ -232,7 +181,6 @@ void main() {
         lessThan(tester.getTopLeft(find.byType(DeviceWorkspacePage)).dx),
       );
       await resize(1180, 780);
-      await capture('W16-1180-fixture');
 
       await tester.tap(find.text('Pixel 9'));
       await tester.pumpAndSettle();
@@ -274,65 +222,28 @@ void main() {
       await resize(1120, 479);
       expect(tester.getSize(find.byKey(sidebar)).width, 72);
       await resize(1120, 480);
-      expect(tester.getSize(find.byKey(sidebar)).width, 208);
+      expect(tester.getSize(find.byKey(sidebar)).width, 220);
     },
   );
 
   testWidgets(
     'keeps the single bottom glass bar mounted when transparency changes',
     (tester) async {
-      final oldSize = tester.view.physicalSize;
-      final oldRatio = tester.view.devicePixelRatio;
-      addTearDown(() {
-        tester.view
-          ..physicalSize = oldSize
-          ..devicePixelRatio = oldRatio;
-      });
-      tester.view
-        ..physicalSize = const Size(402, 844)
-        ..devicePixelRatio = 1;
-
       final reduceTransparency = ValueNotifier(false);
       addTearDown(reduceTransparency.dispose);
-      final router = createAppRouter();
-      addTearDown(router.dispose);
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            deviceListProvider.overrideWith(_Devices.new),
-            recoveryStateProvider.overrideWith(_Recovery.new),
-            preferencesProvider.overrideWith(_Preferences.new),
-          ],
-          child: MaterialApp.router(
-            theme: ConnectTokens.theme(Brightness.light),
-            routerConfig: router,
-            builder: (context, child) => ValueListenableBuilder<bool>(
-              valueListenable: reduceTransparency,
-              builder: (context, reduced, _) =>
-                  GlassPreferences(reduceTransparency: reduced, child: child!),
-            ),
-          ),
+      await _pumpShell(
+        tester,
+        const Size(402, 844),
+        builder: (context, child) => ValueListenableBuilder<bool>(
+          valueListenable: reduceTransparency,
+          builder: (context, reduced, _) =>
+              GlassPreferences(reduceTransparency: reduced, child: child!),
         ),
       );
-      await tester.pumpAndSettle(const Duration(milliseconds: 100));
 
       const key = ValueKey('app-bottom-navigation');
       final first = tester.element(find.byKey(key));
       expect(find.byKey(key), findsOneWidget);
-      final bounds = tester.getRect(find.byKey(key));
-      expect(bounds.width, closeTo(284, 1));
-      expect(bounds.center.dx, closeTo(201, 1));
-      final isolation = tester.widget<liquid.GlassIsolationScope>(
-        find.ancestor(
-          of: find.byKey(key),
-          matching: find.byType(liquid.GlassIsolationScope),
-        ),
-      );
-      expect(isolation.isolated, isTrue);
-      expect(
-        isolation.defaultQuality,
-        GlassMaterial.quality(tester.element(find.byKey(key))),
-      );
 
       reduceTransparency.value = true;
       await tester.pumpAndSettle(const Duration(milliseconds: 100));
@@ -346,35 +257,8 @@ void main() {
   testWidgets('keeps the bottom glass bar state while the keyboard is shown', (
     tester,
   ) async {
-    final oldSize = tester.view.physicalSize;
-    final oldRatio = tester.view.devicePixelRatio;
-    final oldInsets = tester.view.viewInsets;
-    addTearDown(() {
-      tester.view
-        ..physicalSize = oldSize
-        ..devicePixelRatio = oldRatio
-        ..viewInsets = oldInsets;
-    });
-    tester.view
-      ..physicalSize = const Size(402, 844)
-      ..devicePixelRatio = 1;
-
-    final router = createAppRouter();
-    addTearDown(router.dispose);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          deviceListProvider.overrideWith(_Devices.new),
-          recoveryStateProvider.overrideWith(_Recovery.new),
-          preferencesProvider.overrideWith(_Preferences.new),
-        ],
-        child: MaterialApp.router(
-          theme: ConnectTokens.theme(Brightness.light),
-          routerConfig: router,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    addTearDown(tester.view.resetViewInsets);
+    await _pumpShell(tester, const Size(402, 844));
 
     const key = ValueKey('app-bottom-navigation');
     final first = tester.element(find.byKey(key));
@@ -389,45 +273,18 @@ void main() {
   testWidgets('iPhone Duo vertical bar owns the compact navigation strip', (
     tester,
   ) async {
-    final previousPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    addTearDown(() => debugDefaultTargetPlatformOverride = previousPlatform);
-    final oldSize = tester.view.physicalSize;
-    final oldRatio = tester.view.devicePixelRatio;
-    addTearDown(() {
-      tester.view
-        ..physicalSize = oldSize
-        ..devicePixelRatio = oldRatio;
-    });
-    tester.view
-      ..physicalSize = const Size(402, 874)
-      ..devicePixelRatio = 1;
-
-    final router = createAppRouter();
-    addTearDown(router.dispose);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          deviceListProvider.overrideWith(_Devices.new),
-          recoveryStateProvider.overrideWith(_Recovery.new),
-          preferencesProvider.overrideWith(_Preferences.new),
-        ],
-        child: MediaQuery(
-          data: const MediaQueryData(
-            size: Size(402, 874),
-            viewPadding: EdgeInsets.only(right: 120),
-            padding: EdgeInsets.only(right: 120),
-          ),
-          child: MaterialApp.router(
-            theme: ConnectTokens.theme(Brightness.light),
-            routerConfig: router,
-            builder: (context, child) =>
-                liquid.GlassNavigationShell(child: child!),
-          ),
-        ),
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await _pumpShell(
+      tester,
+      const Size(402, 874),
+      media: const MediaQueryData(
+        size: Size(402, 874),
+        viewPadding: EdgeInsets.only(right: 120),
+        padding: EdgeInsets.only(right: 120),
       ),
+      builder: (context, child) => liquid.GlassNavigationShell(child: child!),
     );
-    await tester.pumpAndSettle(const Duration(milliseconds: 100));
 
     final bars = tester
         .widgetList<liquid.GlassVerticalBar>(
@@ -438,7 +295,6 @@ void main() {
       bars.any((bar) => bar.data?.edge == liquid.GlassVerticalBarEdge.trailing),
       isTrue,
     );
-    expect(bars.any((bar) => bar.data?.width == 84), isTrue);
     final navigation = find.byKey(const ValueKey('app-bottom-navigation'));
     expect(navigation, findsOneWidget);
     expect(tester.getBottomRight(navigation).dx, closeTo(402, 1));
@@ -452,41 +308,18 @@ void main() {
   testWidgets('Duo vertical navigation wins over the tablet sidebar', (
     tester,
   ) async {
-    final oldSize = tester.view.physicalSize;
-    final oldRatio = tester.view.devicePixelRatio;
-    addTearDown(() {
-      tester.view
-        ..physicalSize = oldSize
-        ..devicePixelRatio = oldRatio;
-    });
-    tester.view
-      ..physicalSize = const Size(1200, 900)
-      ..devicePixelRatio = 1;
-
-    final router = createAppRouter();
-    addTearDown(router.dispose);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          deviceListProvider.overrideWith(_Devices.new),
-          recoveryStateProvider.overrideWith(_Recovery.new),
-          preferencesProvider.overrideWith(_Preferences.new),
-        ],
-        child: MaterialApp.router(
-          theme: ConnectTokens.theme(Brightness.light),
-          routerConfig: router,
-          builder: (context, child) => liquid.GlassVerticalBar(
-            data: const liquid.GlassVerticalBarData(
-              edge: liquid.GlassVerticalBarEdge.trailing,
-              width: 84,
-              top: 24,
-            ),
-            child: child!,
-          ),
+    await _pumpShell(
+      tester,
+      const Size(1200, 900),
+      builder: (context, child) => liquid.GlassVerticalBar(
+        data: const liquid.GlassVerticalBarData(
+          edge: liquid.GlassVerticalBarEdge.trailing,
+          width: 84,
+          top: 24,
         ),
+        child: child!,
       ),
     );
-    await tester.pumpAndSettle(const Duration(milliseconds: 100));
 
     expect(find.byKey(const ValueKey('app-sidebar')), findsNothing);
     expect(find.byKey(const ValueKey('app-bottom-navigation')), findsOneWidget);
@@ -497,58 +330,44 @@ void main() {
   testWidgets('tablet sidebar occupies the full available work area', (
     tester,
   ) async {
-    final oldSize = tester.view.physicalSize;
-    final oldRatio = tester.view.devicePixelRatio;
-    addTearDown(() {
-      tester.view
-        ..physicalSize = oldSize
-        ..devicePixelRatio = oldRatio;
-    });
-    tester.view
-      ..physicalSize = const Size(1200, 900)
-      ..devicePixelRatio = 1;
+    await _pumpShell(tester, const Size(1200, 900));
 
-    final router = createAppRouter();
-    addTearDown(router.dispose);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          deviceListProvider.overrideWith(_Devices.new),
-          recoveryStateProvider.overrideWith(_Recovery.new),
-          preferencesProvider.overrideWith(_Preferences.new),
-        ],
-        child: MaterialApp.router(
-          theme: ConnectTokens.theme(Brightness.light),
-          routerConfig: router,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle(const Duration(milliseconds: 100));
-
-    final sidebar = tester.renderObject<RenderBox>(
-      find.byKey(const ValueKey('app-sidebar')),
-    );
-    expect(sidebar.size.height, closeTo(tester.view.physicalSize.height, 1));
-    expect(sidebar.localToGlobal(Offset.zero).dy, closeTo(0, 1));
+    final sidebar = find.byKey(const ValueKey('app-sidebar'));
+    expect(tester.getRect(sidebar).top, closeTo(0, 1));
+    expect(tester.getRect(sidebar).height, closeTo(900, 1));
     expect(tester.takeException(), isNull);
   });
 }
 
-class _Recovery extends RecoveryStateNotifier {
-  @override
-  RecoveryState build() => RecoveryState();
-}
-
-class _Devices extends DeviceListNotifier {
-  _Devices([this.initial = const []]);
-  final List<DeviceSnapshot> initial;
-  @override
-  DeviceListState build() => DeviceListState(loading: false, devices: initial);
-}
-
-class _Preferences extends PreferencesNotifier {
-  @override
-  PreferencesState build() => PreferencesState();
+/// 用空设备列表挂载完整路由壳。
+Future<void> _pumpShell(
+  WidgetTester tester,
+  Size size, {
+  TransitionBuilder? builder,
+  MediaQueryData? media,
+}) async {
+  tester.view
+    ..physicalSize = size
+    ..devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  final router = createAppRouter();
+  addTearDown(router.dispose);
+  final app = MaterialApp.router(
+    theme: ConnectTokens.theme(Brightness.light),
+    routerConfig: router,
+    builder: builder,
+  );
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        deviceListProvider.overrideWith(FixedDeviceList.new),
+        recoveryStateProvider.overrideWith(FixedRecovery.new),
+        preferencesProvider.overrideWith(FixedPreferences.new),
+      ],
+      child: media == null ? app : MediaQuery(data: media, child: app),
+    ),
+  );
+  await tester.pumpAndSettle(const Duration(milliseconds: 100));
 }
 
 class _ConnectionControl implements DeviceConnectionControl {

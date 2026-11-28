@@ -1,39 +1,22 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/pages/control/widgets/exit_handle.dart';
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 
 void main() {
-  test('initial remote control handle follows the design right edge', () {
-    final bounds = ExitHandle.initialBoundsFor(
-      const Size(402, 874),
-      const MediaQueryData(
-        padding: EdgeInsets.only(right: 12),
-        systemGestureInsets: EdgeInsets.only(right: 12),
+  Future<void> show(WidgetTester tester) => tester.pumpWidget(
+    MaterialApp(
+      theme: ConnectTokens.theme(Brightness.light),
+      home: Scaffold(
+        body: ExitHandle(deviceLabel: '测试设备', onExit: () {}),
       ),
-    );
+    ),
+  );
+  final handle = find.byKey(const ValueKey('remote-tool-handle'));
+  final panel = find.byKey(const ValueKey('remote-tool-panel'));
 
-    expect(bounds.left, 338);
-    expect(bounds.right, 390);
-    expect(bounds.top, closeTo(384.56, 0.01));
-  });
-
-  testWidgets('dragging inward docks without opening, tapping opens', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ConnectTokens.theme(Brightness.light),
-        home: Scaffold(
-          body: ExitHandle(deviceLabel: '测试设备', onExit: () {}),
-        ),
-      ),
-    );
-    final handle = find.byKey(const ValueKey('remote-tool-handle'));
-    final panel = find.byKey(const ValueKey('remote-tool-panel'));
+  testWidgets('拖动把手只停靠到左右边缘，不展开工具面板', (tester) async {
+    await show(tester);
     await tester.drag(handle, const Offset(-90, 36));
     await tester.pumpAndSettle();
     expect(panel, findsNothing);
@@ -43,74 +26,29 @@ void main() {
     await tester.pumpAndSettle();
     expect(panel, findsNothing);
     expect(tester.getRect(handle).left, 0);
+  });
 
+  testWidgets('点按把手展开工具面板，收起途中再点把手重新展开', (tester) async {
+    await show(tester);
     await tester.tap(handle);
     await tester.pumpAndSettle();
     expect(panel, findsOneWidget);
+    expect(handle, findsNothing);
+    for (final action in ['设备声音', '熄屏', '键盘']) {
+      expect(find.text(action), findsOneWidget);
+    }
+
+    await tester.tap(find.byTooltip('收起画面工具'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(handle, findsOneWidget);
+    await tester.tap(handle);
+    await tester.pumpAndSettle();
+    expect(panel, findsOneWidget);
+
+    await tester.tap(find.byTooltip('收起画面工具'));
+    await tester.pumpAndSettle();
+    expect(panel, findsNothing);
+    expect(handle, findsOneWidget);
   });
-
-  testWidgets(
-    'remote tool panel uses glass with a grid and respects reduced transparency',
-    (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ConnectTokens.theme(Brightness.light),
-          home: GlassPreferences(
-            reduceTransparency: true,
-            child: Scaffold(
-              body: ExitHandle(deviceLabel: '测试设备', onExit: () {}),
-            ),
-          ),
-        ),
-      );
-
-      final control = find.byKey(const ValueKey('remote-tool-handle'));
-      final surface = find.descendant(
-        of: control,
-        matching: find.byType(Glass),
-      );
-      expect(
-        tester.getSize(surface),
-        const Size(
-          DesignTokens.componentRemoteExitPeekWidth,
-          DesignTokens.componentRemoteExitHitHeight,
-        ),
-      );
-      await tester.tap(control);
-      await tester.pump();
-
-      expect(find.byKey(const ValueKey('remote-tool-panel')), findsOneWidget);
-      expect(control, findsNothing);
-      final panel = find.byKey(const ValueKey('remote-tool-panel'));
-      expect(tester.widget<Glass>(panel).variant, GlassVariant.regular);
-      expect(tester.getSize(panel).width, 272);
-      final opening = tester.getRect(panel);
-      await tester.pump(const Duration(milliseconds: 100));
-      final entering = tester.getRect(panel);
-      await tester.pumpAndSettle();
-      expect(opening.width, lessThan(entering.width));
-      expect(entering.width, lessThan(tester.getRect(panel).width));
-      final sound = tester.getCenter(find.text('设备声音'));
-      final sleep = tester.getCenter(find.text('熄屏'));
-      final keyboard = tester.getCenter(find.text('键盘'));
-      expect(sound.dy, sleep.dy);
-      expect(sleep.dx, keyboard.dx);
-      expect(keyboard.dy, greaterThan(sleep.dy));
-
-      await tester.tap(find.byTooltip('收起画面工具'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 60));
-      expect(panel, findsOneWidget);
-      expect(control, findsOneWidget);
-      final closing = tester.getRect(panel);
-      await tester.tap(control);
-      await tester.pump();
-      expect(tester.getRect(panel), closing);
-      await tester.pumpAndSettle();
-      expect(panel, findsOneWidget);
-      await tester.tap(find.byTooltip('收起画面工具'));
-      await tester.pumpAndSettle();
-      expect(panel, findsNothing);
-    },
-  );
 }

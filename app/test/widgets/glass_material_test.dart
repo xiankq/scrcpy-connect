@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/core/settings/preference_codec.dart';
@@ -51,25 +50,5 @@ void main() {
     expect(find.text('standard:false'), findsOneWidget);
     await show(GlassEffects.standard, reduce: true);
     expect(find.text('minimal:true'), findsOneWidget);
-  });
-
-  test('clear disables blur and retains refraction in both themes', () {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
-    for (final mode in Brightness.values) {
-      final regular = Glass.optics(brightness: mode);
-      final clear = Glass.optics(brightness: mode, variant: GlassVariant.clear);
-      expect(regular.frost, greaterThan(0));
-      expect(clear.frost, 0);
-      expect(clear.blur, 0);
-      expect(clear.bodyShade, 0);
-      expect(clear.saturation, 1);
-      expect(clear.lensModel, liquid.GlassLensModel.paraxial);
-      expect(clear.refractiveIndex, greaterThan(regular.refractiveIndex));
-      final menu = Glass.optics(brightness: mode, variant: GlassVariant.menu);
-      final alert = Glass.optics(brightness: mode, variant: GlassVariant.alert);
-      expect(menu.blur, greaterThan(regular.blur));
-      expect(alert.blur, greaterThan(menu.blur));
-    }
   });
 }

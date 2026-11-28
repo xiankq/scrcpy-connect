@@ -24,6 +24,8 @@ import 'package:scrcpy_connect/styles/system_visual_preferences.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 import 'package:scrcpy_connect/widgets/app_lifecycle_observer.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
+import 'package:scrcpy_connect/widgets/page_loader.dart';
 import 'package:scrcpy_connect/widgets/models/device_audio_view_snapshot.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
 import 'package:scrcpy_connect/widgets/window_environment_scope.dart';
@@ -87,20 +89,18 @@ class _MobileRemoteAppState extends State<MobileRemoteApp> {
         builder: (context) => PopScope(
           canPop: false,
           child: Scaffold(
-            body: Center(
-              child: _finished
-                  ? Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('原来的控制会话已不可用。'),
-                        TextButton(
-                          onPressed: () =>
-                              const PlatformWindowHost().close(widget.windowId),
-                          child: const Text('关闭'),
-                        ),
-                      ],
+            // 原会话不可用时形状停止，原位显示原因与「关闭」（design.md「空态、加载与进度」）。
+            body: PageLoader(
+              stopped: _finished,
+              message: _finished ? '原来的控制会话已不可用。' : null,
+              action: _finished
+                  ? AppButton(
+                      label: '关闭',
+                      role: AppButtonRole.secondaryOnPage,
+                      onPressed: () =>
+                          const PlatformWindowHost().close(widget.windowId),
                     )
-                  : const CircularProgressIndicator.adaptive(),
+                  : null,
             ),
           ),
         ),

@@ -21,12 +21,13 @@ class FileDeliveryPath extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final colors = AppColors.of(context);
+    final caption = AppTypography.of(context).footnote;
     final systemMuted = !staged && systemState == FileDeliveryMilestone.pending;
     final systemColor = switch (systemState) {
-      FileDeliveryMilestone.attention => theme.colorScheme.error,
-      _ when systemMuted => theme.colorScheme.onSurfaceVariant,
-      _ => theme.colorScheme.onSurface,
+      FileDeliveryMilestone.attention => colors.error,
+      _ when systemMuted => colors.textSecondary,
+      _ => colors.text,
     };
     final stageActive = !staged;
     return Semantics(
@@ -73,7 +74,7 @@ class FileDeliveryPath extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: DesignTokens.spacingXs),
+          const SizedBox(height: DesignTokens.spacingSm),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -81,15 +82,15 @@ class FileDeliveryPath extends StatelessWidget {
                 child: Text(
                   sourceLabel,
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall,
+                  style: caption,
                 ),
               ),
               Expanded(
                 child: Text(
                   '本机暂存',
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: staged ? null : theme.colorScheme.onSurfaceVariant,
+                  style: caption.copyWith(
+                    color: staged ? colors.text : colors.textSecondary,
                   ),
                 ),
               ),
@@ -97,9 +98,7 @@ class FileDeliveryPath extends StatelessWidget {
                 child: Text(
                   systemLabel,
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: systemColor,
-                  ),
+                  style: caption.copyWith(color: systemColor),
                 ),
               ),
             ],
@@ -120,29 +119,21 @@ class _MilestoneIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final colors = AppColors.of(context);
+    // 已完成用成功色，进行中用主色（进度），需核对用错误色，未开始为中性 block 底。
     final (foreground, background) = switch (state) {
-      _MilestoneVisual.complete => (
-        ConnectTokens.mint,
-        ConnectTokens.mint.withValues(alpha: 0.13),
-      ),
-      _MilestoneVisual.active => (
-        ConnectTokens.amber,
-        ConnectTokens.amber.withValues(alpha: 0.14),
-      ),
+      _MilestoneVisual.complete => (colors.success, colors.successContainer),
+      _MilestoneVisual.active => (colors.primary, colors.primaryContainer),
       _MilestoneVisual.attention => (colors.error, colors.errorContainer),
-      _MilestoneVisual.pending => (
-        colors.onSurfaceVariant,
-        colors.surfaceContainerHigh,
-      ),
+      _MilestoneVisual.pending => (colors.textSecondary, colors.block),
     };
     return Container(
-      width: DesignTokens.componentIconLargeSize,
-      height: DesignTokens.componentIconLargeSize,
+      width: DesignTokens.componentSectionButtonSize,
+      height: DesignTokens.componentSectionButtonSize,
       decoration: BoxDecoration(color: background, shape: BoxShape.circle),
       child: Icon(
         icon,
-        size: DesignTokens.componentIconSmallSize + 2,
+        size: DesignTokens.componentSectionGlyphSize,
         color: foreground,
       ),
     );
@@ -155,11 +146,12 @@ class _MilestoneConnector extends StatelessWidget {
   final bool complete;
 
   @override
-  Widget build(BuildContext context) => Container(
-    height: DesignTokens.spacingHairline,
-    margin: const EdgeInsets.symmetric(horizontal: DesignTokens.spacingXs),
-    color: complete
-        ? ConnectTokens.mint.withValues(alpha: 0.48)
-        : Theme.of(context).colorScheme.outlineVariant,
-  );
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return Container(
+      height: DesignTokens.componentSeparatorHeight,
+      margin: const EdgeInsets.symmetric(horizontal: DesignTokens.spacingXs),
+      color: complete ? colors.success : colors.separator,
+    );
+  }
 }

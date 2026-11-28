@@ -21,7 +21,9 @@ import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/core/devices/device_query_provider.dart';
 import 'package:scrcpy_connect/pages/apps/widgets/phone_app_icon.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/overlays.dart';
 
@@ -492,11 +494,8 @@ class RemoteWindowsState extends State<RemoteWindows>
     if (environment.horizontalPaneDivider != null) return null;
     final hinge = environment.verticalPaneDivider;
     if (hinge == null && !environment.isExpanded) return null;
-    final first =
-        hinge?.left ?? (environment.width - DesignTokens.spacingXs) / 2;
-    final second = hinge == null
-        ? first + DesignTokens.spacingXs
-        : hinge.left + hinge.width;
+    final first = hinge?.left ?? (environment.width - _paneGap) / 2;
+    final second = hinge == null ? first + _paneGap : hinge.left + hinge.width;
     if (first - environment.insets.left < 360 ||
         environment.width - second - environment.insets.right < 360) {
       return null;
@@ -725,11 +724,9 @@ Future<Object?> _chooseRemoteWindow(
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            const horizontal = DesignTokens.spacingMd;
+            const horizontal = DesignTokens.componentSheetPadding;
             final width = constraints.maxWidth - horizontal * 2;
-            final columns = (width / DesignTokens.componentAppCellWidth)
-                .floor()
-                .clamp(1, 6);
+            final columns = (width / _appCellWidth).floor().clamp(1, 6);
             return ListView(
               shrinkWrap: true,
               padding: const EdgeInsetsDirectional.fromSTEB(
@@ -739,29 +736,37 @@ Future<Object?> _chooseRemoteWindow(
                 horizontal,
               ),
               children: [
-                Text('远控窗口', style: Theme.of(context).textTheme.titleLarge),
+                Semantics(
+                  header: true,
+                  child: Text('远控窗口', style: AppTypography.of(context).title3),
+                ),
                 if (workbench != null)
                   Align(
                     alignment: AlignmentDirectional.centerStart,
-                    child: TextButton.icon(
-                      icon: const Icon(LucideIcons.layoutDashboard),
-                      label: const Text('返回工作台'),
+                    child: AppButton(
+                      role: AppButtonRole.text,
+                      size: AppButtonSize.section,
+                      icon: LucideIcons.layoutDashboard,
+                      label: '返回工作台',
                       onPressed: () => Navigator.pop(context, workbench),
                     ),
                   ),
                 if (showSingle)
                   Align(
                     alignment: AlignmentDirectional.centerStart,
-                    child: TextButton.icon(
-                      icon: const Icon(LucideIcons.square),
-                      label: const Text('仅显示当前画面'),
+                    child: AppButton(
+                      role: AppButtonRole.text,
+                      size: AppButtonSize.section,
+                      icon: LucideIcons.square,
+                      label: '仅显示当前画面',
                       onPressed: () => Navigator.pop(context, false),
                     ),
                   ),
                 for (final group in groups.values) ...[
                   Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: DesignTokens.spacingSm,
+                    padding: const EdgeInsets.only(
+                      top: DesignTokens.spacingLg,
+                      bottom: DesignTokens.spacingSm,
                     ),
                     child: Text(
                       group
@@ -769,11 +774,12 @@ Future<Object?> _chooseRemoteWindow(
                               .nonNulls
                               .firstOrNull ??
                           '正在读取设备',
-                      style: Theme.of(context).textTheme.titleSmall,
+                      style: AppTypography.of(context).headline
+                          .copyWith(color: AppColors.of(context).textSecondary),
                     ),
                   ),
                   Wrap(
-                    runSpacing: DesignTokens.spacingXs,
+                    runSpacing: DesignTokens.spacingSm,
                     children: [
                       for (final entry in [
                         ...group.where(
@@ -826,7 +832,7 @@ class _RemoteWindowTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
+    final colors = AppColors.of(context);
     final package = target.packageName;
     final label =
         appName ??
@@ -851,11 +857,13 @@ class _RemoteWindowTile extends ConsumerWidget {
             message: label,
             child: Material(
               color: selected
-                  ? theme.colorScheme.secondaryContainer
-                  : DesignTokens.colorTransparent,
-              borderRadius: radius,
+                  ? colors.primaryContainer
+                  : colors.page.withAlpha(0),
+              shape: const RoundedSuperellipseBorder(borderRadius: radius),
+              clipBehavior: Clip.antiAlias,
               child: InkWell(
-                borderRadius: radius,
+                splashColor: colors.page.withAlpha(0),
+                highlightColor: colors.pressed,
                 onTap: onOpen,
                 child: Padding(
                   padding: const EdgeInsets.all(DesignTokens.spacingXs),
@@ -870,9 +878,12 @@ class _RemoteWindowTile extends ConsumerWidget {
                           ),
                         )
                       else
-                        const SizedBox(
-                          height: DesignTokens.componentAppIconSize,
-                          child: Icon(LucideIcons.smartphone),
+                        SizedBox(
+                          height: _appIconSize,
+                          child: Icon(
+                            AppIcons.navigationDevices,
+                            color: colors.textSecondary,
+                          ),
                         ),
                       const SizedBox(height: DesignTokens.spacingXs),
                       Text(
@@ -880,7 +891,11 @@ class _RemoteWindowTile extends ConsumerWidget {
                         textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelMedium,
+                        style: AppTypography.of(context).caption.copyWith(
+                          color: selected
+                              ? colors.onPrimaryContainer
+                              : colors.text,
+                        ),
                       ),
                     ],
                   ),
@@ -890,10 +905,12 @@ class _RemoteWindowTile extends ConsumerWidget {
           ),
         ),
         if (onPair != null)
-          IconButton(
+          SolidIconButton(
+            compact: true,
+            onPage: true,
             tooltip: '与当前画面并排',
             onPressed: onPair,
-            icon: const Icon(LucideIcons.columns2),
+            icon: LucideIcons.columns2,
           ),
       ],
     );
@@ -940,3 +957,10 @@ class RemoteWindowScope extends InheritedWidget {
       focused != oldWidget.focused ||
       request != oldWidget.request;
 }
+
+/// 并排窗口之间的间隙（无铰链时）。
+const _paneGap = DesignTokens.spacingSm;
+
+/// 窗口选择宫格的单元宽与应用图标高（Ardot 常用应用宫格：图标 52、单元约 78）。
+const _appCellWidth = 78.0;
+const _appIconSize = DesignTokens.componentDeviceTileSize;

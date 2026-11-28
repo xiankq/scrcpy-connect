@@ -4,6 +4,8 @@ import 'package:scrcpy_connect/router/mobile_remote_capabilities.dart';
 import 'package:scrcpy_connect/router/remote_windows.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -24,17 +26,23 @@ class RouteErrorPage extends StatelessWidget {
           message: message,
           action: Column(
             mainAxisSize: MainAxisSize.min,
+            spacing: DesignTokens.spacingSm,
             children: [
-              if (onRetry != null)
-                OutlinedButton(onPressed: onRetry, child: const Text('重新读取')),
-              FilledButton(
+              AppButton(
+                role: AppButtonRole.primary,
                 onPressed: mobile != null
                     ? () => mobile.close()
                     : pane == null
                     ? () => const DevicesRoute().go(context)
                     : () => RemoteWindows.maybeOf(context)?.remove(pane),
-                child: Text(pane == null && mobile == null ? '返回设备列表' : '关闭窗口'),
+                label: pane == null && mobile == null ? '返回设备列表' : '关闭窗口',
               ),
+              if (onRetry != null)
+                AppButton(
+                  role: AppButtonRole.secondaryOnPage,
+                  onPressed: onRetry,
+                  label: '重新读取',
+                ),
             ],
           ),
         ),

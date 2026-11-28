@@ -15,7 +15,10 @@ import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/form_controls.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_preferences.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
+import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:scrcpy_connect/widgets/system_notifications.dart';
 
@@ -126,7 +129,7 @@ class SettingsPage extends HookConsumerWidget {
     final alertStatus = alerts.status;
     final appearance = ConnectSegmentedControl<Appearance>(
       options: const [
-        (Appearance.system, '系统'),
+        (Appearance.system, '跟随系统'),
         (Appearance.light, '浅色'),
         (Appearance.dark, '深色'),
       ],
@@ -153,88 +156,55 @@ class SettingsPage extends HookConsumerWidget {
     }
 
     void openBackground() => const BackgroundRoute().push<void>(context);
-    Widget heading(String label) => Padding(
-      padding: const EdgeInsetsDirectional.fromSTEB(
-        DesignTokens.spacingXs,
-        DesignTokens.spacingSm,
-        0,
-        DesignTokens.spacingXs,
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.titleSmall,
-        semanticsLabel: label,
-      ),
-    );
     return PageFrame(
       root: embedded,
       title: '设置',
       child: GroupedListView(
         padding: const EdgeInsets.fromLTRB(
-          DesignTokens.spacingMd,
+          DesignTokens.componentPagePadding,
           0,
-          DesignTokens.spacingMd,
-          DesignTokens.spacingLg,
+          DesignTokens.componentPagePadding,
+          DesignTokens.componentPagePadding,
         ),
         children: [
           if (preferences.error case final error?) StateNote(error),
-          heading('使用偏好'),
+          const SectionTitle('使用偏好', first: true),
           SettingsGroup(
             children: [
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final room =
-                      constraints.maxWidth /
-                      MediaQuery.textScalerOf(context).scale(1);
-                  return room >= 300
-                      ? SettingsRow(
-                          compact: true,
-                          icon: LucideIcons.sun,
-                          color: DesignTokens.colorListIconAmber,
-                          title: '外观',
-                          trailing: SizedBox(
-                            width:
-                                DesignTokens.componentAppearanceSelectorWidth,
-                            child: appearance,
-                          ),
-                        )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const SettingsRow(
-                              compact: true,
-                              icon: LucideIcons.sun,
-                              color: DesignTokens.colorListIconAmber,
-                              title: '外观',
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(
-                                DesignTokens.spacingMd,
-                                0,
-                                DesignTokens.spacingMd,
-                                DesignTokens.spacingXs,
-                              ),
-                              child: appearance,
-                            ),
-                          ],
-                        );
-                },
+              // 外观：行下方放分段控件，起点与标题对齐（Ardot S1 设置 2:1975）。
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SettingsRow(
+                    icon: LucideIcons.sun,
+                    color: FunctionTone.display,
+                    title: '外观',
+                  ),
+                  Padding(
+                    padding: const EdgeInsetsDirectional.fromSTEB(
+                      tileRowSeparatorIndent,
+                      0,
+                      DesignTokens.componentListRowPadding,
+                      DesignTokens.spacingMd,
+                    ),
+                    child: appearance,
+                  ),
+                ],
               ),
               SettingsRow(
-                compact: true,
-                icon: LucideIcons.layers,
-                color: DesignTokens.colorListIconBlue,
+                icon: LucideIcons.droplet,
+                color: FunctionTone.display,
                 title: '液态玻璃',
                 value: _glassEffectsLabel(settings.glassEffects),
                 onTap: enabled ? chooseGlassEffects : null,
               ),
               SettingsRow(
-                compact: true,
-                icon: LucideIcons.appWindow,
-                color: DesignTokens.colorListIconMint,
+                icon: LucideIcons.coffee,
                 title: '后台保持',
+                enabled: status?.supported != false,
+                value: status?.supported == false ? '不支持' : null,
                 trailing: status?.supported == false
-                    ? Text('不支持', style: Theme.of(context).textTheme.bodySmall)
+                    ? null
                     : ConnectSwitch(
                         value: settings.backgroundKeepAlive,
                         onChanged:
@@ -247,9 +217,8 @@ class SettingsPage extends HookConsumerWidget {
                       ),
               ),
               SettingsRow(
-                compact: true,
                 icon: LucideIcons.bell,
-                color: DesignTokens.colorListIconCoral,
+                color: FunctionTone.notification,
                 title: '通知提醒',
                 trailing: ConnectSwitch(
                   value: settings.notificationAlerts,
@@ -261,9 +230,8 @@ class SettingsPage extends HookConsumerWidget {
                 ),
               ),
               SettingsRow(
-                compact: true,
                 icon: LucideIcons.phone,
-                color: DesignTokens.colorListIconCoral,
+                color: FunctionTone.connection,
                 title: '来电提醒',
                 trailing: ConnectSwitch(
                   value: settings.callAlerts,
@@ -274,49 +242,40 @@ class SettingsPage extends HookConsumerWidget {
                 ),
               ),
               SettingsRow(
-                compact: true,
                 icon: LucideIcons.shieldCheck,
-                color: DesignTokens.colorListIconMint,
                 title: '后台运行',
                 onTap: openBackground,
               ),
             ],
           ),
-          heading('本机数据'),
+          const SectionTitle('本机数据'),
           SettingsGroup(
             children: [
               SettingsRow(
-                compact: true,
                 icon: LucideIcons.hardDrive,
-                color: DesignTokens.colorListIconSlate,
+                color: FunctionTone.media,
                 title: '媒体暂存',
                 onTap: () => const MediaCacheRoute().push<void>(context),
               ),
               SettingsRow(
-                compact: true,
-                icon: LucideIcons.archiveRestore,
-                color: DesignTokens.colorListIconPurple,
+                icon: LucideIcons.archive,
+                color: FunctionTone.archive,
                 title: '设备记录与恢复',
                 onTap: () => const DataPreferencesRoute().push<void>(context),
               ),
               SettingsRow(
-                compact: true,
                 icon: LucideIcons.keyRound,
-                color: DesignTokens.colorListIconMint,
+                color: FunctionTone.connection,
                 title: '授权密钥',
                 onTap: () => const AdbIdentityRoute().push<void>(context),
               ),
               SettingsRow(
-                compact: true,
-                icon: LucideIcons.fileText,
-                color: DesignTokens.colorListIconUtility,
+                icon: LucideIcons.scrollText,
                 title: '运行日志',
                 onTap: () => const RuntimeLogsRoute().push<void>(context),
               ),
               SettingsRow(
-                compact: true,
-                icon: LucideIcons.circleHelp,
-                color: DesignTokens.colorListIconUtility,
+                icon: LucideIcons.info,
                 title: '关于与更新',
                 value: info.data?.version,
                 onTap: () => const AppUpdatesRoute().push<void>(context),

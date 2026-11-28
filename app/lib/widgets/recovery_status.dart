@@ -12,9 +12,9 @@ class RecoveryStatus extends ConsumerStatefulWidget {
   const RecoveryStatus({
     super.key,
     this.padding = const EdgeInsets.fromLTRB(
-      DesignTokens.spacingMd,
+      DesignTokens.spacingLg,
       DesignTokens.spacingSm,
-      DesignTokens.spacingMd,
+      DesignTokens.spacingLg,
       0,
     ),
   });
@@ -52,12 +52,13 @@ class _RecoveryStatusState extends ConsumerState<RecoveryStatus> {
       padding: widget.padding,
       child: ContentPanel(
         padding: const EdgeInsets.symmetric(
-          horizontal: DesignTokens.spacingMd,
-          vertical: DesignTokens.spacingXs,
+          horizontal: DesignTokens.componentCardPadding,
+          vertical: DesignTokens.spacingMd,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: DesignTokens.spacingSm,
           children: [
             Flexible(
               child: SingleChildScrollView(
@@ -72,7 +73,7 @@ class _RecoveryStatusState extends ConsumerState<RecoveryStatus> {
                 onPressed: _retrying ? null : _retry,
                 icon: const Icon(
                   AppIcons.refresh,
-                  size: DesignTokens.componentIconActionSize,
+                  size: DesignTokens.componentSectionGlyphSize,
                 ),
                 label: const Text('重新检查'),
               ),

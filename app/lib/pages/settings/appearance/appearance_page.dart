@@ -1,10 +1,10 @@
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/settings/settings_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/settings/models/preferences.dart';
 import 'package:scrcpy_connect/core/settings/preferences_notifier.dart';
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/choice_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
@@ -35,28 +35,18 @@ class AppearancePage extends HookConsumerWidget {
     return PageFrame(
       title: '外观',
       child: GroupedListView(
-        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+        padding: const EdgeInsets.all(DesignTokens.componentPagePadding),
         children: [
           SettingsGroup(
             children: [
               for (final option in const [
-                (
-                  Appearance.light,
-                  '浅色',
-                  LucideIcons.sun,
-                  DesignTokens.colorListIconAmber,
-                ),
-                (
-                  Appearance.dark,
-                  '深色',
-                  LucideIcons.moon,
-                  DesignTokens.colorListIconPurple,
-                ),
+                (Appearance.light, '浅色', LucideIcons.sun, FunctionTone.display),
+                (Appearance.dark, '深色', LucideIcons.moon, FunctionTone.display),
                 (
                   Appearance.system,
                   '跟随系统',
                   LucideIcons.monitor,
-                  DesignTokens.colorListIconSlate,
+                  FunctionTone.display,
                 ),
               ])
                 ChoiceRow<Appearance>(

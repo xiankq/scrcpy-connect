@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/core/control/app_launch_journal.dart';
 import 'package:scrcpy_connect/core/control/capture_resources.dart';
+import 'package:scrcpy_connect/core/control/media_capture.dart';
 import 'package:scrcpy_connect/core/devices/device_record_storage.dart';
 import 'package:scrcpy_connect/core/devices/device_metadata_transfer.dart';
 import 'package:scrcpy_connect/core/devices/device_connection.dart';
@@ -50,95 +51,43 @@ void main() {
     expect((await launches.unresolved()).single.operationId, operation);
   });
 
-  test('取得媒体适配与唤醒投影不创建会话、音频或唤醒执行者', () async {
-    final resources = await _resources();
-    final capture = resources.capture;
-    final wake = capture.readWake('device');
-    expect(wake.deviceId, 'device');
-    expect(wake.keepActive, isFalse);
-    expect(wake.keepActiveLeaseActive, isFalse);
-    await resources.close();
-    expect(resources.capture, same(capture));
-    expect(() => resources.sessions, throwsA(isA<RequestFailure>()));
-    expect(() => resources.audio, throwsA(isA<RequestFailure>()));
-    expect(() => resources.keepAwake, throwsA(isA<RequestFailure>()));
+  test('空投影和退出不调用原生能力，只创建实际取得的子能力', () async {
+    final notCreated = throwsA(isA<RequestFailure>());
+    final owners = <String, Object Function(CaptureResources)>{
+      'none': (_) => Object(),
+      'capture': (resources) => resources.capture,
+      'audio': (resources) => resources.audio,
+      'sessions': (resources) => resources.sessions,
+    };
+    for (final MapEntry(key: name, value: take) in owners.entries) {
+      final resources = await _resources();
+      final taken = take(resources);
+      expect(resources.currentSessions(), isEmpty, reason: name);
+      expect(await resources.readSessions(), isEmpty, reason: name);
+      expect(await resources.readRecoverySessions(), isEmpty, reason: name);
+      expect(await resources.readActivitySessions(), isEmpty, reason: name);
+      expect(resources.audioSnapshots(), isEmpty, reason: name);
+      resources.handleApplicationEvent(
+        SettingsChanged(Preferences()).toApplicationEvent(sequence: 1),
+      );
+      if (taken is MediaCapture) {
+        final wake = taken.readWake('device');
+        expect(wake.keepActive, isFalse);
+        expect(wake.keepActiveLeaseActive, isFalse);
+      }
+      await resources.close();
+      await resources.close();
+      resources.handleApplicationEvent(
+        SettingsChanged(Preferences()).toApplicationEvent(sequence: 2),
+      );
+      if (name != 'capture') expect(() => resources.capture, notCreated);
+      if (name != 'audio') expect(() => resources.audio, notCreated);
+      if (name != 'sessions') expect(() => resources.sessions, notCreated);
+      expect(() => resources.keepAwake, notCreated, reason: name);
+    }
   });
 
-  test('视频清单与画质查询只取得会话所有者，不连带创建音频和唤醒执行者', () async {
-    final queries = ScrcpyServerQueries(
-      serverBytes: Uint8List(0),
-      timeout: const Duration(seconds: 1),
-    );
-    addTearDown(queries.close);
-    final connection = DeviceConnection(
-      client: _UnusedClient(),
-      device: const AdbDevice(
-        id: 'connection',
-        serial: 'phone',
-        state: 'device',
-      ),
-    );
-    final resources = await _resources(
-      readServerQueries: () => queries,
-      requireConnection: (_) => connection,
-    );
-    final capture = resources.capture;
-    expect(await capture.readVideoSessions(), isEmpty);
-    await expectLater(
-      capture.readVideoQualityOptions('device'),
-      throwsA(
-        isA<RequestFailure>().having((e) => e.code, 'code', 'encoder_probe'),
-      ),
-    );
-    final sessions = resources.sessions;
-    await resources.close();
-    expect(resources.sessions, same(sessions));
-    expect(() => resources.audio, throwsA(isA<RequestFailure>()));
-    expect(() => resources.keepAwake, throwsA(isA<RequestFailure>()));
-  });
-
-  test('只取得设备音源所有者不创建会话或唤醒执行者', () async {
-    final resources = await _resources();
-    final audio = resources.audio;
-    expect(audio.snapshots(), isEmpty);
-    await resources.close();
-    expect(resources.audio, same(audio));
-    expect(() => resources.sessions, throwsA(isA<RequestFailure>()));
-    expect(() => resources.keepAwake, throwsA(isA<RequestFailure>()));
-  });
-
-  test('捕获模块可独立装配，空投影和退出不调用原生执行能力', () async {
-    final captures = await _resources();
-    expect(captures.currentSessions(), isEmpty);
-    expect(await captures.readSessions(), isEmpty);
-    expect(await captures.readRecoverySessions(), isEmpty);
-    expect(await captures.readActivitySessions(), isEmpty);
-    expect(captures.audioSnapshots(), isEmpty);
-    captures.handleApplicationEvent(
-      SettingsChanged(Preferences()).toApplicationEvent(sequence: 1),
-    );
-    await captures.close();
-    await captures.close();
-    captures.handleApplicationEvent(
-      SettingsChanged(Preferences()).toApplicationEvent(sequence: 2),
-    );
-    expect(() => captures.capture, throwsA(isA<RequestFailure>()));
-    expect(() => captures.sessions, throwsA(isA<RequestFailure>()));
-    expect(() => captures.keepAwake, throwsA(isA<RequestFailure>()));
-  });
-
-  test('只创建剪贴板会话后关闭，不创建新的捕获或唤醒能力', () async {
-    final captures = await _resources();
-    final clipboard = captures.sessions;
-    await captures.close();
-    expect(identical(captures.sessions, clipboard), isTrue);
-    expect(() => captures.audio, throwsA(isA<RequestFailure>()));
-    expect(() => captures.keepAwake, throwsA(isA<RequestFailure>()));
-    expect(await captures.readSessions(), isEmpty);
-    expect(await captures.readRecoverySessions(), isEmpty);
-  });
-
-  test('捕获模块关闭不接管借用的设备清单查询', () async {
+  test('画质查询失败交给调用方，关闭捕获模块不关闭借用的设备清单查询', () async {
     final queries = ScrcpyServerQueries(
       serverBytes: Uint8List(0),
       timeout: const Duration(seconds: 1),
@@ -159,11 +108,18 @@ void main() {
     final unavailable = throwsA(
       isA<RequestFailure>().having((e) => e.code, 'code', 'encoder_probe'),
     );
+    expect(await captures.capture.readVideoSessions(), isEmpty);
+    await expectLater(
+      captures.capture.readVideoQualityOptions('device'),
+      unavailable,
+    );
     await expectLater(
       captures.sessions.readVideoQualityOptions('device'),
       unavailable,
     );
     await captures.close();
+    expect(() => captures.audio, throwsA(isA<RequestFailure>()));
+    expect(() => captures.keepAwake, throwsA(isA<RequestFailure>()));
     await expectLater(
       () => queries.encoders(connection, AdbCancellation()),
       unavailable,

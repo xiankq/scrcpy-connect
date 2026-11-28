@@ -6,6 +6,7 @@ import 'package:adb/adb.dart' show AdbCancellation;
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:hooks_riverpod/misc.dart' show Override;
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:scrcpy/scrcpy.dart' show ScrcpyControlCompletion;
@@ -68,29 +69,9 @@ void main() {
         );
       };
     final container = ProviderContainer(
-      overrides: [
-        appSessionProvider.overrideWithValue(dependencies),
-        deviceReaderProvider.overrideWithValue(dependencies.devices),
-        settingsManagementProvider.overrideWithValue(dependencies.settings),
-        runtimeEventsProvider.overrideWithValue(const Stream.empty()),
-        videoSessionsProvider.overrideWithValue(videos),
-        remoteControlProvider.overrideWithValue(control),
-        deviceInspectionProvider.overrideWithValue(_Inspection()),
-        deviceAppsProvider.overrideWithValue(_Apps()),
-        videoDisplayProvider.overrideWithValue(_Displays()),
-      ],
+      overrides: _overrides(dependencies, videos, control: control),
     );
-    final views = RemoteViews(
-      videos: videos,
-      audio: _Audio(),
-      events: const Stream.empty(),
-      current: () => true,
-      readSnapshot: () => const DeviceAudioViewSnapshot(
-        devices: [],
-        reconciliationPending: false,
-      ),
-      onAudioError: (_) {},
-    );
+    final views = _views(videos, const Stream.empty());
     late BuildContext workbench;
     final router = GoRouter(
       routes: [
@@ -267,29 +248,9 @@ void main() {
     final videos = _Videos();
     final dependencies = _Session();
     final container = ProviderContainer(
-      overrides: [
-        appSessionProvider.overrideWithValue(dependencies),
-        deviceReaderProvider.overrideWithValue(dependencies.devices),
-        settingsManagementProvider.overrideWithValue(dependencies.settings),
-        runtimeEventsProvider.overrideWithValue(const Stream.empty()),
-        videoSessionsProvider.overrideWithValue(videos),
-        remoteControlProvider.overrideWithValue(_Control()),
-        deviceInspectionProvider.overrideWithValue(_Inspection()),
-        deviceAppsProvider.overrideWithValue(_Apps()),
-        videoDisplayProvider.overrideWithValue(_Displays()),
-      ],
+      overrides: _overrides(dependencies, videos),
     );
-    final views = RemoteViews(
-      videos: videos,
-      audio: _Audio(),
-      events: const Stream.empty(),
-      current: () => true,
-      readSnapshot: () => const DeviceAudioViewSnapshot(
-        devices: [],
-        reconciliationPending: false,
-      ),
-      onAudioError: (_) {},
-    );
+    final views = _views(videos, const Stream.empty());
     final router = GoRouter(
       observers: [sessionRouteObserver],
       routes: [
@@ -365,23 +326,16 @@ void main() {
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.detached);
     await tester.pump();
     expect(videos.stops, ['session']);
-    container.updateOverrides([
-      appSessionProvider.overrideWithValue(dependencies),
-      deviceReaderProvider.overrideWithValue(dependencies.devices),
-      settingsManagementProvider.overrideWithValue(dependencies.settings),
-      runtimeEventsProvider.overrideWithValue(const Stream.empty()),
-      videoSessionsProvider.overrideWithValue(_Videos()),
-      remoteControlProvider.overrideWithValue(
-        container.read(remoteControlProvider),
+    container.updateOverrides(
+      _overrides(
+        dependencies,
+        _Videos(),
+        control: container.read(remoteControlProvider),
+        inspection: container.read(deviceInspectionProvider),
+        apps: container.read(deviceAppsProvider),
+        displays: container.read(videoDisplayProvider),
       ),
-      deviceInspectionProvider.overrideWithValue(
-        container.read(deviceInspectionProvider),
-      ),
-      deviceAppsProvider.overrideWithValue(container.read(deviceAppsProvider)),
-      videoDisplayProvider.overrideWithValue(
-        container.read(videoDisplayProvider),
-      ),
-    ]);
+    );
     await tester.pump();
     expect(container.read(clipboardFocusProvider), isNull);
     await tester.pumpWidget(const SizedBox());
@@ -398,29 +352,9 @@ void main() {
     final events = StreamController<RuntimeEvent>.broadcast(sync: true);
     final dependencies = _Session();
     final container = ProviderContainer(
-      overrides: [
-        appSessionProvider.overrideWithValue(dependencies),
-        deviceReaderProvider.overrideWithValue(dependencies.devices),
-        settingsManagementProvider.overrideWithValue(dependencies.settings),
-        runtimeEventsProvider.overrideWithValue(events.stream),
-        videoSessionsProvider.overrideWithValue(videos),
-        remoteControlProvider.overrideWithValue(_Control()),
-        deviceInspectionProvider.overrideWithValue(_Inspection()),
-        deviceAppsProvider.overrideWithValue(_Apps()),
-        videoDisplayProvider.overrideWithValue(_Displays()),
-      ],
+      overrides: _overrides(dependencies, videos, events: events.stream),
     );
-    final views = RemoteViews(
-      videos: videos,
-      audio: _Audio(),
-      events: events.stream,
-      current: () => true,
-      readSnapshot: () => const DeviceAudioViewSnapshot(
-        devices: [],
-        reconciliationPending: false,
-      ),
-      onAudioError: (_) {},
-    );
+    final views = _views(videos, events.stream);
     final originalOutput = _output();
     final original = VideoSessionView(
       session: const VideoSessionSnapshot(
@@ -551,29 +485,17 @@ void main() {
     final apps = _Apps();
     final displays = _Displays();
     final container = ProviderContainer(
-      overrides: [
-        appSessionProvider.overrideWithValue(dependencies),
-        deviceReaderProvider.overrideWithValue(dependencies.devices),
-        settingsManagementProvider.overrideWithValue(dependencies.settings),
-        runtimeEventsProvider.overrideWithValue(events.stream),
-        videoSessionsProvider.overrideWithValue(original),
-        remoteControlProvider.overrideWithValue(control),
-        deviceInspectionProvider.overrideWithValue(inspection),
-        deviceAppsProvider.overrideWithValue(apps),
-        videoDisplayProvider.overrideWithValue(displays),
-      ],
-    );
-    final views = RemoteViews(
-      videos: original,
-      audio: _Audio(),
-      events: events.stream,
-      current: () => true,
-      readSnapshot: () => const DeviceAudioViewSnapshot(
-        devices: [],
-        reconciliationPending: false,
+      overrides: _overrides(
+        dependencies,
+        original,
+        events: events.stream,
+        control: control,
+        inspection: inspection,
+        apps: apps,
+        displays: displays,
       ),
-      onAudioError: (_) {},
     );
+    final views = _views(original, events.stream);
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -593,17 +515,17 @@ void main() {
     expect(find.byType(ControlPage), findsOneWidget);
     expect(original.stops, isEmpty);
     expect(control.sent, isEmpty);
-    container.updateOverrides([
-      appSessionProvider.overrideWithValue(dependencies),
-      deviceReaderProvider.overrideWithValue(dependencies.devices),
-      settingsManagementProvider.overrideWithValue(dependencies.settings),
-      runtimeEventsProvider.overrideWithValue(events.stream),
-      videoSessionsProvider.overrideWithValue(replacement),
-      remoteControlProvider.overrideWithValue(control),
-      deviceInspectionProvider.overrideWithValue(inspection),
-      deviceAppsProvider.overrideWithValue(apps),
-      videoDisplayProvider.overrideWithValue(displays),
-    ]);
+    container.updateOverrides(
+      _overrides(
+        dependencies,
+        replacement,
+        events: events.stream,
+        control: control,
+        inspection: inspection,
+        apps: apps,
+        displays: displays,
+      ),
+    );
     await tester.pump();
     expect(find.text('画面来源已变化，请关闭本页后重新打开。'), findsOneWidget);
     original.starting.complete(
@@ -639,6 +561,39 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 }
+
+List<Override> _overrides(
+  _Session session,
+  VideoSessions videos, {
+  Stream<RuntimeEvent> events = const Stream.empty(),
+  RemoteControl? control,
+  DeviceInspection? inspection,
+  DeviceApps? apps,
+  VideoDisplayControl? displays,
+}) => [
+  appSessionProvider.overrideWithValue(session),
+  deviceReaderProvider.overrideWithValue(session.devices),
+  settingsManagementProvider.overrideWithValue(session.settings),
+  runtimeEventsProvider.overrideWithValue(events),
+  videoSessionsProvider.overrideWithValue(videos),
+  remoteControlProvider.overrideWithValue(control ?? _Control()),
+  deviceInspectionProvider.overrideWithValue(inspection ?? _Inspection()),
+  deviceAppsProvider.overrideWithValue(apps ?? _Apps()),
+  videoDisplayProvider.overrideWithValue(displays ?? _Displays()),
+];
+
+RemoteViews _views(VideoSessions videos, Stream<RuntimeEvent> events) =>
+    RemoteViews(
+      videos: videos,
+      audio: _Audio(),
+      events: events,
+      current: () => true,
+      readSnapshot: () => const DeviceAudioViewSnapshot(
+        devices: [],
+        reconciliationPending: false,
+      ),
+      onAudioError: (_) {},
+    );
 
 const _device = DeviceSnapshot(
   id: 'device',

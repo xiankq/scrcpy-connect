@@ -5,16 +5,21 @@ import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/core/diagnostics/models/diagnostic_record.dart';
 import 'package:scrcpy_connect/core/diagnostics/diagnostic_log_provider.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/adaptive_window.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
+import 'package:scrcpy_connect/widgets/chips.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/overlays.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
+import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 import '../widgets/settings_row.dart';
@@ -32,10 +37,6 @@ class RuntimeLogsPage extends HookConsumerWidget {
     useStream(logger?.changes);
     final filters = useState<_Filters>((null, null));
     final (level, area) = filters.value;
-    final filterLabel = [
-      if (level != null) _levelName(level),
-      if (area != null) _areaName(area),
-    ].join(' · ');
     final busy = useState(false);
     final entries = (logger?.recent ?? const <DiagnosticRecord>[]).reversed
         .where((record) => level == null || record.level == level)
@@ -90,6 +91,7 @@ class RuntimeLogsPage extends HookConsumerWidget {
             '清空运行日志？',
             '本机已有日志将被删除，之后仍会记录新的运行事件。',
             action: '清空日志',
+            danger: true,
           ) ||
           !context.mounted) {
         return;
@@ -108,129 +110,155 @@ class RuntimeLogsPage extends HookConsumerWidget {
     return PageFrame(
       title: '运行日志',
       child: GroupedListView.builder(
-        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+        padding: const EdgeInsets.all(DesignTokens.componentPagePadding),
         itemCount: entries.length + 2,
         itemBuilder: (context, index) {
-          final theme = Theme.of(context);
-          final isHeader = index == 0;
-          final isFooter = index == entries.length + 1;
+          final colors = AppColors.of(context);
+          final type = AppTypography.of(context);
           final labels = MaterialLocalizations.of(context);
-          final warning = logger == null
-              ? '本次运行未启用日志服务。'
-              : logger.storageError != null
-              ? '暂时无法写入本机存储，当前仅保留最近的内存记录。'
-              : logger.historyIncomplete
-              ? '部分日志无法读取，已显示可用记录。'
-              : entries.isEmpty
-              ? '暂无符合条件的日志。'
-              : null;
-          final Widget content;
-          if (isHeader) {
-            content = Column(
+          if (index == 0) {
+            final warning = logger == null
+                ? '本次运行未启用日志服务。'
+                : logger.storageError != null
+                ? '暂时无法写入本机存储，当前仅保留最近的内存记录。'
+                : logger.historyIncomplete
+                ? '部分日志无法读取，已显示可用记录。'
+                : entries.isEmpty
+                ? '暂无符合条件的日志。'
+                : null;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SettingsRow(
-                  compact: true,
-                  icon: AppIcons.viewOptions,
-                  color: DesignTokens.colorListIconUtility,
-                  title: '筛选',
-                  value: filterLabel.isEmpty ? '全部' : filterLabel,
-                  onTap: chooseFilters,
+                // 级别与来源筛选（Ardot S5 运行日志 2:2166），都打开同一个筛选面板。
+                Wrap(
+                  spacing: DesignTokens.spacingSm,
+                  runSpacing: DesignTokens.spacingSm,
+                  children: [
+                    AppChip(
+                      label: level == null ? '全部级别' : _levelName(level),
+                      selected: level != null,
+                      dropdown: true,
+                      onPressed: chooseFilters,
+                    ),
+                    AppChip(
+                      label: area == null ? '全部来源' : _areaName(area),
+                      selected: area != null,
+                      dropdown: true,
+                      onPressed: chooseFilters,
+                    ),
+                  ],
                 ),
                 if (warning != null) StateNote(warning),
               ],
             );
-          } else if (isFooter) {
-            content = Column(
-              children: [
-                SettingsRow(
-                  compact: true,
-                  icon: AppIcons.download,
-                  color: DesignTokens.colorListIconUtility,
-                  title: '导出日志',
-                  onTap: logger == null || busy.value ? null : exportLogs,
-                ),
-                SettingsRow(
-                  compact: true,
-                  icon: AppIcons.delete,
-                  color: DesignTokens.colorListIconCoral,
-                  title: '清空日志',
-                  destructive: true,
-                  onTap: logger == null || busy.value ? null : clearLogs,
-                ),
-              ],
-            );
-          } else {
-            final record = entries[index - 1];
-            final time = record.time.toLocal();
-            final date = DateUtils.isSameDay(time, DateTime.now())
-                ? '今天'
-                : labels.formatShortDate(time);
-            final firstOfDay =
-                index == 1 ||
-                !DateUtils.isSameDay(time, entries[index - 2].time.toLocal());
-            final clock = [
-              time.hour,
-              time.minute,
-              time.second,
-            ].map((unit) => '$unit'.padLeft(2, '0')).join(':');
-            final (icon, color) = switch (record.level) {
-              .info => (
-                LucideIcons.fileText,
-                DesignTokens.colorListIconUtility,
-              ),
-              .warning => (
-                LucideIcons.triangleAlert,
-                DesignTokens.colorListIconAmber,
-              ),
-              .error => (LucideIcons.circleX, DesignTokens.colorListIconCoral),
-            };
-            content = Column(
+          }
+          if (index == entries.length + 1) {
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (firstOfDay)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                    child: Text(date, style: theme.textTheme.bodySmall),
-                  ),
-                SettingsRow(
-                  compact: true,
-                  icon: icon,
-                  color: color,
-                  title: _title(record),
-                  subtitle: '$clock · ${_areaName(record.area)}',
-                  onTap: record.fields.isEmpty
-                      ? null
-                      : () => showAppDialog<void>(
-                          context: context,
-                          title: Text(_title(record)),
-                          content: SelectableText(
-                            const JsonEncoder.withIndent('  ')
-                                .convert(record.fields),
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(
-                                context,
-                                rootNavigator: true,
-                              ).pop(),
-                              child: const Text('关闭'),
-                            ),
-                          ],
-                        ),
+                const SectionTitle('日志文件'),
+                SettingsGroup(
+                  children: [
+                    SettingsRow(
+                      icon: AppIcons.send,
+                      color: FunctionTone.transfer,
+                      title: '导出日志',
+                      onTap: logger == null || busy.value ? null : exportLogs,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: DesignTokens.componentListSectionGap),
+                // 危险动作：页面上的通栏胶囊（design.md「列表」危险动作）。
+                AppButton(
+                  role: AppButtonRole.destructiveOnPage,
+                  expand: true,
+                  icon: AppIcons.delete,
+                  onPressed: logger == null || busy.value ? null : clearLogs,
+                  label: '清空日志',
                 ),
               ],
             );
           }
-          const radius = Radius.circular(DesignTokens.roundedLg);
-          return Material(
-            color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.vertical(
-              top: isHeader ? radius : Radius.zero,
-              bottom: isFooter ? radius : Radius.zero,
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: content,
+          final position = index - 1;
+          final record = entries[position];
+          final time = record.time.toLocal();
+          final date = DateUtils.isSameDay(time, DateTime.now())
+              ? '今天'
+              : labels.formatShortDate(time);
+          final firstOfDay =
+              position == 0 ||
+              !DateUtils.isSameDay(time, entries[position - 1].time.toLocal());
+          final lastOfDay =
+              position == entries.length - 1 ||
+              !DateUtils.isSameDay(time, entries[position + 1].time.toLocal());
+          final clock = [
+            time.hour,
+            time.minute,
+            time.second,
+          ].map((unit) => '$unit'.padLeft(2, '0')).join(':');
+          const radius = Radius.circular(
+            DesignTokens.componentListGroupRounded,
+          );
+          // 日志是动态结果列表，逐行绘制同组卡片的圆角与分隔线，而不用 SettingsGroup 包裹。
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (firstOfDay) SectionTitle(date),
+              Material(
+                color: colors.card,
+                shape: RoundedSuperellipseBorder(
+                  borderRadius: BorderRadius.vertical(
+                    top: firstOfDay ? radius : Radius.zero,
+                    bottom: lastOfDay ? radius : Radius.zero,
+                  ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    AppListRow(
+                      title: Text(_title(record)),
+                      subtitle: Text(
+                        '${_areaName(record.area)} · ${_levelName(record.level)}',
+                      ),
+                      value: clock,
+                      onTap: record.fields.isEmpty
+                          ? null
+                          : () => showAppDialog<void>(
+                              context: context,
+                              title: Text(_title(record)),
+                              content: SelectableText(
+                                const JsonEncoder.withIndent('  ')
+                                    .convert(record.fields),
+                                style: type.footnote.copyWith(
+                                  color: colors.textSecondary,
+                                ),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(
+                                    context,
+                                    rootNavigator: true,
+                                  ).pop(),
+                                  child: const Text('关闭'),
+                                ),
+                              ],
+                            ),
+                    ),
+                    if (!lastOfDay)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: DesignTokens.componentListRowPadding,
+                        ),
+                        child: SizedBox(
+                          height: DesignTokens.componentSeparatorHeight,
+                          child: ColoredBox(color: colors.separator),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -246,59 +274,81 @@ class _LogFilters extends HookWidget {
   Widget build(BuildContext context) {
     final level = useState(initial.$1);
     final area = useState(initial.$2);
-    final theme = Theme.of(context);
+    final colors = AppColors.of(context);
+    final type = AppTypography.of(context);
+    final groupLabel = type.footnote.copyWith(color: colors.textSecondary);
     return SafeArea(
       top: false,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440),
+        constraints: const BoxConstraints(maxWidth: _filtersMaxWidth),
         child: ListView(
-          padding: const EdgeInsets.all(DesignTokens.spacingLg),
+          padding: const EdgeInsets.only(bottom: DesignTokens.spacingLg),
           shrinkWrap: true,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text('日志筛选', style: theme.textTheme.titleLarge),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('取消'),
-                ),
-              ],
+            SheetHeader(
+              title: '日志筛选',
+              trailing: AppButton(
+                role: AppButtonRole.text,
+                size: AppButtonSize.section,
+                onPressed: () => Navigator.pop(context),
+                label: '取消',
+              ),
             ),
-            Text('级别', style: theme.textTheme.titleMedium),
-            Wrap(
-              spacing: DesignTokens.spacingXs,
-              children: [
-                for (final option in <LogLevel?>[null, ...LogLevel.values])
-                  ChoiceChip(
-                    label: Text(option == null ? '全部' : _levelName(option)),
-                    selected: level.value == option,
-                    onSelected: (_) => level.value = option,
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: DesignTokens.componentSheetPadding,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: DesignTokens.spacingSm),
+                  Text('级别', style: groupLabel),
+                  const SizedBox(height: DesignTokens.spacingSm),
+                  Wrap(
+                    spacing: DesignTokens.spacingSm,
+                    runSpacing: DesignTokens.spacingSm,
+                    children: [
+                      for (final option in <LogLevel?>[
+                        null,
+                        ...LogLevel.values,
+                      ])
+                        AppChip(
+                          label: option == null ? '全部' : _levelName(option),
+                          selected: level.value == option,
+                          onPressed: () => level.value = option,
+                        ),
+                    ],
                   ),
-              ],
-            ),
-            const SizedBox(height: DesignTokens.spacingMd),
-            Text('来源', style: theme.textTheme.titleMedium),
-            Wrap(
-              spacing: DesignTokens.spacingXs,
-              children: [
-                for (final option in <DiagnosticArea?>[
-                  null,
-                  ...DiagnosticArea.values,
-                ])
-                  ChoiceChip(
-                    label: Text(option == null ? '全部' : _areaName(option)),
-                    selected: area.value == option,
-                    onSelected: (_) => area.value = option,
+                  const SizedBox(height: DesignTokens.spacingXxl),
+                  Text('来源', style: groupLabel),
+                  const SizedBox(height: DesignTokens.spacingSm),
+                  Wrap(
+                    spacing: DesignTokens.spacingSm,
+                    runSpacing: DesignTokens.spacingSm,
+                    children: [
+                      for (final option in <DiagnosticArea?>[
+                        null,
+                        ...DiagnosticArea.values,
+                      ])
+                        AppChip(
+                          label: option == null ? '全部' : _areaName(option),
+                          selected: area.value == option,
+                          onPressed: () => area.value = option,
+                        ),
+                    ],
                   ),
-              ],
-            ),
-            const SizedBox(height: DesignTokens.spacingMd),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.pop<_Filters>(context, (level.value, area.value)),
-              child: const Text('应用筛选'),
+                  const SizedBox(height: DesignTokens.spacingXxl),
+                  AppButton(
+                    role: AppButtonRole.primary,
+                    expand: true,
+                    onPressed: () => Navigator.pop<_Filters>(context, (
+                      level.value,
+                      area.value,
+                    )),
+                    label: '应用筛选',
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -306,6 +356,9 @@ class _LogFilters extends HookWidget {
     );
   }
 }
+
+/// 居中弹层的最大宽度（design.md「菜单、确认框与抽屉」表单弹层）。
+const _filtersMaxWidth = DesignTokens.componentFormSheetWidth;
 
 String _levelName(LogLevel level) => switch (level) {
   LogLevel.info => '信息',

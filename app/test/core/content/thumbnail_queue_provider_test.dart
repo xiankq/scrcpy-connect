@@ -7,6 +7,8 @@ import 'package:scrcpy_connect/core/content/content_preview.dart';
 import 'package:scrcpy_connect/core/content/thumbnail_queue_provider.dart';
 import 'package:scrcpy_connect/core/errors/request_failure.dart';
 
+import '../../support/fixed_state.dart';
+
 void main() {
   test('缩略图换源取消原操作，迟到租约只由原内容能力释放', () async {
     final previous = _Content();
@@ -29,16 +31,16 @@ void main() {
         ),
       ),
     );
-    await _flush(container);
+    await flushProviders(container);
     expect(previous.loads, hasLength(1));
     container.updateOverrides([
       contentReaderProvider.overrideWithValue(replacement),
     ]);
-    await _flush(container);
+    await flushProviders(container);
     await cancelled;
     expect(previous.cancelled, [previous.loads.single.operationId]);
     final currentLease = container.read(provider).acquire('/new');
-    await _flush(container);
+    await flushProviders(container);
     previous.loads.single.result.complete(
       const CachedContent(path: '/old-local', leaseId: 'old-lease'),
     );
@@ -46,12 +48,12 @@ void main() {
       const CachedContent(path: '/new-local', leaseId: 'new-lease'),
     );
     expect((await currentLease.result).path, '/new-local');
-    await _flush(container);
+    await flushProviders(container);
     expect(previous.released, ['old-lease']);
     expect(replacement.released, isEmpty);
     currentLease.release();
     currentLease.release();
-    await _flush(container);
+    await flushProviders(container);
     expect(replacement.released, ['new-lease']);
     expect(replacement.cancelled, isEmpty);
   });
@@ -67,20 +69,20 @@ void main() {
     final queue = container.read(provider);
     final first = queue.acquire('/first');
     final cancelled = expectLater(first.result, throwsA(isA<RequestFailure>()));
-    await _flush(container);
+    await flushProviders(container);
     first.release();
     listener.close();
-    await _flush(container);
+    await flushProviders(container);
     final reopened = container.listen(provider, (_, _) {});
     expect(container.read(provider), same(queue));
     final second = queue.acquire('/second');
-    await _flush(container);
+    await flushProviders(container);
     expect(content.loads, hasLength(1));
     content.loads[0].result.complete(
       const CachedContent(path: '/retired', leaseId: 'retired'),
     );
     await cancelled;
-    await _flush(container);
+    await flushProviders(container);
     expect(content.loads, hasLength(2));
     expect(content.released, ['retired']);
     content.loads[1].result.complete(
@@ -89,7 +91,7 @@ void main() {
     await second.result;
     second.release();
     reopened.close();
-    await _flush(container);
+    await flushProviders(container);
     expect(content.released, ['retired', 'latest']);
     expect(content.cancelled, [content.loads[0].operationId]);
   });
@@ -120,9 +122,4 @@ class _Content implements ContentReader {
   Future<void> releaseLease(String leaseId) async => released.add(leaseId);
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-Future<void> _flush(ProviderContainer container) async {
-  await Future<void>.delayed(Duration.zero);
-  await container.pump();
 }

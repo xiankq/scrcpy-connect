@@ -1,10 +1,14 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/styles/motion.dart';
+import 'package:scrcpy_connect/widgets/chips.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
 
+/// 路径 chip 之间的间距（Ardot F2 2:1357 路径行：间距 8）。
+const _crumbGap = DesignTokens.spacingSm;
+
+/// 路径行（design.md「文件与相册」：路径用 chip 行，当前目录 chip 选中）。
 class FileBreadcrumbs extends HookWidget {
   const FileBreadcrumbs({
     super.key,
@@ -18,13 +22,18 @@ class FileBreadcrumbs extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final scroll = useScrollController();
+    final reduceMotion = reduceMotionOf(context);
     useEffect(() {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (scroll.hasClients) {
+        if (!scroll.hasClients) return;
+        final end = scroll.position.maxScrollExtent;
+        if (reduceMotion) {
+          scroll.jumpTo(end);
+        } else {
           scroll.animateTo(
-            scroll.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
+            end,
+            duration: shortTransitionDuration,
+            curve: standardCurve,
           );
         }
       });
@@ -37,83 +46,18 @@ class FileBreadcrumbs extends HookWidget {
       child: Row(
         children: [
           for (var index = 0; index < crumbs.length; index++) ...[
-            if (index > 0)
-              Icon(
-                AppIcons.forward,
-                size: DesignTokens.componentIconSmallSize,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            _FileBreadcrumbButton(
-              crumb: crumbs[index],
+            if (index > 0) const SizedBox(width: _crumbGap),
+            AppChip(
+              label: crumbs[index].label,
               selected: index == crumbs.length - 1,
               onPressed: onSelected == null
                   ? null
+                  : index == crumbs.length - 1
+                  ? () {}
                   : () => onSelected!(crumbs[index].path),
             ),
           ],
         ],
-      ),
-    );
-  }
-}
-
-class _FileBreadcrumbButton extends StatelessWidget {
-  const _FileBreadcrumbButton({
-    required this.crumb,
-    required this.selected,
-    required this.onPressed,
-  });
-
-  final FileBreadcrumb crumb;
-  final bool selected;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Material(
-      color: selected
-          ? ConnectTokens.accent(
-              context,
-              ConnectTokens.amber,
-            ).withValues(alpha: 0.12)
-          : theme.colorScheme.surfaceContainerLow,
-      shape: const StadiumBorder(),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: selected ? null : onPressed,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            minHeight: DesignTokens.componentChipHeight,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: DesignTokens.spacingSm,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (selected) ...[
-                  Icon(
-                    LucideIcons.folder,
-                    size: DesignTokens.componentIconSmallSize,
-                    color: ConnectTokens.amber,
-                  ),
-                  const SizedBox(width: DesignTokens.spacingXs),
-                ],
-                Text(
-                  crumb.label,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: selected
-                        ? theme.colorScheme.onSurface
-                        : theme.colorScheme.onSurfaceVariant,
-                    fontWeight: selected ? FontWeight.w600 : null,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

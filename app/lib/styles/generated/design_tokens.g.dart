@@ -39,878 +39,569 @@ abstract final class AppIcons {
 }
 
 abstract final class DesignTokens {
-  static const colorAccentAmber = Color(0xf5f7b418);
-  static const colorAccentAmberDark = Color(0xf5f7b418);
-  static const colorAccentAmberSoft = Color(0xfffff4e6);
-  static const colorAccentAmberSoftDark = Color(0xff33291c);
-  static const colorAccentBlue = Color(0xf5347ef5);
-  static const colorAccentBlueDark = Color(0xf5347ef5);
-  static const colorAccentBlueSoft = Color(0xffe6f2ff);
-  static const colorAccentBlueSoftDark = Color(0xff1a2635);
-  static const colorAccentCoral = Color(0xf5f3483f);
-  static const colorAccentCoralDark = Color(0xf5f3483f);
-  static const colorAccentCoralSoft = Color(0xffffebea);
-  static const colorAccentCoralSoftDark = Color(0xff332021);
-  static const colorAccentMint = Color(0xf520c451);
-  static const colorAccentMintDark = Color(0xf520c451);
-  static const colorAccentMintSoft = Color(0xffebf9ee);
-  static const colorAccentMintSoftDark = Color(0xff1e2e24);
-  static const colorBlack = Color(0xff000000);
-  static const colorCallAvatar = Color(0xffc6d3f8);
-  static const colorCallDock = Color(0xff202d47);
-  static const colorCallKey = Color(0xff344764);
-  static const colorCallMuted = Color(0xffb8c6e2);
-  static const colorCallRing = Color(0xff445d8e);
+  static const colorAccentAmber = Color(0xfff7b418);
+  static const colorAccentBlue = Color(0xff4c88ff);
+  static const colorAccentGray = Color(0xff8799ac);
+  static const colorAccentGreen = Color(0xff20c451);
+  static const colorAccentIndigo = Color(0xff596ff1);
+  static const colorAccentOrange = Color(0xfff57529);
+  static const colorAccentPurple = Color(0xff9266e5);
+  static const colorAccentRed = Color(0xfff3483f);
+  static const colorAccentTeal = Color(0xff00adc1);
+  static const colorBlock = Color(0xfff0edf0);
+  static const colorBlockDark = Color(0xff323235);
+  static const colorCallKey = Color(0xff2b3a57);
   static const colorCallStage = Color(0xff141d32);
-  static const colorCanvas = Color(0xfff6f7f8);
-  static const colorCanvasDark = Color(0xff000000);
-  static const colorCanvasLabel = Color(0xff808080);
-  static const colorConnectionIp = Color(0xff347ef5);
-  static const colorConnectionNearby = Color(0xff0099a7);
-  static const colorConnectionPairing = Color(0xff009447);
-  static const colorConnectionPath = Color(0xffe8eef5);
-  static const colorConnectionPathDark = Color(0xff181c24);
-  static const colorConnectionQr = Color(0xff8057f1);
-  static const colorConnectionSignal = Color(0xff347ef5);
-  static const colorConnectionSignalDark = Color(0xff64a2ff);
-  static const colorConnectionTrackArc = Color(0xff2c6199);
-  static const colorConnectionTrackArcDark = Color(0xffa5cefb);
-  static const colorConnectionTrackLine = Color(0xffbbcadb);
-  static const colorConnectionTrackLineDark = Color(0xff36516f);
-  static const colorConnectionUsb = Color(0xffcc6700);
-  static const colorControlDisabled = Color(0xff65666d);
-  static const colorControlDisabledDark = Color(0xffb1b1ba);
-  static const colorControlDisabledTrack = Color(0xffe7e8ec);
-  static const colorControlDisabledTrackDark = Color(0xff39393d);
-  static const colorControlPressed = Color(0x1f14141b);
-  static const colorControlPressedDark = Color(0x26ffffff);
-  static const colorDanger = Color(0xffff3b30);
-  static const colorDangerAction = Color(0xfffce8e8);
-  static const colorDangerActionDark = Color(0xff553137);
-  static const colorDangerContainer = Color(0xffffebea);
-  static const colorDangerContainerDark = Color(0xff332021);
-  static const colorDangerDark = Color(0xffff534a);
-  static const colorDangerText = Color(0xffba2429);
-  static const colorDangerTextDark = Color(0xffff827e);
-  static const colorDeviceDetailValue = Color(0xff545b61);
-  static const colorDeviceGlyphFrame = Color(0xff294454);
-  static const colorDeviceGlyphIdleMark = Color(0xff64757d);
-  static const colorDeviceGlyphIdleScreen = Color(0xffdce6ec);
-  static const colorDeviceGlyphScreen = Color(0xffa7c8e8);
-  static const colorDeviceListOpen = Color(0xff23588a);
-  static const colorDevicePanel = Color(0xffe9eff1);
-  static const colorDevicePanelDark = Color(0xff232a2d);
+  static const colorCallTextSecondary = Color(0xffb8c6e2);
+  static const colorCard = Color(0xfffcf8f9);
+  static const colorCardDark = Color(0xff252628);
+  static const colorDestructive = Color(0xffff383c);
+  static const colorDestructiveDark = Color(0xffff4245);
   static const colorDeviceScreen = Color(0xff171f27);
-  static const colorDeviceScreenRim = Color(0xff36414b);
-  static const colorDeviceShortcutDisabled = Color(0xff72767c);
-  static const colorDiagnosticChecking = Color(0xff2674ed);
-  static const colorDiagnosticCheckingDark = Color(0xff82b8ff);
-  static const colorDiagnosticWarning = Color(0xffd47700);
-  static const colorFileCurrentDirectory = Color(0xfffff1d8);
-  static const colorFileCurrentDirectoryDark = Color(0xff352818);
-  static const colorFileCurrentDirectoryText = Color(0xff845017);
-  static const colorFileFolder = Color(0xffffb443);
-  static const colorFileTile = Color(0xfff2f1f6);
-  static const colorFocus = Color(0xff1b66cb);
-  static const colorFocusDark = Color(0xff89b8ff);
-  static const colorGlass = Color(0x79fdfdfd);
-  static const colorGlassAction = Color(0xff171719);
-  static const colorGlassActionDark = Color(0xfff7f7f8);
-  static const colorGlassActionShine = Color(0x14ffffff);
-  static const colorGlassActionShineDark = Color(0x1fffffff);
-  static const colorGlassAlert = Color(0x7affffff);
-  static const colorGlassAlertDark = Color(0x7a3e3e43);
-  static const colorGlassClear = Color(0x13ffffff);
-  static const colorGlassDark = Color(0x7a38383e);
-  static const colorGlassEdge = Color(0x99ffffff);
-  static const colorGlassEdgeDark = Color(0x47ffffff);
-  static const colorGlassLowEdge = Color(0x4275757a);
-  static const colorGlassLowEdgeDark = Color(0xa3000000);
-  static const colorGlassMenu = Color(0x7affffff);
-  static const colorGlassMenuDark = Color(0x7a3a3a40);
-  static const colorGlassPill = Color(0x7af4f4f4);
-  static const colorGlassPillDark = Color(0x73343438);
-  static const colorGlassSelected = Color(0x1414141b);
-  static const colorGlassSelectedDark = Color(0x24ffffff);
-  static const colorGlassShine = Color(0x66ffffff);
-  static const colorGlassShineDark = Color(0x1fffffff);
-  static const colorGlassToolbarTint = Color(0x2bffffff);
-  static const colorGlassToolbarTintDark = Color(0x17ffffff);
-  static const colorIntroSignalMiddle = Color(0xff6099ee);
-  static const colorIntroSignalNear = Color(0xff8fbfff);
-  static const colorListIconAmber = Color(0xf5f7b418);
-  static const colorListIconBlue = Color(0xf5347ef5);
-  static const colorListIconCoral = Color(0xf5f3483f);
-  static const colorListIconDocument = Color(0xf5596ff1);
-  static const colorListIconMint = Color(0xf520c451);
-  static const colorListIconPurple = Color(0xf59266e5);
-  static const colorListIconSlate = Color(0xf500adc1);
-  static const colorListIconTransfer = Color(0xf5f57529);
-  static const colorListIconUtility = Color(0xf58799ac);
-  static const colorLoadingBlue = Color(0x707ebbff);
-  static const colorLoadingMint = Color(0x6181e8ce);
-  static const colorLoadingViolet = Color(0x6bb8a4f5);
-  static const colorLoadingWarm = Color(0x7affbeb8);
-  static const colorMediaInk = Color(0xff111114);
-  static const colorMediaShade = Color(0x99000000);
-  static const colorMediaThumbnailShade = Color(0x61000000);
-  static const colorMuted = Color(0xffdedede);
-  static const colorMutedDark = Color(0xff404040);
-  static const colorOnAccent = Color(0xffffffff);
-  static const colorOnDanger = Color(0xff171719);
-  static const colorOnDangerContainer = Color(0xff000000);
-  static const colorOnDangerContainerDark = Color(0xffffffff);
-  static const colorOnDangerDark = Color(0xff171719);
+  static const colorDisabled = Color(0x61191b23);
+  static const colorDisabledContainer = Color(0x1f191b23);
+  static const colorDisabledContainerDark = Color(0x1ff6f6ff);
+  static const colorDisabledDark = Color(0x61f6f6ff);
+  static const colorDockPlatter = Color(0xd9d9e2ff);
+  static const colorDockPlatterDark = Color(0xd9000d2a);
+  static const colorError = Color(0xffba1a1a);
+  static const colorErrorContainer = Color(0xffffdad6);
+  static const colorErrorContainerDark = Color(0xff93000a);
+  static const colorErrorDark = Color(0xffffb4ab);
+  static const colorGlassClear = Color(0x1fffffff);
+  static const colorGlassFill = Color(0x21000000);
+  static const colorGlassFillDark = Color(0x21ffffff);
+  static const colorGlassMenu = Color(0x8cfcf8f9);
+  static const colorGlassMenuDark = Color(0xa1343537);
+  static const colorGlassPill = Color(0x94f4f4f4);
+  static const colorGlassPillDark = Color(0x7a343537);
+  static const colorGlassRegular = Color(0x8afdfdfd);
+  static const colorGlassRegularDark = Color(0x9e343537);
+  static const colorGlassRim = Color(0xffffffff);
+  static const colorInset = Color(0xffe4e2e5);
+  static const colorInsetDark = Color(0xff404042);
+  static const colorMediaScrim = Color(0x99000000);
+  static const colorOnErrorContainer = Color(0xff93000a);
+  static const colorOnErrorContainerDark = Color(0xffffdad6);
+  static const colorOnMedia = Color(0xffffffff);
   static const colorOnPrimary = Color(0xffffffff);
-  static const colorOnPrimaryDark = Color(0xff171719);
-  static const colorOnWarning = Color(0xff171719);
-  static const colorOutline = Color(0xff8e8f98);
-  static const colorOutlineDark = Color(0xff7b7c86);
-  static const colorPrimary = Color(0xff000000);
-  static const colorPrimaryAction = Color(0xff171719);
-  static const colorPrimaryActionDark = Color(0xfff7f7f8);
-  static const colorPrimaryDark = Color(0xffffffff);
-  static const colorScrim = Color(0x52141419);
-  static const colorScrimDark = Color(0x80000000);
-  static const colorSecondary = Color(0xff5d5e65);
-  static const colorSecondaryDark = Color(0xffb6b6bd);
-  static const colorShadow = Color(0x14000000);
-  static const colorShadowDark = Color(0x66000000);
-  static const colorSkeletonGraphicDark = Color(0xff39434a);
-  static const colorSuccess = Color(0xff00a34a);
-  static const colorSuccessDark = Color(0xff32e875);
-  static const colorSurface = Color(0xffffffff);
-  static const colorSurfaceDark = Color(0xff262626);
-  static const colorSurfaceFloating = Color(0xffffffff);
-  static const colorSurfaceFloatingDark = Color(0xff343436);
-  static const colorSurfaceInset = Color(0xffe7e8ec);
-  static const colorSurfaceInsetDark = Color(0xff424245);
-  static const colorSurfaceLow = Color(0xfff6f7f8);
-  static const colorSurfaceLowDark = Color(0xff262626);
-  static const colorSurfaceModule = Color(0xfff0f1f3);
-  static const colorSurfaceModuleDark = Color(0xff343436);
-  static const colorSwitchOff = Color(0xff777982);
-  static const colorSwitchOffDark = Color(0xff6e7079);
-  static const colorText = Color(0xff171719);
-  static const colorTextDark = Color(0xfff7f7f8);
-  static const colorTint = Color(0xffe5e5ea);
-  static const colorTintDark = Color(0xff2c2c2e);
-  static const colorTransparent = Color(0x00000000);
-  static const colorWarning = Color(0xffffb020);
-  static const colorWarningDark = Color(0xffffc247);
-  static const colorWhite = Color(0xffffffff);
-  static const colorWorkspaceEmptyIcon = Color(0xfff0f1f2);
-  static const componentAccentAmberBackgroundColor = Color(0xfffff4e6);
-  static const componentAccentAmberDarkBackgroundColor = Color(0xff33291c);
-  static const componentAccentAmberDarkTextColor = Color(0xfff7f7f8);
-  static const componentAccentAmberTextColor = Color(0xff171719);
-  static const componentAccentBlueBackgroundColor = Color(0xffe6f2ff);
-  static const componentAccentBlueDarkBackgroundColor = Color(0xff1a2635);
-  static const componentAccentBlueDarkTextColor = Color(0xfff7f7f8);
-  static const componentAccentBlueTextColor = Color(0xff171719);
-  static const componentAccentCoralBackgroundColor = Color(0xffffebea);
-  static const componentAccentCoralDarkBackgroundColor = Color(0xff332021);
-  static const componentAccentCoralDarkTextColor = Color(0xfff7f7f8);
-  static const componentAccentCoralTextColor = Color(0xff171719);
-  static const componentAccentMintBackgroundColor = Color(0xffebf9ee);
-  static const componentAccentMintDarkBackgroundColor = Color(0xff1e2e24);
-  static const componentAccentMintDarkTextColor = Color(0xfff7f7f8);
-  static const componentAccentMintTextColor = Color(0xff171719);
+  static const colorOnPrimaryContainer = Color(0xff19438f);
+  static const colorOnPrimaryContainerDark = Color(0xffd9e2ff);
+  static const colorOnPrimaryDark = Color(0xff001945);
+  static const colorOnSuccessContainer = Color(0xff005313);
+  static const colorOnSuccessContainerDark = Color(0xff94f990);
+  static const colorOnWarningContainer = Color(0xff693c00);
+  static const colorOnWarningContainerDark = Color(0xffffdcbe);
+  static const colorOutline = Color(0xff737785);
+  static const colorOutlineDark = Color(0xff8c909f);
+  static const colorPage = Color(0xfff0edf0);
+  static const colorPageDark = Color(0xff131315);
+  static const colorPressed = Color(0x66bcbcbc);
+  static const colorPressedDark = Color(0x40cccccc);
+  static const colorPrimary = Color(0xff4c88ff);
+  static const colorPrimaryContainer = Color(0xffd9e2ff);
+  static const colorPrimaryContainerDark = Color(0xff19438f);
+  static const colorPrimaryDark = Color(0xff5c91ff);
+  static const colorScrim = Color(0x33000000);
+  static const colorScrimDark = Color(0x7a000000);
+  static const colorSeparator = Color(0x24191b23);
+  static const colorSeparatorDark = Color(0x24f6f6ff);
+  static const colorShadow = Color(0x1e000000);
+  static const colorShadowDark = Color(0x2d000000);
+  static const colorShadowDock = Color(0x14000000);
+  static const colorShadowDockDark = Color(0x3d000000);
+  static const colorSuccess = Color(0xff006e1c);
+  static const colorSuccessContainer = Color(0xffd5e8cf);
+  static const colorSuccessContainerDark = Color(0xff3b4b38);
+  static const colorSuccessDark = Color(0xff78dc77);
+  static const colorText = Color(0xff191b23);
+  static const colorTextDark = Color(0xfff6f6ff);
+  static const colorTextSecondary = Color(0xff424654);
+  static const colorTextSecondaryDark = Color(0xffc2c6d6);
+  static const colorViewport = Color(0xff000000);
+  static const colorWarning = Color(0xff8b5000);
+  static const colorWarningContainer = Color(0xffffdcbe);
+  static const colorWarningContainerDark = Color(0xff59422c);
+  static const colorWarningDark = Color(0xffffb870);
   static const componentAlertActionsGap = 8.0;
+  static const componentAlertActionsHeight = 48.0;
   static const componentAlertActionsPadding = 16.0;
-  static const componentAlertButtonHeight = 48.0;
-  static const componentAlertButtonRounded = 24.0;
-  static const componentAlertDangerBackgroundColor = Color(0xfffce8e8);
-  static const componentAlertDangerDarkBackgroundColor = Color(0xff553137);
-  static const componentAlertDangerDarkTextColor = Color(0xffff827e);
-  static const componentAlertDangerTextColor = Color(0xffba2429);
+  static const componentAlertBackgroundColor = Color(0xfffcf8f9);
   static const componentAlertPadding = 30.0;
   static const componentAlertRounded = 34.0;
+  static const componentAlertTextColor = Color(0xff191b23);
   static const componentAlertWidth = 348.0;
-  static const componentAppCellHeight = 84.0;
-  static const componentAppCellWidth = 78.0;
-  static const componentAppContinuationMenuWidth = 273.0;
-  static const componentAppIconBackgroundColor = Color(0xffe5e5ea);
-  static const componentAppIconDarkBackgroundColor = Color(0xff2c2c2e);
-  static const componentAppIconDarkTextColor = Color(0xfff7f7f8);
-  static const componentAppIconRounded = 14.0;
-  static const componentAppIconSize = 52.0;
-  static const componentAppIconTextColor = Color(0xff171719);
-  static const componentAppScreenHeight = 424.0;
-  static const componentAppScreenRounded = 20.0;
-  static const componentAppearanceSelectorWidth = 168.0;
-  static const componentButtonDangerBackgroundColor = Color(0xffff3b30);
-  static const componentButtonDangerDarkBackgroundColor = Color(0xffff534a);
-  static const componentButtonDangerDarkTextColor = Color(0xff171719);
-  static const componentButtonDangerTextColor = Color(0xff171719);
-  static const componentButtonPrimaryBackgroundColor = Color(0xff171719);
-  static const componentButtonPrimaryDarkBackgroundColor = Color(0xfff7f7f8);
-  static const componentButtonPrimaryDarkTextColor = Color(0xff171719);
-  static const componentButtonPrimaryHeight = 50.0;
-  static const componentButtonPrimaryRounded = 25.0;
-  static const componentButtonPrimaryTextColor = Color(0xffffffff);
-  static const componentButtonPrimaryTypography = TextStyle(
+  static const componentBannerBackgroundColor = Color(0xfffcf8f9);
+  static const componentBannerHeight = 52.0;
+  static const componentBannerPadding = 18.0;
+  static const componentBannerRounded = 24.0;
+  static const componentBannerTextColor = Color(0xff191b23);
+  static const componentBannerTypography = TextStyle(
     fontSize: 15.0,
-    fontWeight: FontWeight.w500,
-    height: 1.4,
-    letterSpacing: 0.0,
+    fontWeight: FontWeight.w600,
+    height: 1.3333333333333333,
+    letterSpacing: null,
   );
-  static const componentButtonSecondaryBackgroundColor = Color(0xfff0f1f3);
-  static const componentButtonSecondaryDarkBackgroundColor = Color(0xff343436);
-  static const componentButtonSecondaryDarkTextColor = Color(0xfff7f7f8);
-  static const componentButtonSecondaryHeight = 50.0;
-  static const componentButtonSecondaryRounded = 25.0;
-  static const componentButtonSecondaryTextColor = Color(0xff171719);
-  static const componentButtonSecondaryTypography = TextStyle(
+  static const componentBarButtonBackgroundColor = Color(0x8afdfdfd);
+  static const componentBarButtonRounded = 999.0;
+  static const componentBarButtonSize = 44.0;
+  static const componentBarGlyphSize = 24.0;
+  static const componentButtonDestructiveBackgroundColor = Color(0xfff0edf0);
+  static const componentButtonDestructiveTextColor = Color(0xffba1a1a);
+  static const componentButtonDestructiveTypography = TextStyle(
     fontSize: 15.0,
-    fontWeight: FontWeight.w500,
-    height: 1.4,
-    letterSpacing: 0.0,
+    fontWeight: FontWeight.w600,
+    height: 1.3333333333333333,
+    letterSpacing: null,
   );
-  static const componentCallAcceptKeyBackgroundColor = Color(0xff32e875);
-  static const componentCallAcceptKeyRounded = 999.0;
-  static const componentCallAcceptKeySize = 72.0;
-  static const componentCallAcceptKeyTextColor = Color(0xff141d32);
-  static const componentCallAvatarBackgroundColor = Color(0xffc6d3f8);
-  static const componentCallAvatarSize = 112.0;
-  static const componentCallAvatarTextColor = Color(0xff141d32);
-  static const componentCallBannerBackgroundColor = Color(0xff141d32);
-  static const componentCallBannerHeight = 96.0;
-  static const componentCallBannerRounded = 24.0;
-  static const componentCallBannerTextColor = Color(0xfff7f7f8);
-  static const componentCallDockBackgroundColor = Color(0xff202d47);
-  static const componentCallDockRounded = 34.0;
-  static const componentCallDockTextColor = Color(0xfff7f7f8);
-  static const componentCallEndKeyBackgroundColor = Color(0xffff534a);
-  static const componentCallEndKeyRounded = 999.0;
-  static const componentCallEndKeySize = 72.0;
-  static const componentCallEndKeyTextColor = Color(0xff141d32);
-  static const componentCallOrbitBackgroundColor = Color(0xff445d8e);
+  static const componentButtonDisabledBackgroundColor = Color(0x1f191b23);
+  static const componentButtonFilledBackgroundColor = Color(0xff4c88ff);
+  static const componentButtonFilledGap = 8.0;
+  static const componentButtonFilledHeight = 48.0;
+  static const componentButtonFilledPadding = 24.0;
+  static const componentButtonFilledRounded = 999.0;
+  static const componentButtonFilledTextColor = Color(0xffffffff);
+  static const componentButtonFilledTypography = TextStyle(
+    fontSize: 15.0,
+    fontWeight: FontWeight.w600,
+    height: 1.3333333333333333,
+    letterSpacing: null,
+  );
+  static const componentButtonTextHeight = 40.0;
+  static const componentButtonTextPadding = 12.0;
+  static const componentButtonTextTextColor = Color(0xff4c88ff);
+  static const componentButtonTextTypography = TextStyle(
+    fontSize: 15.0,
+    fontWeight: FontWeight.w600,
+    height: 1.3333333333333333,
+    letterSpacing: null,
+  );
+  static const componentButtonTonalBackgroundColor = Color(0xfff0edf0);
+  static const componentButtonTonalHeight = 48.0;
+  static const componentButtonTonalPadding = 24.0;
+  static const componentButtonTonalRounded = 999.0;
+  static const componentButtonTonalTextColor = Color(0xff191b23);
+  static const componentButtonTonalTypography = TextStyle(
+    fontSize: 15.0,
+    fontWeight: FontWeight.w600,
+    height: 1.3333333333333333,
+    letterSpacing: null,
+  );
+  static const componentCallKeyBackgroundColor = Color(0xff2b3a57);
+  static const componentCallKeySize = 64.0;
+  static const componentCallPrimaryKeySize = 72.0;
   static const componentCallStageBackgroundColor = Color(0xff141d32);
   static const componentCallStageSecondaryTextColor = Color(0xffb8c6e2);
-  static const componentCallStageTextColor = Color(0xfff7f7f8);
-  static const componentCallUtilityKeyBackgroundColor = Color(0xff344764);
-  static const componentCallUtilityKeyRounded = 999.0;
-  static const componentCallUtilityKeySize = 64.0;
-  static const componentCallUtilityKeyTextColor = Color(0xfff7f7f8);
-  static const componentCanvasHeadingHeight = 96.0;
-  static const componentCanvasHeadingTextColor = Color(0xff808080);
-  static const componentCheckboxMarkRounded = 2.0;
-  static const componentCheckboxMarkSize = 18.0;
-  static const componentCheckboxTargetSize = 48.0;
-  static const componentChipHeight = 32.0;
-  static const componentChipPadding = 12.0;
+  static const componentCallStageTextColor = Color(0xffffffff);
+  static const componentCanvasLabelTextColor = Color(0xff737785);
+  static const componentCanvasLabelTypography = TextStyle(
+    fontSize: 13.0,
+    fontWeight: FontWeight.w400,
+    height: 1.3846153846153846,
+    letterSpacing: null,
+  );
+  static const componentCardBackgroundColor = Color(0xfffcf8f9);
+  static const componentCardPadding = 16.0;
+  static const componentCardRounded = 16.0;
+  static const componentCardTextColor = Color(0xff191b23);
+  static const componentChevronSize = 18.0;
+  static const componentChevronTextColor = Color(0xff737785);
+  static const componentChipBackgroundColor = Color(0xfffcf8f9);
+  static const componentChipGap = 6.0;
+  static const componentChipHeight = 36.0;
+  static const componentChipPadding = 16.0;
   static const componentChipRounded = 999.0;
-  static const componentConnectionArcBackgroundColor = Color(0xff2c6199);
-  static const componentConnectionArcDarkBackgroundColor = Color(0xffa5cefb);
-  static const componentConnectionFieldBackgroundColor = Color(0xffffffff);
-  static const componentConnectionFieldHeight = 52.0;
-  static const componentConnectionFieldOutlineDarkBackgroundColor = Color(
-    0xff7b7c86,
+  static const componentChipSelectedBackgroundColor = Color(0xff4c88ff);
+  static const componentChipSelectedTextColor = Color(0xffffffff);
+  static const componentChipTextColor = Color(0xff191b23);
+  static const componentChipTypography = TextStyle(
+    fontSize: 15.0,
+    fontWeight: FontWeight.w600,
+    height: 1.3333333333333333,
+    letterSpacing: null,
   );
-  static const componentConnectionFieldPadding = 16.0;
-  static const componentConnectionFieldRounded = 16.0;
-  static const componentConnectionFieldTextColor = Color(0xff171719);
-  static const componentConnectionIconIpTextColor = Color(0xff347ef5);
-  static const componentConnectionIconNearbyTextColor = Color(0xff0099a7);
-  static const componentConnectionIconPairingTextColor = Color(0xff009447);
-  static const componentConnectionIconQrTextColor = Color(0xff8057f1);
-  static const componentConnectionIconUsbTextColor = Color(0xffcc6700);
-  static const componentConnectionNearbyEntryBackgroundColor = Color(
-    0xffffffff,
-  );
-  static const componentConnectionNearbyEntryHeight = 54.0;
-  static const componentConnectionNearbyEntryPadding = 16.0;
-  static const componentConnectionNearbyEntryRounded = 18.0;
-  static const componentConnectionNearbyEntryTextColor = Color(0xff171719);
-  static const componentConnectionPathBackgroundColor = Color(0xffe8eef5);
-  static const componentConnectionPathDarkBackgroundColor = Color(0xff181c24);
-  static const componentConnectionPathHeight = 44.0;
-  static const componentConnectionPathRounded = 999.0;
-  static const componentConnectionSignalBackgroundColor = Color(0xff347ef5);
-  static const componentConnectionSignalDarkBackgroundColor = Color(0xff64a2ff);
-  static const componentConnectionSignalHeight = 4.0;
-  static const componentConnectionSignalRounded = 999.0;
-  static const componentConnectionSignalWidth = 23.0;
-  static const componentConnectionTabSelectedBackgroundColor = Color(
-    0xffe5e5ea,
-  );
-  static const componentConnectionTabSelectedRounded = 14.0;
-  static const componentConnectionTabSelectedTextColor = Color(0xff171719);
-  static const componentConnectionTabsBackgroundColor = Color(0xffffffff);
-  static const componentConnectionTabsHeight = 74.0;
-  static const componentConnectionTabsPadding = 4.0;
-  static const componentConnectionTabsRounded = 18.0;
-  static const componentConnectionTabsTextColor = Color(0xff5d5e65);
-  static const componentConnectionTrackBackgroundColor = Color(0xffbbcadb);
-  static const componentConnectionTrackDarkBackgroundColor = Color(0xff36516f);
-  static const componentContentPanelBackgroundColor = Color(0xffffffff);
-  static const componentContentPanelDarkBackgroundColor = Color(0xff262626);
-  static const componentContentPanelDarkTextColor = Color(0xfff7f7f8);
-  static const componentContentPanelLowBackgroundColor = Color(0xfff6f7f8);
-  static const componentContentPanelLowDarkBackgroundColor = Color(0xff262626);
-  static const componentContentPanelLowDarkTextColor = Color(0xfff7f7f8);
-  static const componentContentPanelLowTextColor = Color(0xff171719);
-  static const componentContentPanelRounded = 16.0;
-  static const componentContentPanelTextColor = Color(0xff171719);
-  static const componentControlCellHeight = 64.0;
-  static const componentControlDisabledBackgroundColor = Color(0xffe7e8ec);
-  static const componentControlDisabledDarkBackgroundColor = Color(0xff39393d);
-  static const componentControlDisabledDarkTextColor = Color(0xffb1b1ba);
-  static const componentControlDisabledTextColor = Color(0xff65666d);
-  static const componentControlFeedbackOpacity = 0.12;
-  static const componentControlFocusBorderColor = Color(0xff1b66cb);
-  static const componentControlFocusDarkBorderColor = Color(0xff89b8ff);
+  static const componentCompactButtonSize = 32.0;
+  static const componentControlFocusBorderColor = Color(0xff4c88ff);
   static const componentControlFocusSize = 2.0;
-  static const componentControlPressedBackgroundColor = Color(0x1f14141b);
-  static const componentControlPressedDarkBackgroundColor = Color(0x26ffffff);
-  static const componentDangerPanelBackgroundColor = Color(0xffffebea);
-  static const componentDangerPanelDarkBackgroundColor = Color(0xff332021);
-  static const componentDangerPanelDarkTextColor = Color(0xffffffff);
-  static const componentDangerPanelTextColor = Color(0xff000000);
-  static const componentDesktopHeaderPadding = 12.0;
   static const componentDesktopHeight = 960.0;
   static const componentDesktopWidth = 1440.0;
-  static const componentDeviceDetailSectionGap = 26.0;
-  static const componentDeviceDetailSectionHeight = 36.0;
-  static const componentDeviceDetailSectionTypography = TextStyle(
-    fontSize: 18.0,
+  static const componentDestructiveFilledBackgroundColor = Color(0xffff383c);
+  static const componentDeviceScreenBackgroundColor = Color(0xff171f27);
+  static const componentDeviceTileBackgroundColor = Color(0xffd9e2ff);
+  static const componentDeviceTileRounded = 16.0;
+  static const componentDeviceTileSize = 52.0;
+  static const componentDeviceTileTextColor = Color(0xff19438f);
+  static const componentDisabledLabelTextColor = Color(0x61191b23);
+  static const componentDockItemGap = 2.0;
+  static const componentDockItemSize = 28.0;
+  static const componentDockItemTextColor = Color(0xff424654);
+  static const componentDockItemTypography = TextStyle(
+    fontSize: 11.0,
     fontWeight: FontWeight.w500,
-    height: 1.4,
-    letterSpacing: 0.0,
+    height: 1.2727272727272727,
+    letterSpacing: null,
   );
-  static const componentDeviceDetailValueTextColor = Color(0xff545b61);
-  static const componentDeviceDetailValueTypography = TextStyle(
-    fontSize: 14.0,
-    fontWeight: FontWeight.w500,
-    height: 1.4,
-    letterSpacing: 0.0,
+  static const componentDockItemWidth = 86.0;
+  static const componentDockPlatterBackgroundColor = Color(0xd9d9e2ff);
+  static const componentDockPlatterTextColor = Color(0xff19438f);
+  static const componentDockShadowBackgroundColor = Color(0x14000000);
+  static const componentDockShadowShadowBlur = 24.0;
+  static const componentDockShadowShadowOffset = 8.0;
+  static const componentEmptyStatePadding = 32.0;
+  static const componentEmptyStateSize = 160.0;
+  static const componentEmptyStateWidth = 320.0;
+  static const componentFloatingShadowBackgroundColor = Color(0x1e000000);
+  static const componentFloatingShadowShadowBlur = 29.0;
+  static const componentFloatingShadowShadowOffset = 8.0;
+  static const componentFootBarBackgroundColor = Color(0x94f4f4f4);
+  static const componentFootBarHeight = 64.0;
+  static const componentFootBarPadding = 8.0;
+  static const componentFootBarRounded = 999.0;
+  static const componentFootBarTypography = TextStyle(
+    fontSize: 12.0,
+    fontWeight: FontWeight.w600,
+    height: 1.3333333333333333,
+    letterSpacing: null,
   );
-  static const componentDeviceGlyphBackgroundColor = Color(0xffa7c8e8);
-  static const componentDeviceGlyphBorderColor = Color(0xff294454);
-  static const componentDeviceGlyphIdleBackgroundColor = Color(0xffdce6ec);
-  static const componentDeviceGlyphIdleBorderColor = Color(0xff64757d);
-  static const componentDeviceHeroBackgroundColor = Color(0xffe9eff1);
-  static const componentDeviceHeroDarkBackgroundColor = Color(0xff232a2d);
-  static const componentDeviceHeroDarkTextColor = Color(0xfff7f7f8);
-  static const componentDeviceHeroGap = 18.0;
-  static const componentDeviceHeroHeight = 258.0;
-  static const componentDeviceHeroPadding = 18.0;
-  static const componentDeviceHeroRounded = 28.0;
-  static const componentDeviceHeroTextColor = Color(0xff171719);
-  static const componentDeviceIconHeight = 208.0;
-  static const componentDeviceIconRounded = 20.0;
-  static const componentDeviceIconWidth = 108.0;
-  static const componentDeviceIdentityBackgroundColor = Color(0xffe9eff1);
-  static const componentDeviceIdentityCompactHeight = 44.0;
-  static const componentDeviceIdentityHeight = 58.0;
-  static const componentDeviceIdentityPaneHeight = 92.0;
-  static const componentDeviceIdentityPaneWidth = 64.0;
-  static const componentDeviceIdentityRimBackgroundColor = Color(0xff36414b);
-  static const componentDeviceIdentityRounded = 17.0;
-  static const componentDeviceIdentityShowcaseBackgroundColor = Color(
-    0xff171f27,
-  );
-  static const componentDeviceIdentityShowcaseHeight = 144.0;
-  static const componentDeviceIdentityShowcaseWidth = 84.0;
-  static const componentDeviceIdentityStatusSize = 17.0;
-  static const componentDeviceIdentityWidth = 58.0;
-  static const componentDeviceListActionHeight = 44.0;
-  static const componentDeviceListActionRounded = 999.0;
-  static const componentDeviceListActionWidth = 79.0;
-  static const componentDeviceListHeaderHeight = 76.0;
-  static const componentDeviceListItemBackgroundColor = Color(0xffffffff);
-  static const componentDeviceListItemCompactHeight = 96.0;
-  static const componentDeviceListItemHeight = 108.0;
-  static const componentDeviceListItemPadding = 16.0;
-  static const componentDeviceListItemRounded = 16.0;
-  static const componentDeviceListItemTextColor = Color(0xff171719);
-  static const componentDeviceListOpenTextColor = Color(0xff23588a);
-  static const componentDeviceListSearchHeight = 46.0;
-  static const componentDeviceListSearchRounded = 16.0;
-  static const componentDeviceShortcutDisabledBackgroundColor = Color(
-    0xff72767c,
-  );
-  static const componentDeviceShortcutDisabledTextColor = Color(0xffffffff);
-  static const componentDiagnosticCheckingDarkTextColor = Color(0xff82b8ff);
-  static const componentDiagnosticCheckingTextColor = Color(0xff2674ed);
-  static const componentDiagnosticWarningTextColor = Color(0xffd47700);
-  static const componentEmptyContentGap = 24.0;
-  static const componentEmptyContentIconSize = 72.0;
-  static const componentEmptyContentMessageGapHeight = 10.0;
-  static const componentEmptyContentPadding = 16.0;
-  static const componentEmptyContentVerticalPadding = 40.0;
-  static const componentEmptyContentWidth = 380.0;
-  static const componentEmptyDeviceIntroHeight = 270.0;
-  static const componentEmptyDeviceIntroPadding = 17.0;
-  static const componentEmptyDeviceIntroRounded = 28.0;
-  static const componentEmptyDeviceIntroWidth = 440.0;
-  static const componentFeatureIconOpacity = 0.1;
-  static const componentFeatureIconRounded = 14.0;
-  static const componentFeatureIconSize = 40.0;
-  static const componentFieldBlockHeight = 104.0;
-  static const componentFileActionBarBackgroundColor = Color(0x7af4f4f4);
-  static const componentFileActionBarDarkBackgroundColor = Color(0x73343438);
-  static const componentFileActionBarHeight = 64.0;
-  static const componentFileActionBarPadding = 8.0;
-  static const componentFileActionBarRounded = 999.0;
-  static const componentFileActionBarTextColor = Color(0xff171719);
-  static const componentFileActionBarTypography = TextStyle(
-    fontSize: 13.0,
-    fontWeight: FontWeight.w500,
-    height: 1.4,
-    letterSpacing: 0.0,
-  );
-  static const componentFileBrowserTileBackgroundColor = Color(0xfff2f1f6);
-  static const componentFileBrowserTileDarkBackgroundColor = Color(0xff262626);
-  static const componentFileBrowserTileRounded = 14.0;
-  static const componentFileCurrentDirectoryBackgroundColor = Color(0xfffff1d8);
-  static const componentFileCurrentDirectoryDarkBackgroundColor = Color(
-    0xff352818,
-  );
-  static const componentFileCurrentDirectoryDarkTextColor = Color(0xffffb443);
-  static const componentFileCurrentDirectoryHeight = 32.0;
-  static const componentFileCurrentDirectoryRounded = 999.0;
-  static const componentFileCurrentDirectoryTextColor = Color(0xff845017);
-  static const componentFileDocumentPreviewHeight = 54.0;
-  static const componentFileDocumentPreviewRounded = 5.0;
-  static const componentFileDocumentPreviewWidth = 42.0;
-  static const componentFileFolderBadgeBackgroundColor = Color(0xffffb443);
-  static const componentFileFolderBadgeRounded = 9.0;
-  static const componentFileFolderBadgeSize = 30.0;
-  static const componentFileFolderGlyphTextColor = Color(0xffffb443);
-  static const componentFileIconSize = 44.0;
-  static const componentFileViewPopoverTypography = TextStyle(
-    fontSize: 14.0,
-    fontWeight: FontWeight.w500,
-    height: 1.4,
-    letterSpacing: 0.0,
-  );
-  static const componentFileViewPopoverWidth = 342.0;
-  static const componentFloatingActionWidth = 196.0;
-  static const componentFloatingSurfaceBackgroundColor = Color(0xffffffff);
-  static const componentFloatingSurfaceDarkBackgroundColor = Color(0xff343436);
-  static const componentFloatingSurfaceDarkTextColor = Color(0xfff7f7f8);
-  static const componentFloatingSurfaceTextColor = Color(0xff171719);
-  static const componentGlassActionBackgroundColor = Color(0xff171719);
-  static const componentGlassActionDarkBackgroundColor = Color(0xfff7f7f8);
-  static const componentGlassActionDarkTextColor = Color(0xff171719);
-  static const componentGlassActionHighlightBackgroundColor = Color(0x14ffffff);
-  static const componentGlassActionHighlightDarkBackgroundColor = Color(
-    0x1fffffff,
-  );
-  static const componentGlassActionTextColor = Color(0xffffffff);
-  static const componentGlassAlertBackgroundColor = Color(0x7affffff);
+  static const componentFormSheetRounded = 34.0;
+  static const componentFormSheetWidth = 440.0;
+  static const componentGlassAlertBackgroundColor = Color(0x8cfcf8f9);
   static const componentGlassAlertBlur = 16.0;
-  static const componentGlassAlertDarkBackgroundColor = Color(0x7a3e3e43);
-  static const componentGlassAlertOpticalDepth = 18.0;
-  static const componentGlassAlertRefractionIndex = 1.046;
-  static const componentGlassAlertSpecularIntensity = 0.46;
-  static const componentGlassAngle = 45.0;
-  static const componentGlassBackgroundColor = Color(0x79fdfdfd);
-  static const componentGlassBlur = 12.0;
-  static const componentGlassBorderColor = Color(0x99ffffff);
-  static const componentGlassClearBackgroundColor = Color(0x13ffffff);
-  static const componentGlassClearBlur = 0.0;
-  static const componentGlassClearOpticalDepth = 21.0;
-  static const componentGlassClearRefractionIndex = 1.132;
-  static const componentGlassClearSpecularIntensity = 0.65;
-  static const componentGlassDispersion = 0.0;
-  static const componentGlassEdgeDarkBackgroundColor = Color(0x47ffffff);
-  static const componentGlassGlowAngle = 90.0;
-  static const componentGlassGlowIntensity = 0.25;
-  static const componentGlassGlowOppositeIntensity = 0.5;
-  static const componentGlassGlowSpread = 0.5;
-  static const componentGlassGlowThickness = 6.0;
-  static const componentGlassHighlightBackgroundColor = Color(0x66ffffff);
-  static const componentGlassHighlightDarkBackgroundColor = Color(0x1fffffff);
-  static const componentGlassInteractionScale = 1.05;
+  static const componentGlassAlertOpticalDepth = 60.0;
+  static const componentGlassAlertRefractionWidth = 20.0;
+  static const componentGlassAlertSaturation = 2.0;
+  static const componentGlassAlertShadowBlur = 29.0;
+  static const componentGlassAlertShadowOffset = 8.0;
+  static const componentGlassAlertSpecularIntensity = 0.16;
+  static const componentGlassClearBackgroundColor = Color(0x1fffffff);
+  static const componentGlassClearBlur = 1.0;
+  static const componentGlassClearOpticalDepth = 60.0;
+  static const componentGlassClearRefractionWidth = 20.0;
+  static const componentGlassClearSpecularIntensity = 0.4;
+  static const componentGlassInteractionGlowIntensity = 0.16;
+  static const componentGlassInteractionScale = 1.16;
   static const componentGlassInteractionStretch = 0.5;
-  static const componentGlassLowEdgeBackgroundColor = Color(0x4275757a);
-  static const componentGlassLowEdgeDarkBackgroundColor = Color(0xa3000000);
-  static const componentGlassMagnification = 1.0;
-  static const componentGlassMaterializeScale = 1.15;
-  static const componentGlassMenuBackgroundColor = Color(0x7affffff);
+  static const componentGlassMenuBackgroundColor = Color(0x8cfcf8f9);
   static const componentGlassMenuBlur = 12.0;
-  static const componentGlassMenuDarkBackgroundColor = Color(0x7a3a3a40);
-  static const componentGlassMenuOpticalDepth = 16.0;
-  static const componentGlassMenuRefractionIndex = 1.054;
-  static const componentGlassMenuSpecularIntensity = 0.48;
-  static const componentGlassOpticalDepth = 70.0;
-  static const componentGlassPillBlur = 5.5;
-  static const componentGlassPillOpticalDepth = 23.0;
-  static const componentGlassPillRefractionIndex = 1.1;
-  static const componentGlassPillSpecularIntensity = 0.5;
-  static const componentGlassRefractionIndex = 1.1;
-  static const componentGlassRefractionWidth = 16.0;
-  static const componentGlassRegularBackgroundColor = Color(0x79fdfdfd);
+  static const componentGlassMenuOpticalDepth = 60.0;
+  static const componentGlassMenuRefractionWidth = 20.0;
+  static const componentGlassMenuSaturation = 2.0;
+  static const componentGlassMenuShadowBlur = 29.0;
+  static const componentGlassMenuShadowOffset = 8.0;
+  static const componentGlassMenuSpecularIntensity = 0.16;
+  static const componentGlassOnGlassBackgroundColor = Color(0x21000000);
+  static const componentGlassPillBackgroundColor = Color(0x94f4f4f4);
+  static const componentGlassPillBlur = 15.6;
+  static const componentGlassPillOpticalDepth = 60.0;
+  static const componentGlassPillRefractionWidth = 20.0;
+  static const componentGlassPillSaturation = 2.1;
+  static const componentGlassPillShadowBlur = 24.0;
+  static const componentGlassPillShadowOffset = 8.0;
+  static const componentGlassPillSpecularIntensity = 0.6;
+  static const componentGlassPillSpecularThickness = 1.3;
+  static const componentGlassRegularBackgroundColor = Color(0x8afdfdfd);
   static const componentGlassRegularBlur = 2.5;
-  static const componentGlassRegularDarkBackgroundColor = Color(0x7a38383e);
-  static const componentGlassRegularOpticalDepth = 20.0;
-  static const componentGlassRegularRefractionIndex = 1.104;
-  static const componentGlassRegularSpecularIntensity = 0.54;
-  static const componentGlassSaturation = 1.0;
-  static const componentGlassSelectionBackgroundColor = Color(0x1414141b);
-  static const componentGlassSelectionDarkBackgroundColor = Color(0x24ffffff);
-  static const componentGlassSelectionLabelDarkTextColor = Color(0xfff7f7f8);
-  static const componentGlassSelectionLabelTextColor = Color(0xff171719);
-  static const componentGlassShadowBackgroundColor = Color(0x14000000);
-  static const componentGlassShadowBlur = 16.0;
-  static const componentGlassShadowDarkBackgroundColor = Color(0x66000000);
-  static const componentGlassShadowOffset = 4.0;
-  static const componentGlassSpecularIntensity = 0.75;
-  static const componentGlassSpecularOppositeIntensity = 0.65;
-  static const componentGlassSpecularSharpness = 0.5;
-  static const componentGlassSpecularSpread = 0.9;
-  static const componentGlassSpecularThickness = 2.0;
-  static const componentGlassToolbarMaterialBackgroundColor = Color(0x2bffffff);
-  static const componentGlassToolbarMaterialDarkBackgroundColor = Color(
-    0x17ffffff,
+  static const componentGlassRegularBorderColor = Color(0xffffffff);
+  static const componentGlassRegularOpticalDepth = 60.0;
+  static const componentGlassRegularRefractionWidth = 20.0;
+  static const componentGlassRegularSaturation = 2.08;
+  static const componentGlassRegularSpecularIntensity = 0.28;
+  static const componentGlassRegularSpecularThickness = 1.2;
+  static const componentHeroCardBackgroundColor = Color(0xfffcf8f9);
+  static const componentHeroCardPadding = 20.0;
+  static const componentHeroCardRounded = 28.0;
+  static const componentHeroCardTextColor = Color(0xff191b23);
+  static const componentIconTileArchiveBackgroundColor = Color(0xff9266e5);
+  static const componentIconTileConnectionBackgroundColor = Color(0xff20c451);
+  static const componentIconTileDeviceBackgroundColor = Color(0xff4c88ff);
+  static const componentIconTileDisplayBackgroundColor = Color(0xfff7b418);
+  static const componentIconTileFileBackgroundColor = Color(0xff596ff1);
+  static const componentIconTileGlyphSize = 18.0;
+  static const componentIconTileMediaBackgroundColor = Color(0xff00adc1);
+  static const componentIconTileNotificationBackgroundColor = Color(0xfff3483f);
+  static const componentIconTileRounded = 8.0;
+  static const componentIconTileSize = 30.0;
+  static const componentIconTileTextColor = Color(0xffffffff);
+  static const componentIconTileTransferBackgroundColor = Color(0xfff57529);
+  static const componentIconTileUtilityBackgroundColor = Color(0xff8799ac);
+  static const componentInputBackgroundColor = Color(0xffe4e2e5);
+  static const componentInputErrorTextColor = Color(0xffba1a1a);
+  static const componentInputErrorTypography = TextStyle(
+    fontSize: 13.0,
+    fontWeight: FontWeight.w400,
+    height: 1.3846153846153846,
+    letterSpacing: null,
   );
-  static const componentGlassToolbarMaterialRounded = 22.0;
-  static const componentHeroActionWidth = 160.0;
-  static const componentHeroLabelWidth = 176.0;
-  static const componentIconActionSize = 19.0;
-  static const componentIconAmberDarkTextColor = Color(0xf5f7b418);
-  static const componentIconAmberTextColor = Color(0xf5f7b418);
-  static const componentIconBlueDarkTextColor = Color(0xf5347ef5);
-  static const componentIconBlueTextColor = Color(0xf5347ef5);
-  static const componentIconButtonGap = 8.0;
-  static const componentIconButtonRounded = 22.0;
-  static const componentIconButtonSize = 44.0;
-  static const componentIconCoralDarkTextColor = Color(0xf5f3483f);
-  static const componentIconCoralTextColor = Color(0xf5f3483f);
-  static const componentIconFeatureSize = 23.0;
-  static const componentIconLargeSize = 32.0;
-  static const componentIconMintDarkTextColor = Color(0xf520c451);
-  static const componentIconMintTextColor = Color(0xf520c451);
-  static const componentIconSize = 22.0;
-  static const componentIconSmallSize = 16.0;
-  static const componentIntroSignalMiddleBackgroundColor = Color(0xff6099ee);
-  static const componentIntroSignalNearBackgroundColor = Color(0xff8fbfff);
-  static const componentListCardPadding = 16.0;
-  static const componentListCardRounded = 16.0;
-  static const componentListIconAmberBackgroundColor = Color(0xf5f7b418);
-  static const componentListIconBlueBackgroundColor = Color(0xf5347ef5);
-  static const componentListIconCompactRounded = 8.0;
-  static const componentListIconCompactSize = 26.0;
-  static const componentListIconCompactTextColor = Color(0xffffffff);
-  static const componentListIconCoralBackgroundColor = Color(0xf5f3483f);
-  static const componentListIconDocumentBackgroundColor = Color(0xf5596ff1);
-  static const componentListIconGlyphCompactSize = 16.0;
-  static const componentListIconGlyphSize = 18.0;
-  static const componentListIconMintBackgroundColor = Color(0xf520c451);
-  static const componentListIconPurpleBackgroundColor = Color(0xf59266e5);
-  static const componentListIconRounded = 9.0;
-  static const componentListIconSize = 30.0;
-  static const componentListIconSlateBackgroundColor = Color(0xf500adc1);
-  static const componentListIconTextColor = Color(0xffffffff);
-  static const componentListIconTransferBackgroundColor = Color(0xf5f57529);
-  static const componentListIconUtilityBackgroundColor = Color(0xf58799ac);
-  static const componentLoadingFlowBlueBackgroundColor = Color(0x707ebbff);
-  static const componentLoadingFlowMintBackgroundColor = Color(0x6181e8ce);
-  static const componentLoadingFlowVioletBackgroundColor = Color(0x6bb8a4f5);
-  static const componentLoadingFlowWarmBackgroundColor = Color(0x7affbeb8);
-  static const componentLoadingOrbOpacity = 0.32;
-  static const componentMediaPreviewBarTextColor = Color(0xfff7f7f8);
-  static const componentMediaPreviewBarWidth = 342.0;
+  static const componentInputHeight = 48.0;
+  static const componentInputPadding = 12.0;
+  static const componentInputRounded = 16.0;
+  static const componentInputTextColor = Color(0xff191b23);
+  static const componentInputTypography = TextStyle(
+    fontSize: 17.0,
+    fontWeight: FontWeight.w400,
+    height: 1.2941176470588236,
+    letterSpacing: null,
+  );
+  static const componentListFooterTextColor = Color(0xff424654);
+  static const componentListFooterTypography = TextStyle(
+    fontSize: 13.0,
+    fontWeight: FontWeight.w400,
+    height: 1.3846153846153846,
+    letterSpacing: null,
+  );
+  static const componentListGroupBackgroundColor = Color(0xfffcf8f9);
+  static const componentListGroupRounded = 24.0;
+  static const componentListGroupTextColor = Color(0xff191b23);
+  static const componentListHeaderHeight = 36.0;
+  static const componentListHeaderPadding = 16.0;
+  static const componentListHeaderTextColor = Color(0xff424654);
+  static const componentListHeaderTypography = TextStyle(
+    fontSize: 17.0,
+    fontWeight: FontWeight.w600,
+    height: 1.2941176470588236,
+    letterSpacing: null,
+  );
+  static const componentListRowGap = 16.0;
+  static const componentListRowHeight = 56.0;
+  static const componentListRowPadding = 16.0;
+  static const componentListRowPressedBackgroundColor = Color(0x66bcbcbc);
+  static const componentListRowSubtitleTextColor = Color(0xff424654);
+  static const componentListRowSubtitleTypography = TextStyle(
+    fontSize: 15.0,
+    fontWeight: FontWeight.w400,
+    height: 1.3333333333333333,
+    letterSpacing: null,
+  );
+  static const componentListRowTypography = TextStyle(
+    fontSize: 17.0,
+    fontWeight: FontWeight.w400,
+    height: 1.2941176470588236,
+    letterSpacing: null,
+  );
+  static const componentListRowVerticalPadding = 10.0;
+  static const componentListSectionGap = 24.0;
   static const componentMediaProtectionBackgroundColor = Color(0x99000000);
   static const componentMediaProtectionHeight = 64.0;
-  static const componentMediaThumbnailSelectionBackgroundColor = Color(
-    0x61000000,
-  );
+  static const componentMenuBackgroundColor = Color(0xfffcf8f9);
   static const componentMenuItemHeight = 44.0;
   static const componentMenuItemPadding = 12.0;
   static const componentMenuItemRounded = 16.0;
   static const componentMenuItemSize = 20.0;
+  static const componentMenuItemTypography = TextStyle(
+    fontSize: 15.0,
+    fontWeight: FontWeight.w400,
+    height: 1.3333333333333333,
+    letterSpacing: null,
+  );
   static const componentMenuPadding = 8.0;
   static const componentMenuRounded = 24.0;
-  static const componentModalScrimBackgroundColor = Color(0x52141419);
-  static const componentModalScrimDarkBackgroundColor = Color(0x80000000);
-  static const componentNavigationBackgroundColor = Color(0x7af4f4f4);
-  static const componentNavigationDarkBackgroundColor = Color(0x73343438);
-  static const componentNavigationDarkTextColor = Color(0xfff7f7f8);
-  static const componentNavigationHeight = 62.0;
-  static const componentNavigationPadding = 4.0;
-  static const componentNavigationRounded = 31.0;
-  static const componentNavigationWidth = 284.0;
-  static const componentNotificationAppIconSize = 36.0;
-  static const componentNotificationCardHeight = 190.0;
-  static const componentNotificationDismissRounded = 999.0;
-  static const componentNotificationDismissSize = 26.0;
-  static const componentNotificationDismissTextColor = Color(0xff5d5e65);
-  static const componentNotificationListItemBackgroundColor = Color(0xffffffff);
-  static const componentNotificationListItemGap = 10.0;
-  static const componentNotificationListItemHeight = 92.0;
-  static const componentNotificationListItemPadding = 16.0;
-  static const componentNotificationListItemRounded = 20.0;
-  static const componentPageBodyHeight = 632.0;
-  static const componentPageContentMaxWidth = 720.0;
-  static const componentPageHeaderHeight = 56.0;
-  static const componentPairingQrBackgroundColor = Color(0xffffffff);
-  static const componentPairingQrSize = 204.0;
-  static const componentPairingQrTextColor = Color(0xff000000);
-  static const componentPhoneBackgroundColor = Color(0xfff6f7f8);
-  static const componentPhoneDarkBackgroundColor = Color(0xff000000);
-  static const componentPhoneDarkTextColor = Color(0xfff7f7f8);
+  static const componentMenuTextColor = Color(0xff191b23);
+  static const componentMenuWidth = 240.0;
+  static const componentModalScrimBackgroundColor = Color(0x33000000);
+  static const componentNavigationDockBackgroundColor = Color(0x94f4f4f4);
+  static const componentNavigationDockHeight = 62.0;
+  static const componentNavigationDockPadding = 4.0;
+  static const componentNavigationDockRounded = 999.0;
+  static const componentNavigationDockWidth = 274.0;
+  static const componentNavigationRailWidth = 72.0;
+  static const componentPageBackgroundColor = Color(0xfff0edf0);
+  static const componentPageBarGap = 4.0;
+  static const componentPageBarHeight = 72.0;
+  static const componentPageBarPadding = 4.0;
+  static const componentPageBarRootTypography = TextStyle(
+    fontSize: 24.0,
+    fontWeight: FontWeight.w600,
+    height: 1.25,
+    letterSpacing: null,
+  );
+  static const componentPageBarTypography = TextStyle(
+    fontSize: 20.0,
+    fontWeight: FontWeight.w600,
+    height: 1.25,
+    letterSpacing: null,
+  );
+  static const componentPageMaxWidth = 720.0;
+  static const componentPagePadding = 16.0;
+  static const componentPageTextColor = Color(0xff191b23);
   static const componentPhoneHeight = 874.0;
-  static const componentPhonePadding = 16.0;
-  static const componentPhoneTextColor = Color(0xff171719);
   static const componentPhoneWidth = 402.0;
-  static const componentPickerOptionHeight = 48.0;
-  static const componentPickerOptionPadding = 12.0;
-  static const componentPickerOptionRounded = 16.0;
-  static const componentPickerOptionSize = 20.0;
-  static const componentPickerPadding = 8.0;
-  static const componentPickerRounded = 34.0;
-  static const componentPickerWidth = 358.0;
-  static const componentRemoteClockHeight = 108.0;
-  static const componentRemoteExitBackgroundColor = Color(0x79fdfdfd);
-  static const componentRemoteExitHandleHeight = 24.0;
-  static const componentRemoteExitHandleRounded = 999.0;
-  static const componentRemoteExitHandleWidth = 2.0;
-  static const componentRemoteExitHitHeight = 52.0;
-  static const componentRemoteExitHitWidth = 44.0;
-  static const componentRemoteExitPadding = 12.0;
-  static const componentRemoteExitPeekBackgroundColor = Color(0x79fdfdfd);
-  static const componentRemoteExitPeekHeight = 52.0;
-  static const componentRemoteExitPeekRounded = 999.0;
-  static const componentRemoteExitPeekTextColor = Color(0xff171719);
-  static const componentRemoteExitPeekWidth = 12.0;
-  static const componentRemoteExitRounded = 999.0;
-  static const componentRemoteExitSize = 52.0;
-  static const componentRemoteExitTextColor = Color(0xff171719);
-  static const componentRemoteNavigationHeight = 56.0;
-  static const componentRemoteNavigationPadding = 67.5;
-  static const componentRemoteScreenBackgroundColor = Color(0xff111114);
-  static const componentRemoteScreenHeight = 492.0;
-  static const componentRemoteScreenRounded = 20.0;
-  static const componentRemoteToolPanelHeight = 329.0;
-  static const componentRemoteToolPanelWidth = 272.0;
-  static const componentRowGap = 12.0;
-  static const componentRowHeight = 56.0;
-  static const componentRowLargeHeight = 64.0;
-  static const componentRowPadding = 16.0;
-  static const componentRowVerticalPadding = 8.0;
-  static const componentScrollEdgeOpacity = 0.9;
-  static const componentSecondaryLabelDarkTextColor = Color(0xffb6b6bd);
-  static const componentSecondaryLabelTextColor = Color(0xff5d5e65);
-  static const componentSegmentedItemRounded = 18.0;
-  static const componentSegmentedTrackHeight = 44.0;
-  static const componentSegmentedTrackPadding = 4.0;
-  static const componentSegmentedTrackRounded = 22.0;
-  static const componentSelectionFieldBackgroundColor = Color(0xffe7e8ec);
-  static const componentSelectionFieldDarkBackgroundColor = Color(0xff424245);
-  static const componentSelectionFieldHeight = 44.0;
-  static const componentSelectionFieldPadding = 16.0;
-  static const componentSelectionFieldRounded = 22.0;
-  static const componentSelectionFieldVerticalPadding = 8.0;
-  static const componentSeparatorBackgroundColor = Color(0xffdedede);
-  static const componentSeparatorDarkBackgroundColor = Color(0xff404040);
-  static const componentSettingsRowHeight = 50.0;
+  static const componentProgressBackgroundColor = Color(0xff4c88ff);
+  static const componentProgressHeight = 3.0;
+  static const componentProgressRounded = 999.0;
+  static const componentRemoteHandleHeight = 52.0;
+  static const componentRemoteHandleWidth = 12.0;
+  static const componentRemoteNavigationHeight = 48.0;
+  static const componentRemoteViewportBackgroundColor = Color(0xff000000);
+  static const componentSafeAreaHeight = 62.0;
+  static const componentSafeAreaVerticalPadding = 34.0;
+  static const componentSearchFieldBackgroundColor = Color(0xffe4e2e5);
+  static const componentSearchFieldHeight = 44.0;
+  static const componentSearchFieldPadding = 12.0;
+  static const componentSearchFieldRounded = 999.0;
+  static const componentSearchFieldTextColor = Color(0xff191b23);
+  static const componentSearchFieldTypography = TextStyle(
+    fontSize: 17.0,
+    fontWeight: FontWeight.w400,
+    height: 1.2941176470588236,
+    letterSpacing: null,
+  );
+  static const componentSectionButtonBackgroundColor = Color(0xfff0edf0);
+  static const componentSectionButtonRounded = 999.0;
+  static const componentSectionButtonSize = 36.0;
+  static const componentSectionButtonTextColor = Color(0xff191b23);
+  static const componentSectionGlyphSize = 20.0;
+  static const componentSegmentedBackgroundColor = Color(0xfff0edf0);
+  static const componentSegmentedHeight = 44.0;
+  static const componentSegmentedPadding = 4.0;
+  static const componentSegmentedRounded = 999.0;
+  static const componentSegmentedTextColor = Color(0xff424654);
+  static const componentSegmentedThumbBackgroundColor = Color(0xff4c88ff);
+  static const componentSegmentedThumbTextColor = Color(0xffffffff);
+  static const componentSegmentedThumbTypography = TextStyle(
+    fontSize: 15.0,
+    fontWeight: FontWeight.w600,
+    height: 1.3333333333333333,
+    letterSpacing: null,
+  );
+  static const componentSegmentedTypography = TextStyle(
+    fontSize: 15.0,
+    fontWeight: FontWeight.w400,
+    height: 1.3333333333333333,
+    letterSpacing: null,
+  );
+  static const componentSelectionMarkBackgroundColor = Color(0xff4c88ff);
+  static const componentSelectionMarkRounded = 999.0;
+  static const componentSelectionMarkSize = 22.0;
+  static const componentSelectionMarkTextColor = Color(0xffffffff);
+  static const componentSeparatorBackgroundColor = Color(0x24191b23);
+  static const componentSeparatorHeight = 1.0;
+  static const componentSheetBackgroundColor = Color(0xfff0edf0);
+  static const componentSheetHandleBackgroundColor = Color(0xff424654);
   static const componentSheetHandleHeight = 4.0;
-  static const componentSheetHandlePadding = 8.0;
   static const componentSheetHandleWidth = 28.0;
-  static const componentSheetLongHeight = 580.0;
-  static const componentSheetMediumHeight = 448.0;
-  static const componentSheetPadding = 24.0;
+  static const componentSheetPadding = 16.0;
   static const componentSheetRounded = 28.0;
-  static const componentSheetShortHeight = 304.0;
-  static const componentSidebarBackgroundColor = Color(0xffffffff);
-  static const componentSidebarCompactWidth = 72.0;
-  static const componentSidebarTextColor = Color(0xff171719);
-  static const componentSidebarWidth = 208.0;
-  static const componentSkeletonGraphicBackgroundColor = Color(0xffe9eff1);
-  static const componentSkeletonGraphicDarkBackgroundColor = Color(0xff39434a);
-  static const componentSkeletonHighlightBackgroundColor = Color(0xffffffff);
-  static const componentSkeletonHighlightDarkBackgroundColor = Color(
-    0xff545b61,
-  );
-  static const componentSkeletonLineBackgroundColor = Color(0xffe5e5ea);
-  static const componentSkeletonLineDarkBackgroundColor = Color(0xff404040);
-  static const componentSmallButtonSize = 36.0;
-  static const componentStatusBarHeight = 54.0;
-  static const componentStatusConnectedDarkTextColor = Color(0xfff7f7f8);
-  static const componentStatusConnectedTextColor = Color(0xff171719);
-  static const componentStatusDangerDarkTextColor = Color(0xfff7f7f8);
-  static const componentStatusDangerTextColor = Color(0xff171719);
-  static const componentStatusSymbolConnectedDarkTextColor = Color(0xff32e875);
-  static const componentStatusSymbolConnectedTextColor = Color(0xff00a34a);
-  static const componentStatusSymbolWarningBackgroundColor = Color(0xffffb020);
-  static const componentStatusSymbolWarningDarkBackgroundColor = Color(
-    0xffffc247,
-  );
-  static const componentStatusSymbolWarningDarkTextColor = Color(0xff171719);
-  static const componentStatusSymbolWarningTextColor = Color(0xff171719);
-  static const componentStatusWarningDarkTextColor = Color(0xfff7f7f8);
-  static const componentStatusWarningTextColor = Color(0xff171719);
+  static const componentSheetTextColor = Color(0xff191b23);
+  static const componentSidebarBackgroundColor = Color(0xfffcf8f9);
+  static const componentSidebarHeight = 40.0;
+  static const componentSidebarRounded = 10.0;
+  static const componentSidebarWidth = 220.0;
+  static const componentSkeletonBackgroundColor = Color(0xffe4e2e5);
+  static const componentSkeletonRounded = 999.0;
+  static const componentStatusDotBackgroundColor = Color(0xff006e1c);
+  static const componentStatusDotSize = 12.0;
+  static const componentSwitchBackgroundColor = Color(0xff4c88ff);
+  static const componentSwitchHeight = 32.0;
+  static const componentSwitchOffBackgroundColor = Color(0xffe4e2e5);
+  static const componentSwitchRounded = 999.0;
   static const componentSwitchThumbBackgroundColor = Color(0xffffffff);
-  static const componentSwitchThumbRounded = 12.0;
+  static const componentSwitchThumbOffBackgroundColor = Color(0xff737785);
   static const componentSwitchThumbSize = 24.0;
-  static const componentSwitchTrackBackgroundColor = Color(0xff171719);
-  static const componentSwitchTrackHeight = 32.0;
-  static const componentSwitchTrackOffBackgroundColor = Color(0xff777982);
-  static const componentSwitchTrackOffDarkBackgroundColor = Color(0xff6e7079);
-  static const componentSwitchTrackPadding = 4.0;
-  static const componentSwitchTrackRounded = 16.0;
-  static const componentSwitchTrackWidth = 52.0;
+  static const componentSwitchWidth = 52.0;
   static const componentTabletHeight = 834.0;
   static const componentTabletWidth = 1194.0;
-  static const componentTextActionBackgroundColor = Color(0x00000000);
-  static const componentTextDangerDarkTextColor = Color(0xffff827e);
-  static const componentTextDangerTextColor = Color(0xffba2429);
-  static const componentThumbnailHeight = 112.0;
-  static const componentThumbnailRounded = 10.0;
-  static const componentThumbnailSize = 112.0;
-  static const componentToolGlyphSize = 24.0;
-  static const componentTransferCardThumbnailWidth = 48.0;
-  static const componentTransferProgressBackgroundColor = Color(0xffdedede);
-  static const componentTransferProgressDarkBackgroundColor = Color(0xff404040);
-  static const componentTransferProgressDarkTextColor = Color(0xfff7f7f8);
-  static const componentTransferProgressHeight = 4.0;
-  static const componentTransferProgressRounded = 2.0;
-  static const componentTransferProgressTextColor = Color(0xff171719);
-  static const componentTypeCellHeight = 60.0;
-  static const componentUpdateDialogGlyphSize = 28.0;
-  static const componentUpdateDialogRingSize = 72.0;
-  static const componentUpdateDialogSummaryWidth = 192.0;
-  static const componentUpdateDialogWidePadding = 28.0;
-  static const componentUpdateDialogWideWidth = 628.0;
-  static const componentUsbStatusCardHeight = 136.0;
-  static const componentWorkspaceAppEmptyBackgroundColor = Color(0xfff0f1f2);
-  static const componentWorkspaceAppEmptyRounded = 12.0;
-  static const componentWorkspaceAppEmptySize = 42.0;
-  static const componentWorkspaceAppHeaderHeight = 44.0;
-  static const componentWorkspaceAppPanelHeight = 110.0;
-  static const componentWorkspaceAppPanelRounded = 24.0;
-  static const componentWorkspaceDuoPaneWidth = 280.0;
-  static const componentWorkspacePaneWidth = 360.0;
-  static const componentWorkspacePhoneHeight = 156.0;
-  static const componentWorkspacePhonePadding = 3.0;
-  static const componentWorkspacePhoneRounded = 24.0;
-  static const componentWorkspacePhoneScreenRounded = 22.0;
-  static const componentWorkspacePhoneWidth = 96.0;
-  static const componentWorkspacePrimaryActionHeight = 48.0;
-  static const componentWorkspaceRunningEmptyGap = 11.0;
-  static const componentWorkspaceRunningEmptySize = 20.0;
-  static const componentWorkspaceSectionGap = 14.0;
-  static const componentWorkspaceShortcutRounded = 16.0;
-  static const componentWorkspaceShortcutSize = 48.0;
-  static const componentWorkspaceShortcutsRounded = 22.0;
-  static const componentWorkspaceSidebarBackgroundColor = Color(0xffe9eff1);
-  static const componentWorkspaceSplitHeight = 480.0;
-  static const componentWorkspaceSplitWidth = 1080.0;
-  static const roundedAction = 25.0;
+  static const componentTagBackgroundColor = Color(0xfff0edf0);
+  static const componentTagErrorBackgroundColor = Color(0xffffdad6);
+  static const componentTagErrorTextColor = Color(0xff93000a);
+  static const componentTagPadding = 6.0;
+  static const componentTagRounded = 8.0;
+  static const componentTagSuccessBackgroundColor = Color(0xffd5e8cf);
+  static const componentTagSuccessTextColor = Color(0xff005313);
+  static const componentTagTextColor = Color(0xff424654);
+  static const componentTagTypography = TextStyle(
+    fontSize: 12.0,
+    fontWeight: FontWeight.w600,
+    height: 1.3333333333333333,
+    letterSpacing: null,
+  );
+  static const componentTagWarningBackgroundColor = Color(0xffffdcbe);
+  static const componentTagWarningTextColor = Color(0xff693c00);
+  static const componentThumbnailBackgroundColor = Color(0xfff0edf0);
+  static const componentThumbnailRounded = 8.0;
+  static const roundedAlert = 34.0;
   static const roundedFull = 999.0;
-  static const roundedItem = 16.0;
   static const roundedLg = 20.0;
-  static const roundedMd = 14.0;
-  static const roundedPhone = 38.0;
-  static const roundedSm = 10.0;
-  static const roundedXl = 28.0;
+  static const roundedMd = 16.0;
+  static const roundedSm = 8.0;
+  static const roundedXl = 24.0;
+  static const roundedXs = 4.0;
+  static const roundedXxl = 28.0;
   static const spacingBoard = 80.0;
-  static const spacingGroup = 144.0;
+  static const spacingGroup = 160.0;
   static const spacingHairline = 1.0;
-  static const spacingLg = 24.0;
-  static const spacingMd = 16.0;
-  static const spacingMicro = 2.0;
+  static const spacingJumbo = 40.0;
+  static const spacingLg = 16.0;
+  static const spacingMd = 12.0;
   static const spacingSection = 48.0;
-  static const spacingSectionTitle = 28.0;
-  static const spacingSm = 12.0;
-  static const spacingTight = 6.0;
-  static const spacingXl = 32.0;
-  static const spacingXs = 8.0;
-  static const spacingXxl = 40.0;
-  static const spacingXxs = 4.0;
-  static const spacingZero = 0.0;
-  static const typographyActionCaptionFontFamily = "MiSans";
-  static const typographyActionCaptionFontSize = 13.0;
-  static const typographyActionCaptionFontWeight = FontWeight.w500;
-  static const typographyActionCaptionLetterSpacing = 0.0;
-  static const typographyActionCaptionLineHeight = 1.4;
-  static const typographyBodyCompactFontFamily = "MiSans";
-  static const typographyBodyCompactFontSize = 15.0;
-  static const typographyBodyCompactFontWeight = FontWeight.w400;
-  static const typographyBodyCompactLetterSpacing = 0.0;
-  static const typographyBodyCompactLineHeight = 1.4;
-  static const typographyBodyEmphasisFontFamily = "MiSans";
-  static const typographyBodyEmphasisFontSize = 17.0;
-  static const typographyBodyEmphasisFontWeight = FontWeight.w600;
-  static const typographyBodyEmphasisLetterSpacing = 0.0;
-  static const typographyBodyEmphasisLineHeight = 1.45;
+  static const spacingSm = 8.0;
+  static const spacingXl = 20.0;
+  static const spacingXs = 4.0;
+  static const spacingXxl = 24.0;
+  static const spacingXxs = 2.0;
+  static const spacingXxxl = 32.0;
   static const typographyBodyFontFamily = "MiSans";
   static const typographyBodyFontSize = 17.0;
   static const typographyBodyFontWeight = FontWeight.w400;
-  static const typographyBodyLetterSpacing = 0.0;
-  static const typographyBodyLineHeight = 1.45;
-  static const typographyCallElapsedFontFamily = "MiSans";
-  static const typographyCallElapsedFontSize = 27.0;
-  static const typographyCallElapsedFontWeight = FontWeight.w500;
-  static const typographyCallElapsedLetterSpacing = 0.0;
-  static const typographyCallElapsedLineHeight = 1.25;
-  static const typographyCallerNameFontFamily = "MiSans";
-  static const typographyCallerNameFontSize = 42.0;
-  static const typographyCallerNameFontWeight = FontWeight.w700;
-  static const typographyCallerNameLetterSpacing = 0.0;
-  static const typographyCallerNameLineHeight = 1.2;
+  static const double? typographyBodyLetterSpacing = null;
+  static const typographyBodyLineHeight = 1.2941176470588236;
+  static const typographyCaption2FontFamily = "MiSans";
+  static const typographyCaption2FontSize = 11.0;
+  static const typographyCaption2FontWeight = FontWeight.w600;
+  static const double? typographyCaption2LetterSpacing = null;
+  static const typographyCaption2LineHeight = 1.1818181818181819;
+  static const typographyCaptionEmphasisFontFamily = "MiSans";
+  static const typographyCaptionEmphasisFontSize = 12.0;
+  static const typographyCaptionEmphasisFontWeight = FontWeight.w600;
+  static const double? typographyCaptionEmphasisLetterSpacing = null;
+  static const typographyCaptionEmphasisLineHeight = 1.3333333333333333;
   static const typographyCaptionFontFamily = "MiSans";
-  static const typographyCaptionFontSize = 13.0;
+  static const typographyCaptionFontSize = 12.0;
   static const typographyCaptionFontWeight = FontWeight.w400;
-  static const typographyCaptionLetterSpacing = 0.0;
-  static const typographyCaptionLineHeight = 1.4;
-  static const typographyClockFontFamily = "MiSans";
-  static const typographyClockFontSize = 48.0;
-  static const typographyClockFontWeight = FontWeight.w600;
-  static const typographyClockLetterSpacing = -1.0;
-  static const typographyClockLineHeight = 1.1;
-  static const typographyConnectionTitleFontFamily = "MiSans";
-  static const typographyConnectionTitleFontSize = 36.0;
-  static const typographyConnectionTitleFontWeight = FontWeight.w700;
-  static const typographyConnectionTitleLetterSpacing = 0.0;
-  static const typographyConnectionTitleLineHeight = 1.2;
-  static const typographyDeviceDetailHeadingFontFamily = "MiSans";
-  static const typographyDeviceDetailHeadingFontSize = 18.0;
-  static const typographyDeviceDetailHeadingFontWeight = FontWeight.w500;
-  static const typographyDeviceDetailHeadingLetterSpacing = 0.0;
-  static const typographyDeviceDetailHeadingLineHeight = 1.4;
-  static const typographyDeviceDetailValueFontFamily = "MiSans";
-  static const typographyDeviceDetailValueFontSize = 14.0;
-  static const typographyDeviceDetailValueFontWeight = FontWeight.w500;
-  static const typographyDeviceDetailValueLetterSpacing = 0.0;
-  static const typographyDeviceDetailValueLineHeight = 1.4;
-  static const typographyDisplayFontFamily = "MiSans";
-  static const typographyDisplayFontSize = 28.0;
-  static const typographyDisplayFontWeight = FontWeight.w700;
-  static const typographyDisplayLetterSpacing = -0.6;
-  static const typographyDisplayLineHeight = 1.15;
-  static const typographyFileOptionLabelFontFamily = "MiSans";
-  static const typographyFileOptionLabelFontSize = 14.0;
-  static const typographyFileOptionLabelFontWeight = FontWeight.w500;
-  static const typographyFileOptionLabelLetterSpacing = 0.0;
-  static const typographyFileOptionLabelLineHeight = 1.4;
-  static const typographyHeadingFontFamily = "MiSans";
-  static const typographyHeadingFontSize = 17.0;
-  static const typographyHeadingFontWeight = FontWeight.w600;
-  static const typographyHeadingLetterSpacing = 0.0;
-  static const typographyHeadingLineHeight = 1.35;
+  static const double? typographyCaptionLetterSpacing = null;
+  static const typographyCaptionLineHeight = 1.3333333333333333;
+  static const typographyFootnoteFontFamily = "MiSans";
+  static const typographyFootnoteFontSize = 13.0;
+  static const typographyFootnoteFontWeight = FontWeight.w400;
+  static const double? typographyFootnoteLetterSpacing = null;
+  static const typographyFootnoteLineHeight = 1.3846153846153846;
+  static const typographyHeadlineFontFamily = "MiSans";
+  static const typographyHeadlineFontSize = 17.0;
+  static const typographyHeadlineFontWeight = FontWeight.w600;
+  static const double? typographyHeadlineLetterSpacing = null;
+  static const typographyHeadlineLineHeight = 1.2941176470588236;
   static const typographyLabelFontFamily = "MiSans";
   static const typographyLabelFontSize = 15.0;
-  static const typographyLabelFontWeight = FontWeight.w500;
-  static const typographyLabelLetterSpacing = 0.0;
-  static const typographyLabelLineHeight = 1.4;
-  static const typographyMicroFontFamily = "MiSans";
-  static const typographyMicroFontSize = 11.0;
-  static const typographyMicroFontWeight = FontWeight.w500;
-  static const typographyMicroLetterSpacing = 0.0;
-  static const typographyMicroLineHeight = 1.3;
-  static const typographyNumericFontFamily = "MiSans";
-  static const typographyNumericFontSize = 17.0;
-  static const typographyNumericFontWeight = FontWeight.w600;
-  static const typographyNumericLetterSpacing = 0.0;
-  static const typographyNumericLineHeight = 1.3;
-  static const typographyTitleFontFamily = "MiSans";
-  static const typographyTitleFontSize = 22.0;
-  static const typographyTitleFontWeight = FontWeight.w600;
-  static const typographyTitleLetterSpacing = 0.0;
-  static const typographyTitleLineHeight = 1.25;
+  static const typographyLabelFontWeight = FontWeight.w600;
+  static const double? typographyLabelLetterSpacing = null;
+  static const typographyLabelLineHeight = 1.3333333333333333;
+  static const typographyLargeTitleFontFamily = "MiSans";
+  static const typographyLargeTitleFontSize = 34.0;
+  static const typographyLargeTitleFontWeight = FontWeight.w700;
+  static const double? typographyLargeTitleLetterSpacing = null;
+  static const typographyLargeTitleLineHeight = 1.2058823529411764;
+  static const typographyPageTitleFontFamily = "MiSans";
+  static const typographyPageTitleFontSize = 24.0;
+  static const typographyPageTitleFontWeight = FontWeight.w600;
+  static const double? typographyPageTitleLetterSpacing = null;
+  static const typographyPageTitleLineHeight = 1.25;
+  static const typographySubheadlineFontFamily = "MiSans";
+  static const typographySubheadlineFontSize = 15.0;
+  static const typographySubheadlineFontWeight = FontWeight.w400;
+  static const double? typographySubheadlineLetterSpacing = null;
+  static const typographySubheadlineLineHeight = 1.3333333333333333;
+  static const typographyTabLabelFontFamily = "MiSans";
+  static const typographyTabLabelFontSize = 11.0;
+  static const typographyTabLabelFontWeight = FontWeight.w500;
+  static const double? typographyTabLabelLetterSpacing = null;
+  static const typographyTabLabelLineHeight = 1.2727272727272727;
+  static const typographyTitle1FontFamily = "MiSans";
+  static const typographyTitle1FontSize = 28.0;
+  static const typographyTitle1FontWeight = FontWeight.w700;
+  static const double? typographyTitle1LetterSpacing = null;
+  static const typographyTitle1LineHeight = 1.2142857142857142;
+  static const typographyTitle3FontFamily = "MiSans";
+  static const typographyTitle3FontSize = 20.0;
+  static const typographyTitle3FontWeight = FontWeight.w600;
+  static const double? typographyTitle3LetterSpacing = null;
+  static const typographyTitle3LineHeight = 1.25;
 }

@@ -26,8 +26,7 @@ dart format --output=none --set-exit-if-changed app/lib app/test test scripts se
 cargo fmt --all --check
 cargo fmt --manifest-path rust/media_codec/Cargo.toml --check
 cargo clippy --workspace --lib --bins -- -D warnings
-cargo test -p interop-adb --test identity
-cargo test -p interop-adb-api file_publication::tests
+cargo test --workspace
 # 媒体核心是独立 workspace；生成检查已要求对应宿主的固定 FFmpeg 缓存。
 media_rust_target="${CARGO_TARGET_DIR:-$PWD/.dart_tool/media_codec/rust-target}"
 (

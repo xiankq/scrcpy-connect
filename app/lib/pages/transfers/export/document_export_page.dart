@@ -7,10 +7,11 @@ import 'package:scrcpy_connect/core/files/document_operation_notifier.dart';
 import 'package:scrcpy_connect/core/files/system_documents.dart';
 import 'package:scrcpy_connect/hooks/use_document_picker.dart';
 import 'package:scrcpy_connect/hooks/use_transfer_cache_lease.dart';
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/utils/formatters.dart';
-import 'package:scrcpy_connect/widgets/form_controls.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart' show confirm;
 import 'package:scrcpy_connect/widgets/documents/document_conflict_panel.dart';
@@ -20,6 +21,7 @@ import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
+import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 class DocumentExportPage extends HookConsumerWidget {
@@ -49,10 +51,11 @@ class DocumentExportPage extends HookConsumerWidget {
     if (!supportsSystemDocumentSave) {
       return PageFrame(
         title: heading,
-        titleStyle: Theme.of(context).textTheme.headlineMedium,
         onBack: onBack,
         child: GroupedListView(
-          padding: const EdgeInsets.all(DesignTokens.spacingLg),
+          padding: const EdgeInsets.symmetric(
+            horizontal: DesignTokens.spacingLg,
+          ),
           children: [
             SystemFileShareForm(
               key: ValueKey('$transferId:$localPath'),
@@ -108,7 +111,6 @@ class DocumentExportPage extends HookConsumerWidget {
     if (transferId != null && (!cacheLease.hasData || cacheLease.hasError)) {
       return PageFrame(
         title: heading,
-        titleStyle: Theme.of(context).textTheme.headlineMedium,
         onBack: onBack,
         child: PageChromeBody(
           child: cacheLease.hasError
@@ -118,11 +120,14 @@ class DocumentExportPage extends HookConsumerWidget {
                     fallback: '临时文件已不可用。请从手机重新取回。',
                   ),
                 )
-              : const Center(child: CircularProgressIndicator.adaptive()),
+              : const Center(child: ContentLoadingIndicator()),
         ),
       );
     }
     final errors = result?.errors ?? <DocumentIssue>[];
+    final colors = AppColors.of(context);
+    final type = AppTypography.of(context);
+    final body = type.subheadline.copyWith(color: colors.textSecondary);
     final leading = <Widget>[
       ContentPanel(
         child: OriginalFileHeader(name: name, kind: kind),
@@ -141,14 +146,16 @@ class DocumentExportPage extends HookConsumerWidget {
           '目前只取回了部分文件。保存前请检查还缺哪些文件。',
           icon: LucideIcons.circleAlert,
         ),
-      const Text('选择系统位置保存一份。只有系统确认写入完成后，才显示保存成功。本机暂存仍保留。'),
+      const SectionFooter('选择系统位置保存一份。只有系统确认写入完成后，才显示保存成功。本机暂存仍保留。'),
       const SizedBox(height: DesignTokens.spacingLg),
       if (waiting) ...[
         const ContentLoadingIndicator(),
         const StateNote('正在等待系统选择或实际写入结果…'),
-        TextButton(
+        AppButton(
+          role: AppButtonRole.secondaryOnPage,
+          expand: true,
           onPressed: operation.cancelling ? null : actions.cancel,
-          child: Text(operation.cancelling ? '正在取消…' : '取消本次保存'),
+          label: operation.cancelling ? '正在取消…' : '取消本次保存',
         ),
         if ((operation.operationId ?? operation.recordOperationId)
             case final owner?)
@@ -158,9 +165,10 @@ class DocumentExportPage extends HookConsumerWidget {
         StateNote(operation.error!, icon: LucideIcons.circleAlert),
       if (operation.refreshing) const StateNote('正在检查这份文件是否已保存…'),
       if (!operation.loaded || status == 'pending' || unknown)
-        TextButton(
+        AppButton(
+          role: AppButtonRole.text,
           onPressed: operation.refreshing ? null : actions.refresh,
-          child: const Text('检查保存结果'),
+          label: '检查保存结果',
         ),
       if (result != null)
         ContentPanel(
@@ -179,15 +187,19 @@ class DocumentExportPage extends HookConsumerWidget {
                 'failed' => '本次保存未开始',
                 'pending' => '上次系统保存尚未结束',
                 _ => '还没有保存回执',
-              }, style: Theme.of(context).textTheme.titleLarge),
-              if (status == 'saved') const Text('如保存到了云盘，云端同步结果请在对应应用核对。'),
+              }, style: type.headline),
+              const SizedBox(height: DesignTokens.spacingXs),
+              if (status == 'saved')
+                Text('如保存到了云盘，云端同步结果请在对应应用核对。', style: body),
               if ((result.name ?? '').isNotEmpty)
-                Text('系统名称：${(result.name ?? '')}'),
+                Text('系统名称：${(result.name ?? '')}', style: body),
               if (result.files != null && result.directories != null)
                 Text(
                   '${result.files} 个文件 · ${result.directories} 个文件夹 · ${bytes(result.bytes)}',
+                  style: body,
                 ),
-              if ((result.skipped ?? 0) > 0) Text('跳过 ${result.skipped} 项'),
+              if ((result.skipped ?? 0) > 0)
+                Text('跳过 ${result.skipped} 项', style: body),
               if (status == 'partial' || unknown)
                 const StateNote('请先在系统文件应用核对实际内容，已有结果不会自动重复写入。'),
               if (result.partialDestinationPossible == true &&
@@ -198,16 +210,25 @@ class DocumentExportPage extends HookConsumerWidget {
         ),
     ];
     final trailing = <Widget>[
-      if (unknown)
-        CheckboxListTile(
-          value: acknowledgedUnknown,
-          onChanged: (v) => reviewedOperation.value = v == true
-              ? operation.recordOperationId
-              : null,
-          title: const Text('我已在系统文件应用核对，仍需重新保存'),
+      if (unknown) ...[
+        const SizedBox(height: DesignTokens.spacingLg),
+        SettingsGroup(
+          children: [
+            ConnectSwitchRow(
+              value: acknowledgedUnknown,
+              onChanged: (v) => reviewedOperation.value = v
+                  ? operation.recordOperationId
+                  : null,
+              title: const Text('我已在系统文件应用核对，仍需重新保存'),
+            ),
+          ],
         ),
-      if (!waiting && status == 'saved')
-        OutlinedButton(
+      ],
+      if (!waiting && status == 'saved') ...[
+        const SizedBox(height: DesignTokens.spacingLg),
+        AppButton(
+          role: AppButtonRole.secondaryOnPage,
+          expand: true,
           onPressed: !operation.loaded || operation.refreshing
               ? null
               : () async {
@@ -223,14 +244,17 @@ class DocumentExportPage extends HookConsumerWidget {
                   }
                   await actions.export(name, additionalCopy: true);
                 },
-          child: const Text('再保存一份'),
+          label: '再保存一份',
         ),
+      ],
+      const SizedBox(height: DesignTokens.spacingLg),
     ];
     final action = waiting
         ? null
         : status != 'saved'
-        ? FilledButton(
-            style: pagePrimaryButtonStyle,
+        ? AppButton(
+            role: AppButtonRole.primary,
+            expand: true,
             onPressed:
                 !operation.loaded ||
                     operation.refreshing ||
@@ -241,30 +265,23 @@ class DocumentExportPage extends HookConsumerWidget {
                     reviewedOperation.value = null;
                     actions.export(name, reviewed: reviewed);
                   },
-            child: Text(result == null ? '选择系统位置并保存' : '重新选择系统位置'),
+            label: result == null ? '选择系统位置并保存' : '重新选择系统位置',
           )
         : transferId == null
         ? null
-        : FilledButton(
-            style: pagePrimaryButtonStyle,
+        : AppButton(
+            role: AppButtonRole.primary,
+            expand: true,
             onPressed: () =>
                 TransferDetailsRoute(taskId: transferId!).push<void>(context),
-            child: const Text('返回传输'),
+            label: '返回传输',
           );
     return PageFrame(
       title: heading,
-      titleStyle: Theme.of(context).textTheme.headlineMedium,
       onBack: onBack,
-      bottom: action == null
-          ? null
-          : Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: DesignTokens.spacingXs,
-              ),
-              child: action,
-            ),
+      bottom: action,
       child: GroupedListView.builder(
-        padding: const EdgeInsets.all(DesignTokens.spacingLg),
+        padding: const EdgeInsets.symmetric(horizontal: DesignTokens.spacingLg),
         itemCount: leading.length + errors.length + trailing.length,
         itemBuilder: (context, index) {
           if (index < leading.length) return leading[index];

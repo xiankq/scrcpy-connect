@@ -7,24 +7,27 @@ import 'package:scrcpy_connect/core/devices/device_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
 import 'package:scrcpy_connect/core/devices/device_management.dart';
 import 'package:scrcpy_connect/core/devices/device_setup.dart';
-import 'package:scrcpy_connect/core/devices/models/device_list_state.dart';
 import 'package:scrcpy_connect/core/identity/models/setup_identity.dart';
 import 'package:scrcpy_connect/pages/device_setup/usb/usb_setup_page.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
+
+import '../../support/fixed_state.dart';
 
 void main() {
   testWidgets('离页取消原能力拥有的 USB 尝试，迟到回执不再刷新状态', (tester) async {
     final setup = _Setup();
     final management = _Management();
+    var refreshes = 0;
     final container = ProviderContainer(
       overrides: [
         deviceSetupProvider.overrideWithValue(setup),
         deviceManagementProvider.overrideWithValue(management),
-        deviceListProvider.overrideWith(_Devices.new),
+        deviceListProvider.overrideWith(
+          () => FixedDeviceList(onRefresh: () => refreshes++),
+        ),
       ],
     );
     addTearDown(container.dispose);
-    final devices = container.read(deviceListProvider.notifier) as _Devices;
     await tester.pumpWidget(_page(container));
     await tester.pumpAndSettle();
     await tester.tap(find.text('检查连接'));
@@ -42,14 +45,17 @@ void main() {
       const UsbSetupResult.selectionRequired([], message: 'retired'),
     );
     await tester.pump();
-    expect(devices._refreshes, 0);
+    expect(refreshes, 0);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('替换能力后由原能力取消尝试，旧回执不写入新的页面流程', (tester) async {
     final previous = _Setup();
     final previousManagement = _Management();
-    final deviceList = deviceListProvider.overrideWith(_Devices.new);
+    var refreshes = 0;
+    final deviceList = deviceListProvider.overrideWith(
+      () => FixedDeviceList(onRefresh: () => refreshes++),
+    );
     final container = ProviderContainer(
       overrides: [
         deviceSetupProvider.overrideWithValue(previous),
@@ -58,7 +64,6 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
-    final devices = container.read(deviceListProvider.notifier) as _Devices;
     await tester.pumpWidget(_page(container));
     await tester.pumpAndSettle();
     await tester.tap(find.text('检查连接'));
@@ -78,7 +83,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('retired'), findsNothing);
-    expect(devices._refreshes, 0);
+    expect(refreshes, 0);
     await tester.tap(find.text('检查连接'));
     await tester.pump();
     replacement.attempts.single.result.complete(
@@ -86,7 +91,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('current'), findsOneWidget);
-    expect(devices._refreshes, 1);
+    expect(refreshes, 1);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
@@ -129,12 +134,4 @@ class _Management implements DeviceManagement {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _Devices extends DeviceListNotifier {
-  int _refreshes = 0;
-  @override
-  DeviceListState build() => DeviceListState(loading: false);
-  @override
-  Future<void> refresh() async => _refreshes++;
 }

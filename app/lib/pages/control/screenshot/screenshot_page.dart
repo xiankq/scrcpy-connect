@@ -6,10 +6,14 @@ import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/core/media/video_screenshots.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/pages/transfers/export/document_export_page.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/overlays.dart';
+import 'package:scrcpy_connect/widgets/page_loader.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -47,63 +51,81 @@ class ScreenshotPage extends HookWidget {
         sourceLabel: deviceName(device),
       );
     }
+    final colors = AppColors.of(context);
+    final caption = AppTypography.of(context).footnote
+        .copyWith(color: colors.textSecondary);
     final source = Text(
       '${deviceName(device)} · ${capture.paused ? '最后画面' : '当前视频帧'}',
-      style: Theme.of(context).textTheme.bodySmall,
+      textAlign: TextAlign.center,
+      style: caption,
     );
-    const padding = EdgeInsets.all(DesignTokens.spacingMd);
     if (available.connectionState != ConnectionState.done) {
       return PageFrame(
         title: '截图',
-        child: PageChromeBody(
-          child: Padding(
-            padding: padding,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                source,
-                const Expanded(
-                  child: Center(child: CircularProgressIndicator.adaptive()),
-                ),
-              ],
-            ),
-          ),
-        ),
+        child: PageChromeBody(child: PageLoader(message: source.data)),
       );
     }
     return PageFrame(
       title: '截图',
       child: GroupedListView(
-        padding: padding,
+        padding: const EdgeInsets.fromLTRB(
+          DesignTokens.componentPagePadding,
+          0,
+          DesignTokens.componentPagePadding,
+          DesignTokens.spacingLg,
+        ),
         children: [
-          source,
-          const SizedBox(height: DesignTokens.spacingMd),
-          if (available.data != true)
-            const StateNote('这张截图已不可用。请返回手机画面重新截图。')
-          else ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
-              child: Image.file(
-                File(path),
-                cacheWidth: 720,
-                height: MediaQuery.sizeOf(context).height * .45,
-                fit: BoxFit.contain,
-                semanticLabel: capture.paused ? '暂停前最后接收到的画面截图' : '当前接收到的视频帧截图',
-                errorBuilder: (_, _, _) =>
-                    const StateNote('无法显示缩略图，仍可尝试保存原始截图。'),
-              ),
+          // 截图预览卡（Ardot R4 2:1240）：卡片内放 20 圆角的截图，下方为来源与尺寸说明。
+          ContentSurface(
+            padding: const EdgeInsets.all(DesignTokens.componentCardPadding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: DesignTokens.spacingSm,
+              children: [
+                if (available.data != true)
+                  const StateNote('这张截图已不可用。请返回手机画面重新截图。')
+                else
+                  ClipRSuperellipse(
+                    borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
+                    child: Image.file(
+                      File(path),
+                      cacheWidth: 720,
+                      height: MediaQuery.sizeOf(context).height * .45,
+                      fit: BoxFit.contain,
+                      semanticLabel: capture.paused
+                          ? '暂停前最后接收到的画面截图'
+                          : '当前接收到的视频帧截图',
+                      errorBuilder: (_, _, _) =>
+                          const StateNote('无法显示缩略图，仍可尝试保存原始截图。'),
+                    ),
+                  ),
+                if (available.data == true)
+                  Text(
+                    '${capture.width} × ${capture.height} 像素',
+                    textAlign: TextAlign.center,
+                    style: caption,
+                  ),
+                source,
+              ],
             ),
+          ),
+          if (available.data == true) ...[
             const SizedBox(height: DesignTokens.spacingMd),
-            const Text('截图已取回本机暂存，尚未保存到系统位置。'),
-            Text('${capture.width} × ${capture.height} 像素'),
+            Text(
+              '截图已取回本机暂存，尚未保存到系统位置。',
+              style: AppTypography.of(context).subheadline
+                  .copyWith(color: colors.textSecondary),
+            ),
             if (capture.paused) const StateNote('这是暂停前最后接收到的画面，并非手机当前实时画面。'),
             if (capture.scaled) const StateNote('受画面尺寸限制，截图已按比例缩小。'),
-            const SizedBox(height: DesignTokens.spacingMd),
+            const SizedBox(height: DesignTokens.spacingXxl),
             if (supportsSystemDocumentSave) ...[
-              FilledButton.icon(
+              AppButton(
+                label: '保存到系统位置',
+                role: AppButtonRole.primary,
+                icon: AppIcons.download,
+                expand: true,
                 onPressed: () => saving.value = true,
-                icon: const Icon(AppIcons.download),
-                label: const Text('保存到系统位置'),
               ),
               const SizedBox(height: DesignTokens.spacingSm),
             ],
@@ -112,6 +134,9 @@ class ScreenshotPage extends HookWidget {
                 localPath: path,
                 name: name,
                 sourceLabel: deviceName(device),
+                role: supportsSystemDocumentSave
+                    ? AppButtonRole.secondaryOnPage
+                    : AppButtonRole.primary,
               ),
           ],
         ],

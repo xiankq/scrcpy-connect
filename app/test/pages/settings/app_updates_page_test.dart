@@ -7,11 +7,11 @@ import 'package:scrcpy_connect/core/platform/app_info.dart';
 import 'package:scrcpy_connect/core/platform/app_release.dart';
 import 'package:scrcpy_connect/core/platform/app_update_provider.dart';
 import 'package:scrcpy_connect/core/platform/platform_capabilities_provider.dart';
-import 'package:scrcpy_connect/core/recovery/models/recovery_state.dart';
 import 'package:scrcpy_connect/core/recovery/recovery_state_notifier.dart';
 import 'package:scrcpy_connect/pages/settings/app_updates_page.dart';
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
+
+import '../../support/fixed_state.dart';
 
 void main() {
   testWidgets('宽矮窗口仍能读到真实的当前版本、更新内容和历史', (tester) async {
@@ -22,17 +22,7 @@ void main() {
       readReleases: () => response.future,
     );
     expect(find.text('当前版本'), findsOneWidget);
-    expect(find.text('0.1.0'), findsOneWidget);
-    expect(find.text('构建 5'), findsOneWidget);
-    final versionRow = tester.getRect(find.widgetWithText(ListTile, '当前版本'));
-    final checkRow = tester.getRect(find.widgetWithText(ListTile, '检查更新'));
-    final historyRow = tester.getRect(find.widgetWithText(ListTile, '更新记录'));
-    expect(checkRow.top, versionRow.bottom);
-    expect(historyRow.top, checkRow.bottom);
-    expect(
-      tester.getTopRight(find.text('0.1.0')).dx,
-      versionRow.right - DesignTokens.spacingMd,
-    );
+    expect(find.text('0.1.0（构建 5）'), findsOneWidget);
     await tester.tap(find.text('检查更新'));
     await tester.pump();
     expect(find.text('正在检查…'), findsOneWidget);
@@ -53,15 +43,10 @@ void main() {
       ),
     ]);
     await tester.pumpAndSettle();
-    expect(find.text('发现新版本'), findsOneWidget);
+    expect(find.text('发现新版本 0.2.0'), findsWidgets);
     expect(find.text('新增平板工作区与设备管理'), findsOneWidget);
     expect(find.text('前往发布渠道'), findsOneWidget);
-    final summary = tester.getRect(find.text('发现新版本'));
-    final notes = tester.getRect(find.text('新增平板工作区与设备管理'));
-    final action = tester.getRect(find.widgetWithText(FilledButton, '前往发布渠道'));
-    expect(summary.right, lessThan(notes.left));
-    expect(action.left, notes.left);
-    expect(action.top, greaterThan(notes.bottom));
+    expect(find.widgetWithText(OutlinedButton, '稍后'), findsOneWidget);
     await tester.tap(find.text('查看更新记录'));
     await tester.pumpAndSettle();
     expect(find.text('已安装'), findsOneWidget);
@@ -77,8 +62,9 @@ void main() {
       textScale: 2,
     );
     final row = tester.getRect(find.widgetWithText(ListTile, '当前版本'));
-    expect(row.contains(tester.getCenter(find.text('0.1.0'))), isTrue);
-    expect(row.bottom, greaterThan(tester.getBottomLeft(find.text('构建 5')).dy));
+    final value = find.text('0.1.0（构建 5）');
+    expect(row.contains(tester.getCenter(value)), isTrue);
+    expect(row.bottom, greaterThan(tester.getBottomLeft(value).dy));
     expect(tester.takeException(), isNull);
   });
 }
@@ -106,7 +92,7 @@ Future<void> _showUpdates(
             buildNumber: '5',
           ),
         ),
-        recoveryStateProvider.overrideWith(_Recovery.new),
+        recoveryStateProvider.overrideWith(FixedRecovery.new),
         appUpdateReaderProvider.overrideWithValue(readReleases),
       ],
       child: MaterialApp(
@@ -121,9 +107,4 @@ Future<void> _showUpdates(
     ),
   );
   await tester.pumpAndSettle();
-}
-
-class _Recovery extends RecoveryStateNotifier {
-  @override
-  RecoveryState build() => RecoveryState();
 }

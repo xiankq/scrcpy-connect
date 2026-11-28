@@ -15,7 +15,9 @@ import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 import 'package:scrcpy_connect/core/media/audio_sources_provider.dart';
 import 'package:scrcpy_connect/core/media/media_capabilities_provider.dart';
 
-import '../../fixtures/video_events.dart';
+import '../../support/fixed_state.dart';
+
+import '../../support/video_events.dart';
 
 void main() {
   for (final kind in _Kind.values) {
@@ -37,61 +39,61 @@ void main() {
         final provider = kind.provider;
         final first = container.listen(provider, (_, _) {});
         final second = container.listen(provider, (_, _) {});
-        await _flush(container);
+        await flushProviders(container);
         expect(source.reads, hasLength(1));
         events.add(
           const DeviceDisconnectRequested('other').toApplicationEvent(),
         );
         events.add(videoChange().toApplicationEvent());
-        await _flush(container);
+        await flushProviders(container);
         expect(source.reads, hasLength(1));
         for (var index = 0; index < 10; index++) {
           events.add(
             const DeviceDisconnectRequested('device').toApplicationEvent(),
           );
-          await _flush(container);
+          await flushProviders(container);
         }
         expect(source.reads, hasLength(1));
         source.reads[0].complete(kind.value(1));
-        await _flush(container);
+        await flushProviders(container);
         expect(source.reads, hasLength(2));
         expect(container.read(provider).isLoading, isTrue);
         expect(container.read(provider).hasValue, isFalse);
         final latest = kind.value(2);
         source.reads[1].complete(latest);
-        await _flush(container);
+        await flushProviders(container);
         expect(container.read(provider).requireValue, latest);
         events.add(RuntimeEvent(const RecoveryStarted()));
         expect(container.read(provider).isLoading, isTrue);
         expect(container.read(provider).value, latest);
-        await _flush(container);
+        await flushProviders(container);
         source.reads[2].complete(kind.value(3));
-        await _flush(container);
+        await flushProviders(container);
         first.close();
-        await _flush(container);
+        await flushProviders(container);
         expect(events.hasListener, isTrue);
         second.close();
-        await _flush(container);
+        await flushProviders(container);
         expect(events.hasListener, isFalse);
       });
 
       test('能力换源、连接换代和恢复准入均撤销旧读取', () async {
         final provider = kind.provider;
         container.listen(provider, (_, _) {});
-        await _flush(container);
+        await flushProviders(container);
         final replacement = _Source();
         container.updateOverrides(_overrides(replacement, events));
-        await _flush(container);
+        await flushProviders(container);
         final latest = kind.value(2);
         replacement.reads.single.complete(latest);
-        await _flush(container);
+        await flushProviders(container);
         source.reads.single.complete(kind.value(1));
-        await _flush(container);
+        await flushProviders(container);
         expect(container.read(provider).requireValue, latest);
         container.updateOverrides(
           _overrides(replacement, events, connectionId: 'next'),
         );
-        await _flush(container);
+        await flushProviders(container);
         expect(replacement.reads, hasLength(2));
         container.updateOverrides(
           _overrides(
@@ -101,40 +103,40 @@ void main() {
             recovering: true,
           ),
         );
-        await _flush(container);
+        await flushProviders(container);
         expect(replacement.reads, hasLength(3));
         replacement.reads[1].complete(kind.value(3));
-        await _flush(container);
+        await flushProviders(container);
         expect(container.read(provider).isLoading, isTrue);
         final recovered = kind.value(4);
         replacement.reads[2].complete(recovered);
-        await _flush(container);
+        await flushProviders(container);
         expect(container.read(provider).requireValue, recovered);
       });
 
       test('失败保留错误与原展示数据，只有明确刷新才重试', () async {
         final provider = kind.provider;
         container.listen(provider, (_, _) {});
-        await _flush(container);
+        await flushProviders(container);
         final previous = kind.value(1);
         source.reads.single.complete(previous);
-        await _flush(container);
+        await flushProviders(container);
         events.add(
           const DeviceDisconnectRequested('device').toApplicationEvent(),
         );
-        await _flush(container);
+        await flushProviders(container);
         final failure = StateError('unavailable');
         source.reads[1].completeError(failure);
-        await _flush(container);
+        await flushProviders(container);
         expect(container.read(provider).error, same(failure));
         expect(container.read(provider).value, previous);
-        await _flush(container);
+        await flushProviders(container);
         expect(source.reads, hasLength(2));
         container.invalidate(provider);
-        await _flush(container);
+        await flushProviders(container);
         expect(source.reads, hasLength(3));
         source.reads[2].complete(kind.value(2));
-        await _flush(container);
+        await flushProviders(container);
         expect(container.read(provider).hasError, isFalse);
       });
     });
@@ -222,9 +224,4 @@ class _Source implements RemoteAudio, VideoQualityControl, ActivityManagement {
   Future<ActivityCollection> readActivities({String? deviceId}) => _read();
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-Future<void> _flush(ProviderContainer container) async {
-  await Future<void>.delayed(Duration.zero);
-  await container.pump();
 }

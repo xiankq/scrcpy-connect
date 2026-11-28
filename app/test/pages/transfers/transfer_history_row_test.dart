@@ -4,18 +4,19 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/core/devices/device_list_notifier.dart';
-import 'package:scrcpy_connect/core/devices/models/device_list_state.dart';
 import 'package:scrcpy_connect/core/files/file_capabilities_provider.dart';
 import 'package:scrcpy_connect/core/files/file_transfers.dart';
 import 'package:scrcpy_connect/pages/transfers/widgets/transfer_history_row.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
+
+import '../../support/fixed_state.dart';
 
 void main() {
   testWidgets('停止期间替换传输能力，旧轮询不再移除记录或刷新新页面', (tester) async {
     final previous = _Transfers();
     final replacement = _Transfers();
     var refreshes = 0;
-    final devices = deviceListProvider.overrideWith(_Devices.new);
+    final devices = deviceListProvider.overrideWith(FixedDeviceList.new);
     final container = ProviderContainer(
       overrides: [fileTransfersProvider.overrideWithValue(previous), devices],
     );
@@ -96,9 +97,4 @@ class _Transfers implements FileTransfers {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _Devices extends DeviceListNotifier {
-  @override
-  DeviceListState build() => DeviceListState(loading: false);
 }

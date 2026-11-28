@@ -13,7 +13,12 @@ import 'package:scrcpy_connect/pages/files/search/widgets/file_search_controls.d
 import 'package:scrcpy_connect/pages/files/search/widgets/file_search_result_row.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/form_controls.dart';
+import 'package:scrcpy_connect/widgets/grouped_list_segment.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
+import 'package:scrcpy_connect/widgets/input_field.dart';
+import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/file_browser.dart';
 import 'package:scrcpy_connect/widgets/loading_skeleton.dart';
@@ -61,136 +66,110 @@ class FileSearchPage extends HookConsumerWidget {
       await operation.start(query.text.trim(), filter.value, path: scopePath);
     }
 
+    final colors = AppColors.of(context);
+    final type = AppTypography.of(context);
+    final note = type.footnote.copyWith(color: colors.textSecondary);
+    final trailingCount =
+        (result == null ? 0 : issues.length) +
+        (result != null && entries.isEmpty && !running ? 1 : 0);
     return PageFrame(
-      titleStyle: Theme.of(context).textTheme.headlineMedium,
       title: '搜索文件',
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      bottom: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: DesignTokens.spacingXs),
-        child: FilledButton(
-          style: pagePrimaryButtonStyle,
-          onPressed: running
-              ? (searchState.stopping ? null : operation.cancel)
-              : (canSearch ? search : null),
-          child: Text(
-            searchState.stopping
-                ? '正在停止…'
-                : searchState.starting
-                ? '正在开始搜索…'
-                : running
-                ? '停止搜索'
-                : '搜索',
-          ),
-        ),
+      bottom: AppButton(
+        label: searchState.stopping
+            ? '正在停止…'
+            : searchState.starting
+            ? '正在开始搜索…'
+            : running
+            ? '停止搜索'
+            : '搜索',
+        role: AppButtonRole.primary,
+        expand: true,
+        onPressed: running
+            ? (searchState.stopping ? null : operation.cancel)
+            : (canSearch ? search : null),
       ),
       child: CustomScrollView(
         slivers: [
           const PageChromeSliver(),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                DesignTokens.spacingMd,
-                DesignTokens.spacingXs,
-                DesignTokens.spacingMd,
-                DesignTokens.spacingSm,
+              padding: const EdgeInsets.symmetric(
+                horizontal: DesignTokens.componentPagePadding,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('文件名称', style: Theme.of(context).textTheme.bodyMedium),
-                  const SizedBox(height: DesignTokens.spacingSm),
-                  TextField(
+                  AppTextField(
+                    label: '文件名称',
                     controller: query,
                     maxLength: 256,
                     textInputAction: TextInputAction.search,
                     onSubmitted: (_) {
                       if (canSearch && !running) search();
                     },
-                    decoration: InputDecoration(
-                      hintText: '输入文件名',
-                      errorText: tooLong ? '搜索内容太长，请缩短文件名。' : null,
-                      counterText: '',
-                    ),
+                    hintText: '输入文件名',
+                    errorText: tooLong ? '搜索内容太长，请缩短文件名。' : null,
                   ),
-                  const SizedBox(height: DesignTokens.spacingSm),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final scope = FileSearchScopeSelector(
-                        entireStorage: entireStorage.value,
-                        onChanged: (entire) => entireStorage.value = entire,
-                      );
-                      final type = FileSearchTypeField(
-                        value: filter.value,
-                        onChanged: (next) => filter.value = next,
-                      );
-                      if (constraints.maxWidth /
-                              MediaQuery.textScalerOf(context).scale(1) <
-                          282) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            scope,
-                            const SizedBox(height: DesignTokens.spacingSm),
-                            type,
-                          ],
-                        );
-                      }
-                      return Row(
-                        children: [
-                          Expanded(child: scope),
-                          const SizedBox(width: DesignTokens.spacingSm),
-                          SizedBox(
-                            width:
-                                96 * MediaQuery.textScalerOf(context).scale(1),
-                            child: type,
-                          ),
-                        ],
-                      );
-                    },
+                  const SizedBox(height: _controlGap),
+                  FileSearchScopeSelector(
+                    entireStorage: entireStorage.value,
+                    onChanged: (entire) => entireStorage.value = entire,
+                  ),
+                  const SizedBox(height: _chipRowGap),
+                  FileSearchTypeField(
+                    value: filter.value,
+                    onChanged: (next) => filter.value = next,
                   ),
                   if (!entireStorage.value && initialPath != '/sdcard')
                     Padding(
                       padding: const EdgeInsets.only(
-                        top: DesignTokens.spacingXs,
+                        top: DesignTokens.spacingSm,
                       ),
                       child: Text(
                         _currentDirectoryLine(scopePath),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
+                        style: note,
                       ),
                     ),
                   if (result != null) ...[
-                    const SizedBox(height: DesignTokens.spacingMd),
-                    Text(
-                      _searchStatusTitle(status, entries.length),
-                      style: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: DesignTokens.spacingXxs),
-                    Text(
-                      _checkedRangeLine(
-                        result,
-                        status,
-                        issues,
-                        scopeLabel: _submittedScopeLabel(result),
+                    SectionTitle(_searchStatusTitle(status, entries.length)),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        DesignTokens.componentListHeaderPadding,
+                        0,
+                        DesignTokens.componentListHeaderPadding,
+                        DesignTokens.spacingSm,
                       ),
-                      style: Theme.of(context).textTheme.bodySmall,
+                      child: Text(
+                        _checkedRangeLine(
+                          result,
+                          status,
+                          issues,
+                          scopeLabel: _submittedScopeLabel(result),
+                        ),
+                        style: note,
+                      ),
                     ),
                   ],
-                  if (dirty) ...[
-                    const SizedBox(height: DesignTokens.spacingXs),
-                    Text(
-                      _dirtyLine(result),
-                      style: Theme.of(context).textTheme.bodySmall,
+                  if (dirty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        DesignTokens.componentListHeaderPadding,
+                        0,
+                        DesignTokens.componentListHeaderPadding,
+                        DesignTokens.spacingSm,
+                      ),
+                      child: Text(_dirtyLine(result), style: note),
                     ),
-                  ],
                   if (searchState.error != null) ...[
                     StateNote(searchState.error!),
                     if (searchState.searchId != null)
-                      TextButton(
+                      AppButton(
+                        label: '刷新搜索结果',
+                        role: AppButtonRole.secondaryOnPage,
+                        size: AppButtonSize.section,
                         onPressed: operation.refresh,
-                        child: const Text('刷新搜索结果'),
                       ),
                   ],
                 ],
@@ -205,12 +184,15 @@ class FileSearchPage extends HookConsumerWidget {
               slivers: [
                 if (searchState.starting && result == null)
                   const SliverPadding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: DesignTokens.spacingMd,
+                    padding: EdgeInsets.fromLTRB(
+                      DesignTokens.componentPagePadding,
+                      DesignTokens.componentListSectionGap,
+                      DesignTokens.componentPagePadding,
+                      0,
                     ),
                     sliver: SliverToBoxAdapter(
                       child: SkeletonRows(
-                        height: DesignTokens.componentRowLargeHeight,
+                        height: DesignTokens.componentListRowHeight,
                         trailing: true,
                       ),
                     ),
@@ -224,30 +206,23 @@ class FileSearchPage extends HookConsumerWidget {
                       message: '按文件名查找，也可选择类型。搜索只读取名称，结果会随可访问范围检查逐步出现。',
                     ),
                   )
-                else
+                else ...[
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(
-                      DesignTokens.spacingMd,
-                      0,
-                      DesignTokens.spacingMd,
-                      DesignTokens.spacingMd,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: DesignTokens.componentPagePadding,
                     ),
-                    sliver: SliverList.separated(
-                      separatorBuilder: (_, _) =>
-                          const SizedBox(height: DesignTokens.spacingSm),
-                      itemCount:
-                          entries.length +
-                          (result == null ? 0 : issues.length) +
-                          (result != null && entries.isEmpty && !running
-                              ? 1
-                              : 0),
+                    sliver: SliverList.builder(
+                      itemCount: entries.length,
                       itemBuilder: (context, index) {
-                        if (index < entries.length) {
-                          final file = entries[index];
-                          final path = file.path ?? '';
-                          final folder = file.isDirectory;
-                          return FileSearchResultRow(
-                            key: ValueKey(('search-result', path)),
+                        final file = entries[index];
+                        final path = file.path ?? '';
+                        final folder = file.isDirectory;
+                        return GroupedListSegment.at(
+                          key: ValueKey(('search-result', path)),
+                          index: index,
+                          count: entries.length,
+                          separatorIndent: tileRowSeparatorIndent,
+                          child: FileSearchResultRow(
                             file: file,
                             folder: folder,
                             onTap: !file.canOpen || path.isEmpty
@@ -268,11 +243,23 @@ class FileSearchPage extends HookConsumerWidget {
                             unavailableReason: file.canOpen && path.isNotEmpty
                                 ? null
                                 : fileUnavailableReason(file),
-                          );
-                        }
-                        var remainder = index - entries.length;
-                        if (remainder < issues.length) {
-                          final issue = issues[remainder];
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(
+                      DesignTokens.componentPagePadding,
+                      DesignTokens.spacingSm,
+                      DesignTokens.componentPagePadding,
+                      DesignTokens.spacingLg,
+                    ),
+                    sliver: SliverList.builder(
+                      itemCount: trailingCount,
+                      itemBuilder: (context, index) {
+                        if (index < issues.length) {
+                          final issue = issues[index];
                           return StateNote(
                             '${issue.path}\n${failureCodeMessage(issue.code, fallback: '无法搜索这个位置。请检查手机上的文件访问权限。')}',
                           );
@@ -285,12 +272,14 @@ class FileSearchPage extends HookConsumerWidget {
                             result?.status == .completed
                                 ? '没有匹配的文件'
                                 : '已检查范围内没有匹配结果',
-                            style: Theme.of(context).textTheme.bodySmall,
+                            textAlign: TextAlign.center,
+                            style: note,
                           ),
                         );
                       },
                     ),
                   ),
+                ],
               ],
             ),
           ),
@@ -300,6 +289,10 @@ class FileSearchPage extends HookConsumerWidget {
     );
   }
 }
+
+/// 名称输入框与条件 chip 之间、两行 chip 之间的间距（Ardot F3 2:1400）。
+const _controlGap = DesignTokens.spacingMd;
+const _chipRowGap = DesignTokens.spacingSm;
 
 String _submittedScopeLabel(FileSearchSnapshot result) =>
     result.path == '/sdcard' ? '手机内部存储' : '当前目录及子目录';

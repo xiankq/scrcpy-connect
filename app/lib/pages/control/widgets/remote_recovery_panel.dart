@@ -1,8 +1,14 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
+import 'package:scrcpy_connect/pages/control/widgets/remote_opening_view.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/overlays.dart';
+
+/// 画面上的恢复横幅最宽 340，不遮住整个画面。
+const _bannerMaxWidth = 340.0;
 
 class RemoteRecoveryPanel extends StatelessWidget {
   const RemoteRecoveryPanel({
@@ -15,6 +21,7 @@ class RemoteRecoveryPanel extends StatelessWidget {
     required this.onRetry,
     this.waitingForFirstFrame = false,
     this.onReturn,
+    this.deviceLabel = '手机',
   });
 
   final RemotePresentation presentation;
@@ -26,8 +33,13 @@ class RemoteRecoveryPanel extends StatelessWidget {
   final bool waitingForFirstFrame;
   final VoidCallback? onReturn;
 
+  /// 首帧失败的阶段卡片中「已连接」后的设备名。
+  final String deviceLabel;
+
   String get _title => waitingForFirstFrame
-      ? '无法打开'
+      ? independent
+            ? '无法打开独立应用画面'
+            : '无法打开手机屏幕'
       : presentation.sessionEnded
       ? '控制会话已结束'
       : presentation.qualityRetryable
@@ -36,13 +48,46 @@ class RemoteRecoveryPanel extends StatelessWidget {
       ? '已暂停'
       : '无法打开画面';
 
+  String get _retryLabel => presentation.qualityRetryable
+      ? '画面与控制'
+      : waitingForFirstFrame &&
+            (presentation.appLaunchUnknown || presentation.stateUnverified)
+      ? '重新核对'
+      : presentation.appLaunchUnknown
+      ? '只读检查'
+      : presentation.appLaunchClosed
+      ? '重新打开'
+      : waitingForFirstFrame
+      ? '重试'
+      : '检查连接';
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    Widget action(String label, VoidCallback callback) => TextButton(
+    final colors = AppColors.of(context);
+    final type = AppTypography.of(context);
+    // 首帧失败在页面底上原位显示：重试为唯一主动作，其余为次要胶囊；
+    // 画面上的横幅用区块尺寸的文字按钮，避免遮住画面。
+    final size = waitingForFirstFrame
+        ? AppButtonSize.dock
+        : AppButtonSize.section;
+    final secondary = waitingForFirstFrame
+        ? AppButtonRole.secondaryOnPage
+        : AppButtonRole.text;
+    Widget action(String label, VoidCallback callback) => AppButton(
+      label: label,
+      size: size,
+      role: secondary,
       onPressed: presentation.connecting ? null : callback,
-      child: Text(label),
     );
+    final retry = onRetry == null
+        ? null
+        : AppButton(
+            label: _retryLabel,
+            size: size,
+            role: waitingForFirstFrame ? AppButtonRole.primary : secondary,
+            icon: waitingForFirstFrame ? AppIcons.refresh : null,
+            onPressed: presentation.connecting ? null : onRetry,
+          );
     final actions = [
       if (presentation.errorCode == 'resource_busy')
         action('管理当前活动', onManageActivities),
@@ -54,62 +99,72 @@ class RemoteRecoveryPanel extends StatelessWidget {
         action('移回手机屏幕', onContinueOnPhoneScreen),
       if (presentation.appLaunchUnknown)
         action('关闭本次打开记录', onCloseUnknownAppLaunch),
-      if (onRetry != null)
-        action(
-          presentation.qualityRetryable
-              ? '画面与控制'
-              : waitingForFirstFrame &&
-                    (presentation.appLaunchUnknown ||
-                        presentation.stateUnverified)
-              ? '重新核对'
-              : presentation.appLaunchUnknown
-              ? '只读检查'
-              : presentation.appLaunchClosed
-              ? '重新打开'
-              : waitingForFirstFrame
-              ? '重试'
-              : '检查连接',
-          onRetry!,
-        ),
+      if (!waitingForFirstFrame) ?retry,
       if (waitingForFirstFrame && onReturn != null)
-        TextButton(onPressed: onReturn, child: const Text('关闭')),
+        AppButton(
+          label: '关闭',
+          size: size,
+          role: AppButtonRole.secondaryOnPage,
+          onPressed: onReturn,
+        ),
     ];
     final message = presentation.error ?? '连接恢复后，手机画面会继续显示。';
 
     if (waitingForFirstFrame) {
-      return SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            key: const ValueKey('remote-recovery-content'),
-            padding: const EdgeInsets.fromLTRB(24, 56, 24, 16),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 320),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(_title, style: theme.textTheme.titleLarge),
-                  const SizedBox(height: DesignTokens.spacingXs),
-                  Text(message, textAlign: TextAlign.center),
-                  const SizedBox(height: DesignTokens.spacingSm),
-                  Wrap(alignment: WrapAlignment.center, children: actions),
-                ],
-              ),
-            ),
+      // 首帧失败在等待原位显示（Ardot R1 9:858）：示意屏中央为失败标记，下方原因与阶段卡片，
+      // 底部「重试」为唯一主动作，其余为次要胶囊。
+      final buttons = [?retry, ...actions];
+      return RemoteOpeningLayout(
+        scrollKey: const ValueKey('remote-recovery-content'),
+        phone: const RemotePhoneMock(child: RemoteOpeningFailureMark()),
+        title: _title,
+        detail: Semantics(
+          liveRegion: true,
+          child: Text(
+            message,
+            textAlign: TextAlign.center,
+            style: type.subheadline.copyWith(color: colors.textSecondary),
           ),
         ),
+        steps: remoteOpeningSteps(
+          presentation,
+          deviceLabel: deviceLabel,
+          failed: true,
+        ),
+        footer: buttons.isEmpty
+            ? null
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: DesignTokens.spacingSm,
+                children: [
+                  for (final button in buttons)
+                    SizedBox(width: double.infinity, child: button),
+                ],
+              ),
       );
     }
 
+    // 画面上的恢复提示是横幅：圆角 24、内距 18/12、`label` 标题（design.md「菜单、确认框与抽屉」）。
     return Align(
       alignment: Alignment.topCenter,
       child: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        minimum: const EdgeInsets.fromLTRB(
+          DesignTokens.spacingLg,
+          DesignTokens.spacingSm,
+          DesignTokens.spacingLg,
+          0,
+        ),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 340),
+          constraints: const BoxConstraints(maxWidth: _bannerMaxWidth),
           child: ContentSurface(
             key: const ValueKey('remote-recovery-content'),
-            radius: DesignTokens.roundedLg,
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+            radius: DesignTokens.componentBannerRounded,
+            padding: EdgeInsets.fromLTRB(
+              DesignTokens.componentBannerPadding,
+              DesignTokens.spacingMd,
+              DesignTokens.componentBannerPadding,
+              actions.isEmpty ? DesignTokens.spacingMd : DesignTokens.spacingXs,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -117,24 +172,23 @@ class RemoteRecoveryPanel extends StatelessWidget {
                 Semantics(
                   liveRegion: true,
                   child: Row(
+                    spacing: DesignTokens.spacingSm,
                     children: [
                       Icon(
                         presentation.paused
                             ? LucideIcons.pause
                             : LucideIcons.monitorOff,
-                        size: DesignTokens.componentIconSmallSize,
+                        size: DesignTokens.componentSectionGlyphSize,
+                        color: colors.primary,
                       ),
-                      const SizedBox(width: DesignTokens.spacingXs),
-                      Expanded(
-                        child: Text(_title, style: theme.textTheme.titleMedium),
-                      ),
+                      Expanded(child: Text(_title, style: type.label)),
                     ],
                   ),
                 ),
                 const SizedBox(height: DesignTokens.spacingXxs),
                 Text(
                   message,
-                  style: theme.textTheme.bodySmall,
+                  style: type.footnote.copyWith(color: colors.textSecondary),
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -145,9 +199,7 @@ class RemoteRecoveryPanel extends StatelessWidget {
                       alignment: WrapAlignment.end,
                       children: actions,
                     ),
-                  )
-                else
-                  const SizedBox(height: DesignTokens.spacingXs),
+                  ),
               ],
             ),
           ),

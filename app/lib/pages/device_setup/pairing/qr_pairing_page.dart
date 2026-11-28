@@ -11,8 +11,11 @@ import 'package:scrcpy_connect/router/app_router.dart';
 
 import 'qr_pairing_notifier.dart';
 
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
+import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
+import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -52,7 +55,12 @@ class QrPairingPage extends HookConsumerWidget {
       bottom: content.primary,
       child: ConnectionContent(
         child: GroupedListView(
-          padding: const EdgeInsets.all(DesignTokens.spacingMd),
+          padding: const EdgeInsets.fromLTRB(
+            DesignTokens.componentPagePadding,
+            DesignTokens.spacingMd,
+            DesignTokens.componentPagePadding,
+            DesignTokens.componentPagePadding,
+          ),
           children: [content.body],
         ),
       ),
@@ -109,50 +117,78 @@ class QrPairingPage extends HookConsumerWidget {
       WorkspaceRoute(deviceId: paired.deviceId!).pushReplacement(context);
     }
   });
+  final colors = AppColors.of(context);
+  final type = AppTypography.of(context);
   final paired = state.receipt;
   final hasQr = state.hasQr;
   final children = <Widget>[
-    if (state.busy) const Center(child: CircularProgressIndicator()),
-    if (hasQr)
-      Center(
-        child: Container(
-          color: DesignTokens.colorWhite,
-          padding: const EdgeInsets.all(DesignTokens.spacingMd),
-          child: QrImageView(
-            data: state.payload!,
-            size: DesignTokens.componentPairingQrSize,
-          ),
+    if (state.busy || hasQr)
+      ContentPanel(
+        padding: _qrCardPadding,
+        child: Column(
+          children: [
+            if (hasQr)
+              DecoratedBox(
+                // 二维码固定在白底上，保证任何主题下都能被手机识别。
+                decoration: const ShapeDecoration(
+                  color: DesignTokens.colorOnMedia,
+                  shape: RoundedSuperellipseBorder(
+                    borderRadius: BorderRadius.all(
+                      Radius.circular(DesignTokens.roundedMd),
+                    ),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(DesignTokens.spacingXxl),
+                  child: QrImageView(data: state.payload!, size: _qrSize),
+                ),
+              )
+            else
+              const SizedBox.square(
+                dimension: _qrTileSize,
+                child: ContentLoadingIndicator(),
+              ),
+            if (hasQr && state.busy) ...[
+              const SizedBox(height: DesignTokens.spacingLg),
+              const ContentLoadingIndicator(),
+            ],
+          ],
         ),
       )
-    else if (!state.busy && state.message == null)
+    else if (state.message == null)
       const StateNote('点击重新生成以获取配对二维码。'),
     if (state.message != null) StateNote(state.message!),
     if (hasQr) ...[
-      const SizedBox(height: DesignTokens.spacingXl),
+      const SizedBox(height: DesignTokens.spacingMd),
       Text(
         '在手机的无线调试中选择“使用二维码配对设备”，扫描此二维码。',
-        style: Theme.of(context).textTheme.bodyMedium
-            ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-        textAlign: TextAlign.center,
+        style: type.subheadline.copyWith(color: colors.textSecondary),
       ),
     ],
     if (paired != null && paired.deviceId != null && !paired.connected)
-      TextButton(
-        onPressed: () {
-          if (onConnectionPort != null) {
-            onConnectionPort(paired.address, paired.deviceId);
-          } else {
-            ConnectionFormRoute(
-              transport: ConnectionTransport.tls,
-              deviceId: paired.deviceId,
-              address: paired.address,
-            ).pushReplacement(context);
-          }
-        },
-        child: const Text('修改连接信息'),
+      Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: AppButton(
+          role: AppButtonRole.text,
+          onPressed: () {
+            if (onConnectionPort != null) {
+              onConnectionPort(paired.address, paired.deviceId);
+            } else {
+              ConnectionFormRoute(
+                transport: ConnectionTransport.tls,
+                deviceId: paired.deviceId,
+                address: paired.address,
+              ).pushReplacement(context);
+            }
+          },
+          label: '修改连接信息',
+        ),
       ),
-    if (!embedded)
-      FilledButton(
+    if (!embedded) ...[
+      const SizedBox(height: DesignTokens.spacingMd),
+      AppButton(
+        role: AppButtonRole.secondaryOnPage,
+        expand: true,
         onPressed: state.busy
             ? null
             : () async {
@@ -170,12 +206,15 @@ class QrPairingPage extends HookConsumerWidget {
                   deviceId: ref.read(provider).receipt?.deviceId,
                 ).pushReplacement(context);
               },
-        child: const Text('使用配对码'),
+        label: '使用配对码',
       ),
+    ],
   ];
-  final primary = FilledButton(
+  final primary = AppButton(
+    role: AppButtonRole.primary,
+    expand: true,
     onPressed: state.busy ? null : generate,
-    child: const Text('重新生成'),
+    label: '重新生成',
   );
   return (
     body: Column(
@@ -185,3 +224,8 @@ class QrPairingPage extends HookConsumerWidget {
     primary: primary,
   );
 }
+
+/// 扫码卡（Ardot 2:891）：`card` 内距 24，白色圆角 16 底块内放二维码。
+const _qrCardPadding = EdgeInsets.all(DesignTokens.spacingXxl);
+const _qrSize = 188.0;
+const _qrTileSize = _qrSize + 2 * DesignTokens.spacingXxl;

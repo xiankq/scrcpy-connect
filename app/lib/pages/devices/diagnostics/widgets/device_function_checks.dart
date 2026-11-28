@@ -5,8 +5,10 @@ import 'package:scrcpy_connect/core/devices/device_assessment.dart';
 import 'package:scrcpy_connect/core/devices/device_query_provider.dart';
 import 'package:scrcpy_connect/core/devices/models/device_snapshot.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/async_content.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/list_row.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 class DeviceFunctionChecks extends ConsumerWidget {
@@ -32,65 +34,33 @@ class DeviceFunctionChecks extends ConsumerWidget {
       emptyTitle: '暂时无法检查功能',
       builder: (context, data) {
         final capabilities = data.capabilities;
-        final dark = Theme.of(context).brightness == Brightness.dark;
+        final colors = AppColors.of(context);
+        if (capabilities.isEmpty) {
+          return const StateNote('请先连接手机，再检查哪些功能可用。');
+        }
+        // 功能检查行（Ardot 诊断行 37:925）：功能名、原因副标题，行尾状态文字加状态图形。
         return SettingsGroup(
           children: [
-            if (capabilities.isEmpty) const StateNote('请先连接手机，再检查哪些功能可用。'),
             for (final cap in capabilities)
-              ListTile(
-                leading: Icon(switch (cap.feature) {
-                  .shell => LucideIcons.shieldCheck,
-                  .files => LucideIcons.folder,
-                  .wirelessPairing => LucideIcons.wifi,
-                  .screen => LucideIcons.smartphone,
-                  .clipboard => LucideIcons.clipboard,
-                  .apps => LucideIcons.grid2x2,
-                  .audio => LucideIcons.volume2,
-                  .notifications => LucideIcons.bell,
-                  .calls => LucideIcons.phone,
-                  .background => LucideIcons.appWindow,
-                }, size: DesignTokens.componentIconSmallSize),
-                title: Text(
-                  _featureName(cap.feature),
-                  style: Theme.of(context).textTheme.bodyMedium,
+              AppListRow(
+                title: Text(_featureName(cap.feature)),
+                subtitle: cap.reason.isEmpty ? null : Text(cap.reason),
+                value: _statusText(cap.status),
+                trailing: Icon(
+                  switch (cap.status) {
+                    .available => LucideIcons.circleCheck,
+                    .unavailable => LucideIcons.circleX,
+                    .limited || .needsSetup => LucideIcons.triangleAlert,
+                    _ => LucideIcons.circleDashed,
+                  },
+                  size: DesignTokens.componentSectionGlyphSize,
+                  color: switch (cap.status) {
+                    .available => colors.success,
+                    .unavailable => colors.error,
+                    .limited || .needsSetup => colors.warning,
+                    _ => colors.textSecondary,
+                  },
                 ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _statusText(cap.status),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(width: DesignTokens.spacingXs),
-                    Icon(
-                      switch (cap.status) {
-                        .available => LucideIcons.check,
-                        .unavailable => LucideIcons.x,
-                        .limited || .needsSetup => LucideIcons.circleAlert,
-                        _ => LucideIcons.circle,
-                      },
-                      size: DesignTokens.componentIconSmallSize,
-                      color: switch (cap.status) {
-                        .available =>
-                          dark
-                              ? DesignTokens.colorSuccessDark
-                              : DesignTokens.colorSuccess,
-                        .unavailable => Theme.of(context).colorScheme.error,
-                        .limited || .needsSetup =>
-                          dark
-                              ? DesignTokens.colorWarningDark
-                              : DesignTokens.colorDiagnosticWarning,
-                        _ => Theme.of(context).colorScheme.onSurfaceVariant,
-                      },
-                    ),
-                  ],
-                ),
-                subtitle: cap.reason.isEmpty
-                    ? null
-                    : Text(
-                        cap.reason,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
               ),
           ],
         );

@@ -105,12 +105,13 @@ bool FlutterWindow::OnCreate() {
     auto* flutter_view_controller =
         reinterpret_cast<flutter::FlutterViewController*>(controller);
     RegisterPlugins(flutter_view_controller->engine());
-    RegisterDesktopWindowChrome(flutter_view_controller);
+    // 远控子窗口保留系统标题栏与边框。
+    RegisterDesktopWindowChrome(flutter_view_controller, false);
   });
   system_typography_ = std::make_unique<SystemTypography>(
       flutter_controller_->engine()->messenger());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
-  RegisterDesktopWindowChrome(flutter_controller_.get());
+  RegisterDesktopWindowChrome(flutter_controller_.get(), true);
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();

@@ -13,7 +13,8 @@ import 'package:scrcpy_connect/core/devices/device_setup.dart';
 import 'package:scrcpy_connect/core/events/runtime_events_provider.dart';
 import 'package:scrcpy_connect/core/recovery/models/recovery_event.dart';
 
-import '../../fixtures/video_events.dart';
+import '../../support/video_events.dart';
+import '../../support/fixed_state.dart';
 
 void main() {
   group('设备查询独立装配', () {
@@ -63,20 +64,20 @@ void main() {
         const DeviceDisconnectRequested('another-device').toApplicationEvent(),
       );
       events.add(videoChange().toApplicationEvent());
-      await _flush(container);
+      await flushProviders(container);
       expect(inspection.reads, hasLength(1));
       expect(previous.cancellation.isCancelled, isFalse);
       events.add(
         const DeviceDisconnectRequested('device').toApplicationEvent(),
       );
       expect(previous.cancellation.isCancelled, isTrue);
-      await _flush(container);
+      await flushProviders(container);
       expect(inspection.reads, hasLength(2));
       previous.result.complete(_details('old-connection'));
-      await _flush(container);
+      await flushProviders(container);
       expect(container.read(provider).isLoading, isTrue);
       inspection.reads.last.result.complete(_details('new-connection'));
-      await _flush(container);
+      await flushProviders(container);
       expect(
         container.read(provider).requireValue.connectionId,
         'new-connection',
@@ -96,14 +97,14 @@ void main() {
         deviceInspectionProvider.overrideWithValue(replacement),
         runtimeEventsProvider.overrideWithValue(replacementEvents.stream),
       ]);
-      await _flush(container);
+      await flushProviders(container);
       expect(previous.cancellation.isCancelled, isTrue);
       expect(events.hasListener, isFalse);
       replacement.reads.single.result.complete(_details('replacement'));
-      await _flush(container);
+      await flushProviders(container);
       previous.result.complete(_details('retired'));
       events.add(RuntimeEvent(const RecoveryStarted()));
-      await _flush(container);
+      await flushProviders(container);
       expect(container.read(provider).requireValue.connectionId, 'replacement');
       expect(replacement.reads, hasLength(1));
     });
@@ -121,13 +122,8 @@ void main() {
     await container.pump();
     expect(setup.cancellation.isCancelled, isTrue);
     setup.result.complete(const []);
-    await _flush(container);
+    await flushProviders(container);
   });
-}
-
-Future<void> _flush(ProviderContainer container) async {
-  await Future<void>.delayed(Duration.zero);
-  await container.pump();
 }
 
 DeviceReading<DeviceDetails> _details(String connectionId) => DeviceReading(

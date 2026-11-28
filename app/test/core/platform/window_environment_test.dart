@@ -11,49 +11,6 @@ void main() {
     expect(WindowEnvironment.sizeClassFor(840), WindowSizeClass.expanded);
   });
 
-  test(
-    'window projections use value semantics for stable inherited updates',
-    () {
-      const first = WindowEnvironment(
-        width: 840,
-        height: 700,
-        insets: WindowInsets(top: 24),
-        displayFeatures: [
-          WindowDisplayFeature(
-            left: 420,
-            top: 0,
-            width: 2,
-            height: 700,
-            type: WindowDisplayFeatureType.fold,
-            state: WindowPosture.book,
-            separating: true,
-          ),
-        ],
-        input: WindowInputCapabilities(pointer: true),
-      );
-      const second = WindowEnvironment(
-        width: 840,
-        height: 700,
-        insets: WindowInsets(top: 24),
-        displayFeatures: [
-          WindowDisplayFeature(
-            left: 420,
-            top: 0,
-            width: 2,
-            height: 700,
-            type: WindowDisplayFeatureType.fold,
-            state: WindowPosture.book,
-            separating: true,
-          ),
-        ],
-        input: WindowInputCapabilities(pointer: true),
-      );
-
-      expect(first, second);
-      expect(first.hashCode, second.hashCode);
-    },
-  );
-
   test('workspace toolbar follows the expanded width breakpoint', () {
     expect(
       const WindowEnvironment(width: 1200, height: 479).usesWorkspaceToolbar,
@@ -98,101 +55,60 @@ void main() {
     );
   });
 
-  test('folds, hinges and cutouts are reserved regions', () {
-    const hinge = WindowDisplayFeature(
-      left: 500,
-      top: 0,
-      width: 20,
-      height: 800,
-      type: WindowDisplayFeatureType.hinge,
-      state: WindowPosture.book,
+  test('only separating folds and hinges split panes', () {
+    WindowDisplayFeature feature(
+      WindowDisplayFeatureType type, {
+      bool separating = false,
+      bool horizontal = false,
+    }) => WindowDisplayFeature(
+      left: horizontal ? 0 : 420,
+      top: horizontal ? 599 : 0,
+      width: horizontal ? 840 : (type == .cutout ? 40 : 2),
+      height: horizontal ? 2 : (type == .cutout ? 24 : 1200),
+      type: type,
+      separating: separating,
     );
-    const environment = WindowEnvironment(
-      width: 1020,
-      height: 800,
-      displayFeatures: [hinge],
-    );
-    expect(environment.hasReservedDisplayFeature, isTrue);
-    expect(hinge.contains(510, 400), isTrue);
-    expect(hinge.contains(100, 400), isFalse);
-  });
-
-  test('a fold feature is also reserved for pane layout', () {
-    const environment = WindowEnvironment(
-      width: 840,
-      height: 700,
-      displayFeatures: [
-        WindowDisplayFeature(
-          left: 420,
-          top: 0,
-          width: 2,
-          height: 700,
-          type: WindowDisplayFeatureType.fold,
-          separating: true,
-        ),
-      ],
-    );
-
-    expect(environment.hasReservedDisplayFeature, isTrue);
-    expect(environment.verticalPaneDivider, isNotNull);
-  });
-
-  test('a non-separating crease stays continuous without splitting panes', () {
-    const environment = WindowEnvironment(
-      width: 840,
-      height: 700,
-      displayFeatures: [
-        WindowDisplayFeature(
-          left: 420,
-          top: 0,
-          width: 2,
-          height: 700,
-          type: WindowDisplayFeatureType.fold,
-          separating: false,
-        ),
-      ],
-    );
-
-    expect(environment.hasReservedDisplayFeature, isTrue);
-    expect(environment.verticalPaneDivider, isNull);
-  });
-
-  test('a horizontal hinge exposes a safe tabletop pane', () {
-    const environment = WindowEnvironment(
-      width: 840,
-      height: 1200,
-      displayFeatures: [
-        WindowDisplayFeature(
-          left: 0,
-          top: 599,
-          width: 840,
-          height: 2,
-          type: WindowDisplayFeatureType.hinge,
-          separating: true,
-        ),
-      ],
-    );
-
-    expect(environment.horizontalPaneDivider, isNotNull);
-    expect(environment.verticalPaneDivider, isNull);
-  });
-
-  test('a camera cutout does not split the workspace into panes', () {
-    const environment = WindowEnvironment(
-      width: 840,
-      height: 700,
-      displayFeatures: [
-        WindowDisplayFeature(
-          left: 400,
-          top: 0,
-          width: 40,
-          height: 24,
-          type: WindowDisplayFeatureType.cutout,
-        ),
-      ],
-    );
-
-    expect(environment.verticalPaneDivider, isNull);
+    final cases = [
+      (
+        feature(.hinge, separating: true),
+        reserved: true,
+        vertical: true,
+        horizontal: false,
+      ),
+      (
+        feature(.fold, separating: true),
+        reserved: true,
+        vertical: true,
+        horizontal: false,
+      ),
+      (feature(.fold), reserved: true, vertical: false, horizontal: false),
+      (
+        feature(.hinge, separating: true, horizontal: true),
+        reserved: true,
+        vertical: false,
+        horizontal: true,
+      ),
+      (feature(.cutout), reserved: true, vertical: false, horizontal: false),
+    ];
+    for (final c in cases) {
+      final environment = WindowEnvironment(
+        width: 840,
+        height: 1200,
+        displayFeatures: [c.$1],
+      );
+      final label = '${c.$1.type} separating=${c.$1.separating}';
+      expect(environment.hasReservedDisplayFeature, c.reserved, reason: label);
+      expect(
+        environment.verticalPaneDivider != null,
+        c.vertical,
+        reason: label,
+      );
+      expect(
+        environment.horizontalPaneDivider != null,
+        c.horizontal,
+        reason: label,
+      );
+    }
   });
 
   test('decodes a HarmonyOS window projection without vendor types', () {
@@ -228,39 +144,26 @@ void main() {
     expect(environment.verticalPaneDivider, isNotNull);
   });
 
-  test('decodes an explicit non-separating host feature', () {
-    final environment = WindowEnvironmentCodec.decode({
-      'width': 840,
-      'height': 700,
-      'displayFeatures': [
-        {
-          'left': 420,
-          'top': 0,
-          'width': 2,
-          'height': 700,
-          'type': 'fold',
-          'separating': false,
-        },
-      ],
-    });
+  test('a host feature splits panes only when it says separating', () {
+    for (final separating in [false, null]) {
+      final environment = WindowEnvironmentCodec.decode({
+        'width': 840,
+        'height': 700,
+        'displayFeatures': [
+          {
+            'left': 420,
+            'top': 0,
+            'width': 2,
+            'height': 700,
+            'type': 'fold',
+            'separating': ?separating,
+          },
+        ],
+      });
 
-    expect(environment, isNotNull);
-    expect(environment!.displayFeatures.single.separating, isFalse);
-    expect(environment.verticalPaneDivider, isNull);
-  });
-
-  test('does not split when a host omits separating metadata', () {
-    final environment = WindowEnvironmentCodec.decode({
-      'width': 840,
-      'height': 700,
-      'displayFeatures': [
-        {'left': 420, 'top': 0, 'width': 2, 'height': 700, 'type': 'fold'},
-      ],
-    });
-
-    expect(environment, isNotNull);
-    expect(environment!.displayFeatures.single.separating, isFalse);
-    expect(environment.verticalPaneDivider, isNull);
+      expect(environment!.displayFeatures.single.separating, isFalse);
+      expect(environment.verticalPaneDivider, isNull);
+    }
   });
 
   test(
@@ -349,36 +252,29 @@ void main() {
   );
 
   test('accepts HarmonyOS WindowStatusType names and enum values', () {
-    final splitByName = WindowEnvironmentCodec.decode({
-      'width': 700,
-      'height': 500,
-      'windowStatusType': 'SPLIT_SCREEN',
-    });
-    final floatingByValue = WindowEnvironmentCodec.decode({
-      'width': 700,
-      'height': 500,
-      'windowStatusType': 4,
-    });
-
-    expect(splitByName?.mode, WindowMode.split);
-    expect(floatingByValue?.mode, WindowMode.floating);
-  });
-
-  test('keeps HarmonyOS maximized windows in the workspace mode', () {
-    final maximizedByName = WindowEnvironmentCodec.decode({
-      'width': 1200,
-      'height': 800,
-      'windowStatusType': 'MAXIMIZE',
-    });
-    final maximizedByValue = WindowEnvironmentCodec.decode({
-      'width': 1200,
-      'height': 800,
-      'windowStatusType': 2,
-    });
-
-    expect(maximizedByName?.mode, WindowMode.freeform);
-    expect(maximizedByName?.usesWorkspaceToolbar, isTrue);
-    expect(maximizedByValue?.mode, WindowMode.freeform);
+    final cases = <Object, WindowMode>{
+      'SPLIT_SCREEN': .split,
+      4: .floating,
+      // 最大化窗口仍按工作区窗口处理。
+      'MAXIMIZE': .freeform,
+      2: .freeform,
+    };
+    for (final MapEntry(key: status, value: mode) in cases.entries) {
+      final environment = WindowEnvironmentCodec.decode({
+        'width': 1200,
+        'height': 800,
+        'windowStatusType': status,
+      });
+      expect(environment?.mode, mode, reason: '$status');
+    }
+    expect(
+      WindowEnvironmentCodec.decode({
+        'width': 1200,
+        'height': 800,
+        'windowStatusType': 'MAXIMIZE',
+      })?.usesWorkspaceToolbar,
+      isTrue,
+    );
   });
 
   test('normalizes ArkTS enum casing at the host boundary', () {

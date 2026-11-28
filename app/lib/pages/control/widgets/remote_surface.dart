@@ -7,13 +7,14 @@ import 'package:media_codec/media_codec.dart';
 import 'package:scrcpy_connect/core/control/remote_control.dart';
 import 'package:scrcpy_connect/pages/control/remote_input_owner.dart';
 import 'package:scrcpy_connect/pages/control/remote_presentation.dart';
+import 'package:scrcpy_connect/pages/control/widgets/remote_opening_view.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/styles/motion.dart';
-import 'package:scrcpy_connect/widgets/ambient_loading_field.dart';
+import 'package:scrcpy_connect/styles/theme.dart';
+import 'package:scrcpy_connect/widgets/banner.dart';
+import 'package:scrcpy_connect/widgets/buttons.dart';
 import 'package:scrcpy_connect/widgets/desktop_window_frame.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
-import 'package:scrcpy_connect/widgets/overlays.dart';
 
 class RemoteSurface extends StatelessWidget {
   const RemoteSurface({
@@ -152,12 +153,18 @@ class RemoteStage extends StatelessWidget {
               ],
             ),
             child: loading && !screenOff
-                ? AmbientLoadingField(
+                ? RemoteOpeningView(
                     key: const ValueKey('remote-first-frame-wait'),
                     semanticsLabel: '$deviceLabel，$stage',
+                    title: stage,
+                    detail: deviceLabel,
+                    steps: remoteOpeningSteps(
+                      presentation,
+                      deviceLabel: deviceLabel,
+                      failed: false,
+                    ),
                     animating: showMotion,
-                    showParticles: showMotion,
-                    overlay: abnormal ? recovery : null,
+                    failure: abnormal ? recovery : null,
                   )
                 : const SizedBox.shrink(),
           ),
@@ -167,11 +174,8 @@ class RemoteStage extends StatelessWidget {
             alignment: Alignment.bottomCenter,
             child: SafeArea(
               child: Padding(
-                padding: EdgeInsets.all(DesignTokens.spacingMd),
-                child: ContentSurface(
-                  padding: EdgeInsets.all(DesignTokens.spacingMd),
-                  child: Text('正在调整画面…'),
-                ),
+                padding: EdgeInsets.all(DesignTokens.spacingLg),
+                child: AppBanner(message: '正在调整画面…', icon: AppIcons.refresh),
               ),
             ),
           ),
@@ -189,25 +193,13 @@ class RemoteStage extends StatelessWidget {
             alignment: Alignment.topCenter,
             child: SafeArea(
               child: Padding(
-                padding: EdgeInsets.only(top: DesignTokens.spacingXs),
-                child: ContentSurface(
-                  radius: DesignTokens.roundedFull,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: DesignTokens.spacingSm,
-                    vertical: DesignTokens.spacingXxs,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        LucideIcons.pause,
-                        size: DesignTokens.componentIconSmallSize,
-                      ),
-                      SizedBox(width: DesignTokens.spacingXxs),
-                      Text('已暂停'),
-                    ],
-                  ),
+                padding: EdgeInsets.fromLTRB(
+                  DesignTokens.spacingLg,
+                  DesignTokens.spacingSm,
+                  DesignTokens.spacingLg,
+                  0,
                 ),
+                child: AppBanner(message: '已暂停', icon: LucideIcons.pause),
               ),
             ),
           ),
@@ -237,19 +229,13 @@ class RemoteStage extends StatelessWidget {
             ),
           ),
         if (needsWake)
+          // 熄屏视口中央的「点亮屏幕」（Ardot「远控 / 点亮屏幕」37:1156）。
           Center(
-            child: Tooltip(
-              message: '点亮屏幕',
-              excludeFromSemantics: true,
-              child: GlassToolbarIconButton(
-                variant: GlassVariant.clear,
-                semanticLabel: '点亮屏幕',
-                onPressed: onWake,
-                icon: const Icon(
-                  LucideIcons.sun,
-                  color: DesignTokens.colorWhite,
-                ),
-              ),
+            child: AppButton(
+              role: AppButtonRole.glass,
+              label: '点亮屏幕',
+              icon: LucideIcons.sun,
+              onPressed: onWake,
             ),
           ),
         if (!waiting)
@@ -261,9 +247,28 @@ class RemoteStage extends StatelessWidget {
             left:
                 MediaQuery.paddingOf(context).left +
                 (DesktopWindowInsets.of(context)?.left ?? 0) +
-                20,
-            top: MediaQuery.paddingOf(context).top + 12,
-            child: Row(children: [closeWait, ?switchWait]),
+                DesignTokens.spacingSm,
+            right:
+                MediaQuery.paddingOf(context).right +
+                (DesktopWindowInsets.of(context)?.right ?? 0) +
+                DesignTokens.spacingSm,
+            top: MediaQuery.paddingOf(context).top,
+            height: DesignTokens.componentPageBarHeight,
+            child: Row(
+              spacing: DesignTokens.spacingSm,
+              children: [
+                closeWait,
+                Expanded(
+                  child: Text(
+                    independent ? deviceLabel : '$deviceLabel · 手机屏幕',
+                    style: AppTypography.of(context).title3,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                ?switchWait,
+              ],
+            ),
           ),
       ],
     );
